@@ -148,10 +148,12 @@ void home_config_paths(char **global, char **xdg, char *file)
 			*global = mkpathdup("%s/.gitconfig", home);
 	}
 
-	if (!xdg_home)
-		*xdg = NULL;
-	else
-		*xdg = mkpathdup("%s/git/%s", xdg_home, file);
+	if (xdg) {
+		if (!xdg_home)
+			*xdg = NULL;
+		else
+			*xdg = mkpathdup("%s/git/%s", xdg_home, file);
+	}
 
 	free(to_free);
 }
@@ -249,9 +251,7 @@ int validate_headref(const char *path)
 static struct passwd *getpw_str(const char *username, size_t len)
 {
 	struct passwd *pw;
-	char *username_z = xmalloc(len + 1);
-	memcpy(username_z, username, len);
-	username_z[len] = '\0';
+	char *username_z = xmemdupz(username, len);
 	pw = getpwnam(username_z);
 	free(username_z);
 	return pw;
@@ -277,16 +277,16 @@ char *expand_user_path(const char *path)
 			const char *home = getenv("HOME");
 			if (!home)
 				goto return_null;
-			strbuf_add(&user_path, home, strlen(home));
+			strbuf_addstr(&user_path, home);
 		} else {
 			struct passwd *pw = getpw_str(username, username_len);
 			if (!pw)
 				goto return_null;
-			strbuf_add(&user_path, pw->pw_dir, strlen(pw->pw_dir));
+			strbuf_addstr(&user_path, pw->pw_dir);
 		}
 		to_copy = first_slash;
 	}
-	strbuf_add(&user_path, to_copy, strlen(to_copy));
+	strbuf_addstr(&user_path, to_copy);
 	return strbuf_detach(&user_path, NULL);
 return_null:
 	strbuf_release(&user_path);
@@ -824,9 +824,35 @@ int daemon_avoid_alias(const char *p)
 	}
 }
 
-int offset_1st_component(const char *path)
+static int only_spaces_and_periods(const char *path, size_t len, size_t skip)
 {
-	if (has_dos_drive_prefix(path))
-		return 2 + is_dir_sep(path[2]);
-	return is_dir_sep(path[0]);
+	if (len < skip)
+		return 0;
+	len -= skip;
+	path += skip;
+	while (len-- > 0) {
+		char c = *(path++);
+		if (c != ' ' && c != '.')
+			return 0;
+	}
+	return 1;
+}
+
+int is_ntfs_dotgit(const char *name)
+{
+	int len;
+
+	for (len = 0; ; len++)
+		if (!name[len] || name[len] == '\\' || is_dir_sep(name[len])) {
+			if (only_spaces_and_periods(name, len, 4) &&
+					!strncasecmp(name, ".git", 4))
+				return 1;
+			if (only_spaces_and_periods(name, len, 5) &&
+					!strncasecmp(name, "git~1", 5))
+				return 1;
+			if (name[len] != '\\')
+				return 0;
+			name += len + 1;
+			len = -1;
+		}
 }
