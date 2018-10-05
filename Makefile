@@ -102,8 +102,10 @@ install: install-bin install-man install-contrib
 	rm -f "$(DSTROOT)$(PREFIX)/share/man/man1/gitk.1"
 	rm -rf "$(DSTROOT)$(PREFIX)/share/man/man3"
 	rm -f "$(DSTROOT)$(PREFIX)"/bin/git-cvs*
+	rm -f "$(DSTROOT)$(PREFIX)"/libexec/git-core/git-archimport
 	rm -f "$(DSTROOT)$(PREFIX)"/libexec/git-core/git-cvs*
 	rm -f "$(DSTROOT)$(PREFIX)"/share/man/man*/*cvs*
+	rm -f "$(DSTROOT)$(PREFIX)"/share/man/man*/*archimport*
 	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/Git.plist $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitconfig $(DSTROOT)$(PREFIX)/share/git-core
