@@ -21,49 +21,32 @@ addons:
     - git-svn
     - apache2
 
-env:
-  global:
-    - DEVELOPER=1
-    # The Linux build installs the defined dependency versions below.
-    # The OS X build installs the latest available versions. Keep that
-    # in mind when you encounter a broken OS X build!
-    - LINUX_P4_VERSION="16.2"
-    - LINUX_GIT_LFS_VERSION="1.5.2"
-    - DEFAULT_TEST_TARGET=prove
-    - GIT_PROVE_OPTS="--timer --jobs 3 --state=failed,slow,save"
-    - GIT_TEST_OPTS="--verbose-log"
-    - GIT_TEST_CLONE_2GB=YesPlease
-    # t9810 occasionally fails on Travis CI OS X
-    # t9816 occasionally fails with "TAP out of sequence errors" on Travis CI OS X
-    - GIT_SKIP_TESTS="t9810 t9816"
-
 matrix:
   include:
-    - env: GETTEXT_POISON=YesPlease
+    - env: jobname=GETTEXT_POISON
       os: linux
       compiler:
       addons:
       before_install:
-    - env: Windows
+    - env: jobname=Windows
       os: linux
       compiler:
       addons:
       before_install:
-      before_script:
       script:
         - >
           test "$TRAVIS_REPO_SLUG" != "git/git" ||
           ci/run-windows-build.sh $TRAVIS_BRANCH $(git rev-parse HEAD)
       after_failure:
-    - env: Linux32
+    - env: jobname=Linux32
       os: linux
       compiler:
+      addons:
       services:
         - docker
       before_install:
-      before_script:
       script: ci/run-linux32-docker.sh
-    - env: Static Analysis
+    - env: jobname=StaticAnalysis
       os: linux
       compiler:
       addons:
@@ -71,10 +54,9 @@ matrix:
           packages:
           - coccinelle
       before_install:
-      before_script:
       script: ci/run-static-analysis.sh
       after_failure:
-    - env: Documentation
+    - env: jobname=Documentation
       os: linux
       compiler:
       addons:
@@ -83,13 +65,11 @@ matrix:
           - asciidoc
           - xmlto
       before_install:
-      before_script:
       script: ci/test-documentation.sh
       after_failure:
 
 before_install: ci/install-dependencies.sh
-before_script: ci/run-build.sh
-script: ci/run-tests.sh
+script: ci/run-build-and-tests.sh
 after_failure: ci/print-test-failures.sh
 
 notifications:

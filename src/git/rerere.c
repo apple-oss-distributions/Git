@@ -159,8 +159,8 @@ static struct rerere_dir *find_rerere_dir(const char *hex)
 		ALLOC_GROW(rerere_dir, rerere_dir_nr + 1, rerere_dir_alloc);
 		/* ... and add it in. */
 		rerere_dir_nr++;
-		memmove(rerere_dir + pos + 1, rerere_dir + pos,
-			(rerere_dir_nr - pos - 1) * sizeof(*rerere_dir));
+		MOVE_ARRAY(rerere_dir + pos + 1, rerere_dir + pos,
+			   rerere_dir_nr - pos - 1);
 		rerere_dir[pos] = rr_dir;
 		scan_rerere_dir(rr_dir);
 	}
@@ -719,11 +719,9 @@ static void update_paths(struct string_list *update)
 			item->string);
 	}
 
-	if (active_cache_changed) {
-		if (write_locked_index(&the_index, &index_lock, COMMIT_LOCK))
-			die("Unable to write new index file");
-	} else
-		rollback_lock_file(&index_lock);
+	if (write_locked_index(&the_index, &index_lock,
+			       COMMIT_LOCK | SKIP_IF_UNCHANGED))
+		die("Unable to write new index file");
 }
 
 static void remove_variant(struct rerere_id *id)

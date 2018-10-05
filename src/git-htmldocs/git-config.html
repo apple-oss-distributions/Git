@@ -1047,6 +1047,16 @@ from all available files.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--expiry-date
+</dt>
+<dd>
+<p>
+        <code>git config</code> will ensure that the output is converted from
+        a fixed or relative date-string to a timestamp. This option
+        has no effect when setting the value.
+</p>
+</dd>
+<dt class="hdlist1">
 -z
 </dt>
 <dt class="hdlist1">
@@ -1132,6 +1142,14 @@ from all available files.</p></div>
 </p>
 </dd>
 </dl></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p><code>pager.config</code> is only respected when listing configuration, i.e., when
+using <code>--list</code> or any of the <code>--get-*</code> which may return multiple results.
+The default is to use a pager.</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -1388,11 +1406,13 @@ in the section header, like in the example below:</p></div>
 <pre><code>        [section "subsection"]</code></pre>
 </div></div>
 <div class="paragraph"><p>Subsection names are case sensitive and can contain any characters except
-newline (doublequote <code>"</code> and backslash can be included by escaping them
-as <code>\"</code> and <code>\\</code>, respectively).  Section headers cannot span multiple
-lines.  Variables may belong directly to a section or to a given subsection.
-You can have <code>[section]</code> if you have <code>[section "subsection"]</code>, but you
-don&#8217;t need to.</p></div>
+newline and the null byte. Doublequote <code>"</code> and backslash can be included
+by escaping them as <code>\"</code> and <code>\\</code>, respectively. Backslashes preceding
+other characters are dropped when reading; for example, <code>\t</code> is read as
+<code>t</code> and <code>\0</code> is read as <code>0</code> Section headers cannot span multiple lines.
+Variables may belong directly to a section or to a given subsection. You
+can have <code>[section]</code> if you have <code>[section "subsection"]</code>, but you don&#8217;t
+need to.</p></div>
 <div class="paragraph"><p>There is also a deprecated <code>[section.subsection]</code> syntax. With this
 syntax, the subsection name is converted to lower-case and is also
 compared case sensitively. These subsection names follow the same
@@ -1857,6 +1877,24 @@ addEmbeddedRepo
                 git repo inside of another.
 </p>
 </dd>
+<dt class="hdlist1">
+ignoredHook
+</dt>
+<dd>
+<p>
+                Advice shown if an hook is ignored because the hook is not
+                set as executable.
+</p>
+</dd>
+<dt class="hdlist1">
+waitingForEditor
+</dt>
+<dd>
+<p>
+                Print a message to the terminal whenever Git is waiting for
+                editor input from the user.
+</p>
+</dd>
 </dl></div>
 </div></div>
 </dd>
@@ -1944,6 +1982,18 @@ core.protectNTFS
         cause problems with the NTFS filesystem, e.g. conflict with
         8.3 "short" names.
         Defaults to <code>true</code> on Windows, and <code>false</code> elsewhere.
+</p>
+</dd>
+<dt class="hdlist1">
+core.fsmonitor
+</dt>
+<dd>
+<p>
+        If set, the value of this variable is used as a command which
+        will identify all files that may have changed since the
+        requested date/time. This information is used to speed up git by
+        avoiding unnecessary processing of files that have not changed.
+        See the "fsmonitor-watchman" section of <a href="githooks.html">githooks(5)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2723,6 +2773,43 @@ apply.whitespace
 <p>
         Tells <em>git apply</em> how to handle whitespaces, in the same way
         as the <code>--whitespace</code> option. See <a href="git-apply.html">git-apply(1)</a>.
+</p>
+</dd>
+<dt class="hdlist1">
+blame.showRoot
+</dt>
+<dd>
+<p>
+        Do not treat root commits as boundaries in <a href="git-blame.html">git-blame(1)</a>.
+        This option defaults to false.
+</p>
+</dd>
+<dt class="hdlist1">
+blame.blankBoundary
+</dt>
+<dd>
+<p>
+        Show blank commit object name for boundary commits in
+        <a href="git-blame.html">git-blame(1)</a>. This option defaults to false.
+</p>
+</dd>
+<dt class="hdlist1">
+blame.showEmail
+</dt>
+<dd>
+<p>
+        Show the author email instead of author name in <a href="git-blame.html">git-blame(1)</a>.
+        This option defaults to false.
+</p>
+</dd>
+<dt class="hdlist1">
+blame.date
+</dt>
+<dd>
+<p>
+        Specifies the format used to output dates in <a href="git-blame.html">git-blame(1)</a>.
+        If unset the iso format is used. For supported values,
+        see the discussion of the <code>--date</code> option at <a href="git-log.html">git-log(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -4028,7 +4115,21 @@ fetch.prune
 <dd>
 <p>
         If true, fetch will automatically behave as if the <code>--prune</code>
-        option was given on the command line.  See also <code>remote.&lt;name&gt;.prune</code>.
+        option was given on the command line.  See also <code>remote.&lt;name&gt;.prune</code>
+        and the PRUNING section of <a href="git-fetch.html">git-fetch(1)</a>.
+</p>
+</dd>
+<dt class="hdlist1">
+fetch.pruneTags
+</dt>
+<dd>
+<p>
+        If true, fetch will automatically behave as if the
+        <code>refs/tags/*:refs/tags/*</code> refspec was provided when pruning,
+        if not set already. This allows for setting both this option
+        and <code>fetch.prune</code> to maintain a 1=1 mapping to upstream
+        refs. See also <code>remote.&lt;name&gt;.pruneTags</code> and the PRUNING
+        section of <a href="git-fetch.html">git-fetch(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -5114,8 +5215,8 @@ http.sslVerify
 <dd>
 <p>
         Whether to verify the SSL certificate when fetching or pushing
-        over HTTPS. Can be overridden by the <code>GIT_SSL_NO_VERIFY</code> environment
-        variable.
+        over HTTPS. Defaults to true. Can be overridden by the
+        <code>GIT_SSL_NO_VERIFY</code> environment variable.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -5353,15 +5454,51 @@ ssh.variant
 </dt>
 <dd>
 <p>
-        Depending on the value of the environment variables <code>GIT_SSH</code> or
-        <code>GIT_SSH_COMMAND</code>, or the config setting <code>core.sshCommand</code>, Git
-        auto-detects whether to adjust its command-line parameters for use
-        with plink or tortoiseplink, as opposed to the default (OpenSSH).
+        By default, Git determines the command line arguments to use
+        based on the basename of the configured SSH command (configured
+        using the environment variable <code>GIT_SSH</code> or <code>GIT_SSH_COMMAND</code> or
+        the config setting <code>core.sshCommand</code>). If the basename is
+        unrecognized, Git will attempt to detect support of OpenSSH
+        options by first invoking the configured SSH command with the
+        <code>-G</code> (print configuration) option and will subsequently use
+        OpenSSH options (if that is successful) or no options besides
+        the host and remote command (if it fails).
 </p>
-<div class="paragraph"><p>The config variable <code>ssh.variant</code> can be set to override this auto-detection;
-valid values are <code>ssh</code>, <code>plink</code>, <code>putty</code> or <code>tortoiseplink</code>. Any other value
-will be treated as normal ssh. This setting can be overridden via the
-environment variable <code>GIT_SSH_VARIANT</code>.</p></div>
+<div class="paragraph"><p>The config variable <code>ssh.variant</code> can be set to override this detection.
+Valid values are <code>ssh</code> (to use OpenSSH options), <code>plink</code>, <code>putty</code>,
+<code>tortoiseplink</code>, <code>simple</code> (no options except the host and remote command).
+The default auto-detection can be explicitly requested using the value
+<code>auto</code>.  Any other value is treated as <code>ssh</code>.  This setting can also be
+overridden via the environment variable <code>GIT_SSH_VARIANT</code>.</p></div>
+<div class="paragraph"><p>The current command-line parameters used for each variant are as
+follows:</p></div>
+<div class="openblock">
+<div class="content">
+<div class="ulist"><ul>
+<li>
+<p>
+<code>ssh</code> - [-p port] [-4] [-6] [-o option] [username@]host command
+</p>
+</li>
+<li>
+<p>
+<code>simple</code> - [username@]host command
+</p>
+</li>
+<li>
+<p>
+<code>plink</code> or <code>putty</code> - [-P port] [-4] [-6] [username@]host command
+</p>
+</li>
+<li>
+<p>
+<code>tortoiseplink</code> - [-P port] [-4] [-6] -batch [username@]host command
+</p>
+</li>
+</ul></div>
+</div></div>
+<div class="paragraph"><p>Except for the <code>simple</code> variant, command-line parameters are likely to
+change as git gains new features.</p></div>
 </dd>
 <dt class="hdlist1">
 i18n.commitEncoding
@@ -5675,6 +5812,15 @@ merge.ff
         line). When set to <code>only</code>, only such fast-forward merges are
         allowed (equivalent to giving the <code>--ff-only</code> option from the
         command line).
+</p>
+</dd>
+<dt class="hdlist1">
+merge.verifySignatures
+</dt>
+<dd>
+<p>
+        If true, this is equivalent to the --verify-signatures command
+        line option. See <a href="git-merge.html">git-merge(1)</a> for details.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -6360,6 +6506,35 @@ any external helpers are named by their protocol (e.g., use
 </div></div>
 </dd>
 <dt class="hdlist1">
+protocol.version
+</dt>
+<dd>
+<p>
+        Experimental. If set, clients will attempt to communicate with a
+        server using the specified protocol version.  If unset, no
+        attempt will be made by the client to communicate using a
+        particular protocol version, this results in protocol version 0
+        being used.
+        Supported versions:
+</p>
+<div class="openblock">
+<div class="content">
+<div class="ulist"><ul>
+<li>
+<p>
+<code>0</code> - the original wire protocol.
+</p>
+</li>
+<li>
+<p>
+<code>1</code> - the original wire protocol with the addition of a version string
+  in the initial response from the server.
+</p>
+</li>
+</ul></div>
+</div></div>
+</dd>
+<dt class="hdlist1">
 pull.ff
 </dt>
 <dd>
@@ -6511,6 +6686,33 @@ push.gpgSign
 </p>
 </dd>
 <dt class="hdlist1">
+push.pushOption
+</dt>
+<dd>
+<p>
+        When no <code>--push-option=&lt;option&gt;</code> argument is given from the
+        command line, <code>git push</code> behaves as if each &lt;value&gt; of
+        this variable is given as <code>--push-option=&lt;value&gt;</code>.
+</p>
+<div class="paragraph"><p>This is a multi-valued variable, and an empty value can be used in a
+higher priority configuration file (e.g. <code>.git/config</code> in a
+repository) to clear the values inherited from a lower priority
+configuration files (e.g. <code>$HOME/.gitconfig</code>).</p></div>
+<div class="openblock">
+<div class="content">
+<div class="paragraph"><p>Example:</p></div>
+<div class="paragraph"><p>/etc/gitconfig
+  push.pushoption = a
+  push.pushoption = b</p></div>
+<div class="paragraph"><p>~/.gitconfig
+  push.pushoption = c</p></div>
+<div class="paragraph"><p>repo/.git/config
+  push.pushoption =
+  push.pushoption = b</p></div>
+<div class="paragraph"><p>This will result in only b (a and c are cleared).</p></div>
+</div></div>
+</dd>
+<dt class="hdlist1">
 push.recurseSubmodules
 </dt>
 <dd>
@@ -6556,6 +6758,8 @@ rebase.autoStash
         ends.  This means that you can run rebase on a dirty worktree.
         However, use with care: the final stash application after a
         successful rebase might result in non-trivial conflicts.
+        This option can be overridden by the <code>--no-autostash</code> and
+        <code>--autostash</code> options of <a href="git-rebase.html">git-rebase(1)</a>.
         Defaults to false.
 </p>
 </dd>
@@ -6571,7 +6775,7 @@ rebase.missingCommitsCheck
         --edit-todo</em> can then be used to correct the error. If set to
         "ignore", no checking is done.
         To drop a commit without warning or error, use the <code>drop</code>
-        command in the todo-list.
+        command in the todo list.
         Defaults to "ignore".
 </p>
 </dd>
@@ -6580,10 +6784,33 @@ rebase.instructionFormat
 </dt>
 <dd>
 <p>
-        A format string, as specified in <a href="git-log.html">git-log(1)</a>, to be used for
-        the instruction list during an interactive rebase.  The format will automatically
-        have the long commit hash prepended to the format.
+        A format string, as specified in <a href="git-log.html">git-log(1)</a>, to be used for the
+        todo list during an interactive rebase.  The format will
+        automatically have the long commit hash prepended to the format.
 </p>
+</dd>
+<dt class="hdlist1">
+rebase.abbreviateCommands
+</dt>
+<dd>
+<p>
+        If set to true, <code>git rebase</code> will use abbreviated command names in the
+        todo list resulting in something like this:
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>        p deadbee The oneline of the commit
+        p fa1afe1 The oneline of the next commit
+        ...</code></pre>
+</div></div>
+<div class="paragraph"><p>instead of:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>        pick deadbee The oneline of the commit
+        pick fa1afe1 The oneline of the next commit
+        ...</code></pre>
+</div></div>
+<div class="paragraph"><p>Defaults to false.</p></div>
 </dd>
 <dt class="hdlist1">
 receive.advertiseAtomic
@@ -6953,6 +7180,19 @@ remote.&lt;name&gt;.prune
 </p>
 </dd>
 <dt class="hdlist1">
+remote.&lt;name&gt;.pruneTags
+</dt>
+<dd>
+<p>
+        When set to true, fetching from this remote by default will also
+        remove any local tags that no longer exist on the remote if pruning
+        is activated in general via <code>remote.&lt;name&gt;.prune</code>, <code>fetch.prune</code> or
+        <code>--prune</code>. Overrides <code>fetch.pruneTags</code> settings, if any.
+</p>
+<div class="paragraph"><p>See also <code>remote.&lt;name&gt;.prune</code> and the PRUNING section of
+<a href="git-fetch.html">git-fetch(1)</a>.</p></div>
+</dd>
+<dt class="hdlist1">
 remotes.&lt;group&gt;
 </dt>
 <dd>
@@ -7118,6 +7358,9 @@ sendemail.suppressFrom
 </dt>
 <dt class="hdlist1">
 sendemail.to
+</dt>
+<dt class="hdlist1">
+sendemail.tocmd
 </dt>
 <dt class="hdlist1">
 sendemail.smtpDomain
@@ -7451,7 +7694,8 @@ submodule.recurse
 <dd>
 <p>
         Specifies if commands recurse into submodules by default. This
-        applies to all commands that have a <code>--recurse-submodules</code> option.
+        applies to all commands that have a <code>--recurse-submodules</code> option,
+        except <code>clone</code>.
         Defaults to false.
 </p>
 </dd>
@@ -7662,6 +7906,15 @@ uploadpack.packObjectsHook
         <code>pack-objects</code> to the hook, and expects a completed packfile on
         stdout.
 </p>
+</dd>
+<dt class="hdlist1">
+uploadpack.allowFilter
+</dt>
+<dd>
+<p>
+        If this option is set, <code>upload-pack</code> will support partial
+        clone and partial fetch object filtering.
+</p>
 <div class="paragraph"><p>Note that this configuration variable is ignored if it is seen in the
 repository-level config (this is a safety measure against fetching from
 untrusted repositories).</p></div>
@@ -7805,6 +8058,21 @@ web.browser
         may use it.
 </p>
 </dd>
+<dt class="hdlist1">
+worktree.guessRemote
+</dt>
+<dd>
+<p>
+        With <code>add</code>, if no branch argument, and neither of <code>-b</code> nor
+        <code>-B</code> nor <code>--detach</code> are given, the command defaults to
+        creating a new branch from HEAD.  If <code>worktree.guessRemote</code> is
+        set to true, <code>worktree add</code> tries to find a remote-tracking
+        branch whose name uniquely matches the new branch name.  If
+        such a branch exists, it is checked out and set as "upstream"
+        for the new branch.  If no such match can be found, it falls
+        back to creating a new branch from the current HEAD.
+</p>
+</dd>
 </dl></div>
 </div>
 </div>
@@ -7819,7 +8087,8 @@ web.browser
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-10-30 14:54:51 JST
+Last updated
+ 2018-03-21 12:51:04 PDT
 </div>
 </div>
 </body>

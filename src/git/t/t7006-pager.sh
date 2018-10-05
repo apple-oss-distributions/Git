@@ -110,13 +110,6 @@ test_expect_success TTY 'configuration can disable pager' '
 	! test -e paginated.out
 '
 
-test_expect_success TTY 'git config uses a pager if configured to' '
-	rm -f paginated.out &&
-	test_config pager.config true &&
-	test_terminal git config --list &&
-	test -e paginated.out
-'
-
 test_expect_success TTY 'configuration can enable pager (from subdir)' '
 	rm -f paginated.out &&
 	mkdir -p subdir &&
@@ -213,6 +206,86 @@ test_expect_success TTY 'git tag as alias respects pager.tag with -l' '
 	test_terminal git -c pager.tag=false -c alias.t=tag t -l &&
 	! test -e paginated.out
 '
+
+test_expect_success TTY 'git branch defaults to paging' '
+	rm -f paginated.out &&
+	test_terminal git branch &&
+	test -e paginated.out
+'
+
+test_expect_success TTY 'git branch respects pager.branch' '
+	rm -f paginated.out &&
+	test_terminal git -c pager.branch=false branch &&
+	! test -e paginated.out
+'
+
+test_expect_success TTY 'git branch respects --no-pager' '
+	rm -f paginated.out &&
+	test_terminal git --no-pager branch &&
+	! test -e paginated.out
+'
+
+test_expect_success TTY 'git branch --edit-description ignores pager.branch' '
+	rm -f paginated.out editor.used &&
+	write_script editor <<-\EOF &&
+		echo "New description" >"$1"
+		touch editor.used
+	EOF
+	EDITOR=./editor test_terminal git -c pager.branch branch --edit-description &&
+	! test -e paginated.out &&
+	test -e editor.used
+'
+
+test_expect_success TTY 'git branch --set-upstream-to ignores pager.branch' '
+	rm -f paginated.out &&
+	git branch other &&
+	test_when_finished "git branch -D other" &&
+	test_terminal git -c pager.branch branch --set-upstream-to=other &&
+	test_when_finished "git branch --unset-upstream" &&
+	! test -e paginated.out
+'
+
+test_expect_success TTY 'git config ignores pager.config when setting' '
+	rm -f paginated.out &&
+	test_terminal git -c pager.config config foo.bar bar &&
+	! test -e paginated.out
+'
+
+test_expect_success TTY 'git config --edit ignores pager.config' '
+	rm -f paginated.out editor.used &&
+	write_script editor <<-\EOF &&
+		touch editor.used
+	EOF
+	EDITOR=./editor test_terminal git -c pager.config config --edit &&
+	! test -e paginated.out &&
+	test -e editor.used
+'
+
+test_expect_success TTY 'git config --get ignores pager.config' '
+	rm -f paginated.out &&
+	test_terminal git -c pager.config config --get foo.bar &&
+	! test -e paginated.out
+'
+
+test_expect_success TTY 'git config --get-urlmatch defaults to paging' '
+	rm -f paginated.out &&
+	test_terminal git -c http."https://foo.com/".bar=foo \
+			  config --get-urlmatch http https://foo.com &&
+	test -e paginated.out
+'
+
+test_expect_success TTY 'git config --get-all respects pager.config' '
+	rm -f paginated.out &&
+	test_terminal git -c pager.config=false config --get-all foo.bar &&
+	! test -e paginated.out
+'
+
+test_expect_success TTY 'git config --list defaults to paging' '
+	rm -f paginated.out &&
+	test_terminal git config --list &&
+	test -e paginated.out
+'
+
 
 # A colored commit log will begin with an appropriate ANSI escape
 # for the first color; the text "commit" comes later.

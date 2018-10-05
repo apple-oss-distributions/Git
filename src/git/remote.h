@@ -47,6 +47,7 @@ struct remote {
 	int skip_default_update;
 	int mirror;
 	int prune;
+	int prune_tags;
 
 	const char *receivepack;
 	const char *uploadpack;
@@ -223,6 +224,8 @@ struct branch {
 struct branch *branch_get(const char *name);
 const char *remote_for_branch(struct branch *branch, int *explicit);
 const char *pushremote_for_branch(struct branch *branch, int *explicit);
+const char *remote_ref_for_branch(struct branch *branch, int for_push,
+				  int *explicit);
 
 int branch_has_merge_config(struct branch *branch);
 int branch_merge_matches(struct branch *, int n, const char *);
@@ -255,10 +258,18 @@ enum match_refs_flags {
 	MATCH_REFS_FOLLOW_TAGS	= (1 << 3)
 };
 
+/* Flags for --ahead-behind option. */
+enum ahead_behind_flags {
+	AHEAD_BEHIND_UNSPECIFIED = -1,
+	AHEAD_BEHIND_QUICK       =  0,  /* just eq/neq reporting */
+	AHEAD_BEHIND_FULL        =  1,  /* traditional a/b reporting */
+};
+
 /* Reporting of tracking info */
 int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
-		       const char **upstream_name);
-int format_tracking_info(struct branch *branch, struct strbuf *sb);
+		       const char **upstream_name, enum ahead_behind_flags abf);
+int format_tracking_info(struct branch *branch, struct strbuf *sb,
+			 enum ahead_behind_flags abf);
 
 struct ref *get_local_heads(void);
 /*
@@ -294,5 +305,9 @@ extern int parseopt_push_cas_option(const struct option *, const char *arg, int 
 
 extern int is_empty_cas(const struct push_cas_option *);
 void apply_push_cas(struct push_cas_option *, struct remote *, struct ref *);
+
+#define TAG_REFSPEC "refs/tags/*:refs/tags/*"
+
+void add_prune_tags_to_fetch_refspec(struct remote *remote);
 
 #endif

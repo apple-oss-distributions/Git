@@ -122,7 +122,7 @@ test_expect_success 'describe --contains defaults to HEAD without commit-ish' '
 '
 
 : >err.expect
-check_describe A --all A^0
+check_describe tags/A --all A^0
 test_expect_success 'no warning was displayed for A' '
 	test_cmp err.expect err.actual
 '
@@ -304,10 +304,44 @@ test_expect_success 'describe chokes on severely broken submodules' '
 	mv .git/modules/sub1/ .git/modules/sub_moved &&
 	test_must_fail git describe --dirty
 '
-test_expect_success 'describe ignoring a borken submodule' '
+test_expect_success 'describe ignoring a broken submodule' '
 	git describe --broken >out &&
 	test_when_finished "mv .git/modules/sub_moved .git/modules/sub1" &&
 	grep broken out
+'
+
+test_expect_success 'describe a blob at a directly tagged commit' '
+	echo "make it a unique blob" >file &&
+	git add file && git commit -m "content in file" &&
+	git tag -a -m "latest annotated tag" unique-file &&
+	git describe HEAD:file >actual &&
+	echo "unique-file:file" >expect &&
+	test_cmp expect actual
+'
+
+test_expect_success 'describe a blob with its first introduction' '
+	git commit --allow-empty -m "empty commit" &&
+	git rm file &&
+	git commit -m "delete blob" &&
+	git revert HEAD &&
+	git commit --allow-empty -m "empty commit" &&
+	git describe HEAD:file >actual &&
+	echo "unique-file:file" >expect &&
+	test_cmp expect actual
+'
+
+test_expect_success 'describe directly tagged blob' '
+	git tag test-blob unique-file:file &&
+	git describe test-blob >actual &&
+	echo "unique-file:file" >expect &&
+	# suboptimal: we rather want to see "test-blob"
+	test_cmp expect actual
+'
+
+test_expect_success 'describe tag object' '
+	git tag test-blob-1 -a -m msg unique-file:file &&
+	test_must_fail git describe test-blob-1 2>actual &&
+	test_i18ngrep "fatal: test-blob-1 is neither a commit nor blob" actual
 '
 
 test_expect_failure ULIMIT_STACK_SIZE 'name-rev works in a deep repo' '
@@ -338,6 +372,18 @@ test_expect_success ULIMIT_STACK_SIZE 'describe works in a deep repo' '
 	test_cmp expect actual &&
 	run_with_limited_stack git describe --tags --abbrev=0 HEAD~4000 >actual &&
 	test_cmp expect actual
+'
+
+check_describe tags/A --all A
+check_describe tags/c --all c
+check_describe heads/branch_A --all --match='branch_*' branch_A
+
+test_expect_success 'describe complains about tree object' '
+	test_must_fail git describe HEAD^{tree}
+'
+
+test_expect_success 'describe complains about missing object' '
+	test_must_fail git describe $_z40
 '
 
 test_done

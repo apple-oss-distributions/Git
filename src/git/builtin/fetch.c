@@ -3,6 +3,7 @@
  */
 #include "cache.h"
 #include "config.h"
+#include "repository.h"
 #include "refs.h"
 #include "commit.h"
 #include "builtin.h"
@@ -18,6 +19,7 @@
 #include "argv-array.h"
 #include "utf8.h"
 #include "packfile.h"
+#include "list-objects-filter-options.h"
 
 static const char * const builtin_fetch_usage[] = {
 	N_("git fetch [<options>] [<repository> [<refspec>...]]"),
@@ -37,6 +39,10 @@ static int fetch_prune_config = -1; /* unspecified */
 static int prune = -1; /* unspecified */
 #define PRUNE_BY_DEFAULT 0 /* do we prune by default? */
 
+static int fetch_prune_tags_config = -1; /* unspecified */
+static int prune_tags = -1; /* unspecified */
+#define PRUNE_TAGS_BY_DEFAULT 0 /* do we prune tags by default? */
+
 static int all, append, dry_run, force, keep, multiple, update_head_ok, verbosity, deepen_relative;
 static int progress = -1;
 static int tags = TAGS_DEFAULT, unshallow, update_shallow, deepen;
@@ -55,11 +61,17 @@ static int recurse_submodules_default = RECURSE_SUBMODULES_ON_DEMAND;
 static int shown_url = 0;
 static int refmap_alloc, refmap_nr;
 static const char **refmap_array;
+static struct list_objects_filter_options filter_options;
 
 static int git_fetch_config(const char *k, const char *v, void *cb)
 {
 	if (!strcmp(k, "fetch.prune")) {
 		fetch_prune_config = git_config_bool(k, v);
+		return 0;
+	}
+
+	if (!strcmp(k, "fetch.prunetags")) {
+		fetch_prune_tags_config = git_config_bool(k, v);
 		return 0;
 	}
 
@@ -114,7 +126,7 @@ static struct option builtin_fetch_options[] = {
 		 N_("append to .git/FETCH_HEAD instead of overwriting")),
 	OPT_STRING(0, "upload-pack", &upload_pack, N_("path"),
 		   N_("path to upload pack on remote end")),
-	OPT__FORCE(&force, N_("force overwrite of local branch")),
+	OPT__FORCE(&force, N_("force overwrite of local branch"), 0),
 	OPT_BOOL('m', "multiple", &multiple,
 		 N_("fetch from multiple remotes")),
 	OPT_SET_INT('t', "tags", &tags,
@@ -125,6 +137,8 @@ static struct option builtin_fetch_options[] = {
 		    N_("number of submodules fetched in parallel")),
 	OPT_BOOL('p', "prune", &prune,
 		 N_("prune remote-tracking branches no longer on remote")),
+	OPT_BOOL('P', "prune-tags", &prune_tags,
+		 N_("prune local tags no longer on remote and clobber changed tags")),
 	{ OPTION_CALLBACK, 0, "recurse-submodules", &recurse_submodules, N_("on-demand"),
 		    N_("control recursive fetching of submodules"),
 		    PARSE_OPT_OPTARG, option_fetch_parse_recurse_submodules },
@@ -160,6 +174,7 @@ static struct option builtin_fetch_options[] = {
 			TRANSPORT_FAMILY_IPV4),
 	OPT_SET_INT('6', "ipv6", &family, N_("use IPv6 addresses only"),
 			TRANSPORT_FAMILY_IPV6),
+	OPT_PARSE_LIST_OBJECTS_FILTER(&filter_options),
 	OPT_END()
 };
 
@@ -457,8 +472,8 @@ static int s_update_ref(const char *action,
 	transaction = ref_transaction_begin(&err);
 	if (!transaction ||
 	    ref_transaction_update(transaction, ref->name,
-				   ref->new_oid.hash,
-				   check_old ? ref->old_oid.hash : NULL,
+				   &ref->new_oid,
+				   check_old ? &ref->old_oid : NULL,
 				   0, msg, &err))
 		goto fail;
 
@@ -727,7 +742,7 @@ static int update_local_ref(struct ref *ref,
 	}
 }
 
-static int iterate_ref_map(void *cb_data, unsigned char sha1[20])
+static int iterate_ref_map(void *cb_data, struct object_id *oid)
 {
 	struct ref **rm = cb_data;
 	struct ref *ref = *rm;
@@ -737,7 +752,7 @@ static int iterate_ref_map(void *cb_data, unsigned char sha1[20])
 	if (!ref)
 		return -1; /* end of the list */
 	*rm = ref->next;
-	hashcpy(sha1, ref->old_oid.hash);
+	oidcpy(oid, &ref->old_oid);
 	return 0;
 }
 
@@ -1044,6 +1059,11 @@ static struct transport *prepare_transport(struct remote *remote, int deepen)
 		set_option(transport, TRANS_OPT_DEEPEN_RELATIVE, "yes");
 	if (update_shallow)
 		set_option(transport, TRANS_OPT_UPDATE_SHALLOW, "yes");
+	if (filter_options.choice) {
+		set_option(transport, TRANS_OPT_LIST_OBJECTS_FILTER,
+			   filter_options.filter_spec);
+		set_option(transport, TRANS_OPT_FROM_PROMISOR, "1");
+	}
 	return transport;
 }
 
@@ -1093,9 +1113,6 @@ static int do_fetch(struct transport *transport,
 		if (transport->remote->fetch_tags == -1)
 			tags = TAGS_UNSET;
 	}
-
-	if (!transport->get_refs_list || !transport->fetch)
-		die(_("Don't know how to fetch from %s"), transport->url);
 
 	/* if not appending, truncate FETCH_HEAD */
 	if (!append && !dry_run) {
@@ -1214,6 +1231,8 @@ static void add_options_to_argv(struct argv_array *argv)
 		argv_array_push(argv, "--dry-run");
 	if (prune != -1)
 		argv_array_push(argv, prune ? "--prune" : "--no-prune");
+	if (prune_tags != -1)
+		argv_array_push(argv, prune_tags ? "--prune-tags" : "--no-prune-tags");
 	if (update_head_ok)
 		argv_array_push(argv, "--update-head-ok");
 	if (force)
@@ -1267,12 +1286,65 @@ static int fetch_multiple(struct string_list *list)
 	return result;
 }
 
-static int fetch_one(struct remote *remote, int argc, const char **argv)
+/*
+ * Fetching from the promisor remote should use the given filter-spec
+ * or inherit the default filter-spec from the config.
+ */
+static inline void fetch_one_setup_partial(struct remote *remote)
+{
+	/*
+	 * Explicit --no-filter argument overrides everything, regardless
+	 * of any prior partial clones and fetches.
+	 */
+	if (filter_options.no_filter)
+		return;
+
+	/*
+	 * If no prior partial clone/fetch and the current fetch DID NOT
+	 * request a partial-fetch, do a normal fetch.
+	 */
+	if (!repository_format_partial_clone && !filter_options.choice)
+		return;
+
+	/*
+	 * If this is the FIRST partial-fetch request, we enable partial
+	 * on this repo and remember the given filter-spec as the default
+	 * for subsequent fetches to this remote.
+	 */
+	if (!repository_format_partial_clone && filter_options.choice) {
+		partial_clone_register(remote->name, &filter_options);
+		return;
+	}
+
+	/*
+	 * We are currently limited to only ONE promisor remote and only
+	 * allow partial-fetches from the promisor remote.
+	 */
+	if (strcmp(remote->name, repository_format_partial_clone)) {
+		if (filter_options.choice)
+			die(_("--filter can only be used with the remote configured in core.partialClone"));
+		return;
+	}
+
+	/*
+	 * Do a partial-fetch from the promisor remote using either the
+	 * explicitly given filter-spec or inherit the filter-spec from
+	 * the config.
+	 */
+	if (!filter_options.choice)
+		partial_clone_get_default_filter_spec(&filter_options);
+	return;
+}
+
+static int fetch_one(struct remote *remote, int argc, const char **argv, int prune_tags_ok)
 {
 	static const char **refs = NULL;
 	struct refspec *refspec;
 	int ref_nr = 0;
+	int j = 0;
 	int exit_code;
+	int maybe_prune_tags;
+	int remote_via_config = remote_is_configured(remote, 0);
 
 	if (!remote)
 		die(_("No remote repository specified.  Please, specify either a URL or a\n"
@@ -1282,18 +1354,39 @@ static int fetch_one(struct remote *remote, int argc, const char **argv)
 
 	if (prune < 0) {
 		/* no command line request */
-		if (0 <= gtransport->remote->prune)
-			prune = gtransport->remote->prune;
+		if (0 <= remote->prune)
+			prune = remote->prune;
 		else if (0 <= fetch_prune_config)
 			prune = fetch_prune_config;
 		else
 			prune = PRUNE_BY_DEFAULT;
 	}
 
+	if (prune_tags < 0) {
+		/* no command line request */
+		if (0 <= remote->prune_tags)
+			prune_tags = remote->prune_tags;
+		else if (0 <= fetch_prune_tags_config)
+			prune_tags = fetch_prune_tags_config;
+		else
+			prune_tags = PRUNE_TAGS_BY_DEFAULT;
+	}
+
+	maybe_prune_tags = prune_tags_ok && prune_tags;
+	if (maybe_prune_tags && remote_via_config)
+		add_prune_tags_to_fetch_refspec(remote);
+
+	if (argc > 0 || (maybe_prune_tags && !remote_via_config)) {
+		size_t nr_alloc = st_add3(argc, maybe_prune_tags, 1);
+		refs = xcalloc(nr_alloc, sizeof(const char *));
+		if (maybe_prune_tags) {
+			refs[j++] = xstrdup("refs/tags/*:refs/tags/*");
+			ref_nr++;
+		}
+	}
+
 	if (argc > 0) {
-		int j = 0;
 		int i;
-		refs = xcalloc(st_add(argc, 1), sizeof(const char *));
 		for (i = 0; i < argc; i++) {
 			if (!strcmp(argv[i], "tag")) {
 				i++;
@@ -1303,9 +1396,8 @@ static int fetch_one(struct remote *remote, int argc, const char **argv)
 						    argv[i], argv[i]);
 			} else
 				refs[j++] = argv[i];
+			ref_nr++;
 		}
-		refs[j] = NULL;
-		ref_nr = j;
 	}
 
 	sigchain_push_common(unlock_pack_on_signal);
@@ -1322,11 +1414,14 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
 {
 	int i;
 	struct string_list list = STRING_LIST_INIT_DUP;
-	struct remote *remote;
+	struct remote *remote = NULL;
 	int result = 0;
+	int prune_tags_ok = 1;
 	struct argv_array argv_gc_auto = ARGV_ARRAY_INIT;
 
 	packet_trace_identity("fetch");
+
+	fetch_if_missing = 0;
 
 	/* Record the command line for the reflog */
 	strbuf_addstr(&default_rla, "fetch");
@@ -1361,23 +1456,23 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
 	if (depth || deepen_since || deepen_not.nr)
 		deepen = 1;
 
+	if (filter_options.choice && !repository_format_partial_clone)
+		die("--filter can only be used when extensions.partialClone is set");
+
 	if (all) {
 		if (argc == 1)
 			die(_("fetch --all does not take a repository argument"));
 		else if (argc > 1)
 			die(_("fetch --all does not make sense with refspecs"));
 		(void) for_each_remote(get_one_remote_for_fetch, &list);
-		result = fetch_multiple(&list);
 	} else if (argc == 0) {
 		/* No arguments -- use default remote */
 		remote = remote_get(NULL);
-		result = fetch_one(remote, argc, argv);
 	} else if (multiple) {
 		/* All arguments are assumed to be remotes or groups */
 		for (i = 0; i < argc; i++)
 			if (!add_remote_or_group(argv[i], &list))
 				die(_("No such remote or remote group: %s"), argv[i]);
-		result = fetch_multiple(&list);
 	} else {
 		/* Single remote or group */
 		(void) add_remote_or_group(argv[0], &list);
@@ -1385,19 +1480,32 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
 			/* More than one remote */
 			if (argc > 1)
 				die(_("Fetching a group and specifying refspecs does not make sense"));
-			result = fetch_multiple(&list);
 		} else {
 			/* Zero or one remotes */
 			remote = remote_get(argv[0]);
-			result = fetch_one(remote, argc-1, argv+1);
+			prune_tags_ok = (argc == 1);
+			argc--;
+			argv++;
 		}
+	}
+
+	if (remote) {
+		if (filter_options.choice || repository_format_partial_clone)
+			fetch_one_setup_partial(remote);
+		result = fetch_one(remote, argc, argv, prune_tags_ok);
+	} else {
+		if (filter_options.choice)
+			die(_("--filter can only be used with the remote configured in core.partialClone"));
+		/* TODO should this also die if we have a previous partial-clone? */
+		result = fetch_multiple(&list);
 	}
 
 	if (!result && (recurse_submodules != RECURSE_SUBMODULES_OFF)) {
 		struct argv_array options = ARGV_ARRAY_INIT;
 
 		add_options_to_argv(&options);
-		result = fetch_populated_submodules(&options,
+		result = fetch_populated_submodules(the_repository,
+						    &options,
 						    submodule_prefix,
 						    recurse_submodules,
 						    recurse_submodules_default,

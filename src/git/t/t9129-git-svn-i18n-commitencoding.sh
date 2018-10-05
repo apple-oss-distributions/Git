@@ -42,7 +42,7 @@ done
 
 for H in ISO8859-1 eucJP ISO-2022-JP
 do
-	test_expect_failure "$H commit on git side" '
+	test_expect_success "$H commit on git side" '
 	(
 		cd $H &&
 		git config i18n.commitencoding $H &&
@@ -59,7 +59,7 @@ done
 
 for H in ISO8859-1 eucJP ISO-2022-JP
 do
-	test_expect_failure "$H dcommit to svn" '
+	test_expect_success "$H dcommit to svn" '
 	(
 		cd $H &&
 		git svn dcommit &&
@@ -71,7 +71,7 @@ do
 	'
 done
 
-test_expect_failure UTF8 'ISO-8859-1 should match UTF-8 in svn' '
+test_expect_success UTF8 'ISO-8859-1 should match UTF-8 in svn' '
 	(
 		cd ISO8859-1 &&
 		compare_svn_head_with "$TEST_DIRECTORY"/t3900/1-UTF-8.txt
@@ -80,7 +80,7 @@ test_expect_failure UTF8 'ISO-8859-1 should match UTF-8 in svn' '
 
 for H in eucJP ISO-2022-JP
 do
-	test_expect_failure UTF8 "$H should match UTF-8 in svn" '
+	test_expect_success UTF8 "$H should match UTF-8 in svn" '
 		(
 			cd $H &&
 			compare_svn_head_with "$TEST_DIRECTORY"/t3900/2-UTF-8.txt

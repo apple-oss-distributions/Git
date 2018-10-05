@@ -901,6 +901,36 @@ test_expect_success 'get --path barfs on boolean variable' '
 	test_must_fail git config --get --path path.bool
 '
 
+test_expect_success 'get --expiry-date' '
+	rel="3.weeks.5.days.00:00" &&
+	rel_out="$rel ->" &&
+	cat >.git/config <<-\EOF &&
+	[date]
+	valid1 = "3.weeks.5.days 00:00"
+	valid2 = "Fri Jun 4 15:46:55 2010"
+	valid3 = "2017/11/11 11:11:11PM"
+	valid4 = "2017/11/10 09:08:07 PM"
+	valid5 = "never"
+	invalid1 = "abc"
+	EOF
+	cat >expect <<-EOF &&
+	$(test-date timestamp $rel)
+	1275666415
+	1510441871
+	1510348087
+	0
+	EOF
+	{
+		echo "$rel_out $(git config --expiry-date date.valid1)"
+		git config --expiry-date date.valid2 &&
+		git config --expiry-date date.valid3 &&
+		git config --expiry-date date.valid4 &&
+		git config --expiry-date date.valid5
+	} >actual &&
+	test_cmp expect actual &&
+	test_must_fail git config --expiry-date date.invalid1
+'
+
 cat > expect << EOF
 [quote]
 	leading = " test"
@@ -1174,6 +1204,29 @@ done
 
 test_expect_success 'git -c is not confused by empty environment' '
 	GIT_CONFIG_PARAMETERS="" git -c x.one=1 config --list
+'
+
+sq="'"
+test_expect_success 'detect bogus GIT_CONFIG_PARAMETERS' '
+	cat >expect <<-\EOF &&
+	env.one one
+	env.two two
+	EOF
+	GIT_CONFIG_PARAMETERS="${sq}env.one=one${sq} ${sq}env.two=two${sq}" \
+		git config --get-regexp "env.*" >actual &&
+	test_cmp expect actual &&
+
+	cat >expect <<-EOF &&
+	env.one one${sq}
+	env.two two
+	EOF
+	GIT_CONFIG_PARAMETERS="${sq}env.one=one${sq}\\$sq$sq$sq ${sq}env.two=two${sq}" \
+		git config --get-regexp "env.*" >actual &&
+	test_cmp expect actual &&
+
+	test_must_fail env \
+		GIT_CONFIG_PARAMETERS="${sq}env.one=one${sq}\\$sq ${sq}env.two=two${sq}" \
+		git config --get-regexp "env.*"
 '
 
 test_expect_success 'git config --edit works' '

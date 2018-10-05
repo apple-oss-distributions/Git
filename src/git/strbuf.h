@@ -179,6 +179,9 @@ extern void strbuf_trim(struct strbuf *);
 extern void strbuf_rtrim(struct strbuf *);
 extern void strbuf_ltrim(struct strbuf *);
 
+/* Strip trailing directory separators */
+extern void strbuf_trim_trailing_dir_sep(struct strbuf *);
+
 /**
  * Replace the contents of the strbuf with a reencoded form.  Returns -1
  * on error, 0 on success.
@@ -479,15 +482,6 @@ extern int strbuf_normalize_path(struct strbuf *sb);
  * comments are considered contents to be removed or not.
  */
 extern void strbuf_stripspace(struct strbuf *buf, int skip_comments);
-
-/**
- * Temporary alias until all topic branches have switched to use
- * strbuf_stripspace directly.
- */
-static inline void stripspace(struct strbuf *buf, int skip_comments)
-{
-	strbuf_stripspace(buf, skip_comments);
-}
 
 static inline int strbuf_strip_suffix(struct strbuf *sb, const char *suffix)
 {

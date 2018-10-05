@@ -29,6 +29,8 @@
 #include "gpg-interface.h"
 #include "progress.h"
 
+#define MAIL_DEFAULT_WRAP 72
+
 /* Set a default date-time format for git log ("log.date" config variable) */
 static const char *default_date_mode = NULL;
 
@@ -121,20 +123,19 @@ static void cmd_log_init_defaults(struct rev_info *rev)
 	if (fmt_pretty)
 		get_commit_format(fmt_pretty, rev);
 	if (default_follow)
-		DIFF_OPT_SET(&rev->diffopt, DEFAULT_FOLLOW_RENAMES);
+		rev->diffopt.flags.default_follow_renames = 1;
 	rev->verbose_header = 1;
-	DIFF_OPT_SET(&rev->diffopt, RECURSIVE);
+	rev->diffopt.flags.recursive = 1;
 	rev->diffopt.stat_width = -1; /* use full terminal width */
 	rev->diffopt.stat_graph_width = -1; /* respect statGraphWidth config */
 	rev->abbrev_commit = default_abbrev_commit;
 	rev->show_root_diff = default_show_root;
 	rev->subject_prefix = fmt_patch_subject_prefix;
 	rev->show_signature = default_show_signature;
-	DIFF_OPT_SET(&rev->diffopt, ALLOW_TEXTCONV);
+	rev->diffopt.flags.allow_textconv = 1;
 
 	if (default_date_mode)
 		parse_date_format(default_date_mode, &rev->date_mode);
-	rev->diffopt.touched_flags = 0;
 }
 
 static void cmd_log_init_finish(int argc, const char **argv, const char *prefix,
@@ -143,11 +144,19 @@ static void cmd_log_init_finish(int argc, const char **argv, const char *prefix,
 	struct userformat_want w;
 	int quiet = 0, source = 0, mailmap = 0;
 	static struct line_opt_callback_data line_cb = {NULL, NULL, STRING_LIST_INIT_DUP};
+	static struct string_list decorate_refs_exclude = STRING_LIST_INIT_NODUP;
+	static struct string_list decorate_refs_include = STRING_LIST_INIT_NODUP;
+	struct decoration_filter decoration_filter = {&decorate_refs_include,
+						      &decorate_refs_exclude};
 
 	const struct option builtin_log_options[] = {
 		OPT__QUIET(&quiet, N_("suppress diff output")),
 		OPT_BOOL(0, "source", &source, N_("show source")),
 		OPT_BOOL(0, "use-mailmap", &mailmap, N_("Use mail map file")),
+		OPT_STRING_LIST(0, "decorate-refs", &decorate_refs_include,
+				N_("pattern"), N_("only decorate refs that match <pattern>")),
+		OPT_STRING_LIST(0, "decorate-refs-exclude", &decorate_refs_exclude,
+				N_("pattern"), N_("do not decorate refs that match <pattern>")),
 		{ OPTION_CALLBACK, 0, "decorate", NULL, NULL, N_("decorate options"),
 		  PARSE_OPT_OPTARG, decorate_callback},
 		OPT_CALLBACK('L', NULL, &line_cb, "n,m:file",
@@ -181,8 +190,8 @@ static void cmd_log_init_finish(int argc, const char **argv, const char *prefix,
 	if (rev->show_notes)
 		init_display_notes(&rev->notes_opt);
 
-	if (rev->diffopt.pickaxe || rev->diffopt.filter ||
-	    DIFF_OPT_TST(&rev->diffopt, FOLLOW_RENAMES))
+	if ((rev->diffopt.pickaxe_opts & DIFF_PICKAXE_KINDS_MASK) ||
+	    rev->diffopt.filter || rev->diffopt.flags.follow_renames)
 		rev->always_show_header = 0;
 
 	if (source)
@@ -206,7 +215,7 @@ static void cmd_log_init_finish(int argc, const char **argv, const char *prefix,
 
 	if (decoration_style) {
 		rev->show_decorations = 1;
-		load_ref_decorations(decoration_style);
+		load_ref_decorations(&decoration_filter, decoration_style);
 	}
 
 	if (rev->line_level_traverse)
@@ -392,7 +401,7 @@ static int cmd_log_walk(struct rev_info *rev)
 		fclose(rev->diffopt.file);
 
 	if (rev->diffopt.output_format & DIFF_FORMAT_CHECKDIFF &&
-	    DIFF_OPT_TST(&rev->diffopt, CHECK_FAILED)) {
+	    rev->diffopt.flags.check_failed) {
 		return 02;
 	}
 	return diff_result_code(&rev->diffopt, 0);
@@ -484,8 +493,8 @@ static int show_blob_object(const struct object_id *oid, struct rev_info *rev, c
 	unsigned long size;
 
 	fflush(rev->diffopt.file);
-	if (!DIFF_OPT_TOUCHED(&rev->diffopt, ALLOW_TEXTCONV) ||
-	    !DIFF_OPT_TST(&rev->diffopt, ALLOW_TEXTCONV))
+	if (!rev->diffopt.flags.textconv_set_via_cmdline ||
+	    !rev->diffopt.flags.allow_textconv)
 		return stream_blob_to_fd(1, oid, NULL, 0);
 
 	if (get_oid_with_context(obj_name, GET_OID_RECORD_PATH,
@@ -667,9 +676,9 @@ int cmd_log_reflog(int argc, const char **argv, const char *prefix)
 static void log_setup_revisions_tweak(struct rev_info *rev,
 				      struct setup_revision_opt *opt)
 {
-	if (DIFF_OPT_TST(&rev->diffopt, DEFAULT_FOLLOW_RENAMES) &&
+	if (rev->diffopt.flags.default_follow_renames &&
 	    rev->prune_data.nr == 1)
-		DIFF_OPT_SET(&rev->diffopt, FOLLOW_RENAMES);
+		rev->diffopt.flags.follow_renames = 1;
 
 	/* Turn --cc/-c into -p --cc/-c when -p was not given */
 	if (!rev->diffopt.output_format && rev->combine_merges)
@@ -975,7 +984,7 @@ static char *find_branch_name(struct rev_info *rev)
 		return NULL;
 	ref = rev->cmdline.rev[positive].name;
 	tip_oid = &rev->cmdline.rev[positive].item->oid;
-	if (dwim_ref(ref, strlen(ref), branch_oid.hash, &full_ref) &&
+	if (dwim_ref(ref, strlen(ref), &branch_oid, &full_ref) &&
 	    skip_prefix(full_ref, "refs/heads/", &v) &&
 	    !oidcmp(tip_oid, &branch_oid))
 		branch = xstrdup(v);
@@ -1037,7 +1046,7 @@ static void make_cover_letter(struct rev_info *rev, int use_stdout,
 
 	shortlog_init(&log);
 	log.wrap_lines = 1;
-	log.wrap = 72;
+	log.wrap = MAIL_DEFAULT_WRAP;
 	log.in1 = 2;
 	log.in2 = 4;
 	log.file = rev->diffopt.file;
@@ -1054,6 +1063,7 @@ static void make_cover_letter(struct rev_info *rev, int use_stdout,
 
 	memcpy(&opts, &rev->diffopt, sizeof(opts));
 	opts.output_format = DIFF_FORMAT_SUMMARY | DIFF_FORMAT_DIFFSTAT;
+	opts.stat_width = MAIL_DEFAULT_WRAP;
 
 	diff_setup_done(&opts);
 
@@ -1341,7 +1351,7 @@ static void prepare_bases(struct base_tree_info *bases,
 		return;
 
 	diff_setup(&diffopt);
-	DIFF_OPT_SET(&diffopt, RECURSIVE);
+	diffopt.flags.recursive = 1;
 	diff_setup_done(&diffopt);
 
 	oidcpy(&bases->base_commit, &base->object.oid);
@@ -1512,7 +1522,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 	rev.verbose_header = 1;
 	rev.diff = 1;
 	rev.max_parents = 1;
-	DIFF_OPT_SET(&rev.diffopt, RECURSIVE);
+	rev.diffopt.flags.recursive = 1;
 	rev.subject_prefix = fmt_patch_subject_prefix;
 	memset(&s_r_opt, 0, sizeof(s_r_opt));
 	s_r_opt.def = "HEAD";
@@ -1607,14 +1617,16 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 		(!rev.diffopt.output_format ||
 		 rev.diffopt.output_format == DIFF_FORMAT_PATCH))
 		rev.diffopt.output_format = DIFF_FORMAT_DIFFSTAT | DIFF_FORMAT_SUMMARY;
+	if (!rev.diffopt.stat_width)
+		rev.diffopt.stat_width = MAIL_DEFAULT_WRAP;
 
 	/* Always generate a patch */
 	rev.diffopt.output_format |= DIFF_FORMAT_PATCH;
 
 	rev.zero_commit = zero_commit;
 
-	if (!DIFF_OPT_TST(&rev.diffopt, TEXT) && !no_binary_diff)
-		DIFF_OPT_SET(&rev.diffopt, BINARY);
+	if (!rev.diffopt.flags.text && !no_binary_diff)
+		rev.diffopt.flags.binary = 1;
 
 	if (rev.show_notes)
 		init_display_notes(&rev.notes_opt);

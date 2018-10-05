@@ -1189,11 +1189,11 @@ bail:
  */
 static void lf_to_crlf(struct strbuf *msg)
 {
-	char *new;
+	char *new_msg;
 	size_t i, j;
 	char lastc;
 
-	/* First pass: tally, in j, the size of the new string: */
+	/* First pass: tally, in j, the size of the new_msg string: */
 	for (i = j = 0, lastc = '\0'; i < msg->len; i++) {
 		if (msg->buf[i] == '\n' && lastc != '\r')
 			j++; /* a CR will need to be added here */
@@ -1201,18 +1201,18 @@ static void lf_to_crlf(struct strbuf *msg)
 		j++;
 	}
 
-	new = xmallocz(j);
+	new_msg = xmallocz(j);
 
 	/*
-	 * Second pass: write the new string.  Note that this loop is
+	 * Second pass: write the new_msg string.  Note that this loop is
 	 * otherwise identical to the first pass.
 	 */
 	for (i = j = 0, lastc = '\0'; i < msg->len; i++) {
 		if (msg->buf[i] == '\n' && lastc != '\r')
-			new[j++] = '\r';
-		lastc = new[j++] = msg->buf[i];
+			new_msg[j++] = '\r';
+		lastc = new_msg[j++] = msg->buf[i];
 	}
-	strbuf_attach(msg, new, j, j + 1);
+	strbuf_attach(msg, new_msg, j, j + 1);
 }
 
 /*
@@ -1412,6 +1412,7 @@ static CURL *setup_curl(struct imap_server_conf *srvc, struct credential *cred)
 {
 	CURL *curl;
 	struct strbuf path = STRBUF_INIT;
+	char *uri_encoded_folder;
 
 	if (curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
 		die("curl_global_init failed");
@@ -1429,7 +1430,12 @@ static CURL *setup_curl(struct imap_server_conf *srvc, struct credential *cred)
 	strbuf_addstr(&path, server.host);
 	if (!path.len || path.buf[path.len - 1] != '/')
 		strbuf_addch(&path, '/');
-	strbuf_addstr(&path, server.folder);
+
+	uri_encoded_folder = curl_easy_escape(curl, server.folder, 0);
+	if (!uri_encoded_folder)
+		die("failed to encode server folder");
+	strbuf_addstr(&path, uri_encoded_folder);
+	curl_free(uri_encoded_folder);
 
 	curl_easy_setopt(curl, CURLOPT_URL, path.buf);
 	strbuf_release(&path);

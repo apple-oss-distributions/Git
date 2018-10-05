@@ -362,7 +362,7 @@ static void start_put(struct transfer_request *request)
 	git_zstream stream;
 
 	unpacked = read_sha1_file(request->obj->oid.hash, &type, &len);
-	hdrlen = xsnprintf(hdr, sizeof(hdr), "%s %lu", typename(type), len) + 1;
+	hdrlen = xsnprintf(hdr, sizeof(hdr), "%s %lu", type_name(type), len) + 1;
 
 	/* Set it up */
 	git_deflate_init(&stream, zlib_compression_level);
@@ -915,6 +915,10 @@ static struct remote_lock *lock_remote(const char *path, long timeout)
 				lock->timeout = -1;
 			}
 			XML_ParserFree(parser);
+		} else {
+			fprintf(stderr,
+				"error: curl result=%d, HTTP code=%ld\n",
+				results.curl_result, results.http_code);
 		}
 	} else {
 		fprintf(stderr, "Unable to start LOCK request\n");
@@ -1007,20 +1011,18 @@ static void remote_ls(const char *path, int flags,
 		      void (*userFunc)(struct remote_ls_ctx *ls),
 		      void *userData);
 
-/* extract hex from sharded "xx/x{40}" filename */
+/* extract hex from sharded "xx/x{38}" filename */
 static int get_oid_hex_from_objpath(const char *path, struct object_id *oid)
 {
-	char hex[GIT_MAX_HEXSZ];
-
 	if (strlen(path) != GIT_SHA1_HEXSZ + 1)
 		return -1;
 
-	memcpy(hex, path, 2);
+	if (hex_to_bytes(oid->hash, path, 1))
+		return -1;
 	path += 2;
 	path++; /* skip '/' */
-	memcpy(hex + 2, path, GIT_SHA1_HEXSZ - 2);
 
-	return get_oid_hex(hex, oid);
+	return hex_to_bytes(oid->hash + 1, path, GIT_SHA1_RAWSZ - 1);
 }
 
 static void process_ls_object(struct remote_ls_ctx *ls)

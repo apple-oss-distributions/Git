@@ -255,4 +255,60 @@ test_expect_success 'rebase commit with an ancient timestamp' '
 	grep "author .* 34567 +0600$" actual
 '
 
+test_expect_success 'rebase with "From " line in commit message' '
+	git checkout -b preserve-from master~1 &&
+	cat >From_.msg <<EOF &&
+Somebody embedded an mbox in a commit message
+
+This is from so-and-so:
+
+From a@b Mon Sep 17 00:00:00 2001
+From: John Doe <nobody@example.com>
+Date: Sat, 11 Nov 2017 00:00:00 +0000
+Subject: not this message
+
+something
+EOF
+	>From_ &&
+	git add From_ &&
+	git commit -F From_.msg &&
+	git rebase master &&
+	git log -1 --pretty=format:%B >out &&
+	test_cmp From_.msg out
+'
+
+test_expect_success 'rebase--am.sh and --show-current-patch' '
+	test_create_repo conflict-apply &&
+	(
+		cd conflict-apply &&
+		test_commit init &&
+		echo one >>init.t &&
+		git commit -a -m one &&
+		echo two >>init.t &&
+		git commit -a -m two &&
+		git tag two &&
+		test_must_fail git rebase --onto init HEAD^ &&
+		GIT_TRACE=1 git rebase --show-current-patch >/dev/null 2>stderr &&
+		grep "show.*$(git rev-parse two)" stderr
+	)
+'
+
+test_expect_success 'rebase--merge.sh and --show-current-patch' '
+	test_create_repo conflict-merge &&
+	(
+		cd conflict-merge &&
+		test_commit init &&
+		echo one >>init.t &&
+		git commit -a -m one &&
+		echo two >>init.t &&
+		git commit -a -m two &&
+		git tag two &&
+		test_must_fail git rebase --merge --onto init HEAD^ &&
+		git rebase --show-current-patch >actual.patch &&
+		GIT_TRACE=1 git rebase --show-current-patch >/dev/null 2>stderr &&
+		grep "show.*REBASE_HEAD" stderr &&
+		test "$(git rev-parse REBASE_HEAD)" = "$(git rev-parse two)"
+	)
+'
+
 test_done

@@ -804,6 +804,99 @@ test_expect_success 'push -m shows right message' '
 	test_cmp expect actual
 '
 
+test_expect_success 'push -m also works without space' '
+	>foo &&
+	git add foo &&
+	git stash push -m"unspaced test message" &&
+	echo "stash@{0}: On master: unspaced test message" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store -m foo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store -m "store m" $STASH_ID &&
+	echo "stash@{0}: store m" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store -mfoo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store -m"store mfoo" $STASH_ID &&
+	echo "stash@{0}: store mfoo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store --message=foo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store --message="store message=foo" $STASH_ID &&
+	echo "stash@{0}: store message=foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store --message foo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store --message "store message foo" $STASH_ID &&
+	echo "stash@{0}: store message foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push -mfoo uses right message' '
+	>foo &&
+	git add foo &&
+	git stash push -m"test mfoo" &&
+	echo "stash@{0}: On master: test mfoo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push --message foo is synonym for -mfoo' '
+	>foo &&
+	git add foo &&
+	git stash push --message "test message foo" &&
+	echo "stash@{0}: On master: test message foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push --message=foo is synonym for -mfoo' '
+	>foo &&
+	git add foo &&
+	git stash push --message="test message=foo" &&
+	echo "stash@{0}: On master: test message=foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push -m shows right message' '
+	>foo &&
+	git add foo &&
+	git stash push -m "test m foo" &&
+	echo "stash@{0}: On master: test m foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
 test_expect_success 'create stores correct message' '
 	>foo &&
 	git add foo &&
@@ -969,6 +1062,38 @@ test_expect_success 'stash -k -- <pathspec> leaves unstaged files intact' '
 	test "",bar = $(cat foo),$(cat bar) &&
 	git stash pop &&
 	test foo,bar = $(cat foo),$(cat bar)
+'
+
+test_expect_success 'stash -- <subdir> leaves untracked files in subdir intact' '
+	git reset &&
+	>subdir/untracked &&
+	>subdir/tracked1 &&
+	>subdir/tracked2 &&
+	git add subdir/tracked* &&
+	git stash -- subdir/ &&
+	test_path_is_missing subdir/tracked1 &&
+	test_path_is_missing subdir/tracked2 &&
+	test_path_is_file subdir/untracked &&
+	git stash pop &&
+	test_path_is_file subdir/tracked1 &&
+	test_path_is_file subdir/tracked2 &&
+	test_path_is_file subdir/untracked
+'
+
+test_expect_success 'stash -- <subdir> works with binary files' '
+	git reset &&
+	>subdir/untracked &&
+	>subdir/tracked &&
+	cp "$TEST_DIRECTORY"/test-binary-1.png subdir/tracked-binary &&
+	git add subdir/tracked* &&
+	git stash -- subdir/ &&
+	test_path_is_missing subdir/tracked &&
+	test_path_is_missing subdir/tracked-binary &&
+	test_path_is_file subdir/untracked &&
+	git stash pop &&
+	test_path_is_file subdir/tracked &&
+	test_path_is_file subdir/tracked-binary &&
+	test_path_is_file subdir/untracked
 '
 
 test_done

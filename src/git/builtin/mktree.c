@@ -40,7 +40,7 @@ static int ent_compare(const void *a_, const void *b_)
 				 b->name, b->len, b->mode);
 }
 
-static void write_tree(unsigned char *sha1)
+static void write_tree(struct object_id *oid)
 {
 	struct strbuf buf;
 	size_t size;
@@ -57,7 +57,7 @@ static void write_tree(unsigned char *sha1)
 		strbuf_add(&buf, ent->sha1, 20);
 	}
 
-	write_sha1_file(buf.buf, buf.len, tree_type, sha1);
+	write_object_file(buf.buf, buf.len, tree_type, oid);
 	strbuf_release(&buf);
 }
 
@@ -112,7 +112,7 @@ static void mktree_line(char *buf, size_t len, int nul_term_line, int allow_miss
 	mode_type = object_type(mode);
 	if (mode_type != type_from_string(ptr)) {
 		die("entry '%s' object type (%s) doesn't match mode type (%s)",
-			path, ptr, typename(mode_type));
+			path, ptr, type_name(mode_type));
 	}
 
 	/* Check the type of object identified by sha1 */
@@ -131,7 +131,7 @@ static void mktree_line(char *buf, size_t len, int nul_term_line, int allow_miss
 			 * because the new tree entry will never be correct.
 			 */
 			die("entry '%s' object %s is a %s but specified type was (%s)",
-				path, sha1_to_hex(sha1), typename(obj_type), typename(mode_type));
+				path, sha1_to_hex(sha1), type_name(obj_type), type_name(mode_type));
 		}
 	}
 
@@ -142,7 +142,7 @@ static void mktree_line(char *buf, size_t len, int nul_term_line, int allow_miss
 int cmd_mktree(int ac, const char **av, const char *prefix)
 {
 	struct strbuf sb = STRBUF_INIT;
-	unsigned char sha1[20];
+	struct object_id oid;
 	int nul_term_line = 0;
 	int allow_missing = 0;
 	int is_batch_mode = 0;
@@ -181,8 +181,8 @@ int cmd_mktree(int ac, const char **av, const char *prefix)
 			 */
 			; /* skip creating an empty tree */
 		} else {
-			write_tree(sha1);
-			puts(sha1_to_hex(sha1));
+			write_tree(&oid);
+			puts(oid_to_hex(&oid));
 			fflush(stdout);
 		}
 		used=0; /* reset tree entry buffer for re-use in batch mode */

@@ -22,6 +22,9 @@ struct submodule {
 	int recommend_shallow;
 };
 
+#define SUBMODULE_INIT { NULL, NULL, NULL, RECURSE_SUBMODULES_NONE, \
+	NULL, NULL, SUBMODULE_UPDATE_STRATEGY_INIT, {0}, -1 };
+
 struct submodule_cache;
 struct repository;
 
@@ -44,5 +47,12 @@ extern const struct submodule *submodule_from_cache(struct repository *repo,
 						    const struct object_id *treeish_name,
 						    const char *key);
 extern void submodule_free(void);
+
+/*
+ * Returns 0 if the name is syntactically acceptable as a submodule "name"
+ * (e.g., that may be found in the subsection of a .gitmodules file) and -1
+ * otherwise.
+ */
+int check_submodule_name(const char *name);
 
 #endif /* SUBMODULE_CONFIG_H */

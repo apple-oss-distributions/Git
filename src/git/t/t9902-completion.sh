@@ -1237,17 +1237,19 @@ test_expect_success 'double dash "git" itself' '
 test_expect_success 'double dash "git checkout"' '
 	test_completion "git checkout --" <<-\EOF
 	--quiet Z
+	--detach Z
+	--track Z
+	--orphan=Z
 	--ours Z
 	--theirs Z
-	--track Z
-	--no-track Z
 	--merge Z
-	--conflict=
-	--orphan Z
+	--conflict=Z
 	--patch Z
-	--detach Z
 	--ignore-skip-worktree-bits Z
+	--ignore-other-worktrees Z
 	--recurse-submodules Z
+	--progress Z
+	--no-track Z
 	--no-recurse-submodules Z
 	EOF
 '
@@ -1494,5 +1496,36 @@ do
 		test_cmp expected out
 	'
 done
+
+test_expect_success 'sourcing the completion script clears cached commands' '
+	__git_compute_all_commands &&
+	verbose test -n "$__git_all_commands" &&
+	. "$GIT_BUILD_DIR/contrib/completion/git-completion.bash" &&
+	verbose test -z "$__git_all_commands"
+'
+
+test_expect_success 'sourcing the completion script clears cached porcelain commands' '
+	__git_compute_porcelain_commands &&
+	verbose test -n "$__git_porcelain_commands" &&
+	. "$GIT_BUILD_DIR/contrib/completion/git-completion.bash" &&
+	verbose test -z "$__git_porcelain_commands"
+'
+
+test_expect_success !GETTEXT_POISON 'sourcing the completion script clears cached merge strategies' '
+	__git_compute_merge_strategies &&
+	verbose test -n "$__git_merge_strategies" &&
+	. "$GIT_BUILD_DIR/contrib/completion/git-completion.bash" &&
+	verbose test -z "$__git_merge_strategies"
+'
+
+test_expect_success 'sourcing the completion script clears cached --options' '
+	__gitcomp_builtin checkout &&
+	verbose test -n "$__gitcomp_builtin_checkout" &&
+	__gitcomp_builtin notes_edit &&
+	verbose test -n "$__gitcomp_builtin_notes_edit" &&
+	. "$GIT_BUILD_DIR/contrib/completion/git-completion.bash" &&
+	verbose test -z "$__gitcomp_builtin_checkout" &&
+	verbose test -z "$__gitcomp_builtin_notes_edit"
+'
 
 test_done

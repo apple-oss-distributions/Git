@@ -5,6 +5,7 @@
 #include "string-list.h"
 #include "color.h"
 #include "pathspec.h"
+#include "remote.h"
 
 struct worktree;
 
@@ -27,6 +28,12 @@ enum untracked_status_type {
 	SHOW_ALL_UNTRACKED_FILES
 };
 
+enum show_ignored_type {
+	SHOW_NO_IGNORED,
+	SHOW_TRADITIONAL_IGNORED,
+	SHOW_MATCHING_IGNORED,
+};
+
 /* from where does this commit originate */
 enum commit_whence {
 	FROM_COMMIT,     /* normal */
@@ -38,10 +45,11 @@ struct wt_status_change_data {
 	int worktree_status;
 	int index_status;
 	int stagemask;
-	int score;
 	int mode_head, mode_index, mode_worktree;
 	struct object_id oid_head, oid_index;
-	char *head_path;
+	int rename_status;
+	int rename_score;
+	char *rename_source;
 	unsigned dirty_submodule       : 2;
 	unsigned new_submodule_commits : 1;
 };
@@ -70,7 +78,7 @@ struct wt_status {
 	int display_comment_prefix;
 	int relative_paths;
 	int submodule_summary;
-	int show_ignored_files;
+	enum show_ignored_type show_ignored_mode;
 	enum untracked_status_type show_untracked_files;
 	const char *ignore_submodule_arg;
 	char color_palette[WT_STATUS_MAXSLOT][COLOR_MAXLEN];
@@ -80,6 +88,7 @@ struct wt_status {
 	int show_branch;
 	int show_stash;
 	int hints;
+	enum ahead_behind_flags ahead_behind_flags;
 
 	enum wt_status_format status_format;
 	unsigned char sha1_commit[GIT_MAX_RAWSZ]; /* when not Initial */

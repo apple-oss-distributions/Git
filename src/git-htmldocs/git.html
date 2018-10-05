@@ -1130,7 +1130,7 @@ ancillary user utilities.</p></div>
 </dt>
 <dd>
 <p>
-        Describe a commit using the most recent tag reachable from it.
+        Give an object a human readable name based on an available ref.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2670,21 +2670,23 @@ parameter, &lt;path&gt;.</p></div>
         If either of these environment variables is set then <em>git fetch</em>
         and <em>git push</em> will use the specified command instead of <em>ssh</em>
         when they need to connect to a remote system.
-        The command will be given exactly two or four arguments: the
-        <em>username@host</em> (or just <em>host</em>) from the URL and the shell
-        command to execute on that remote system, optionally preceded by
-        <code>-p</code> (literally) and the <em>port</em> from the URL when it specifies
-        something other than the default SSH port.
+        The command-line parameters passed to the configured command are
+        determined by the ssh variant.  See <code>ssh.variant</code> option in
+        <a href="git-config.html">git-config(1)</a> for details.
 </p>
-<div class="paragraph"><p><code>$GIT_SSH_COMMAND</code> takes precedence over <code>$GIT_SSH</code>, and is interpreted
+</dd>
+</dl></div>
+<div class="paragraph"><p>+
+<code>$GIT_SSH_COMMAND</code> takes precedence over <code>$GIT_SSH</code>, and is interpreted
 by the shell, which allows additional arguments to be included.
 <code>$GIT_SSH</code> on the other hand must be just the path to a program
 (which can be a wrapper shell script, if additional arguments are
 needed).</p></div>
-<div class="paragraph"><p>Usually it is easier to configure any desired options through your
+<div class="paragraph"><p>+
+Usually it is easier to configure any desired options through your
 personal <code>.ssh/config</code> file.  Please consult your ssh documentation
 for further details.</p></div>
-</dd>
+<div class="dlist"><dl>
 <dt class="hdlist1">
 <code>GIT_SSH_VARIANT</code>
 </dt>
@@ -2769,6 +2771,15 @@ into it.</p></div>
 "false" (case insensitive) disables trace messages.</p></div>
 </dd>
 <dt class="hdlist1">
+<code>GIT_TRACE_FSMONITOR</code>
+</dt>
+<dd>
+<p>
+        Enables trace messages for the filesystem monitor extension.
+        See <code>GIT_TRACE</code> for available trace output options.
+</p>
+</dd>
+<dt class="hdlist1">
 <code>GIT_TRACE_PACK_ACCESS</code>
 </dt>
 <dd>
@@ -2848,6 +2859,26 @@ of clones and fetches.</p></div>
         This option overrides setting the <code>GIT_CURL_VERBOSE</code> environment
         variable.
         See <code>GIT_TRACE</code> for available trace output options.
+</p>
+</dd>
+<dt class="hdlist1">
+<code>GIT_TRACE_CURL_NO_DATA</code>
+</dt>
+<dd>
+<p>
+        When a curl trace is enabled (see <code>GIT_TRACE_CURL</code> above), do not dump
+        data (that is, only dump info lines and headers).
+</p>
+</dd>
+<dt class="hdlist1">
+<code>GIT_REDACT_COOKIES</code>
+</dt>
+<dd>
+<p>
+        This can be set to a comma-separated list of strings. When a curl trace
+        is enabled (see <code>GIT_TRACE_CURL</code> above), whenever a "Cookies:" header
+        sent by the client is dumped, values of cookies whose key is in that
+        list (case-sensitive) are redacted.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2949,6 +2980,17 @@ of clones and fetches.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<code>GIT_PROTOCOL</code>
+</dt>
+<dd>
+<p>
+        For internal use only.  Used in handshaking the wire protocol.
+        Contains a colon <em>:</em> separated list of keys with optional values
+        <em>key[=value]</em>.  Presence of unknown keys and values must be
+        ignored.
+</p>
+</dd>
+<dt class="hdlist1">
 <code>GIT_OPTIONAL_LOCKS</code>
 </dt>
 <dd>
@@ -2959,6 +3001,46 @@ of clones and fetches.</p></div>
         index as a side effect. This is useful for processes running in
         the background which do not want to cause lock contention with
         other operations on the repository.  Defaults to <code>1</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+<code>GIT_REDIRECT_STDIN</code>
+</dt>
+<dt class="hdlist1">
+<code>GIT_REDIRECT_STDOUT</code>
+</dt>
+<dt class="hdlist1">
+<code>GIT_REDIRECT_STDERR</code>
+</dt>
+<dd>
+<p>
+        Windows-only: allow redirecting the standard input/output/error
+        handles to paths specified by the environment variables. This is
+        particularly useful in multi-threaded applications where the
+        canonical way to pass standard handles via <code>CreateProcess()</code> is
+        not an option because it would require the handles to be marked
+        inheritable (and consequently <strong>every</strong> spawned process would
+        inherit them, possibly blocking regular Git operations). The
+        primary intended use case is to use named pipes for communication
+        (e.g. <code>\\.\pipe\my-git-stdin-123</code>).
+</p>
+<div class="paragraph"><p>Two special values are supported: <code>off</code> will simply close the
+corresponding standard handle, and if <code>GIT_REDIRECT_STDERR</code> is
+<code>2&gt;&amp;1</code>, standard error will be redirected to the same handle as
+standard output.</p></div>
+</dd>
+<dt class="hdlist1">
+<code>GIT_PRINT_SHA1_ELLIPSIS</code> (deprecated)
+</dt>
+<dd>
+<p>
+        If set to <code>yes</code>, print an ellipsis following an
+        (abbreviated) SHA-1 value.  This affects indications of
+        detached HEADs (<a href="git-checkout.html">git-checkout(1)</a>) and the raw
+        diff output (<a href="git-diff.html">git-diff(1)</a>).  Printing an
+        ellipsis in the cases mentioned is no longer considered
+        adequate and support for it is likely to be removed in the
+        foreseeable future (along with the variable).
 </p>
 </dd>
 </dl></div>
@@ -3047,6 +3129,8 @@ the authors for specific parts of the project.</p></div>
 <div class="paragraph"><p>Report bugs to the Git mailing list &lt;<a href="mailto:git@vger.kernel.org">git@vger.kernel.org</a>&gt; where the
 development and maintenance is primarily done.  You do not have to be
 subscribed to the list to send a message there.</p></div>
+<div class="paragraph"><p>Issues which are security relevant should be disclosed privately to
+the Git Security mailing list &lt;<a href="mailto:git-security@googlegroups.com">git-security@googlegroups.com</a>&gt;.</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -3069,7 +3153,8 @@ subscribed to the list to send a message there.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-10-03 16:10:36 JST
+Last updated
+ 2018-03-15 15:49:20 PDT
 </div>
 </div>
 </body>

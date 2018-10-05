@@ -76,7 +76,7 @@ static int diff_tree_stdin(char *line)
 	if (obj->type == OBJ_TREE)
 		return stdin_diff_trees((struct tree *)obj, p);
 	error("Object %s is a %s, not a commit or tree",
-	      oid_to_hex(&oid), typename(obj->type));
+	      oid_to_hex(&oid), type_name(obj->type));
 	return -1;
 }
 
@@ -110,6 +110,8 @@ int cmd_diff_tree(int argc, const char **argv, const char *prefix)
 
 	git_config(git_diff_basic_config, NULL); /* no "diff" UI options */
 	init_revisions(opt, prefix);
+	if (read_cache() < 0)
+		die(_("index file corrupt"));
 	opt->abbrev = 0;
 	opt->diff = 1;
 	opt->disable_stdin = 1;

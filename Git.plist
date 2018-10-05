@@ -4,15 +4,27 @@
 <array>
 	<dict>
 		<key>OpenSourceImportDate</key>
-		<string>2017-12-01</string>
+		<string>2017-05-29</string>
 		<key>OpenSourceLicense</key>
 		<string>GPL</string>
 		<key>OpenSourceProject</key>
 		<string>git</string>
 		<key>OpenSourceVersion</key>
-		<string>2.15.1</string>
+		<string>2.17.1</string>
 		<key>OpenSourceWebsiteURL</key>
 		<string>http://git-scm.com</string>
+		<key>OpenSourceModifications</key>
+		<array>
+			<string>Locate perl and python modules using relative-paths</string>
+			<string>Locate git subcommand executables relative to runtime executable</string>
+			<string>Support Xcode.app-bundled gitattributes</string>
+			<string>Support Xcode.app-bundled gitconfig</string>
+			<string>Use symbolic links rather than hard links for files in libexec</string>
+			<string>HTML documentation is not provided with Apple's git. Make the error message more on point.</string>
+			<string>Set Apple Git version during build</string>
+			<string>Fix detection of UTF8_NFD_TO_NFC in test-lib</string>
+			<string>git-svn had a minor thinko/typo which has been fixed.</string>
+		</array>
 	</dict>
 </array>
 </plist>

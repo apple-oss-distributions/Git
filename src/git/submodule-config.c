@@ -9,7 +9,7 @@
 /*
  * submodule cache lookup structure
  * There is one shared set of 'struct submodule' entries which can be
- * looked up by their sha1 blob id of the .gitmodule file and either
+ * looked up by their sha1 blob id of the .gitmodules file and either
  * using path or name as key.
  * for_path stores submodule entries with path as key
  * for_name stores submodule entries with name as key
@@ -91,7 +91,7 @@ static void submodule_cache_clear(struct submodule_cache *cache)
 	/*
 	 * We iterate over the name hash here to be symmetric with the
 	 * allocation of struct submodule entries. Each is allocated by
-	 * their .gitmodule blob sha1 and submodule name.
+	 * their .gitmodules blob sha1 and submodule name.
 	 */
 	hashmap_iter_init(&cache->for_name, &iter);
 	while ((entry = hashmap_iter_next(&iter)))
@@ -190,6 +190,31 @@ static struct submodule *cache_lookup_name(struct submodule_cache *cache,
 	return NULL;
 }
 
+int check_submodule_name(const char *name)
+{
+	/* Disallow empty names */
+	if (!*name)
+		return -1;
+
+	/*
+	 * Look for '..' as a path component. Check both '/' and '\\' as
+	 * separators rather than is_dir_sep(), because we want the name rules
+	 * to be consistent across platforms.
+	 */
+	goto in_component; /* always start inside component */
+	while (*name) {
+		char c = *name++;
+		if (c == '/' || c == '\\') {
+in_component:
+			if (name[0] == '.' && name[1] == '.' &&
+			    (!name[2] || name[2] == '/' || name[2] == '\\'))
+				return -1;
+		}
+	}
+
+	return 0;
+}
+
 static int name_and_item_from_var(const char *var, struct strbuf *name,
 				  struct strbuf *item)
 {
@@ -201,6 +226,12 @@ static int name_and_item_from_var(const char *var, struct strbuf *name,
 		return 0;
 
 	strbuf_add(name, subsection, subsection_len);
+	if (check_submodule_name(name->buf) < 0) {
+		warning(_("ignoring suspicious submodule name: %s"), name->buf);
+		strbuf_release(name);
+		return 0;
+	}
+
 	strbuf_addstr(item, key);
 
 	return 1;

@@ -22,6 +22,7 @@ static struct refspec s_tag_refspec = {
 	"refs/tags/*"
 };
 
+/* See TAG_REFSPEC for the string version */
 const struct refspec *tag_refspec = &s_tag_refspec;
 
 struct counted_string {
@@ -103,6 +104,17 @@ static void add_fetch_refspec(struct remote *remote, const char *ref)
 	remote->fetch_refspec[remote->fetch_refspec_nr++] = ref;
 }
 
+void add_prune_tags_to_fetch_refspec(struct remote *remote)
+{
+	int nr = remote->fetch_refspec_nr;
+	int bufsize = nr  + 1;
+	int size = sizeof(struct refspec);
+
+	remote->fetch = xrealloc(remote->fetch, size  * bufsize);
+	memcpy(&remote->fetch[nr], tag_refspec, size);
+	add_fetch_refspec(remote, xstrdup(TAG_REFSPEC));
+}
+
 static void add_url(struct remote *remote, const char *url)
 {
 	ALLOC_GROW(remote->url, remote->url_nr + 1, remote->url_alloc);
@@ -173,6 +185,7 @@ static struct remote *make_remote(const char *name, int len)
 
 	ret = xcalloc(1, sizeof(struct remote));
 	ret->prune = -1;  /* unspecified */
+	ret->prune_tags = -1;  /* unspecified */
 	ALLOC_GROW(remotes, remotes_nr + 1, remotes_alloc);
 	remotes[remotes_nr++] = ret;
 	ret->name = xstrndup(name, len);
@@ -391,6 +404,8 @@ static int handle_config(const char *key, const char *value, void *cb)
 		remote->skip_default_update = git_config_bool(key, value);
 	else if (!strcmp(subkey, "prune"))
 		remote->prune = git_config_bool(key, value);
+	else if (!strcmp(subkey, "prunetags"))
+		remote->prune_tags = git_config_bool(key, value);
 	else if (!strcmp(subkey, "url")) {
 		const char *v;
 		if (git_config_string(&v, key, value))
@@ -673,6 +688,36 @@ const char *pushremote_for_branch(struct branch *branch, int *explicit)
 		return pushremote_name;
 	}
 	return remote_for_branch(branch, explicit);
+}
+
+const char *remote_ref_for_branch(struct branch *branch, int for_push,
+				  int *explicit)
+{
+	if (branch) {
+		if (!for_push) {
+			if (branch->merge_nr) {
+				if (explicit)
+					*explicit = 1;
+				return branch->merge_name[0];
+			}
+		} else {
+			const char *dst, *remote_name =
+				pushremote_for_branch(branch, NULL);
+			struct remote *remote = remote_get(remote_name);
+
+			if (remote && remote->push_refspec_nr &&
+			    (dst = apply_refspecs(remote->push,
+						  remote->push_refspec_nr,
+						  branch->refname))) {
+				if (explicit)
+					*explicit = 1;
+				return dst;
+			}
+		}
+	}
+	if (explicit)
+		*explicit = 0;
+	return "";
 }
 
 static struct remote *remote_get_1(const char *name,
@@ -1629,7 +1674,7 @@ static void set_merge(struct branch *ret)
 		    strcmp(ret->remote_name, "."))
 			continue;
 		if (dwim_ref(ret->merge_name[i], strlen(ret->merge_name[i]),
-			     oid.hash, &ref) == 1)
+			     &oid, &ref) == 1)
 			ret->merge[i]->dst = ref;
 		else
 			ret->merge[i]->dst = xstrdup(ret->merge_name[i]);
@@ -1940,33 +1985,33 @@ static void unmark_and_free(struct commit_list *list, unsigned int mark)
 int ref_newer(const struct object_id *new_oid, const struct object_id *old_oid)
 {
 	struct object *o;
-	struct commit *old, *new;
+	struct commit *old_commit, *new_commit;
 	struct commit_list *list, *used;
 	int found = 0;
 
 	/*
-	 * Both new and old must be commit-ish and new is descendant of
-	 * old.  Otherwise we require --force.
+	 * Both new_commit and old_commit must be commit-ish and new_commit is descendant of
+	 * old_commit.  Otherwise we require --force.
 	 */
 	o = deref_tag(parse_object(old_oid), NULL, 0);
 	if (!o || o->type != OBJ_COMMIT)
 		return 0;
-	old = (struct commit *) o;
+	old_commit = (struct commit *) o;
 
 	o = deref_tag(parse_object(new_oid), NULL, 0);
 	if (!o || o->type != OBJ_COMMIT)
 		return 0;
-	new = (struct commit *) o;
+	new_commit = (struct commit *) o;
 
-	if (parse_commit(new) < 0)
+	if (parse_commit(new_commit) < 0)
 		return 0;
 
 	used = list = NULL;
-	commit_list_insert(new, &list);
+	commit_list_insert(new_commit, &list);
 	while (list) {
-		new = pop_most_recent_commit(&list, TMP_MARK);
-		commit_list_insert(new, &used);
-		if (new == old) {
+		new_commit = pop_most_recent_commit(&list, TMP_MARK);
+		commit_list_insert(new_commit, &used);
+		if (new_commit == old_commit) {
 			found = 1;
 			break;
 		}
@@ -1977,16 +2022,23 @@ int ref_newer(const struct object_id *new_oid, const struct object_id *old_oid)
 }
 
 /*
- * Compare a branch with its upstream, and save their differences (number
- * of commits) in *num_ours and *num_theirs. The name of the upstream branch
- * (or NULL if no upstream is defined) is returned via *upstream_name, if it
- * is not itself NULL.
+ * Lookup the upstream branch for the given branch and if present, optionally
+ * compute the commit ahead/behind values for the pair.
+ *
+ * If abf is AHEAD_BEHIND_FULL, compute the full ahead/behind and return the
+ * counts in *num_ours and *num_theirs.  If abf is AHEAD_BEHIND_QUICK, skip
+ * the (potentially expensive) a/b computation (*num_ours and *num_theirs are
+ * set to zero).
+ *
+ * The name of the upstream branch (or NULL if no upstream is defined) is
+ * returned via *upstream_name, if it is not itself NULL.
  *
  * Returns -1 if num_ours and num_theirs could not be filled in (e.g., no
- * upstream defined, or ref does not exist), 0 otherwise.
+ * upstream defined, or ref does not exist).  Returns 0 if the commits are
+ * identical.  Returns 1 if commits are different.
  */
 int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
-		       const char **upstream_name)
+		       const char **upstream_name, enum ahead_behind_flags abf)
 {
 	struct object_id oid;
 	struct commit *ours, *theirs;
@@ -2002,23 +2054,27 @@ int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
 		return -1;
 
 	/* Cannot stat if what we used to build on no longer exists */
-	if (read_ref(base, oid.hash))
+	if (read_ref(base, &oid))
 		return -1;
 	theirs = lookup_commit_reference(&oid);
 	if (!theirs)
 		return -1;
 
-	if (read_ref(branch->refname, oid.hash))
+	if (read_ref(branch->refname, &oid))
 		return -1;
 	ours = lookup_commit_reference(&oid);
 	if (!ours)
 		return -1;
 
+	*num_theirs = *num_ours = 0;
+
 	/* are we the same? */
-	if (theirs == ours) {
-		*num_theirs = *num_ours = 0;
+	if (theirs == ours)
 		return 0;
-	}
+	if (abf == AHEAD_BEHIND_QUICK)
+		return 1;
+	if (abf != AHEAD_BEHIND_FULL)
+		BUG("stat_tracking_info: invalid abf '%d'", abf);
 
 	/* Run "rev-list --left-right ours...theirs" internally... */
 	argv_array_push(&argv, ""); /* ignored */
@@ -2034,8 +2090,6 @@ int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
 		die("revision walk setup failed");
 
 	/* ... and count the commits on each side. */
-	*num_ours = 0;
-	*num_theirs = 0;
 	while (1) {
 		struct commit *c = get_revision(&revs);
 		if (!c)
@@ -2051,20 +2105,22 @@ int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
 	clear_commit_marks(theirs, ALL_REV_FLAGS);
 
 	argv_array_clear(&argv);
-	return 0;
+	return 1;
 }
 
 /*
  * Return true when there is anything to report, otherwise false.
  */
-int format_tracking_info(struct branch *branch, struct strbuf *sb)
+int format_tracking_info(struct branch *branch, struct strbuf *sb,
+			 enum ahead_behind_flags abf)
 {
-	int ours, theirs;
+	int ours, theirs, sti;
 	const char *full_base;
 	char *base;
 	int upstream_is_gone = 0;
 
-	if (stat_tracking_info(branch, &ours, &theirs, &full_base) < 0) {
+	sti = stat_tracking_info(branch, &ours, &theirs, &full_base, abf);
+	if (sti < 0) {
 		if (!full_base)
 			return 0;
 		upstream_is_gone = 1;
@@ -2078,10 +2134,17 @@ int format_tracking_info(struct branch *branch, struct strbuf *sb)
 		if (advice_status_hints)
 			strbuf_addstr(sb,
 				_("  (use \"git branch --unset-upstream\" to fixup)\n"));
-	} else if (!ours && !theirs) {
+	} else if (!sti) {
 		strbuf_addf(sb,
 			_("Your branch is up to date with '%s'.\n"),
 			base);
+	} else if (abf == AHEAD_BEHIND_QUICK) {
+		strbuf_addf(sb,
+			    _("Your branch and '%s' refer to different commits.\n"),
+			    base);
+		if (advice_status_hints)
+			strbuf_addf(sb, _("  (use \"%s\" for details)\n"),
+				    "git status --ahead-behind");
 	} else if (!theirs) {
 		strbuf_addf(sb,
 			Q_("Your branch is ahead of '%s' by %d commit.\n",
@@ -2327,7 +2390,7 @@ static int remote_tracking(struct remote *remote, const char *refname,
 	dst = apply_refspecs(remote->fetch, remote->fetch_refspec_nr, refname);
 	if (!dst)
 		return -1; /* no tracking ref for refname at remote */
-	if (read_ref(dst, oid->hash))
+	if (read_ref(dst, oid))
 		return -1; /* we know what the tracking ref is but we cannot read it */
 	return 0;
 }

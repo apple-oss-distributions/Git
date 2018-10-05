@@ -990,6 +990,16 @@ int git_config_pathname(const char **dest, const char *var, const char *value)
 	return 0;
 }
 
+int git_config_expiry_date(timestamp_t *timestamp, const char *var, const char *value)
+{
+	if (!value)
+		return config_error_nonbool(var);
+	if (parse_expiry_date(value, timestamp))
+		return error(_("'%s' for '%s' is not a valid timestamp"),
+			     value, var);
+	return 0;
+}
+
 static int git_default_core_config(const char *var, const char *value)
 {
 	/* This needs a better name */
@@ -1139,11 +1149,14 @@ static int git_default_core_config(const char *var, const char *value)
 	}
 
 	if (!strcmp(var, "core.safecrlf")) {
+		int eol_rndtrp_die;
 		if (value && !strcasecmp(value, "warn")) {
-			safe_crlf = SAFE_CRLF_WARN;
+			global_conv_flags_eol = CONV_EOL_RNDTRP_WARN;
 			return 0;
 		}
-		safe_crlf = git_config_bool(var, value);
+		eol_rndtrp_die = git_config_bool(var, value);
+		global_conv_flags_eol = eol_rndtrp_die ?
+			CONV_EOL_RNDTRP_DIE : CONV_EOL_RNDTRP_WARN;
 		return 0;
 	}
 
@@ -1239,6 +1252,11 @@ static int git_default_core_config(const char *var, const char *value)
 		else
 			hide_dotfiles = git_config_bool(var, value);
 		return 0;
+	}
+
+	if (!strcmp(var, "core.partialclonefilter")) {
+		return git_config_string(&core_partial_clone_filter_default,
+					 var, value);
 	}
 
 	/* Add other config variables here and to Documentation/config.txt. */
@@ -2169,6 +2187,20 @@ int git_config_get_max_percent_split_change(void)
 	return -1; /* default value */
 }
 
+int git_config_get_fsmonitor(void)
+{
+	if (git_config_get_pathname("core.fsmonitor", &core_fsmonitor))
+		core_fsmonitor = getenv("GIT_FSMONITOR_TEST");
+
+	if (core_fsmonitor && !*core_fsmonitor)
+		core_fsmonitor = NULL;
+
+	if (core_fsmonitor)
+		return 1;
+
+	return 0;
+}
+
 NORETURN
 void git_die_config_linenr(const char *key, const char *filename, int linenr)
 {
@@ -2764,7 +2796,7 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 {
 	int ret = 0, remove = 0;
 	char *filename_buf = NULL;
-	struct lock_file *lock;
+	struct lock_file lock = LOCK_INIT;
 	int out_fd;
 	char buf[1024];
 	FILE *config_file = NULL;
@@ -2779,8 +2811,7 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 	if (!config_filename)
 		config_filename = filename_buf = git_pathdup("config");
 
-	lock = xcalloc(1, sizeof(struct lock_file));
-	out_fd = hold_lock_file_for_update(lock, config_filename, 0);
+	out_fd = hold_lock_file_for_update(&lock, config_filename, 0);
 	if (out_fd < 0) {
 		ret = error("could not lock config file %s", config_filename);
 		goto out;
@@ -2799,9 +2830,9 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 		goto out;
 	}
 
-	if (chmod(get_lock_file_path(lock), st.st_mode & 07777) < 0) {
+	if (chmod(get_lock_file_path(&lock), st.st_mode & 07777) < 0) {
 		ret = error_errno("chmod on %s failed",
-				  get_lock_file_path(lock));
+				  get_lock_file_path(&lock));
 		goto out;
 	}
 
@@ -2824,8 +2855,8 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 			 * multiple [branch "$name"] sections.
 			 */
 			if (copystr.len > 0) {
-				if (write_in_full(out_fd, copystr.buf, copystr.len) != copystr.len) {
-					ret = write_error(get_lock_file_path(lock));
+				if (write_in_full(out_fd, copystr.buf, copystr.len) < 0) {
+					ret = write_error(get_lock_file_path(&lock));
 					goto out;
 				}
 				strbuf_reset(&copystr);
@@ -2841,7 +2872,7 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 				store.baselen = strlen(new_name);
 				if (!copy) {
 					if (write_section(out_fd, new_name) < 0) {
-						ret = write_error(get_lock_file_path(lock));
+						ret = write_error(get_lock_file_path(&lock));
 						goto out;
 					}
 					/*
@@ -2875,7 +2906,7 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 		}
 
 		if (write_in_full(out_fd, output, length) < 0) {
-			ret = write_error(get_lock_file_path(lock));
+			ret = write_error(get_lock_file_path(&lock));
 			goto out;
 		}
 	}
@@ -2886,8 +2917,8 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 	 * logic in the loop above.
 	 */
 	if (copystr.len > 0) {
-		if (write_in_full(out_fd, copystr.buf, copystr.len) != copystr.len) {
-			ret = write_error(get_lock_file_path(lock));
+		if (write_in_full(out_fd, copystr.buf, copystr.len) < 0) {
+			ret = write_error(get_lock_file_path(&lock));
 			goto out;
 		}
 		strbuf_reset(&copystr);
@@ -2896,13 +2927,13 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
 	fclose(config_file);
 	config_file = NULL;
 commit_and_out:
-	if (commit_lock_file(lock) < 0)
+	if (commit_lock_file(&lock) < 0)
 		ret = error_errno("could not write config file %s",
 				  config_filename);
 out:
 	if (config_file)
 		fclose(config_file);
-	rollback_lock_file(lock);
+	rollback_lock_file(&lock);
 out_no_rollback:
 	free(filename_buf);
 	return ret;

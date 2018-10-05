@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-commit
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GIT\-COMMIT" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GIT\-COMMIT" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -235,6 +235,13 @@ Override the author date used in the commit\&.
 Use the given <msg> as the commit message\&. If multiple
 \fB\-m\fR
 options are given, their values are concatenated as separate paragraphs\&.
+.sp
+The
+\fB\-m\fR
+option is mutually exclusive with
+\fB\-c\fR,
+\fB\-C\fR, and
+\fB\-F\fR\&.
 .RE
 .PP
 \-t <file>, \-\-template=<file>

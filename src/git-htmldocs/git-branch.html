@@ -754,7 +754,7 @@ git-branch(1) Manual Page
         [(--merged | --no-merged) [&lt;commit&gt;]]
         [--contains [&lt;commit]] [--no-contains [&lt;commit&gt;]]
         [--points-at &lt;object&gt;] [--format=&lt;format&gt;] [&lt;pattern&gt;&#8230;]
-<em>git branch</em> [--set-upstream | --track | --no-track] [-l] [-f] &lt;branchname&gt; [&lt;start-point&gt;]
+<em>git branch</em> [--track | --no-track] [-l] [-f] &lt;branchname&gt; [&lt;start-point&gt;]
 <em>git branch</em> (--set-upstream-to=&lt;upstream&gt; | -u &lt;upstream&gt;) [&lt;branchname&gt;]
 <em>git branch</em> --unset-upstream [&lt;branchname&gt;]
 <em>git branch</em> (-m | -M) [&lt;oldbranch&gt;] &lt;newbranch&gt;
@@ -829,7 +829,7 @@ way to clean up all obsolete remote-tracking branches.</p></div>
 <p>
         Delete a branch. The branch must be fully merged in its
         upstream branch, or in <code>HEAD</code> if no upstream was set with
-        <code>--track</code> or <code>--set-upstream</code>.
+        <code>--track</code> or <code>--set-upstream-to</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1226,6 +1226,14 @@ start-point is either a local or remote-tracking branch.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p><code>pager.branch</code> is only respected when listing branches, i.e., when
+<code>--list</code> is used or implied. The default is to use a pager.
+See <a href="git-config.html">git-config(1)</a>.</p></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_examples">Examples</h2>
 <div class="sectionbody">
 <div class="dlist"><dl>
@@ -1336,7 +1344,8 @@ a branch?&#8221;</a> in the Git User&#8217;s Manual.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-10-20 15:42:50 JST
+Last updated
+ 2018-01-26 15:11:04 PST
 </div>
 </div>
 </body>

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-update-index
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GIT\-UPDATE\-INDEX" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GIT\-UPDATE\-INDEX" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,9 +39,11 @@ git-update-index \- Register file contents in the working tree to the index
              [\-\-chmod=(+|\-)x]
              [\-\-[no\-]assume\-unchanged]
              [\-\-[no\-]skip\-worktree]
+             [\-\-[no\-]fsmonitor\-valid]
              [\-\-ignore\-submodules]
              [\-\-[no\-]split\-index]
              [\-\-[no\-|test\-|force\-]untracked\-cache]
+             [\-\-[no\-]fsmonitor]
              [\-\-really\-refresh] [\-\-unresolve] [\-\-again | \-g]
              [\-\-info\-only] [\-\-index\-info]
              [\-z] [\-\-stdin] [\-\-index\-version <n>]
@@ -128,6 +130,11 @@ Like
 \-\-[no\-]skip\-worktree
 .RS 4
 When one of these flags is specified, the object name recorded for the paths are not updated\&. Instead, these options set and unset the "skip\-worktree" bit for the paths\&. See section "Skip\-worktree bit" below for more information\&.
+.RE
+.PP
+\-\-[no\-]fsmonitor\-valid
+.RS 4
+When one of these flags is specified, the object name recorded for the paths are not updated\&. Instead, these options set and unset the "fsmonitor valid" bit for the paths\&. See section "File System Monitor" below for more information\&.
 .RE
 .PP
 \-g, \-\-again
@@ -243,6 +250,14 @@ used to imply
 but this option would enable the extension unconditionally\&.
 .RE
 .PP
+\-\-fsmonitor, \-\-no\-fsmonitor
+.RS 4
+Enable or disable files system monitor feature\&. These options take effect whatever the value of the
+\fBcore\&.fsmonitor\fR
+configuration variable (see
+\fBgit-config\fR(1))\&. But a warning is emitted when the change goes against the configured value, as the configured value will take effect next time the index is read and this will remove the intended effect of the option\&.
+.RE
+.PP
 \-\-
 .RS 4
 Do not interpret any more arguments as options\&.
@@ -260,12 +275,12 @@ and
 and paths with
 \fI//\fR
 .RE
-.SH "USING --REFRESH"
+.SH "USING \-\-REFRESH"
 .sp
 \fB\-\-refresh\fR does not calculate a new sha1 file or bring the index up to date for mode/content changes\&. But what it \fBdoes\fR do is to "re\-match" the stat information of a file with the index, so that you can refresh the index for a file that hasn\(cqt been changed but where the stat entry is out of date\&.
 .sp
 For example, you\(cqd want to do this after doing a \fIgit read\-tree\fR, to link up the stat index details with the proper files\&.
-.SH "USING --CACHEINFO OR --INFO-ONLY"
+.SH "USING \-\-CACHEINFO OR \-\-INFO\-ONLY"
 .sp
 \fB\-\-cacheinfo\fR is used to register a file that is not in the current working directory\&. This is useful for minimum\-checkout merging\&.
 .sp
@@ -285,7 +300,7 @@ $ git update\-index \-\-cacheinfo <mode>,<sha1>,<path>
 \fB\-\-info\-only\fR is used to register files without placing them in the object database\&. This is useful for status\-only repositories\&.
 .sp
 Both \fB\-\-cacheinfo\fR and \fB\-\-info\-only\fR behave similarly: the index is updated but the object database isn\(cqt\&. \fB\-\-cacheinfo\fR is useful when the object is in the database but the file isn\(cqt available locally\&. \fB\-\-info\-only\fR is useful when the file is available, but you do not wish to update the object database\&.
-.SH "USING --INDEX-INFO"
+.SH "USING \-\-INDEX\-INFO"
 .sp
 \fB\-\-index\-info\fR is a more powerful mechanism that lets you feed multiple entry definitions from the standard input, and designed specifically for scripts\&. It can take inputs of three formats:
 .sp
@@ -447,7 +462,7 @@ match the path\&.
 \fB9. \fRnow it checks with lstat(2) and finds it has been changed\&.
 .br
 .RE
-.SH "SKIP-WORKTREE BIT"
+.SH "SKIP\-WORKTREE BIT"
 .sp
 Skip\-worktree bit can be defined in one (long) sentence: When reading an entry, if it is marked as skip\-worktree, then Git pretends its working directory version is up to date and read the index version instead\&.
 .sp
@@ -476,6 +491,36 @@ You can test whether the filesystem supports that with the \fB\-\-test\-untracke
 If you want to enable (or disable) this feature, it is easier to use the \fBcore\&.untrackedCache\fR configuration variable (see \fBgit-config\fR(1)) than using the \fB\-\-untracked\-cache\fR option to \fBgit update\-index\fR in each repository, especially if you want to do so across all repositories you use, because you can set the configuration variable to \fBtrue\fR (or \fBfalse\fR) in your \fB$HOME/\&.gitconfig\fR just once and have it affect all repositories you touch\&.
 .sp
 When the \fBcore\&.untrackedCache\fR configuration variable is changed, the untracked cache is added to or removed from the index the next time a command reads the index; while when \fB\-\-[no\-|force\-]untracked\-cache\fR are used, the untracked cache is immediately added to or removed from the index\&.
+.sp
+Before 2\&.17, the untracked cache had a bug where replacing a directory with a symlink to another directory could cause it to incorrectly show files tracked by git as untracked\&. See the "status: add a failing test showing a core\&.untrackedCache bug" commit to git\&.git\&. A workaround for that is (and this might work for other undiscovered bugs in the future):
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git \-c core\&.untrackedCache=false status
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+This bug has also been shown to affect non\-symlink cases of replacing a directory with a file when it comes to the internal structures of the untracked cache, but no case has been reported where this resulted in wrong "git status" output\&.
+.sp
+There are also cases where existing indexes written by git versions before 2\&.17 will reference directories that don\(cqt exist anymore, potentially causing many "could not open directory" warnings to be printed on "git status"\&. These are new warnings for existing issues that were previously silently discarded\&.
+.sp
+As with the bug described above the solution is to one\-off do a "git status" run with \fBcore\&.untrackedCache=false\fR to flush out the leftover bad data\&.
+.SH "FILE SYSTEM MONITOR"
+.sp
+This feature is intended to speed up git operations for repos that have large working directories\&.
+.sp
+It enables git to work together with a file system monitor (see the "fsmonitor\-watchman" section of \fBgithooks\fR(5)) that can inform it as to what files have been modified\&. This enables git to avoid having to lstat() every file to find modified files\&.
+.sp
+When used in conjunction with the untracked cache, it can further improve performance by avoiding the cost of scanning the entire working directory looking for new files\&.
+.sp
+If you want to enable (or disable) this feature, it is easier to use the \fBcore\&.fsmonitor\fR configuration variable (see \fBgit-config\fR(1)) than using the \fB\-\-fsmonitor\fR option to \fBgit update\-index\fR in each repository, especially if you want to do so across all repositories you use, because you can set the configuration variable in your \fB$HOME/\&.gitconfig\fR just once and have it affect all repositories you touch\&.
+.sp
+When the \fBcore\&.fsmonitor\fR configuration variable is changed, the file system monitor is added to or removed from the index the next time a command reads the index\&. When \fB\-\-[no\-]fsmonitor\fR are used, the file system monitor is immediately added to or removed from the index\&.
 .SH "CONFIGURATION"
 .sp
 The command honors \fBcore\&.filemode\fR configuration variable\&. If your repository is on a filesystem whose executable bits are unreliable, this should be set to \fIfalse\fR (see \fBgit-config\fR(1))\&. This causes the command to ignore differences in file modes recorded in the index and the file mode on the filesystem if they differ only on executable bit\&. On such an unfortunate filesystem, you may need to use \fIgit update\-index \-\-chmod=\fR\&.

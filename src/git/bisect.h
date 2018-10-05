@@ -34,4 +34,6 @@ extern int estimate_bisect_steps(int all);
 
 extern void read_bisect_terms(const char **bad, const char **good);
 
+extern int bisect_clean_state(void);
+
 #endif

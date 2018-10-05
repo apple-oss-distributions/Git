@@ -238,10 +238,8 @@ int remove_entry_from_dir(struct ref_dir *dir, const char *refname)
 		return -1;
 	entry = dir->entries[entry_index];
 
-	memmove(&dir->entries[entry_index],
-		&dir->entries[entry_index + 1],
-		(dir->nr - entry_index - 1) * sizeof(*dir->entries)
-		);
+	MOVE_ARRAY(&dir->entries[entry_index],
+		   &dir->entries[entry_index + 1], dir->nr - entry_index - 1);
 	dir->nr--;
 	if (dir->sorted > entry_index)
 		dir->sorted--;
@@ -260,8 +258,8 @@ int add_ref_entry(struct ref_dir *dir, struct ref_entry *ref)
 
 /*
  * Emit a warning and return true iff ref1 and ref2 have the same name
- * and the same sha1.  Die if they have the same name but different
- * sha1s.
+ * and the same oid. Die if they have the same name but different
+ * oids.
  */
 static int is_dup_ref(const struct ref_entry *ref1, const struct ref_entry *ref2)
 {
@@ -493,7 +491,7 @@ static int cache_ref_iterator_advance(struct ref_iterator *ref_iterator)
 static int cache_ref_iterator_peel(struct ref_iterator *ref_iterator,
 				   struct object_id *peeled)
 {
-	return peel_object(ref_iterator->oid->hash, peeled->hash);
+	return peel_object(ref_iterator->oid, peeled);
 }
 
 static int cache_ref_iterator_abort(struct ref_iterator *ref_iterator)

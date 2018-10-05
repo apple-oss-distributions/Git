@@ -10,6 +10,8 @@
 #include "diff.h"
 #include "revision.h"
 #include "list-objects.h"
+#include "list-objects-filter.h"
+#include "list-objects-filter-options.h"
 #include "run-command.h"
 #include "connect.h"
 #include "sigchain.h"
@@ -18,6 +20,8 @@
 #include "parse-options.h"
 #include "argv-array.h"
 #include "prio-queue.h"
+#include "protocol.h"
+#include "quote.h"
 
 static const char * const upload_pack_usage[] = {
 	N_("git upload-pack [<options>] <dir>"),
@@ -63,6 +67,10 @@ static int use_sideband;
 static int advertise_refs;
 static int stateless_rpc;
 static const char *pack_objects_hook;
+
+static int filter_capability_requested;
+static int allow_filter;
+static struct list_objects_filter_options filter_options;
 
 static void reset_timeout(void)
 {
@@ -131,6 +139,17 @@ static void create_pack_file(void)
 		argv_array_push(&pack_objects.args, "--delta-base-offset");
 	if (use_include_tag)
 		argv_array_push(&pack_objects.args, "--include-tag");
+	if (filter_options.filter_spec) {
+		if (pack_objects.use_shell) {
+			struct strbuf buf = STRBUF_INIT;
+			sq_quote_buf(&buf, filter_options.filter_spec);
+			argv_array_pushf(&pack_objects.args, "--filter=%s", buf.buf);
+			strbuf_release(&buf);
+		} else {
+			argv_array_pushf(&pack_objects.args, "--filter=%s",
+					 filter_options.filter_spec);
+		}
+	}
 
 	pack_objects.in = -1;
 	pack_objects.out = -1;
@@ -787,11 +806,17 @@ static void receive_needs(void)
 		if (skip_prefix(line, "deepen-not ", &arg)) {
 			char *ref = NULL;
 			struct object_id oid;
-			if (expand_ref(arg, strlen(arg), oid.hash, &ref) != 1)
+			if (expand_ref(arg, strlen(arg), &oid, &ref) != 1)
 				die("git upload-pack: ambiguous deepen-not: %s", line);
 			string_list_append(&deepen_not, ref);
 			free(ref);
 			deepen_rev_list = 1;
+			continue;
+		}
+		if (skip_prefix(line, "filter ", &arg)) {
+			if (!filter_capability_requested)
+				die("git upload-pack: filtering capability not negotiated");
+			parse_list_objects_filter(&filter_options, arg);
 			continue;
 		}
 		if (!skip_prefix(line, "want ", &arg) ||
@@ -821,6 +846,8 @@ static void receive_needs(void)
 			no_progress = 1;
 		if (parse_feature_request(features, "include-tag"))
 			use_include_tag = 1;
+		if (allow_filter && parse_feature_request(features, "filter"))
+			filter_capability_requested = 1;
 
 		o = parse_object(&oid_buf);
 		if (!o) {
@@ -940,7 +967,7 @@ static int send_ref(const char *refname, const struct object_id *oid,
 		struct strbuf symref_info = STRBUF_INIT;
 
 		format_symref_info(&symref_info, cb_data);
-		packet_write_fmt(1, "%s %s%c%s%s%s%s%s agent=%s\n",
+		packet_write_fmt(1, "%s %s%c%s%s%s%s%s%s agent=%s\n",
 			     oid_to_hex(oid), refname_nons,
 			     0, capabilities,
 			     (allow_unadvertised_object_request & ALLOW_TIP_SHA1) ?
@@ -949,13 +976,14 @@ static int send_ref(const char *refname, const struct object_id *oid,
 				     " allow-reachable-sha1-in-want" : "",
 			     stateless_rpc ? " no-done" : "",
 			     symref_info.buf,
+			     allow_filter ? " filter" : "",
 			     git_user_agent_sanitized());
 		strbuf_release(&symref_info);
 	} else {
 		packet_write_fmt(1, "%s %s\n", oid_to_hex(oid), refname_nons);
 	}
 	capabilities = NULL;
-	if (!peel_ref(refname, peeled.hash))
+	if (!peel_ref(refname, &peeled))
 		packet_write_fmt(1, "%s %s^{}\n", oid_to_hex(&peeled), refname_nons);
 	return 0;
 }
@@ -1027,6 +1055,8 @@ static int upload_pack_config(const char *var, const char *value, void *unused)
 	} else if (current_config_scope() != CONFIG_SCOPE_REPO) {
 		if (!strcmp("uploadpack.packobjectshook", var))
 			return git_config_string(&pack_objects_hook, var, value);
+	} else if (!strcmp("uploadpack.allowfilter", var)) {
+		allow_filter = git_config_bool(var, value);
 	}
 	return parse_hide_refs_config(var, value, "uploadpack");
 }
@@ -1066,6 +1096,23 @@ int cmd_main(int argc, const char **argv)
 		die("'%s' does not appear to be a git repository", dir);
 
 	git_config(upload_pack_config, NULL);
-	upload_pack();
+
+	switch (determine_protocol_version_server()) {
+	case protocol_v1:
+		/*
+		 * v1 is just the original protocol with a version string,
+		 * so just fall through after writing the version string.
+		 */
+		if (advertise_refs || !stateless_rpc)
+			packet_write_fmt(1, "version 1\n");
+
+		/* fallthrough */
+	case protocol_v0:
+		upload_pack();
+		break;
+	case protocol_unknown_version:
+		BUG("unknown protocol version");
+	}
+
 	return 0;
 }

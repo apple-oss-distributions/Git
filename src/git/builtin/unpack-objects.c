@@ -21,7 +21,7 @@ static unsigned char buffer[4096];
 static unsigned int offset, len;
 static off_t consumed_bytes;
 static off_t max_input_size;
-static git_SHA_CTX ctx;
+static git_hash_ctx ctx;
 static struct fsck_options fsck_options = FSCK_OPTIONS_STRICT;
 
 /*
@@ -62,7 +62,7 @@ static void *fill(int min)
 	if (min > sizeof(buffer))
 		die("cannot fill %d bytes", min);
 	if (offset) {
-		git_SHA1_Update(&ctx, buffer, offset);
+		the_hash_algo->update_fn(&ctx, buffer, offset);
 		memmove(buffer, buffer + offset, len);
 		offset = 0;
 	}
@@ -158,6 +158,7 @@ struct obj_info {
 	struct object *obj;
 };
 
+/* Remember to update object flag allocation in object.h */
 #define FLAG_OPEN (1u<<20)
 #define FLAG_WRITTEN (1u<<21)
 
@@ -172,7 +173,8 @@ static void write_cached_object(struct object *obj, struct obj_buffer *obj_buf)
 {
 	struct object_id oid;
 
-	if (write_sha1_file(obj_buf->buffer, obj_buf->size, typename(obj->type), oid.hash) < 0)
+	if (write_object_file(obj_buf->buffer, obj_buf->size,
+			      type_name(obj->type), &oid) < 0)
 		die("failed to write object %s", oid_to_hex(&obj->oid));
 	obj->flags |= FLAG_WRITTEN;
 }
@@ -208,7 +210,7 @@ static int check_object(struct object *obj, int type, void *data, struct fsck_op
 	if (!obj_buf)
 		die("Whoops! Cannot find object '%s'", oid_to_hex(&obj->oid));
 	if (fsck_object(obj, obj_buf->buffer, obj_buf->size, &fsck_options))
-		die("Error in object");
+		die("fsck error in packed object");
 	fsck_options.walk = check_object;
 	if (fsck_walk(obj, NULL, &fsck_options))
 		die("Error on reachable objects of %s", oid_to_hex(&obj->oid));
@@ -237,14 +239,16 @@ static void write_object(unsigned nr, enum object_type type,
 			 void *buf, unsigned long size)
 {
 	if (!strict) {
-		if (write_sha1_file(buf, size, typename(type), obj_list[nr].oid.hash) < 0)
+		if (write_object_file(buf, size, type_name(type),
+				      &obj_list[nr].oid) < 0)
 			die("failed to write object");
 		added_object(nr, type, buf, size);
 		free(buf);
 		obj_list[nr].obj = NULL;
 	} else if (type == OBJ_BLOB) {
 		struct blob *blob;
-		if (write_sha1_file(buf, size, typename(type), obj_list[nr].oid.hash) < 0)
+		if (write_object_file(buf, size, type_name(type),
+				      &obj_list[nr].oid) < 0)
 			die("failed to write object");
 		added_object(nr, type, buf, size);
 		free(buf);
@@ -258,12 +262,12 @@ static void write_object(unsigned nr, enum object_type type,
 	} else {
 		struct object *obj;
 		int eaten;
-		hash_sha1_file(buf, size, typename(type), obj_list[nr].oid.hash);
+		hash_object_file(buf, size, type_name(type), &obj_list[nr].oid);
 		added_object(nr, type, buf, size);
 		obj = parse_object_buffer(&obj_list[nr].oid, type, size, buf,
 					  &eaten);
 		if (!obj)
-			die("invalid %s", typename(type));
+			die("invalid %s", type_name(type));
 		add_object_buffer(obj, buf, size);
 		obj->flags |= FLAG_OPEN;
 		obj_list[nr].obj = obj;
@@ -345,8 +349,8 @@ static void unpack_delta_entry(enum object_type type, unsigned long delta_size,
 	struct object_id base_oid;
 
 	if (type == OBJ_REF_DELTA) {
-		hashcpy(base_oid.hash, fill(GIT_SHA1_RAWSZ));
-		use(GIT_SHA1_RAWSZ);
+		hashcpy(base_oid.hash, fill(the_hash_algo->rawsz));
+		use(the_hash_algo->rawsz);
 		delta_data = get_data(delta_size);
 		if (dry_run || !delta_data) {
 			free(delta_data);
@@ -564,15 +568,18 @@ int cmd_unpack_objects(int argc, const char **argv, const char *prefix)
 		/* We don't take any non-flag arguments now.. Maybe some day */
 		usage(unpack_usage);
 	}
-	git_SHA1_Init(&ctx);
+	the_hash_algo->init_fn(&ctx);
 	unpack_all();
-	git_SHA1_Update(&ctx, buffer, offset);
-	git_SHA1_Final(oid.hash, &ctx);
-	if (strict)
+	the_hash_algo->update_fn(&ctx, buffer, offset);
+	the_hash_algo->final_fn(oid.hash, &ctx);
+	if (strict) {
 		write_rest();
-	if (hashcmp(fill(GIT_SHA1_RAWSZ), oid.hash))
+		if (fsck_finish(&fsck_options))
+			die(_("fsck error in pack objects"));
+	}
+	if (hashcmp(fill(the_hash_algo->rawsz), oid.hash))
 		die("final sha1 did not match");
-	use(GIT_SHA1_RAWSZ);
+	use(the_hash_algo->rawsz);
 
 	/* Write the last part of the buffer to stdout */
 	while (len) {

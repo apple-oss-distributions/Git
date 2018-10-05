@@ -70,7 +70,7 @@ static const char *printable_type(struct object *obj)
 			object_as_type(obj, type, 0);
 	}
 
-	ret = typename(obj->type);
+	ret = type_name(obj->type);
 	if (!ret)
 		ret = "unknown";
 
@@ -137,7 +137,7 @@ static int mark_object(struct object *obj, int type, void *data, struct fsck_opt
 		printf("broken link from %7s %s\n",
 			   printable_type(parent), describe_object(parent));
 		printf("broken link from %7s %s\n",
-			   (type == OBJ_ANY ? "unknown" : typename(type)), "unknown");
+			   (type == OBJ_ANY ? "unknown" : type_name(type)), "unknown");
 		errors_found |= ERROR_REACHABLE;
 		return 1;
 	}
@@ -149,6 +149,15 @@ static int mark_object(struct object *obj, int type, void *data, struct fsck_opt
 	if (obj->flags & REACHABLE)
 		return 0;
 	obj->flags |= REACHABLE;
+
+	if (is_promisor_object(&obj->oid))
+		/*
+		 * Further recursion does not need to be performed on this
+		 * object since it is a promisor object (so it does not need to
+		 * be added to "pending").
+		 */
+		return 0;
+
 	if (!(obj->flags & HAS_OBJ)) {
 		if (parent && !has_object_file(&obj->oid)) {
 			printf("broken link from %7s %s\n",
@@ -171,7 +180,13 @@ static void mark_object_reachable(struct object *obj)
 
 static int traverse_one_object(struct object *obj)
 {
-	return fsck_walk(obj, obj, &fsck_walk_options);
+	int result = fsck_walk(obj, obj, &fsck_walk_options);
+
+	if (obj->type == OBJ_TREE) {
+		struct tree *tree = (struct tree *)obj;
+		free_tree_buffer(tree);
+	}
+	return result;
 }
 
 static int traverse_reachable(void)
@@ -208,6 +223,8 @@ static void check_reachable_object(struct object *obj)
 	 * do a full fsck
 	 */
 	if (!(obj->flags & HAS_OBJ)) {
+		if (is_promisor_object(&obj->oid))
+			return;
 		if (has_sha1_pack(obj->oid.hash))
 			return; /* it is in pack - forget about it */
 		printf("missing %s %s\n", printable_type(obj),
@@ -320,7 +337,7 @@ static void check_connectivity(void)
 	}
 }
 
-static int fsck_obj(struct object *obj)
+static int fsck_obj(struct object *obj, void *buffer, unsigned long size)
 {
 	int err;
 
@@ -334,7 +351,7 @@ static int fsck_obj(struct object *obj)
 
 	if (fsck_walk(obj, NULL, &fsck_obj_options))
 		objerror(obj, "broken links");
-	err = fsck_object(obj, NULL, 0, &fsck_obj_options);
+	err = fsck_object(obj, buffer, size, &fsck_obj_options);
 	if (err)
 		goto out;
 
@@ -379,7 +396,7 @@ static int fsck_obj_buffer(const struct object_id *oid, enum object_type type,
 	}
 	obj->flags &= ~(REACHABLE | SEEN);
 	obj->flags |= HAS_OBJ;
-	return fsck_obj(obj);
+	return fsck_obj(obj, buffer, size);
 }
 
 static int default_refs;
@@ -398,7 +415,7 @@ static void fsck_handle_reflog_oid(const char *refname, struct object_id *oid,
 					xstrfmt("%s@{%"PRItime"}", refname, timestamp));
 			obj->flags |= USED;
 			mark_object_reachable(obj);
-		} else {
+		} else if (!is_promisor_object(oid)) {
 			error("%s: invalid reflog entry %s", refname, oid_to_hex(oid));
 			errors_found |= ERROR_REACHABLE;
 		}
@@ -434,6 +451,14 @@ static int fsck_handle_ref(const char *refname, const struct object_id *oid,
 
 	obj = parse_object(oid);
 	if (!obj) {
+		if (is_promisor_object(oid)) {
+			/*
+			 * Increment default_refs anyway, because this is a
+			 * valid ref.
+			 */
+			 default_refs++;
+			 return 0;
+		}
 		error("%s: invalid sha1 pointer %s", refname, oid_to_hex(oid));
 		errors_found |= ERROR_REACHABLE;
 		/* We'll continue with the rest despite the error.. */
@@ -479,44 +504,42 @@ static void get_default_heads(void)
 	}
 }
 
-static struct object *parse_loose_object(const struct object_id *oid,
-					 const char *path)
-{
-	struct object *obj;
-	void *contents;
-	enum object_type type;
-	unsigned long size;
-	int eaten;
-
-	if (read_loose_object(path, oid->hash, &type, &size, &contents) < 0)
-		return NULL;
-
-	if (!contents && type != OBJ_BLOB)
-		die("BUG: read_loose_object streamed a non-blob");
-
-	obj = parse_object_buffer(oid, type, size, contents, &eaten);
-
-	if (!eaten)
-		free(contents);
-	return obj;
-}
-
 static int fsck_loose(const struct object_id *oid, const char *path, void *data)
 {
-	struct object *obj = parse_loose_object(oid, path);
+	struct object *obj;
+	enum object_type type;
+	unsigned long size;
+	void *contents;
+	int eaten;
 
-	if (!obj) {
+	if (read_loose_object(path, oid->hash, &type, &size, &contents) < 0) {
 		errors_found |= ERROR_OBJECT;
 		error("%s: object corrupt or missing: %s",
 		      oid_to_hex(oid), path);
 		return 0; /* keep checking other objects */
 	}
 
+	if (!contents && type != OBJ_BLOB)
+		BUG("read_loose_object streamed a non-blob");
+
+	obj = parse_object_buffer(oid, type, size, contents, &eaten);
+	if (!obj) {
+		errors_found |= ERROR_OBJECT;
+		error("%s: object could not be parsed: %s",
+		      oid_to_hex(oid), path);
+		if (!eaten)
+			free(contents);
+		return 0; /* keep checking other objects */
+	}
+
 	obj->flags &= ~(REACHABLE | SEEN);
 	obj->flags |= HAS_OBJ;
-	if (fsck_obj(obj))
+	if (fsck_obj(obj, contents, size))
 		errors_found |= ERROR_OBJECT;
-	return 0;
+
+	if (!eaten)
+		free(contents);
+	return 0; /* keep checking other objects, even if we saw an error */
 }
 
 static int fsck_cruft(const char *basename, const char *path, void *data)
@@ -555,7 +578,7 @@ static int fsck_head_link(void)
 	if (verbose)
 		fprintf(stderr, "Checking HEAD link\n");
 
-	head_points_at = resolve_ref_unsafe("HEAD", 0, head_oid.hash, NULL);
+	head_points_at = resolve_ref_unsafe("HEAD", 0, &head_oid, NULL);
 	if (!head_points_at) {
 		errors_found |= ERROR_REFS;
 		return error("Invalid HEAD");
@@ -659,6 +682,9 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
 	int i;
 	struct alternate_object_database *alt;
 
+	/* fsck knows how to handle missing promisor objects */
+	fetch_if_missing = 0;
+
 	errors_found = 0;
 	check_replace_refs = 0;
 
@@ -722,6 +748,9 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
 			}
 			stop_progress(&progress);
 		}
+
+		if (fsck_finish(&fsck_obj_options))
+			errors_found |= ERROR_OBJECT;
 	}
 
 	for (i = 0; i < argc; i++) {
@@ -731,6 +760,8 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
 			struct object *obj = lookup_object(oid.hash);
 
 			if (!obj || !(obj->flags & HAS_OBJ)) {
+				if (is_promisor_object(&oid))
+					continue;
 				error("%s: object missing", oid_to_hex(&oid));
 				errors_found |= ERROR_OBJECT;
 				continue;
@@ -759,6 +790,7 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
 
 	if (keep_cache_objects) {
 		verify_index_checksum = 1;
+		verify_ce_order = 1;
 		read_cache();
 		for (i = 0; i < active_nr; i++) {
 			unsigned int mode;

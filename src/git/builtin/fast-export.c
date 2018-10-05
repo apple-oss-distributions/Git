@@ -240,7 +240,7 @@ static void export_blob(const struct object_id *oid)
 		buf = read_sha1_file(oid->hash, &type, &size);
 		if (!buf)
 			die ("Could not read blob %s", oid_to_hex(oid));
-		if (check_sha1_signature(oid->hash, buf, size, typename(type)) < 0)
+		if (check_sha1_signature(oid->hash, buf, size, type_name(type)) < 0)
 			die("sha1 mismatch in blob %s", oid_to_hex(oid));
 		object = parse_object_buffer(oid, type, size, buf, &eaten);
 	}
@@ -757,7 +757,7 @@ static void handle_tag(const char *name, struct tag *tag)
 			if (tagged->type != OBJ_COMMIT) {
 				die ("Tag %s tags unexported %s!",
 				     oid_to_hex(&tag->object.oid),
-				     typename(tagged->type));
+				     type_name(tagged->type));
 			}
 			p = (struct commit *)tagged;
 			for (;;) {
@@ -823,7 +823,7 @@ static void get_tags_and_duplicates(struct rev_cmdline_info *info)
 		if (e->flags & UNINTERESTING)
 			continue;
 
-		if (dwim_ref(e->name, strlen(e->name), oid.hash, &full_name) != 1)
+		if (dwim_ref(e->name, strlen(e->name), &oid, &full_name) != 1)
 			continue;
 
 		if (refspecs) {
@@ -839,7 +839,7 @@ static void get_tags_and_duplicates(struct rev_cmdline_info *info)
 		if (!commit) {
 			warning("%s: Unexpected object of type %s, skipping.",
 				e->name,
-				typename(e->item->type));
+				type_name(e->item->type));
 			continue;
 		}
 
@@ -851,7 +851,7 @@ static void get_tags_and_duplicates(struct rev_cmdline_info *info)
 			continue;
 		default: /* OBJ_TAG (nested tags) is already handled */
 			warning("Tag points to object of unexpected type %s, skipping.",
-				typename(commit->object.type));
+				type_name(commit->object.type));
 			continue;
 		}
 
@@ -895,7 +895,7 @@ static void export_marks(char *file)
 {
 	unsigned int i;
 	uint32_t mark;
-	struct object_decoration *deco = idnums.hash;
+	struct decoration_entry *deco = idnums.entries;
 	FILE *f;
 	int e = 0;
 
@@ -1066,7 +1066,7 @@ int cmd_fast_export(int argc, const char **argv, const char *prefix)
 		die("revision walk setup failed");
 	revs.diffopt.format_callback = show_filemodify;
 	revs.diffopt.format_callback_data = &paths_of_changed_objects;
-	DIFF_OPT_SET(&revs.diffopt, RECURSIVE);
+	revs.diffopt.flags.recursive = 1;
 	while ((commit = get_revision(&revs))) {
 		if (has_unshown_parent(commit)) {
 			add_object_array(&commit->object, NULL, &commits);

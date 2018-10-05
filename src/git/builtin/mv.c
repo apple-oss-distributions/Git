@@ -122,7 +122,8 @@ int cmd_mv(int argc, const char **argv, const char *prefix)
 	struct option builtin_mv_options[] = {
 		OPT__VERBOSE(&verbose, N_("be verbose")),
 		OPT__DRY_RUN(&show_only, N_("dry run")),
-		OPT__FORCE(&force, N_("force move/rename even if target exists")),
+		OPT__FORCE(&force, N_("force move/rename even if target exists"),
+			   PARSE_OPT_NOCOMPLETE),
 		OPT_BOOL('k', NULL, &ignore_errors, N_("skip move/rename errors")),
 		OPT_END(),
 	};
@@ -286,15 +287,14 @@ int cmd_mv(int argc, const char **argv, const char *prefix)
 
 		pos = cache_name_pos(src, strlen(src));
 		assert(pos >= 0);
-		if (!show_only)
-			rename_cache_entry_at(pos, dst);
+		rename_cache_entry_at(pos, dst);
 	}
 
 	if (gitmodules_modified)
-		stage_updated_gitmodules();
+		stage_updated_gitmodules(&the_index);
 
-	if (active_cache_changed &&
-	    write_locked_index(&the_index, &lock_file, COMMIT_LOCK))
+	if (write_locked_index(&the_index, &lock_file,
+			       COMMIT_LOCK | SKIP_IF_UNCHANGED))
 		die(_("Unable to write new index file"));
 
 	return 0;

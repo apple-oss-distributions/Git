@@ -199,12 +199,14 @@ make_patch () {
 
 die_with_patch () {
 	echo "$1" > "$state_dir"/stopped-sha
+	git update-ref REBASE_HEAD "$1"
 	make_patch "$1"
 	die "$2"
 }
 
 exit_with_patch () {
 	echo "$1" > "$state_dir"/stopped-sha
+	git update-ref REBASE_HEAD "$1"
 	make_patch $1
 	git rev-parse --verify HEAD > "$amend"
 	gpg_sign_opt_quoted=${gpg_sign_opt:+$(git rev-parse --sq-quote "$gpg_sign_opt")}
@@ -281,7 +283,7 @@ pick_one () {
 
 	test -d "$rewritten" &&
 		pick_one_preserving_merges "$@" && return
-	output eval git cherry-pick $allow_rerere_autoupdate \
+	output eval git cherry-pick $allow_rerere_autoupdate $allow_empty_message \
 			${gpg_sign_opt:+$(git rev-parse --sq-quote "$gpg_sign_opt")} \
 			"$strategy_args" $empty_args $ff "$@"
 
@@ -392,9 +394,12 @@ pick_one_preserving_merges () {
 			new_parents=${new_parents# $first_parent}
 			merge_args="--no-log --no-ff"
 			if ! do_with_author output eval \
-			'git merge ${gpg_sign_opt:+"$gpg_sign_opt"} \
-				$allow_rerere_autoupdate $merge_args \
-				$strategy_args -m "$msg_content" $new_parents'
+				git merge ${gpg_sign_opt:+$(git rev-parse \
+					--sq-quote "$gpg_sign_opt")} \
+				$allow_rerere_autoupdate "$merge_args" \
+				"$strategy_args" \
+				-m "$(git rev-parse --sq-quote "$msg_content")" \
+				"$new_parents"
 			then
 				printf "%s\n" "$msg_content" > "$GIT_DIR"/MERGE_MSG
 				die_with_patch $sha1 "$(eval_gettext "Error redoing merge \$sha1")"
@@ -403,6 +408,7 @@ pick_one_preserving_merges () {
 			;;
 		*)
 			output eval git cherry-pick $allow_rerere_autoupdate \
+				$allow_empty_message \
 				${gpg_sign_opt:+$(git rev-parse --sq-quote "$gpg_sign_opt")} \
 				"$strategy_args" "$@" ||
 				die_with_patch $sha1 "$(eval_gettext "Could not pick \$sha1")"
@@ -556,7 +562,8 @@ do_next () {
 
 		mark_action_done
 		do_pick $sha1 "$rest"
-		git commit --amend --no-post-rewrite ${gpg_sign_opt:+"$gpg_sign_opt"} || {
+		git commit --amend --no-post-rewrite ${gpg_sign_opt:+"$gpg_sign_opt"} \
+			$allow_empty_message || {
 			warn "$(eval_gettext "\
 Could not amend commit after successfully picking \$sha1... \$rest
 This is most likely due to an empty commit message, or the pre-commit hook
@@ -604,7 +611,7 @@ you are able to reword the commit.")"
 			# This is an intermediate commit; its message will only be
 			# used in case of trouble.  So use the long version:
 			do_with_author output git commit --amend --no-verify -F "$squash_msg" \
-				${gpg_sign_opt:+"$gpg_sign_opt"} ||
+				${gpg_sign_opt:+"$gpg_sign_opt"} $allow_empty_message ||
 				die_failed_squash $sha1 "$rest"
 			;;
 		*)
@@ -612,13 +619,13 @@ you are able to reword the commit.")"
 			if test -f "$fixup_msg"
 			then
 				do_with_author git commit --amend --no-verify -F "$fixup_msg" \
-					${gpg_sign_opt:+"$gpg_sign_opt"} ||
+					${gpg_sign_opt:+"$gpg_sign_opt"} $allow_empty_message ||
 					die_failed_squash $sha1 "$rest"
 			else
 				cp "$squash_msg" "$GIT_DIR"/SQUASH_MSG || exit
 				rm -f "$GIT_DIR"/MERGE_MSG
 				do_with_author git commit --amend --no-verify -F "$GIT_DIR"/SQUASH_MSG -e \
-					${gpg_sign_opt:+"$gpg_sign_opt"} ||
+					${gpg_sign_opt:+"$gpg_sign_opt"} $allow_empty_message ||
 					die_failed_squash $sha1 "$rest"
 			fi
 			rm -f "$squash_msg" "$fixup_msg"
@@ -722,27 +729,6 @@ collapse_todo_ids() {
 	git rebase--helper --shorten-ids
 }
 
-# Add commands after a pick or after a squash/fixup series
-# in the todo list.
-add_exec_commands () {
-	{
-		first=t
-		while read -r insn rest
-		do
-			case $insn in
-			pick)
-				test -n "$first" ||
-				printf "%s" "$cmd"
-				;;
-			esac
-			printf "%s %s\n" "$insn" "$rest"
-			first=
-		done
-		printf "%s" "$cmd"
-	} <"$1" >"$1.new" &&
-	mv "$1.new" "$1"
-}
-
 # Switch to the branch in $into and notify it in the reflog
 checkout_onto () {
 	GIT_REFLOG_ACTION="$GIT_REFLOG_ACTION: checkout $onto_name"
@@ -772,7 +758,8 @@ case "$action" in
 continue)
 	if test ! -d "$rewritten"
 	then
-		exec git rebase--helper ${force_rebase:+--no-ff} --continue
+		exec git rebase--helper ${force_rebase:+--no-ff} $allow_empty_message \
+			--continue
 	fi
 	# do we have anything to commit?
 	if git diff-index --cached --quiet HEAD --
@@ -812,11 +799,11 @@ In both cases, once you're done, continue with:
 You have uncommitted changes in your working tree. Please commit them
 first and then run 'git rebase --continue' again.")"
 			do_with_author git commit --amend --no-verify -F "$msg" -e \
-				${gpg_sign_opt:+"$gpg_sign_opt"} ||
+				${gpg_sign_opt:+"$gpg_sign_opt"} $allow_empty_message ||
 				die "$(gettext "Could not commit staged changes.")"
 		else
 			do_with_author git commit --no-verify -F "$msg" -e \
-				${gpg_sign_opt:+"$gpg_sign_opt"} ||
+				${gpg_sign_opt:+"$gpg_sign_opt"} $allow_empty_message ||
 				die "$(gettext "Could not commit staged changes.")"
 		fi
 	fi
@@ -835,7 +822,8 @@ skip)
 
 	if test ! -d "$rewritten"
 	then
-		exec git rebase--helper ${force_rebase:+--no-ff} --continue
+		exec git rebase--helper ${force_rebase:+--no-ff} $allow_empty_message \
+			--continue
 	fi
 	do_rest
 	return 0
@@ -858,6 +846,9 @@ To continue rebase after editing, run:
 
 	exit
 	;;
+show-current-patch)
+	exec git show REBASE_HEAD --
+	;;
 esac
 
 comment_for_reflog start
@@ -873,6 +864,7 @@ fi
 
 orig_head=$(git rev-parse --verify HEAD) || die "$(gettext "No HEAD?")"
 mkdir -p "$state_dir" || die "$(eval_gettext "Could not create temporary \$state_dir")"
+rm -f "$(git rev-parse --git-path REBASE_HEAD)"
 
 : > "$state_dir"/interactive || die "$(gettext "Could not mark as interactive")"
 write_basic_state
@@ -914,7 +906,8 @@ fi
 if test t != "$preserve_merges"
 then
 	git rebase--helper --make-script ${keep_empty:+--keep-empty} \
-		$revisions ${restrict_revision+^$restrict_revision} >"$todo"
+		$revisions ${restrict_revision+^$restrict_revision} >"$todo" ||
+	die "$(gettext "Could not generate todo list")"
 else
 	format=$(git config --get rebase.instructionFormat)
 	# the 'rev-list .. | sed' requires %m to parse; the instruction requires %H to parse
@@ -982,7 +975,7 @@ fi
 
 test -s "$todo" || echo noop >> "$todo"
 test -z "$autosquash" || git rebase--helper --rearrange-squash || exit
-test -n "$cmd" && add_exec_commands "$todo"
+test -n "$cmd" && git rebase--helper --add-exec-commands "$cmd"
 
 todocount=$(git stripspace --strip-comments <"$todo" | wc -l)
 todocount=${todocount##* }
@@ -1033,7 +1026,8 @@ checkout_onto
 if test -z "$rebase_root" && test ! -d "$rewritten"
 then
 	require_clean_work_tree "rebase"
-	exec git rebase--helper ${force_rebase:+--no-ff} --continue
+	exec git rebase--helper ${force_rebase:+--no-ff} $allow_empty_message \
+		--continue
 fi
 do_rest
 

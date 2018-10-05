@@ -84,9 +84,8 @@ static struct cache_tree_sub *find_subtree(struct cache_tree *it,
 	down->namelen = pathlen;
 
 	if (pos < it->subtree_nr)
-		memmove(it->down + pos + 1,
-			it->down + pos,
-			sizeof(down) * (it->subtree_nr - pos - 1));
+		MOVE_ARRAY(it->down + pos + 1, it->down + pos,
+			   it->subtree_nr - pos - 1);
 	it->down[pos] = down;
 	return down;
 }
@@ -400,16 +399,16 @@ static int update_one(struct cache_tree *it,
 	}
 
 	if (repair) {
-		unsigned char sha1[20];
-		hash_sha1_file(buffer.buf, buffer.len, tree_type, sha1);
-		if (has_sha1_file(sha1))
-			hashcpy(it->oid.hash, sha1);
+		struct object_id oid;
+		hash_object_file(buffer.buf, buffer.len, tree_type, &oid);
+		if (has_sha1_file(oid.hash))
+			oidcpy(&it->oid, &oid);
 		else
 			to_invalidate = 1;
-	} else if (dryrun)
-		hash_sha1_file(buffer.buf, buffer.len, tree_type,
-			       it->oid.hash);
-	else if (write_sha1_file(buffer.buf, buffer.len, tree_type, it->oid.hash)) {
+	} else if (dryrun) {
+		hash_object_file(buffer.buf, buffer.len, tree_type, &it->oid);
+	} else if (write_object_file(buffer.buf, buffer.len, tree_type,
+				     &it->oid)) {
 		strbuf_release(&buffer);
 		return -1;
 	}
@@ -602,13 +601,13 @@ static struct cache_tree *cache_tree_find(struct cache_tree *it, const char *pat
 
 int write_index_as_tree(unsigned char *sha1, struct index_state *index_state, const char *index_path, int flags, const char *prefix)
 {
-	int entries, was_valid, newfd;
+	int entries, was_valid;
 	struct lock_file lock_file = LOCK_INIT;
 	int ret = 0;
 
-	newfd = hold_lock_file_for_update(&lock_file, index_path, LOCK_DIE_ON_ERROR);
+	hold_lock_file_for_update(&lock_file, index_path, LOCK_DIE_ON_ERROR);
 
-	entries = read_index_from(index_state, index_path);
+	entries = read_index_from(index_state, index_path, get_git_dir());
 	if (entries < 0) {
 		ret = WRITE_TREE_UNREADABLE_INDEX;
 		goto out;
@@ -625,10 +624,7 @@ int write_index_as_tree(unsigned char *sha1, struct index_state *index_state, co
 			ret = WRITE_TREE_UNMERGED_INDEX;
 			goto out;
 		}
-		if (0 <= newfd) {
-			if (!write_locked_index(index_state, &lock_file, COMMIT_LOCK))
-				newfd = -1;
-		}
+		write_locked_index(index_state, &lock_file, COMMIT_LOCK);
 		/* Not being able to write is fine -- we are only interested
 		 * in updating the cache-tree part, and if the next caller
 		 * ends up using the old index with unupdated cache-tree part
@@ -650,8 +646,7 @@ int write_index_as_tree(unsigned char *sha1, struct index_state *index_state, co
 		hashcpy(sha1, index_state->cache_tree->oid.hash);
 
 out:
-	if (0 <= newfd)
-		rollback_lock_file(&lock_file);
+	rollback_lock_file(&lock_file);
 	return ret;
 }
 

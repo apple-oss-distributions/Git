@@ -126,10 +126,8 @@ int register_commit_graft(struct commit_graft *graft, int ignore_dups)
 	ALLOC_GROW(commit_graft, commit_graft_nr + 1, commit_graft_alloc);
 	commit_graft_nr++;
 	if (pos < commit_graft_nr)
-		memmove(commit_graft + pos + 1,
-			commit_graft + pos,
-			(commit_graft_nr - pos - 1) *
-			sizeof(*commit_graft));
+		MOVE_ARRAY(commit_graft + pos + 1, commit_graft + pos,
+			   commit_graft_nr - pos - 1);
 	commit_graft[pos] = graft;
 	return 0;
 }
@@ -274,7 +272,7 @@ const void *get_commit_buffer(const struct commit *commit, unsigned long *sizep)
 			    oid_to_hex(&commit->object.oid));
 		if (type != OBJ_COMMIT)
 			die("expected commit for %s, got %s",
-			    oid_to_hex(&commit->object.oid), typename(type));
+			    oid_to_hex(&commit->object.oid), type_name(type));
 		if (sizep)
 			*sizep = size;
 	}
@@ -547,7 +545,7 @@ void clear_commit_marks_many(int nr, struct commit **commit, unsigned int mark)
 	struct commit_list *list = NULL;
 
 	while (nr--) {
-		commit_list_insert(*commit, &list);
+		clear_commit_marks_1(&list, *commit, mark);
 		commit++;
 	}
 	while (list)
@@ -557,20 +555,6 @@ void clear_commit_marks_many(int nr, struct commit **commit, unsigned int mark)
 void clear_commit_marks(struct commit *commit, unsigned int mark)
 {
 	clear_commit_marks_many(1, &commit, mark);
-}
-
-void clear_commit_marks_for_object_array(struct object_array *a, unsigned mark)
-{
-	struct object *object;
-	struct commit *commit;
-	unsigned int i;
-
-	for (i = 0; i < a->nr; i++) {
-		object = a->objects[i].item;
-		commit = lookup_commit_reference_gently(&object->oid, 1);
-		if (commit)
-			clear_commit_marks(commit, mark);
-	}
 }
 
 struct commit *pop_commit(struct commit_list **stack)
@@ -875,19 +859,19 @@ struct commit_list *get_octopus_merge_bases(struct commit_list *in)
 	commit_list_insert(in->item, &ret);
 
 	for (i = in->next; i; i = i->next) {
-		struct commit_list *new = NULL, *end = NULL;
+		struct commit_list *new_commits = NULL, *end = NULL;
 
 		for (j = ret; j; j = j->next) {
 			struct commit_list *bases;
 			bases = get_merge_bases(i->item, j->item);
-			if (!new)
-				new = bases;
+			if (!new_commits)
+				new_commits = bases;
 			else
 				end->next = bases;
 			for (k = bases; k; k = k->next)
 				end = k;
 		}
-		ret = new;
+		ret = new_commits;
 	}
 	return ret;
 }
@@ -929,8 +913,7 @@ static int remove_redundant(struct commit **array, int cnt)
 			if (work[j]->object.flags & PARENT1)
 				redundant[filled_index[j]] = 1;
 		clear_commit_marks(array[i], all_flags);
-		for (j = 0; j < filled; j++)
-			clear_commit_marks(work[j], all_flags);
+		clear_commit_marks_many(filled, work, all_flags);
 		free_commit_list(common);
 	}
 
@@ -1395,9 +1378,8 @@ void free_commit_extra_headers(struct commit_extra_header *extra)
 	}
 }
 
-int commit_tree(const char *msg, size_t msg_len,
-		const unsigned char *tree,
-		struct commit_list *parents, unsigned char *ret,
+int commit_tree(const char *msg, size_t msg_len, const struct object_id *tree,
+		struct commit_list *parents, struct object_id *ret,
 		const char *author, const char *sign_commit)
 {
 	struct commit_extra_header *extra = NULL, **tail = &extra;
@@ -1526,8 +1508,8 @@ N_("Warning: commit message did not conform to UTF-8.\n"
    "variable i18n.commitencoding to the encoding your project uses.\n");
 
 int commit_tree_extended(const char *msg, size_t msg_len,
-			 const unsigned char *tree,
-			 struct commit_list *parents, unsigned char *ret,
+			 const struct object_id *tree,
+			 struct commit_list *parents, struct object_id *ret,
 			 const char *author, const char *sign_commit,
 			 struct commit_extra_header *extra)
 {
@@ -1535,7 +1517,7 @@ int commit_tree_extended(const char *msg, size_t msg_len,
 	int encoding_is_utf8;
 	struct strbuf buffer;
 
-	assert_sha1_type(tree, OBJ_TREE);
+	assert_sha1_type(tree->hash, OBJ_TREE);
 
 	if (memchr(msg, '\0', msg_len))
 		return error("a NUL byte in commit log message not allowed.");
@@ -1544,7 +1526,7 @@ int commit_tree_extended(const char *msg, size_t msg_len,
 	encoding_is_utf8 = is_encoding_utf8(git_commit_encoding);
 
 	strbuf_init(&buffer, 8192); /* should avoid reallocs for the headers */
-	strbuf_addf(&buffer, "tree %s\n", sha1_to_hex(tree));
+	strbuf_addf(&buffer, "tree %s\n", oid_to_hex(tree));
 
 	/*
 	 * NOTE! This ordering means that the same exact tree merged with a
@@ -1583,7 +1565,7 @@ int commit_tree_extended(const char *msg, size_t msg_len,
 		goto out;
 	}
 
-	result = write_sha1_file(buffer.buf, buffer.len, commit_type, ret);
+	result = write_object_file(buffer.buf, buffer.len, commit_type, ret);
 out:
 	strbuf_release(&buffer);
 	return result;
@@ -1632,11 +1614,11 @@ struct commit *get_merge_parent(const char *name)
 struct commit_list **commit_list_append(struct commit *commit,
 					struct commit_list **next)
 {
-	struct commit_list *new = xmalloc(sizeof(struct commit_list));
-	new->item = commit;
-	*next = new;
-	new->next = NULL;
-	return &new->next;
+	struct commit_list *new_commit = xmalloc(sizeof(struct commit_list));
+	new_commit->item = commit;
+	*next = new_commit;
+	new_commit->next = NULL;
+	return &new_commit->next;
 }
 
 const char *find_commit_header(const char *msg, const char *key, size_t *out_len)

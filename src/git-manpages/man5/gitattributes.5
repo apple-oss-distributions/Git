@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitattributes
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GITATTRIBUTES" "5" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GITATTRIBUTES" "5" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -76,7 +76,35 @@ Unspecified
 No pattern matches the path, and nothing says if the path has or does not have the attribute, the attribute for the path is said to be Unspecified\&.
 .RE
 .sp
-When more than one pattern matches the path, a later line overrides an earlier line\&. This overriding is done per attribute\&. The rules how the pattern matches paths are the same as in \fB\&.gitignore\fR files; see \fBgitignore\fR(5)\&. Unlike \fB\&.gitignore\fR, negative patterns are forbidden\&.
+When more than one pattern matches the path, a later line overrides an earlier line\&. This overriding is done per attribute\&.
+.sp
+The rules by which the pattern matches paths are the same as in \fB\&.gitignore\fR files (see \fBgitignore\fR(5)), with a few exceptions:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+negative patterns are forbidden
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+patterns that match a directory do not recursively match paths inside that directory (so using the trailing\-slash
+\fBpath/\fR
+syntax is pointless in an attributes file; use
+\fBpath/**\fR
+instead)
+.RE
 .sp
 When deciding what attributes are assigned to a path, Git consults \fB$GIT_DIR/info/attributes\fR file (which has the highest precedence), \fB\&.gitattributes\fR file in the same directory as the path in question, and its parent directories up to the toplevel of the work tree (the further the directory that contains \fB\&.gitattributes\fR is from the path in question, the lower its precedence)\&. Finally global and system\-wide files are considered (they have the lowest precedence)\&.
 .sp
@@ -259,8 +287,7 @@ From a clean working directory:
 .\}
 .nf
 $ echo "* text=auto" >\&.gitattributes
-$ git read\-tree \-\-empty   # Clean index, force re\-scan of working directory
-$ git add \&.
+$ git add \-\-renormalize \&.
 $ git status        # Show files that will be normalized
 $ git commit \-m "Introduce end\-of\-line normalization"
 .fi
@@ -366,6 +393,8 @@ These two filters behave differently, and by default, a filter is taken as the f
 .sp
 You can declare that a filter turns a content that by itself is unusable into a usable content by setting the filter\&.<driver>\&.required configuration variable to \fBtrue\fR\&.
 .sp
+Note: Whenever the clean filter is changed, the repo should be renormalized: $ git add \-\-renormalize \&.
+.sp
 For example, in \&.gitattributes, you would assign the \fBfilter\fR attribute for paths\&.
 .sp
 .if n \{\
@@ -440,37 +469,9 @@ Note that "%f" is the name of the path that is being worked on\&. Depending on t
 \fBLong Running Filter Process\fR
 .RS 4
 .sp
-If the filter command (a string value) is defined via \fBfilter\&.<driver>\&.process\fR then Git can process all blobs with a single filter invocation for the entire life of a single Git command\&. This is achieved by using a packet format (pkt\-line, see technical/protocol\-common\&.txt) based protocol over standard input and standard output as follows\&. All packets, except for the "*CONTENT" packets and the "0000" flush packet, are considered text and therefore are terminated by a LF\&.
+If the filter command (a string value) is defined via \fBfilter\&.<driver>\&.process\fR then Git can process all blobs with a single filter invocation for the entire life of a single Git command\&. This is achieved by using the long\-running process protocol (described in technical/long\-running\-process\-protocol\&.txt)\&.
 .sp
-Git starts the filter when it encounters the first file that needs to be cleaned or smudged\&. After the filter started Git sends a welcome message ("git\-filter\-client"), a list of supported protocol version numbers, and a flush packet\&. Git expects to read a welcome response message ("git\-filter\-server"), exactly one protocol version number from the previously sent list, and a flush packet\&. All further communication will be based on the selected version\&. The remaining protocol description below documents "version=2"\&. Please note that "version=42" in the example below does not exist and is only there to illustrate how the protocol would look like with more than one version\&.
-.sp
-After the version negotiation Git sends a list of all capabilities that it supports and a flush packet\&. Git expects to read a list of desired capabilities, which must be a subset of the supported capabilities list, and a flush packet as response:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-packet:          git> git\-filter\-client
-packet:          git> version=2
-packet:          git> version=42
-packet:          git> 0000
-packet:          git< git\-filter\-server
-packet:          git< version=2
-packet:          git< 0000
-packet:          git> capability=clean
-packet:          git> capability=smudge
-packet:          git> capability=not\-yet\-invented
-packet:          git> 0000
-packet:          git< capability=clean
-packet:          git< capability=smudge
-packet:          git< 0000
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.sp
-Supported filter capabilities in version 2 are "clean", "smudge", and "delay"\&.
+When Git encounters the first file that needs to be cleaned or smudged, it starts the filter and performs the handshake\&. In the handshake, the welcome message sent by Git is "git\-filter\-client", only version 2 is suppported, and the supported capabilities are "clean", "smudge", and "delay"\&.
 .sp
 Afterwards Git sends a list of "key=value" pairs terminated with a flush packet\&. The list will contain at least the filter command (based on the supported capabilities) and the pathname of the file to filter relative to the repository root\&. Right after the flush packet Git sends the content split in zero or more pkt\-line packets and a flush packet to terminate content\&. Please note, that the filter must not send any response before it received the content and the final flush packet\&. Also note that the "value" of a "key=value" pair can contain the "=" character whereas the key would never contain that character\&.
 .sp
@@ -571,8 +572,6 @@ packet:          git< 0000
 Git neither stops nor restarts the filter process in case the "error"/"abort" status is set\&. However, Git sets its exit code according to the \fBfilter\&.<driver>\&.required\fR flag, mimicking the behavior of the \fBfilter\&.<driver>\&.clean\fR / \fBfilter\&.<driver>\&.smudge\fR mechanism\&.
 .sp
 If the filter dies during the communication or does not adhere to the protocol then Git will stop the filter process and restart it with the next file that needs to be processed\&. Depending on the \fBfilter\&.<driver>\&.required\fR flag Git will interpret that as error\&.
-.sp
-After the filter has processed a command it is expected to wait for a "key=value" list containing the next command\&. Git will close the command pipe on exit\&. The filter is expected to detect EOF and exit gracefully on its own\&. Git will wait until the filter process has stopped\&.
 .RE
 .sp
 .it 1 an-trap
@@ -888,6 +887,18 @@ suitable for source code in the Fortran language\&.
 .\}
 \fBfountain\fR
 suitable for Fountain documents\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBgolang\fR
+suitable for source code in the Go language\&.
 .RE
 .sp
 .RS 4

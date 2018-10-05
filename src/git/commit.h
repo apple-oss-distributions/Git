@@ -7,6 +7,7 @@
 #include "decorate.h"
 #include "gpg-interface.h"
 #include "string-list.h"
+#include "pretty.h"
 
 struct commit_list {
 	struct commit *item;
@@ -121,93 +122,13 @@ struct commit_list *copy_commit_list(struct commit_list *list);
 
 void free_commit_list(struct commit_list *list);
 
-/* Commit formats */
-enum cmit_fmt {
-	CMIT_FMT_RAW,
-	CMIT_FMT_MEDIUM,
-	CMIT_FMT_DEFAULT = CMIT_FMT_MEDIUM,
-	CMIT_FMT_SHORT,
-	CMIT_FMT_FULL,
-	CMIT_FMT_FULLER,
-	CMIT_FMT_ONELINE,
-	CMIT_FMT_EMAIL,
-	CMIT_FMT_MBOXRD,
-	CMIT_FMT_USERFORMAT,
-
-	CMIT_FMT_UNSPECIFIED
-};
-
-static inline int cmit_fmt_is_mail(enum cmit_fmt fmt)
-{
-	return (fmt == CMIT_FMT_EMAIL || fmt == CMIT_FMT_MBOXRD);
-}
-
 struct rev_info; /* in revision.h, it circularly uses enum cmit_fmt */
-
-struct pretty_print_context {
-	/*
-	 * Callers should tweak these to change the behavior of pp_* functions.
-	 */
-	enum cmit_fmt fmt;
-	int abbrev;
-	const char *after_subject;
-	int preserve_subject;
-	struct date_mode date_mode;
-	unsigned date_mode_explicit:1;
-	int print_email_subject;
-	int expand_tabs_in_log;
-	int need_8bit_cte;
-	char *notes_message;
-	struct reflog_walk_info *reflog_info;
-	struct rev_info *rev;
-	const char *output_encoding;
-	struct string_list *mailmap;
-	int color;
-	struct ident_split *from_ident;
-
-	/*
-	 * Fields below here are manipulated internally by pp_* functions and
-	 * should not be counted on by callers.
-	 */
-	struct string_list in_body_headers;
-	int graph_width;
-};
-
-struct userformat_want {
-	unsigned notes:1;
-};
 
 extern int has_non_ascii(const char *text);
 extern const char *logmsg_reencode(const struct commit *commit,
 				   char **commit_encoding,
 				   const char *output_encoding);
-extern void get_commit_format(const char *arg, struct rev_info *);
-extern const char *format_subject(struct strbuf *sb, const char *msg,
-				  const char *line_separator);
-extern void userformat_find_requirements(const char *fmt, struct userformat_want *w);
-extern int commit_format_is_empty(enum cmit_fmt);
 extern const char *skip_blank_lines(const char *msg);
-extern void format_commit_message(const struct commit *commit,
-				  const char *format, struct strbuf *sb,
-				  const struct pretty_print_context *context);
-extern void pretty_print_commit(struct pretty_print_context *pp,
-				const struct commit *commit,
-				struct strbuf *sb);
-extern void pp_commit_easy(enum cmit_fmt fmt, const struct commit *commit,
-			   struct strbuf *sb);
-void pp_user_info(struct pretty_print_context *pp,
-		  const char *what, struct strbuf *sb,
-		  const char *line, const char *encoding);
-void pp_title_line(struct pretty_print_context *pp,
-		   const char **msg_p,
-		   struct strbuf *sb,
-		   const char *encoding,
-		   int need_8bit_cte);
-void pp_remainder(struct pretty_print_context *pp,
-		  const char **msg_p,
-		  struct strbuf *sb,
-		  int indent);
-
 
 /** Removes the first commit from a list sorted by date, and adds all
  * of its parents.
@@ -219,7 +140,6 @@ struct commit *pop_commit(struct commit_list **stack);
 
 void clear_commit_marks(struct commit *commit, unsigned int mark);
 void clear_commit_marks_many(int nr, struct commit **commit, unsigned int mark);
-void clear_commit_marks_for_object_array(struct object_array *a, unsigned mark);
 
 
 enum rev_sort_order {
@@ -342,14 +262,15 @@ extern void append_merge_tag_headers(struct commit_list *parents,
 				     struct commit_extra_header ***tail);
 
 extern int commit_tree(const char *msg, size_t msg_len,
-		       const unsigned char *tree,
-		       struct commit_list *parents, unsigned char *ret,
+		       const struct object_id *tree,
+		       struct commit_list *parents, struct object_id *ret,
 		       const char *author, const char *sign_commit);
 
 extern int commit_tree_extended(const char *msg, size_t msg_len,
-				const unsigned char *tree,
-				struct commit_list *parents, unsigned char *ret,
-				const char *author, const char *sign_commit,
+				const struct object_id *tree,
+				struct commit_list *parents,
+				struct object_id *ret, const char *author,
+				const char *sign_commit,
 				struct commit_extra_header *);
 
 extern struct commit_extra_header *read_commit_extra_headers(struct commit *, const char **);

@@ -825,14 +825,18 @@ same as for <em>git diff-index</em> and <em>git diff-tree</em>.</p></div>
 <dt class="hdlist1">
 --indent-heuristic
 </dt>
+<dd>
+<p>
+        Enable the heuristic that shift diff hunk boundaries to make patches
+        easier to read. This is the default.
+</p>
+</dd>
 <dt class="hdlist1">
 --no-indent-heuristic
 </dt>
 <dd>
 <p>
-        These are to help debugging and tuning experimental heuristics
-        (which are off by default) that shift diff hunk boundaries to
-        make patches easier to read.
+        Disable the indent heuristic.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -859,6 +863,19 @@ same as for <em>git diff-index</em> and <em>git diff-tree</em>.</p></div>
 <p>
         Generate a diff using the "histogram diff" algorithm.
 </p>
+</dd>
+<dt class="hdlist1">
+--anchored=&lt;text&gt;
+</dt>
+<dd>
+<p>
+        Generate a diff using the "anchored diff" algorithm.
+</p>
+<div class="paragraph"><p>This option may be specified more than once.</p></div>
+<div class="paragraph"><p>If a line exists in both the source and destination, exists only once,
+and starts with this text, this algorithm attempts to prevent it from
+appearing as a deletion or addition in the output. It uses the "patience
+diff" algorithm internally.</p></div>
 </dd>
 <dt class="hdlist1">
 --diff-algorithm={patience|minimal|histogram|myers}
@@ -931,6 +948,19 @@ have to use <code>--diff-algorithm=default</code> option.</p></div>
 </p>
 <div class="paragraph"><p>These parameters can also be set individually with <code>--stat-width=&lt;width&gt;</code>,
 <code>--stat-name-width=&lt;name-width&gt;</code> and <code>--stat-count=&lt;count&gt;</code>.</p></div>
+</dd>
+<dt class="hdlist1">
+--compact-summary
+</dt>
+<dd>
+<p>
+        Output a condensed summary of extended header information such
+        as file creations or deletions ("new" or "gone", optionally "+l"
+        if it&#8217;s a symlink) and mode changes ("+x" or "-x" for adding
+        or removing executable bit respectively) in diffstat. The
+        information is put betwen the filename part and the graph
+        part. Implies <code>--stat</code>.
+</p>
 </dd>
 <dt class="hdlist1">
 --numstat
@@ -1467,6 +1497,11 @@ of a delete/create pair.</p></div>
 </p>
 <div class="paragraph"><p>Also, these upper-case letters can be downcased to exclude.  E.g.
 <code>--diff-filter=ad</code> excludes added and deleted paths.</p></div>
+<div class="paragraph"><p>Note that not all diffs can feature all types. For instance, diffs
+from the index to the working tree can never have Added entries
+(because the set of paths included in the diff is limited by what is in
+the index).  Similarly, copied and renamed entries cannot appear if
+detection for those types is disabled.</p></div>
 </dd>
 <dt class="hdlist1">
 -S&lt;string&gt;
@@ -1505,6 +1540,19 @@ file:</p></div>
 occurrences of that string did not change).</p></div>
 <div class="paragraph"><p>See the <em>pickaxe</em> entry in <a href="gitdiffcore.html">gitdiffcore(7)</a> for more
 information.</p></div>
+</dd>
+<dt class="hdlist1">
+--find-object=&lt;object-id&gt;
+</dt>
+<dd>
+<p>
+        Look for differences that change the number of occurrences of
+        the specified object. Similar to <code>-S</code>, just the argument is different
+        in that it doesn&#8217;t search for a specific string but for a specific
+        object id.
+</p>
+<div class="paragraph"><p>The object can be a blob or a submodule commit. It implies the <code>-t</code> option in
+<code>git-log</code> to also find trees.</p></div>
 </dd>
 <dt class="hdlist1">
 --pickaxe-all
@@ -1607,6 +1655,14 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 <dd>
 <p>
         Treat all files as text.
+</p>
+</dd>
+<dt class="hdlist1">
+--ignore-cr-at-eol
+</dt>
+<dd>
+<p>
+        Ignore carrige-return at the end of line when doing a comparison.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2417,7 +2473,8 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2013-08-21 00:40:27 JST
+Last updated
+ 2018-01-26 15:11:04 PST
 </div>
 </div>
 </body>

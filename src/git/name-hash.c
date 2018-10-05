@@ -578,6 +578,8 @@ static void threaded_lazy_init_name_hash(
 
 static void lazy_init_name_hash(struct index_state *istate)
 {
+	uint64_t start = getnanotime();
+
 	if (istate->name_hash_initialized)
 		return;
 	hashmap_init(&istate->name_hash, cache_entry_cmp, NULL, istate->cache_nr);
@@ -600,6 +602,7 @@ static void lazy_init_name_hash(struct index_state *istate)
 	}
 
 	istate->name_hash_initialized = 1;
+	trace_performance_since(start, "initialize name hash");
 }
 
 /*
@@ -696,12 +699,12 @@ void adjust_dirname_case(struct index_state *istate, char *name)
 		if (*ptr == '/') {
 			struct dir_entry *dir;
 
-			ptr++;
-			dir = find_dir_entry(istate, name, ptr - name + 1);
+			dir = find_dir_entry(istate, name, ptr - name);
 			if (dir) {
 				memcpy((void *)startPtr, dir->name + (startPtr - name), ptr - startPtr);
-				startPtr = ptr;
+				startPtr = ptr + 1;
 			}
+			ptr++;
 		}
 	}
 }

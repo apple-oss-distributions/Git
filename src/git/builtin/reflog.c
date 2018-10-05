@@ -42,7 +42,7 @@ struct expire_reflog_policy_cb {
 };
 
 struct collected_reflog {
-	unsigned char sha1[20];
+	struct object_id oid;
 	char reflog[FLEX_ARRAY];
 };
 
@@ -52,6 +52,7 @@ struct collect_reflog_cb {
 	int nr;
 };
 
+/* Remember to update object flag allocation in object.h */
 #define INCOMPLETE	(1u<<10)
 #define STUDYING	(1u<<11)
 #define REACHABLE	(1u<<12)
@@ -289,20 +290,20 @@ static int should_expire_reflog_ent(struct object_id *ooid, struct object_id *no
 				    const char *message, void *cb_data)
 {
 	struct expire_reflog_policy_cb *cb = cb_data;
-	struct commit *old, *new;
+	struct commit *old_commit, *new_commit;
 
 	if (timestamp < cb->cmd.expire_total)
 		return 1;
 
-	old = new = NULL;
+	old_commit = new_commit = NULL;
 	if (cb->cmd.stalefix &&
-	    (!keep_entry(&old, ooid) || !keep_entry(&new, noid)))
+	    (!keep_entry(&old_commit, ooid) || !keep_entry(&new_commit, noid)))
 		return 1;
 
 	if (timestamp < cb->cmd.expire_unreachable) {
 		if (cb->unreachable_expire_kind == UE_ALWAYS)
 			return 1;
-		if (unreachable(cb, old, ooid) || unreachable(cb, new, noid))
+		if (unreachable(cb, old_commit, ooid) || unreachable(cb, new_commit, noid))
 			return 1;
 	}
 
@@ -385,7 +386,7 @@ static int collect_reflog(const char *ref, const struct object_id *oid, int unus
 	struct collect_reflog_cb *cb = cb_data;
 
 	FLEX_ALLOC_STR(e, reflog, ref);
-	hashcpy(e->sha1, oid->hash);
+	oidcpy(&e->oid, oid);
 	ALLOC_GROW(cb->e, cb->nr + 1, cb->alloc);
 	cb->e[cb->nr++] = e;
 	return 0;
@@ -416,16 +417,6 @@ static struct reflog_expire_cfg *find_cfg_ent(const char *pattern, size_t len)
 	return ent;
 }
 
-static int parse_expire_cfg_value(const char *var, const char *value, timestamp_t *expire)
-{
-	if (!value)
-		return config_error_nonbool(var);
-	if (parse_expiry_date(value, expire))
-		return error(_("'%s' for '%s' is not a valid timestamp"),
-			     value, var);
-	return 0;
-}
-
 /* expiry timer slot */
 #define EXPIRE_TOTAL   01
 #define EXPIRE_UNREACH 02
@@ -443,11 +434,11 @@ static int reflog_expire_config(const char *var, const char *value, void *cb)
 
 	if (!strcmp(key, "reflogexpire")) {
 		slot = EXPIRE_TOTAL;
-		if (parse_expire_cfg_value(var, value, &expire))
+		if (git_config_expiry_date(&expire, var, value))
 			return -1;
 	} else if (!strcmp(key, "reflogexpireunreachable")) {
 		slot = EXPIRE_UNREACH;
-		if (parse_expire_cfg_value(var, value, &expire))
+		if (git_config_expiry_date(&expire, var, value))
 			return -1;
 	} else
 		return git_default_config(var, value, cb);
@@ -589,7 +580,7 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
 		for (i = 0; i < collected.nr; i++) {
 			struct collected_reflog *e = collected.e[i];
 			set_reflog_expiry_param(&cb.cmd, explicit_expiry, e->reflog);
-			status |= reflog_expire(e->reflog, e->sha1, flags,
+			status |= reflog_expire(e->reflog, &e->oid, flags,
 						reflog_expiry_prepare,
 						should_expire_reflog_ent,
 						reflog_expiry_cleanup,
@@ -601,13 +592,13 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
 
 	for (; i < argc; i++) {
 		char *ref;
-		unsigned char sha1[20];
-		if (!dwim_log(argv[i], strlen(argv[i]), sha1, &ref)) {
+		struct object_id oid;
+		if (!dwim_log(argv[i], strlen(argv[i]), &oid, &ref)) {
 			status |= error("%s points nowhere!", argv[i]);
 			continue;
 		}
 		set_reflog_expiry_param(&cb.cmd, explicit_expiry, ref);
-		status |= reflog_expire(ref, sha1, flags,
+		status |= reflog_expire(ref, &oid, flags,
 					reflog_expiry_prepare,
 					should_expire_reflog_ent,
 					reflog_expiry_cleanup,
@@ -659,7 +650,7 @@ static int cmd_reflog_delete(int argc, const char **argv, const char *prefix)
 
 	for ( ; i < argc; i++) {
 		const char *spec = strstr(argv[i], "@{");
-		unsigned char sha1[20];
+		struct object_id oid;
 		char *ep, *ref;
 		int recno;
 
@@ -668,7 +659,7 @@ static int cmd_reflog_delete(int argc, const char **argv, const char *prefix)
 			continue;
 		}
 
-		if (!dwim_log(argv[i], spec - argv[i], sha1, &ref)) {
+		if (!dwim_log(argv[i], spec - argv[i], &oid, &ref)) {
 			status |= error("no reflog for '%s'", argv[i]);
 			continue;
 		}
@@ -683,7 +674,7 @@ static int cmd_reflog_delete(int argc, const char **argv, const char *prefix)
 			cb.cmd.expire_total = 0;
 		}
 
-		status |= reflog_expire(ref, sha1, flags,
+		status |= reflog_expire(ref, &oid, flags,
 					reflog_expiry_prepare,
 					should_expire_reflog_ent,
 					reflog_expiry_cleanup,

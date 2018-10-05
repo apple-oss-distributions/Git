@@ -178,24 +178,40 @@ int read_branch_desc(struct strbuf *buf, const char *branch_name)
 	return 0;
 }
 
-int validate_new_branchname(const char *name, struct strbuf *ref,
-			    int force, int attr_only)
+/*
+ * Check if 'name' can be a valid name for a branch; die otherwise.
+ * Return 1 if the named branch already exists; return 0 otherwise.
+ * Fill ref with the full refname for the branch.
+ */
+int validate_branchname(const char *name, struct strbuf *ref)
 {
 	if (strbuf_check_branch_ref(ref, name))
 		die(_("'%s' is not a valid branch name."), name);
 
-	if (!ref_exists(ref->buf))
+	return ref_exists(ref->buf);
+}
+
+/*
+ * Check if a branch 'name' can be created as a new branch; die otherwise.
+ * 'force' can be used when it is OK for the named branch already exists.
+ * Return 1 if the named branch already exists; return 0 otherwise.
+ * Fill ref with the full refname for the branch.
+ */
+int validate_new_branchname(const char *name, struct strbuf *ref, int force)
+{
+	const char *head;
+
+	if (!validate_branchname(name, ref))
 		return 0;
-	else if (!force && !attr_only)
-		die(_("A branch named '%s' already exists."), ref->buf + strlen("refs/heads/"));
 
-	if (!attr_only) {
-		const char *head;
+	if (!force)
+		die(_("A branch named '%s' already exists."),
+		    ref->buf + strlen("refs/heads/"));
 
-		head = resolve_ref_unsafe("HEAD", 0, NULL, NULL);
-		if (!is_bare_repository() && head && !strcmp(head, ref->buf))
-			die(_("Cannot force update the current branch."));
-	}
+	head = resolve_ref_unsafe("HEAD", 0, NULL, NULL);
+	if (!is_bare_repository() && head && !strcmp(head, ref->buf))
+		die(_("Cannot force update the current branch."));
+
 	return 1;
 }
 
@@ -228,7 +244,7 @@ N_("\n"
 "\"git push -u\" to set the upstream config as you push.");
 
 void create_branch(const char *name, const char *start_name,
-		   int force, int reflog, int clobber_head,
+		   int force, int clobber_head_ok, int reflog,
 		   int quiet, enum branch_track track)
 {
 	struct commit *commit;
@@ -242,9 +258,9 @@ void create_branch(const char *name, const char *start_name,
 	if (track == BRANCH_TRACK_EXPLICIT || track == BRANCH_TRACK_OVERRIDE)
 		explicit_tracking = 1;
 
-	if (validate_new_branchname(name, &ref, force,
-				    track == BRANCH_TRACK_OVERRIDE ||
-				    clobber_head)) {
+	if ((track == BRANCH_TRACK_OVERRIDE || clobber_head_ok)
+	    ? validate_branchname(name, &ref)
+	    : validate_new_branchname(name, &ref, force)) {
 		if (!force)
 			dont_change_ref = 1;
 		else
@@ -264,7 +280,7 @@ void create_branch(const char *name, const char *start_name,
 		die(_("Not a valid object name: '%s'."), start_name);
 	}
 
-	switch (dwim_ref(start_name, strlen(start_name), oid.hash, &real_ref)) {
+	switch (dwim_ref(start_name, strlen(start_name), &oid, &real_ref)) {
 	case 0:
 		/* Not branching from any existing branch */
 		if (explicit_tracking)
@@ -305,7 +321,7 @@ void create_branch(const char *name, const char *start_name,
 		transaction = ref_transaction_begin(&err);
 		if (!transaction ||
 		    ref_transaction_update(transaction, ref.buf,
-					   oid.hash, forcing ? NULL : null_sha1,
+					   &oid, forcing ? NULL : &null_oid,
 					   0, msg, &err) ||
 		    ref_transaction_commit(transaction, &err))
 			die("%s", err.buf);

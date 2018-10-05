@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-read-tree
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GIT\-READ\-TREE" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GIT\-READ\-TREE" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -124,12 +124,10 @@ when both sides add a path identically\&. The resolution is to add that path\&.
 .RE
 .RE
 .PP
-\-\-prefix=<prefix>/
+\-\-prefix=<prefix>
 .RS 4
 Keep the current index contents, and read the contents of the named tree\-ish under the directory at
-\fB<prefix>\fR\&. The command will refuse to overwrite entries that already existed in the original index file\&. Note that the
-\fB<prefix>/\fR
-value must end with a slash\&.
+\fB<prefix>\fR\&. The command will refuse to overwrite entries that already existed in the original index file\&.
 .RE
 .PP
 \-\-exclude\-per\-directory=<gitignore>

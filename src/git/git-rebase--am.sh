@@ -27,6 +27,9 @@ skip)
 	move_to_original_branch
 	return
 	;;
+show-current-patch)
+	exec git am --show-current-patch
+	;;
 esac
 
 if test -z "$rebase_root"
@@ -46,6 +49,7 @@ then
 	# makes this easy
 	git cherry-pick ${gpg_sign_opt:+"$gpg_sign_opt"} --allow-empty \
 		$allow_rerere_autoupdate --right-only "$revisions" \
+		$allow_empty_message \
 		${restrict_revision+^$restrict_revision}
 	ret=$?
 else
@@ -53,6 +57,7 @@ else
 
 	git format-patch -k --stdout --full-index --cherry-pick --right-only \
 		--src-prefix=a/ --dst-prefix=b/ --no-renames --no-cover-letter \
+		--pretty=mboxrd \
 		$git_format_patch_opt \
 		"$revisions" ${restrict_revision+^$restrict_revision} \
 		>"$GIT_DIR/rebased-patches"
@@ -83,6 +88,7 @@ else
 	fi
 
 	git am $git_am_opt --rebasing --resolvemsg="$resolvemsg" \
+		--patch-format=mboxrd \
 		$allow_rerere_autoupdate \
 		${gpg_sign_opt:+"$gpg_sign_opt"} <"$GIT_DIR/rebased-patches"
 	ret=$?

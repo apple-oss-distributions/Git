@@ -68,17 +68,21 @@ struct snapshot {
 	int mmapped;
 
 	/*
-	 * The contents of the `packed-refs` file. If the file was
-	 * already sorted, this points at the mmapped contents of the
-	 * file. If not, this points at heap-allocated memory
-	 * containing the contents, sorted. If there were no contents
-	 * (e.g., because the file didn't exist), `buf` and `eof` are
-	 * both NULL.
+	 * The contents of the `packed-refs` file:
+	 *
+	 * - buf -- a pointer to the start of the memory
+	 * - start -- a pointer to the first byte of actual references
+	 *   (i.e., after the header line, if one is present)
+	 * - eof -- a pointer just past the end of the reference
+	 *   contents
+	 *
+	 * If the `packed-refs` file was already sorted, `buf` points
+	 * at the mmapped contents of the file. If not, it points at
+	 * heap-allocated memory containing the contents, sorted. If
+	 * there were no contents (e.g., because the file didn't
+	 * exist), `buf`, `start`, and `eof` are all NULL.
 	 */
-	char *buf, *eof;
-
-	/* The size of the header line, if any; otherwise, 0: */
-	size_t header_len;
+	char *buf, *start, *eof;
 
 	/*
 	 * What is the peeled state of the `packed-refs` file that
@@ -169,8 +173,7 @@ static void clear_snapshot_buffer(struct snapshot *snapshot)
 	} else {
 		free(snapshot->buf);
 	}
-	snapshot->buf = snapshot->eof = NULL;
-	snapshot->header_len = 0;
+	snapshot->buf = snapshot->start = snapshot->eof = NULL;
 }
 
 /*
@@ -319,12 +322,13 @@ static void sort_snapshot(struct snapshot *snapshot)
 	size_t len, i;
 	char *new_buffer, *dst;
 
-	pos = snapshot->buf + snapshot->header_len;
+	pos = snapshot->start;
 	eof = snapshot->eof;
-	len = eof - pos;
 
-	if (!len)
+	if (pos == eof)
 		return;
+
+	len = eof - pos;
 
 	/*
 	 * Initialize records based on a crude estimate of the number
@@ -391,9 +395,8 @@ static void sort_snapshot(struct snapshot *snapshot)
 	 * place:
 	 */
 	clear_snapshot_buffer(snapshot);
-	snapshot->buf = new_buffer;
+	snapshot->buf = snapshot->start = new_buffer;
 	snapshot->eof = new_buffer + len;
-	snapshot->header_len = 0;
 
 cleanup:
 	free(records);
@@ -442,23 +445,26 @@ static const char *find_end_of_record(const char *p, const char *end)
  */
 static void verify_buffer_safe(struct snapshot *snapshot)
 {
-	const char *buf = snapshot->buf + snapshot->header_len;
+	const char *start = snapshot->start;
 	const char *eof = snapshot->eof;
 	const char *last_line;
 
-	if (buf == eof)
+	if (start == eof)
 		return;
 
-	last_line = find_start_of_record(buf, eof - 1);
+	last_line = find_start_of_record(start, eof - 1);
 	if (*(eof - 1) != '\n' || eof - last_line < GIT_SHA1_HEXSZ + 2)
 		die_invalid_line(snapshot->refs->path,
 				 last_line, eof - last_line);
 }
 
+#define SMALL_FILE_SIZE (32*1024)
+
 /*
  * Depending on `mmap_strategy`, either mmap or read the contents of
  * the `packed-refs` file into the snapshot. Return 1 if the file
- * existed and was read, or 0 if the file was absent. Die on errors.
+ * existed and was read, or 0 if the file was absent or empty. Die on
+ * errors.
  */
 static int load_contents(struct snapshot *snapshot)
 {
@@ -489,23 +495,22 @@ static int load_contents(struct snapshot *snapshot)
 		die_errno("couldn't stat %s", snapshot->refs->path);
 	size = xsize_t(st.st_size);
 
-	switch (mmap_strategy) {
-	case MMAP_NONE:
+	if (!size) {
+		return 0;
+	} else if (mmap_strategy == MMAP_NONE || size <= SMALL_FILE_SIZE) {
 		snapshot->buf = xmalloc(size);
 		bytes_read = read_in_full(fd, snapshot->buf, size);
 		if (bytes_read < 0 || bytes_read != size)
 			die_errno("couldn't read %s", snapshot->refs->path);
-		snapshot->eof = snapshot->buf + size;
 		snapshot->mmapped = 0;
-		break;
-	case MMAP_TEMPORARY:
-	case MMAP_OK:
+	} else {
 		snapshot->buf = xmmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-		snapshot->eof = snapshot->buf + size;
 		snapshot->mmapped = 1;
-		break;
 	}
 	close(fd);
+
+	snapshot->start = snapshot->buf;
+	snapshot->eof = snapshot->buf + size;
 
 	return 1;
 }
@@ -515,9 +520,11 @@ static int load_contents(struct snapshot *snapshot)
  * `refname` starts. If `mustexist` is true and the reference doesn't
  * exist, then return NULL. If `mustexist` is false and the reference
  * doesn't exist, then return the point where that reference would be
- * inserted. In the latter mode, `refname` doesn't have to be a proper
- * reference name; for example, one could search for "refs/replace/"
- * to find the start of any replace references.
+ * inserted, or `snapshot->eof` (which might be NULL) if it would be
+ * inserted at the end of the file. In the latter mode, `refname`
+ * doesn't have to be a proper reference name; for example, one could
+ * search for "refs/replace/" to find the start of any replace
+ * references.
  *
  * The record is sought using a binary search, so `snapshot->buf` must
  * be sorted.
@@ -539,7 +546,7 @@ static const char *find_reference_location(struct snapshot *snapshot,
 	 * preceding records all have reference names that come
 	 * *before* `refname`.
 	 */
-	const char *lo = snapshot->buf + snapshot->header_len;
+	const char *lo = snapshot->start;
 
 	/*
 	 * A pointer to a the first character of a record whose
@@ -547,7 +554,7 @@ static const char *find_reference_location(struct snapshot *snapshot,
 	 */
 	const char *hi = snapshot->eof;
 
-	while (lo < hi) {
+	while (lo != hi) {
 		const char *mid, *rec;
 		int cmp;
 
@@ -616,9 +623,7 @@ static struct snapshot *create_snapshot(struct packed_ref_store *refs)
 
 	/* If the file has a header line, process it: */
 	if (snapshot->buf < snapshot->eof && *snapshot->buf == '#') {
-		struct strbuf tmp = STRBUF_INIT;
-		char *p;
-		const char *eol;
+		char *tmp, *p, *eol;
 		struct string_list traits = STRING_LIST_INIT_NODUP;
 
 		eol = memchr(snapshot->buf, '\n',
@@ -628,9 +633,9 @@ static struct snapshot *create_snapshot(struct packed_ref_store *refs)
 					      snapshot->buf,
 					      snapshot->eof - snapshot->buf);
 
-		strbuf_add(&tmp, snapshot->buf, eol - snapshot->buf);
+		tmp = xmemdupz(snapshot->buf, eol - snapshot->buf);
 
-		if (!skip_prefix(tmp.buf, "# pack-refs with:", (const char **)&p))
+		if (!skip_prefix(tmp, "# pack-refs with:", (const char **)&p))
 			die_invalid_line(refs->path,
 					 snapshot->buf,
 					 snapshot->eof - snapshot->buf);
@@ -647,10 +652,10 @@ static struct snapshot *create_snapshot(struct packed_ref_store *refs)
 		/* perhaps other traits later as well */
 
 		/* The "+ 1" is for the LF character. */
-		snapshot->header_len = eol + 1 - snapshot->buf;
+		snapshot->start = eol + 1;
 
 		string_list_clear(&traits, 0);
-		strbuf_release(&tmp);
+		free(tmp);
 	}
 
 	verify_buffer_safe(snapshot);
@@ -671,13 +676,12 @@ static struct snapshot *create_snapshot(struct packed_ref_store *refs)
 		 * We don't want to leave the file mmapped, so we are
 		 * forced to make a copy now:
 		 */
-		size_t size = snapshot->eof -
-			(snapshot->buf + snapshot->header_len);
+		size_t size = snapshot->eof - snapshot->start;
 		char *buf_copy = xmalloc(size);
 
-		memcpy(buf_copy, snapshot->buf + snapshot->header_len, size);
+		memcpy(buf_copy, snapshot->start, size);
 		clear_snapshot_buffer(snapshot);
-		snapshot->buf = buf_copy;
+		snapshot->buf = snapshot->start = buf_copy;
 		snapshot->eof = buf_copy + size;
 	}
 
@@ -716,7 +720,7 @@ static struct snapshot *get_snapshot(struct packed_ref_store *refs)
 }
 
 static int packed_read_raw_ref(struct ref_store *ref_store,
-			       const char *refname, unsigned char *sha1,
+			       const char *refname, struct object_id *oid,
 			       struct strbuf *referent, unsigned int *type)
 {
 	struct packed_ref_store *refs =
@@ -734,7 +738,7 @@ static int packed_read_raw_ref(struct ref_store *ref_store,
 		return -1;
 	}
 
-	if (get_sha1_hex(rec, sha1))
+	if (get_oid_hex(rec, oid))
 		die_invalid_line(refs->path, rec, snapshot->eof - rec);
 
 	*type = REF_ISPACKED;
@@ -744,7 +748,7 @@ static int packed_read_raw_ref(struct ref_store *ref_store,
 /*
  * This value is set in `base.flags` if the peeled value of the
  * current reference is known. In that case, `peeled` contains the
- * correct peeled value for the reference, which might be `null_sha1`
+ * correct peeled value for the reference, which might be `null_oid`
  * if the reference is not a tag or if it is broken.
  */
 #define REF_KNOWS_PEELED 0x40
@@ -880,7 +884,7 @@ static int packed_ref_iterator_peel(struct ref_iterator *ref_iterator,
 	} else if ((iter->base.flags & (REF_ISBROKEN | REF_ISSYMREF))) {
 		return -1;
 	} else {
-		return !!peel_object(iter->oid.hash, peeled->hash);
+		return !!peel_object(&iter->oid, peeled);
 	}
 }
 
@@ -924,7 +928,12 @@ static struct ref_iterator *packed_ref_iterator_begin(
 	 */
 	snapshot = get_snapshot(refs);
 
-	if (!snapshot->buf)
+	if (prefix && *prefix)
+		start = find_reference_location(snapshot, prefix, 0);
+	else
+		start = snapshot->start;
+
+	if (start == snapshot->eof)
 		return empty_ref_iterator_begin();
 
 	iter = xcalloc(1, sizeof(*iter));
@@ -933,11 +942,6 @@ static struct ref_iterator *packed_ref_iterator_begin(
 
 	iter->snapshot = snapshot;
 	acquire_snapshot(snapshot);
-
-	if (prefix && *prefix)
-		start = find_reference_location(snapshot, prefix, 0);
-	else
-		start = snapshot->buf + snapshot->header_len;
 
 	iter->pos = start;
 	iter->eof = snapshot->eof;
@@ -961,11 +965,11 @@ static struct ref_iterator *packed_ref_iterator_begin(
  * by the failing call to `fprintf()`.
  */
 static int write_packed_entry(FILE *fh, const char *refname,
-			      const unsigned char *sha1,
-			      const unsigned char *peeled)
+			      const struct object_id *oid,
+			      const struct object_id *peeled)
 {
-	if (fprintf(fh, "%s %s\n", sha1_to_hex(sha1), refname) < 0 ||
-	    (peeled && fprintf(fh, "^%s\n", sha1_to_hex(peeled)) < 0))
+	if (fprintf(fh, "%s %s\n", oid_to_hex(oid), refname) < 0 ||
+	    (peeled && fprintf(fh, "^%s\n", oid_to_hex(peeled)) < 0))
 		return -1;
 
 	return 0;
@@ -1203,8 +1207,8 @@ static int write_with_updates(struct packed_ref_store *refs,
 			int peel_error = ref_iterator_peel(iter, &peeled);
 
 			if (write_packed_entry(out, iter->refname,
-					       iter->oid->hash,
-					       peel_error ? NULL : peeled.hash))
+					       iter->oid,
+					       peel_error ? NULL : &peeled))
 				goto write_error;
 
 			if ((ok = ref_iterator_advance(iter)) != ITER_OK)
@@ -1220,12 +1224,12 @@ static int write_with_updates(struct packed_ref_store *refs,
 			i++;
 		} else {
 			struct object_id peeled;
-			int peel_error = peel_object(update->new_oid.hash,
-						     peeled.hash);
+			int peel_error = peel_object(&update->new_oid,
+						     &peeled);
 
 			if (write_packed_entry(out, update->refname,
-					       update->new_oid.hash,
-					       peel_error ? NULL : peeled.hash))
+					       &update->new_oid,
+					       peel_error ? NULL : &peeled))
 				goto write_error;
 
 			i++;
@@ -1259,6 +1263,100 @@ error:
 
 	delete_tempfile(&refs->tempfile);
 	return -1;
+}
+
+int is_packed_transaction_needed(struct ref_store *ref_store,
+				 struct ref_transaction *transaction)
+{
+	struct packed_ref_store *refs = packed_downcast(
+			ref_store,
+			REF_STORE_READ,
+			"is_packed_transaction_needed");
+	struct strbuf referent = STRBUF_INIT;
+	size_t i;
+	int ret;
+
+	if (!is_lock_file_locked(&refs->lock))
+		BUG("is_packed_transaction_needed() called while unlocked");
+
+	/*
+	 * We're only going to bother returning false for the common,
+	 * trivial case that references are only being deleted, their
+	 * old values are not being checked, and the old `packed-refs`
+	 * file doesn't contain any of those reference(s). This gives
+	 * false positives for some other cases that could
+	 * theoretically be optimized away:
+	 *
+	 * 1. It could be that the old value is being verified without
+	 *    setting a new value. In this case, we could verify the
+	 *    old value here and skip the update if it agrees. If it
+	 *    disagrees, we could either let the update go through
+	 *    (the actual commit would re-detect and report the
+	 *    problem), or come up with a way of reporting such an
+	 *    error to *our* caller.
+	 *
+	 * 2. It could be that a new value is being set, but that it
+	 *    is identical to the current packed value of the
+	 *    reference.
+	 *
+	 * Neither of these cases will come up in the current code,
+	 * because the only caller of this function passes to it a
+	 * transaction that only includes `delete` updates with no
+	 * `old_id`. Even if that ever changes, false positives only
+	 * cause an optimization to be missed; they do not affect
+	 * correctness.
+	 */
+
+	/*
+	 * Start with the cheap checks that don't require old
+	 * reference values to be read:
+	 */
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+
+		if (update->flags & REF_HAVE_OLD)
+			/* Have to check the old value -> needed. */
+			return 1;
+
+		if ((update->flags & REF_HAVE_NEW) && !is_null_oid(&update->new_oid))
+			/* Have to set a new value -> needed. */
+			return 1;
+	}
+
+	/*
+	 * The transaction isn't checking any old values nor is it
+	 * setting any nonzero new values, so it still might be able
+	 * to be skipped. Now do the more expensive check: the update
+	 * is needed if any of the updates is a delete, and the old
+	 * `packed-refs` file contains a value for that reference.
+	 */
+	ret = 0;
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+		unsigned int type;
+		struct object_id oid;
+
+		if (!(update->flags & REF_HAVE_NEW))
+			/*
+			 * This reference isn't being deleted -> not
+			 * needed.
+			 */
+			continue;
+
+		if (!refs_read_raw_ref(ref_store, update->refname,
+				       &oid, &referent, &type) ||
+		    errno != ENOENT) {
+			/*
+			 * We have to actually delete that reference
+			 * -> this transaction is needed.
+			 */
+			ret = 1;
+			break;
+		}
+	}
+
+	strbuf_release(&referent);
+	return ret;
 }
 
 struct packed_transaction_backend_data {
@@ -1519,7 +1617,7 @@ static int packed_delete_reflog(struct ref_store *ref_store,
 }
 
 static int packed_reflog_expire(struct ref_store *ref_store,
-				const char *refname, const unsigned char *sha1,
+				const char *refname, const struct object_id *oid,
 				unsigned int flags,
 				reflog_expiry_prepare_fn prepare_fn,
 				reflog_expiry_should_prune_fn should_prune_fn,

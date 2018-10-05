@@ -28,17 +28,22 @@ struct object_array {
 #define TYPE_BITS   3
 /*
  * object flag allocation:
- * revision.h:      0---------10                                26
- * fetch-pack.c:    0---5
- * walker.c:        0-2
- * upload-pack.c:       4       11----------------19
- * builtin/blame.c:               12-13
- * bisect.c:                               16
- * bundle.c:                               16
- * http-push.c:                            16-----19
- * commit.c:                               16-----19
- * sha1_name.c:                                     20
- * builtin/fsck.c:  0--3
+ * revision.h:               0---------10                                26
+ * fetch-pack.c:             0----5
+ * walker.c:                 0-2
+ * upload-pack.c:                4       11----------------19
+ * builtin/blame.c:                        12-13
+ * bisect.c:                                        16
+ * bundle.c:                                        16
+ * http-push.c:                                     16-----19
+ * commit.c:                                        16-----19
+ * sha1_name.c:                                              20
+ * list-objects-filter.c:                                      21
+ * builtin/fsck.c:           0--3
+ * builtin/index-pack.c:                                     2021
+ * builtin/pack-objects.c:                                   20
+ * builtin/reflog.c:                   10--12
+ * builtin/unpack-objects.c:                                 2021
  */
 #define FLAG_BITS  27
 
@@ -52,7 +57,7 @@ struct object {
 	struct object_id oid;
 };
 
-extern const char *typename(unsigned int type);
+extern const char *type_name(unsigned int type);
 extern int type_from_string_gently(const char *str, ssize_t, int gentle);
 #define type_from_string(str) type_from_string_gently(str, -1, 0)
 
@@ -147,5 +152,10 @@ void object_array_remove_duplicates(struct object_array *array);
 void object_array_clear(struct object_array *array);
 
 void clear_object_flags(unsigned flags);
+
+/*
+ * Clear the specified object flags from all in-core commit objects.
+ */
+extern void clear_commit_marks_all(unsigned int flags);
 
 #endif /* OBJECT_H */

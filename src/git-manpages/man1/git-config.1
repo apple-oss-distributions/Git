@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-config
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GIT\-CONFIG" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GIT\-CONFIG" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -304,6 +304,12 @@ to the home directory for the specified user\&. This option has no effect when s
 from the command line to let your shell do the expansion)\&.
 .RE
 .PP
+\-\-expiry\-date
+.RS 4
+\fBgit config\fR
+will ensure that the output is converted from a fixed or relative date\-string to a timestamp\&. This option has no effect when setting the value\&.
+.RE
+.PP
 \-z, \-\-null
 .RS 4
 For all options that output values and/or keys, always end values with the null character (instead of a newline)\&. Use newline instead as a delimiter between key and value\&. This allows for secure parsing of the output without getting confused e\&.g\&. by values that contain line breaks\&.
@@ -368,6 +374,9 @@ when a specific file is given (e\&.g\&., using
 \fBon\fR
 when searching all config files\&.
 .RE
+.SH "CONFIGURATION"
+.sp
+\fBpager\&.config\fR is only respected when listing configuration, i\&.e\&., when using \fB\-\-list\fR or any of the \fB\-\-get\-*\fR which may return multiple results\&. The default is to use a pager\&.
 .SH "FILES"
 .sp
 If not set explicitly with \fB\-\-file\fR, there are four files where \fIgit config\fR will search for configuration options:
@@ -696,7 +705,7 @@ Sections can be further divided into subsections\&. To begin a subsection put it
 .\}
 .sp
 .sp
-Subsection names are case sensitive and can contain any characters except newline (doublequote \fB"\fR and backslash can be included by escaping them as \fB\e"\fR and \fB\e\e\fR, respectively)\&. Section headers cannot span multiple lines\&. Variables may belong directly to a section or to a given subsection\&. You can have \fB[section]\fR if you have \fB[section "subsection"]\fR, but you don\(cqt need to\&.
+Subsection names are case sensitive and can contain any characters except newline and the null byte\&. Doublequote \fB"\fR and backslash can be included by escaping them as \fB\e"\fR and \fB\e\e\fR, respectively\&. Backslashes preceding other characters are dropped when reading; for example, \fB\et\fR is read as \fBt\fR and \fB\e0\fR is read as \fB0\fR Section headers cannot span multiple lines\&. Variables may belong directly to a section or to a given subsection\&. You can have \fB[section]\fR if you have \fB[section "subsection"]\fR, but you don\(cqt need to\&.
 .sp
 There is also a deprecated \fB[section\&.subsection]\fR syntax\&. With this syntax, the subsection name is converted to lower\-case and is also compared case sensitively\&. These subsection names follow the same restrictions as section names\&.
 .sp
@@ -1197,6 +1206,16 @@ addEmbeddedRepo
 .RS 4
 Advice on what to do when you\(cqve accidentally added one git repo inside of another\&.
 .RE
+.PP
+ignoredHook
+.RS 4
+Advice shown if an hook is ignored because the hook is not set as executable\&.
+.RE
+.PP
+waitingForEditor
+.RS 4
+Print a message to the terminal whenever Git is waiting for editor input from the user\&.
+.RE
 .RE
 .PP
 core\&.fileMode
@@ -1261,6 +1280,12 @@ If set to true, do not allow checkout of paths that would cause problems with th
 on Windows, and
 \fBfalse\fR
 elsewhere\&.
+.RE
+.PP
+core\&.fsmonitor
+.RS 4
+If set, the value of this variable is used as a command which will identify all files that may have changed since the requested date/time\&. This information is used to speed up git by avoiding unnecessary processing of files that have not changed\&. See the "fsmonitor\-watchman" section of
+\fBgithooks\fR(5)\&.
 .RE
 .PP
 core\&.trustctime
@@ -1975,6 +2000,33 @@ how to handle whitespaces, in the same way as the
 \fB\-\-whitespace\fR
 option\&. See
 \fBgit-apply\fR(1)\&.
+.RE
+.PP
+blame\&.showRoot
+.RS 4
+Do not treat root commits as boundaries in
+\fBgit-blame\fR(1)\&. This option defaults to false\&.
+.RE
+.PP
+blame\&.blankBoundary
+.RS 4
+Show blank commit object name for boundary commits in
+\fBgit-blame\fR(1)\&. This option defaults to false\&.
+.RE
+.PP
+blame\&.showEmail
+.RS 4
+Show the author email instead of author name in
+\fBgit-blame\fR(1)\&. This option defaults to false\&.
+.RE
+.PP
+blame\&.date
+.RS 4
+Specifies the format used to output dates in
+\fBgit-blame\fR(1)\&. If unset the iso format is used\&. For supported values, see the discussion of the
+\fB\-\-date\fR
+option at
+\fBgit-log\fR(1)\&.
 .RE
 .PP
 branch\&.autoSetupMerge
@@ -2788,7 +2840,8 @@ A boolean to inhibit the standard behavior of printing a space before each empty
 diff\&.submodule
 .RS 4
 Specify the format in which differences in submodules are shown\&. The "short" format just shows the names of the commits at the beginning and end of the range\&. The "log" format lists the commits in the range like
-\fBgit-submodule\fR(1)\fBsummary\fR
+\fBgit-submodule\fR(1)
+\fBsummary\fR
 does\&. The "diff" format shows an inline diff of the changed contents of the submodule\&. Defaults to "short"\&.
 .RE
 .PP
@@ -3221,7 +3274,21 @@ fetch\&.prune
 If true, fetch will automatically behave as if the
 \fB\-\-prune\fR
 option was given on the command line\&. See also
-\fBremote\&.<name>\&.prune\fR\&.
+\fBremote\&.<name>\&.prune\fR
+and the PRUNING section of
+\fBgit-fetch\fR(1)\&.
+.RE
+.PP
+fetch\&.pruneTags
+.RS 4
+If true, fetch will automatically behave as if the
+\fBrefs/tags/*:refs/tags/*\fR
+refspec was provided when pruning, if not set already\&. This allows for setting both this option and
+\fBfetch\&.prune\fR
+to maintain a 1=1 mapping to upstream refs\&. See also
+\fBremote\&.<name>\&.pruneTags\fR
+and the PRUNING section of
+\fBgit-fetch\fR(1)\&.
 .RE
 .PP
 fetch\&.output
@@ -3728,7 +3795,8 @@ menu item is invoked from
 guitool\&.<name>\&.cmd
 .RS 4
 Specifies the shell command line to execute when the corresponding item of the
-\fBgit-gui\fR(1)\fBTools\fR
+\fBgit-gui\fR(1)
+\fBTools\fR
 menu is invoked\&. This option is mandatory for every tool\&. The command is executed from the root of the working directory, and in the environment it receives the name of the tool as
 \fBGIT_GUITOOL\fR, the name of the currently selected file as
 \fIFILENAME\fR, and the name of the current branch as
@@ -4080,7 +4148,7 @@ to the empty string\&.
 .PP
 http\&.sslVerify
 .RS 4
-Whether to verify the SSL certificate when fetching or pushing over HTTPS\&. Can be overridden by the
+Whether to verify the SSL certificate when fetching or pushing over HTTPS\&. Defaults to true\&. Can be overridden by the
 \fBGIT_SSL_NO_VERIFY\fR
 environment variable\&.
 .RE
@@ -4286,21 +4354,84 @@ All URLs are normalized before attempting any matching (the password part, if em
 .PP
 ssh\&.variant
 .RS 4
-Depending on the value of the environment variables
+By default, Git determines the command line arguments to use based on the basename of the configured SSH command (configured using the environment variable
 \fBGIT_SSH\fR
 or
-\fBGIT_SSH_COMMAND\fR, or the config setting
-\fBcore\&.sshCommand\fR, Git auto\-detects whether to adjust its command\-line parameters for use with plink or tortoiseplink, as opposed to the default (OpenSSH)\&.
+\fBGIT_SSH_COMMAND\fR
+or the config setting
+\fBcore\&.sshCommand\fR)\&. If the basename is unrecognized, Git will attempt to detect support of OpenSSH options by first invoking the configured SSH command with the
+\fB\-G\fR
+(print configuration) option and will subsequently use OpenSSH options (if that is successful) or no options besides the host and remote command (if it fails)\&.
 .sp
 The config variable
 \fBssh\&.variant\fR
-can be set to override this auto\-detection; valid values are
-\fBssh\fR,
+can be set to override this detection\&. Valid values are
+\fBssh\fR
+(to use OpenSSH options),
 \fBplink\fR,
-\fBputty\fR
-or
-\fBtortoiseplink\fR\&. Any other value will be treated as normal ssh\&. This setting can be overridden via the environment variable
+\fBputty\fR,
+\fBtortoiseplink\fR,
+\fBsimple\fR
+(no options except the host and remote command)\&. The default auto\-detection can be explicitly requested using the value
+\fBauto\fR\&. Any other value is treated as
+\fBssh\fR\&. This setting can also be overridden via the environment variable
 \fBGIT_SSH_VARIANT\fR\&.
+.sp
+The current command\-line parameters used for each variant are as follows:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBssh\fR
+\- [\-p port] [\-4] [\-6] [\-o option] [username@]host command
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBsimple\fR
+\- [username@]host command
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBplink\fR
+or
+\fBputty\fR
+\- [\-P port] [\-4] [\-6] [username@]host command
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBtortoiseplink\fR
+\- [\-P port] [\-4] [\-6] \-batch [username@]host command
+.RE
+.sp
+Except for the
+\fBsimple\fR
+variant, command\-line parameters are likely to change as git gains new features\&.
 .RE
 .PP
 i18n\&.commitEncoding
@@ -4561,6 +4692,13 @@ option from the command line)\&. When set to
 \fBonly\fR, only such fast\-forward merges are allowed (equivalent to giving the
 \fB\-\-ff\-only\fR
 option from the command line)\&.
+.RE
+.PP
+merge\&.verifySignatures
+.RS 4
+If true, this is equivalent to the \-\-verify\-signatures command line option\&. See
+\fBgit-merge\fR(1)
+for details\&.
 .RE
 .PP
 merge\&.branchdesc
@@ -5283,6 +5421,35 @@ helper)
 .RE
 .RE
 .PP
+protocol\&.version
+.RS 4
+Experimental\&. If set, clients will attempt to communicate with a server using the specified protocol version\&. If unset, no attempt will be made by the client to communicate using a particular protocol version, this results in protocol version 0 being used\&. Supported versions:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fB0\fR
+\- the original wire protocol\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fB1\fR
+\- the original wire protocol with the addition of a version string in the initial response from the server\&.
+.RE
+.RE
+.PP
 pull\&.ff
 .RS 4
 By default, Git does not create an extra merge commit when merging a commit that is a descendant of the current commit\&. Instead, the tip of the current branch is fast\-forwarded\&. When set to
@@ -5455,6 +5622,31 @@ is passed to
 \fIgit push\fR\&. A false value may override a value from a lower\-priority config file\&. An explicit command\-line flag always overrides this config option\&.
 .RE
 .PP
+push\&.pushOption
+.RS 4
+When no
+\fB\-\-push\-option=<option>\fR
+argument is given from the command line,
+\fBgit push\fR
+behaves as if each <value> of this variable is given as
+\fB\-\-push\-option=<value>\fR\&.
+.sp
+This is a multi\-valued variable, and an empty value can be used in a higher priority configuration file (e\&.g\&.
+\fB\&.git/config\fR
+in a repository) to clear the values inherited from a lower priority configuration files (e\&.g\&.
+\fB$HOME/\&.gitconfig\fR)\&.
+.sp
+Example:
+.sp
+/etc/gitconfig push\&.pushoption = a push\&.pushoption = b
+.sp
+~/\&.gitconfig push\&.pushoption = c
+.sp
+repo/\&.git/config push\&.pushoption = push\&.pushoption = b
+.sp
+This will result in only b (a and c are cleared)\&.
+.RE
+.PP
 push\&.recurseSubmodules
 .RS 4
 Make sure all submodule commits used by the revisions to be pushed are available on a remote\-tracking branch\&. If the value is
@@ -5481,7 +5673,12 @@ option by default\&.
 .PP
 rebase\&.autoStash
 .RS 4
-When set to true, automatically create a temporary stash entry before the operation begins, and apply it after the operation ends\&. This means that you can run rebase on a dirty worktree\&. However, use with care: the final stash application after a successful rebase might result in non\-trivial conflicts\&. Defaults to false\&.
+When set to true, automatically create a temporary stash entry before the operation begins, and apply it after the operation ends\&. This means that you can run rebase on a dirty worktree\&. However, use with care: the final stash application after a successful rebase might result in non\-trivial conflicts\&. This option can be overridden by the
+\fB\-\-no\-autostash\fR
+and
+\fB\-\-autostash\fR
+options of
+\fBgit-rebase\fR(1)\&. Defaults to false\&.
 .RE
 .PP
 rebase\&.missingCommitsCheck
@@ -5490,13 +5687,48 @@ If set to "warn", git rebase \-i will print a warning if some commits are remove
 \fIgit rebase \-\-edit\-todo\fR
 can then be used to correct the error\&. If set to "ignore", no checking is done\&. To drop a commit without warning or error, use the
 \fBdrop\fR
-command in the todo\-list\&. Defaults to "ignore"\&.
+command in the todo list\&. Defaults to "ignore"\&.
 .RE
 .PP
 rebase\&.instructionFormat
 .RS 4
 A format string, as specified in
-\fBgit-log\fR(1), to be used for the instruction list during an interactive rebase\&. The format will automatically have the long commit hash prepended to the format\&.
+\fBgit-log\fR(1), to be used for the todo list during an interactive rebase\&. The format will automatically have the long commit hash prepended to the format\&.
+.RE
+.PP
+rebase\&.abbreviateCommands
+.RS 4
+If set to true,
+\fBgit rebase\fR
+will use abbreviated command names in the todo list resulting in something like this:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+        p deadbee The oneline of the commit
+        p fa1afe1 The oneline of the next commit
+        \&.\&.\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+instead of:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+        pick deadbee The oneline of the commit
+        pick fa1afe1 The oneline of the next commit
+        \&.\&.\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Defaults to false\&.
 .RE
 .PP
 receive\&.advertiseAtomic
@@ -5755,6 +5987,22 @@ option was given on the command line)\&. Overrides
 settings, if any\&.
 .RE
 .PP
+remote\&.<name>\&.pruneTags
+.RS 4
+When set to true, fetching from this remote by default will also remove any local tags that no longer exist on the remote if pruning is activated in general via
+\fBremote\&.<name>\&.prune\fR,
+\fBfetch\&.prune\fR
+or
+\fB\-\-prune\fR\&. Overrides
+\fBfetch\&.pruneTags\fR
+settings, if any\&.
+.sp
+See also
+\fBremote\&.<name>\&.prune\fR
+and the PRUNING section of
+\fBgit-fetch\fR(1)\&.
+.RE
+.PP
 remotes\&.<group>
 .RS 4
 The list of remotes which are fetched by "git remote update <group>"\&. See
@@ -5848,7 +6096,7 @@ parameters found below, taking precedence over those when this identity is selec
 \fBsendemail\&.identity\fR\&.
 .RE
 .PP
-sendemail\&.aliasesFile, sendemail\&.aliasFileType, sendemail\&.annotate, sendemail\&.bcc, sendemail\&.cc, sendemail\&.ccCmd, sendemail\&.chainReplyTo, sendemail\&.confirm, sendemail\&.envelopeSender, sendemail\&.from, sendemail\&.multiEdit, sendemail\&.signedoffbycc, sendemail\&.smtpPass, sendemail\&.suppresscc, sendemail\&.suppressFrom, sendemail\&.to, sendemail\&.smtpDomain, sendemail\&.smtpServer, sendemail\&.smtpServerPort, sendemail\&.smtpServerOption, sendemail\&.smtpUser, sendemail\&.thread, sendemail\&.transferEncoding, sendemail\&.validate, sendemail\&.xmailer
+sendemail\&.aliasesFile, sendemail\&.aliasFileType, sendemail\&.annotate, sendemail\&.bcc, sendemail\&.cc, sendemail\&.ccCmd, sendemail\&.chainReplyTo, sendemail\&.confirm, sendemail\&.envelopeSender, sendemail\&.from, sendemail\&.multiEdit, sendemail\&.signedoffbycc, sendemail\&.smtpPass, sendemail\&.suppresscc, sendemail\&.suppressFrom, sendemail\&.to, sendemail\&.tocmd, sendemail\&.smtpDomain, sendemail\&.smtpServer, sendemail\&.smtpServerPort, sendemail\&.smtpServerOption, sendemail\&.smtpUser, sendemail\&.thread, sendemail\&.transferEncoding, sendemail\&.validate, sendemail\&.xmailer
 .RS 4
 See
 \fBgit-send-email\fR(1)
@@ -6092,7 +6340,8 @@ submodule\&.recurse
 .RS 4
 Specifies if commands recurse into submodules by default\&. This applies to all commands that have a
 \fB\-\-recurse\-submodules\fR
-option\&. Defaults to false\&.
+option, except
+\fBclone\fR\&. Defaults to false\&.
 .RE
 .PP
 submodule\&.fetchJobs
@@ -6292,6 +6541,13 @@ itself was run\&. I\&.e\&.,
 will feed input intended for
 \fBpack\-objects\fR
 to the hook, and expects a completed packfile on stdout\&.
+.RE
+.PP
+uploadpack\&.allowFilter
+.RS 4
+If this option is set,
+\fBupload\-pack\fR
+will support partial clone and partial fetch object filtering\&.
 .sp
 Note that this configuration variable is ignored if it is seen in the repository\-level config (this is a safety measure against fetching from untrusted repositories)\&.
 .RE
@@ -6380,6 +6636,22 @@ Specify a web browser that may be used by some commands\&. Currently only
 and
 \fBgit-help\fR(1)
 may use it\&.
+.RE
+.PP
+worktree\&.guessRemote
+.RS 4
+With
+\fBadd\fR, if no branch argument, and neither of
+\fB\-b\fR
+nor
+\fB\-B\fR
+nor
+\fB\-\-detach\fR
+are given, the command defaults to creating a new branch from HEAD\&. If
+\fBworktree\&.guessRemote\fR
+is set to true,
+\fBworktree add\fR
+tries to find a remote\-tracking branch whose name uniquely matches the new branch name\&. If such a branch exists, it is checked out and set as "upstream" for the new branch\&. If no such match can be found, it falls back to creating a new branch from the current HEAD\&.
 .RE
 .SH "GIT"
 .sp

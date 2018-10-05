@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-send-email
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GIT\-SEND\-EMAIL" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GIT\-SEND\-EMAIL" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -121,6 +121,11 @@ Specify the sender of the emails\&. If not specified on the command line, the va
 configuration option is used\&. If neither the command\-line option nor
 \fBsendemail\&.from\fR
 are set, then the user will be prompted for the value\&. The default for the prompt will be the value of GIT_AUTHOR_IDENT, or GIT_COMMITTER_IDENT if that is not set, as returned by "git var \-l"\&.
+.RE
+.PP
+\-\-reply\-to=<address>
+.RS 4
+Specify the address where replies from recipients should go to\&. Use this if replies to messages should go to another address than what is specified with the \-\-from parameter\&.
 .RE
 .PP
 \-\-in\-reply\-to=<identifier>
@@ -272,11 +277,12 @@ or a raw IP address)\&. Alternatively it can specify a full pathname of a sendma
 \fB\-i\fR
 option\&. Default value can be specified by the
 \fBsendemail\&.smtpServer\fR
-configuration option; the built\-in default is
-\fB/usr/sbin/sendmail\fR
-or
-\fB/usr/lib/sendmail\fR
-if such program is available, or
+configuration option; the built\-in default is to search for
+\fBsendmail\fR
+in
+\fB/usr/sbin\fR,
+\fB/usr/lib\fR
+and $PATH if such program is available, falling back to
 \fBlocalhost\fR
 otherwise\&.
 .RE

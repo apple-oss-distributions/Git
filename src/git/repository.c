@@ -5,7 +5,7 @@
 
 /* The main repository */
 static struct repository the_repo = {
-	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &the_index, 0, 0
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &the_index, &hash_algos[GIT_HASH_SHA1], 0, 0
 };
 struct repository *the_repository = &the_repo;
 
@@ -62,6 +62,11 @@ void repo_set_gitdir(struct repository *repo, const char *path)
 	repo_setup_env(repo);
 
 	free(old_gitdir);
+}
+
+void repo_set_hash_algo(struct repository *repo, int hash_algo)
+{
+	repo->hash_algo = &hash_algos[hash_algo];
 }
 
 /*
@@ -135,6 +140,8 @@ int repo_init(struct repository *repo, const char *gitdir, const char *worktree)
 
 	if (read_and_verify_repository_format(&format, repo->commondir))
 		goto error;
+
+	repo_set_hash_algo(repo, format.hash_algo);
 
 	if (worktree)
 		repo_set_worktree(repo, worktree);
@@ -229,5 +236,5 @@ int repo_read_index(struct repository *repo)
 	if (!repo->index)
 		repo->index = xcalloc(1, sizeof(*repo->index));
 
-	return read_index_from(repo->index, repo->index_file);
+	return read_index_from(repo->index, repo->index_file, repo->gitdir);
 }

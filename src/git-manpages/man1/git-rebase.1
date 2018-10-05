@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-rebase
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/30/2017
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/02/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.15.0
+.\"    Source: Git 2.17.0
 .\"  Language: English
 .\"
-.TH "GIT\-REBASE" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
+.TH "GIT\-REBASE" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -36,7 +36,7 @@ git-rebase \- Reapply commits on top of another base tip
         [<upstream> [<branch>]]
 \fIgit rebase\fR [\-i | \-\-interactive] [options] [\-\-exec <cmd>] [\-\-onto <newbase>]
         \-\-root [<branch>]
-\fIgit rebase\fR \-\-continue | \-\-skip | \-\-abort | \-\-quit | \-\-edit\-todo
+\fIgit rebase\fR \-\-continue | \-\-skip | \-\-abort | \-\-quit | \-\-edit\-todo | \-\-show\-current\-patch
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -315,21 +315,62 @@ option by default\&.
 .PP
 rebase\&.autoStash
 .RS 4
-If set to true enable
+When set to true, automatically create a temporary stash entry before the operation begins, and apply it after the operation ends\&. This means that you can run rebase on a dirty worktree\&. However, use with care: the final stash application after a successful rebase might result in non\-trivial conflicts\&. This option can be overridden by the
+\fB\-\-no\-autostash\fR
+and
 \fB\-\-autostash\fR
-option by default\&.
+options of
+\fBgit-rebase\fR(1)\&. Defaults to false\&.
 .RE
 .PP
 rebase\&.missingCommitsCheck
 .RS 4
-If set to "warn", print warnings about removed commits in interactive mode\&. If set to "error", print the warnings and stop the rebase\&. If set to "ignore", no checking is done\&. "ignore" by default\&.
+If set to "warn", git rebase \-i will print a warning if some commits are removed (e\&.g\&. a line was deleted), however the rebase will still proceed\&. If set to "error", it will print the previous warning and stop the rebase,
+\fIgit rebase \-\-edit\-todo\fR
+can then be used to correct the error\&. If set to "ignore", no checking is done\&. To drop a commit without warning or error, use the
+\fBdrop\fR
+command in the todo list\&. Defaults to "ignore"\&.
 .RE
 .PP
 rebase\&.instructionFormat
 .RS 4
-Custom commit list format to use during an
-\fB\-\-interactive\fR
-rebase\&.
+A format string, as specified in
+\fBgit-log\fR(1), to be used for the todo list during an interactive rebase\&. The format will automatically have the long commit hash prepended to the format\&.
+.RE
+.PP
+rebase\&.abbreviateCommands
+.RS 4
+If set to true,
+\fBgit rebase\fR
+will use abbreviated command names in the todo list resulting in something like this:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+        p deadbee The oneline of the commit
+        p fa1afe1 The oneline of the next commit
+        \&.\&.\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+instead of:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+        pick deadbee The oneline of the commit
+        pick fa1afe1 The oneline of the next commit
+        \&.\&.\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Defaults to false\&.
 .RE
 .SH "OPTIONS"
 .PP
@@ -370,6 +411,11 @@ Abort the rebase operation but HEAD is not reset back to the original branch\&. 
 Keep the commits that do not change anything from its parents in the result\&.
 .RE
 .PP
+\-\-allow\-empty\-message
+.RS 4
+By default, rebasing commits with an empty message will fail\&. This option overrides that behavior, allowing commits with empty messages to be rebased\&.
+.RE
+.PP
 \-\-skip
 .RS 4
 Restart the rebasing process by skipping the current patch\&.
@@ -378,6 +424,12 @@ Restart the rebasing process by skipping the current patch\&.
 \-\-edit\-todo
 .RS 4
 Edit the todo list during an interactive rebase\&.
+.RE
+.PP
+\-\-show\-current\-patch
+.RS 4
+Show the current patch in an interactive rebase or when rebase is stopped because of conflicts\&. This is the equivalent of
+\fBgit show REBASE_HEAD\fR\&.
 .RE
 .PP
 \-m, \-\-merge
@@ -663,7 +715,7 @@ This is the opposite of
 \fIours\fR; note that, unlike
 \fIours\fR, there is no
 \fItheirs\fR
-merge stragegy to confuse this merge option with\&.
+merge strategy to confuse this merge option with\&.
 .RE
 .PP
 patience
@@ -671,7 +723,8 @@ patience
 With this option,
 \fImerge\-recursive\fR
 spends a little extra time to avoid mismerges that sometimes occur due to unimportant matching lines (e\&.g\&., braces from distinct functions)\&. Use this when the branches to be merged have diverged wildly\&. See also
-\fBgit-diff\fR(1)\fB\-\-patience\fR\&.
+\fBgit-diff\fR(1)
+\fB\-\-patience\fR\&.
 .RE
 .PP
 diff\-algorithm=[patience|minimal|histogram|myers]
@@ -679,15 +732,18 @@ diff\-algorithm=[patience|minimal|histogram|myers]
 Tells
 \fImerge\-recursive\fR
 to use a different diff algorithm, which can help avoid mismerges that occur due to unimportant matching lines (such as braces from distinct functions)\&. See also
-\fBgit-diff\fR(1)\fB\-\-diff\-algorithm\fR\&.
+\fBgit-diff\fR(1)
+\fB\-\-diff\-algorithm\fR\&.
 .RE
 .PP
-ignore\-space\-change, ignore\-all\-space, ignore\-space\-at\-eol
+ignore\-space\-change, ignore\-all\-space, ignore\-space\-at\-eol, ignore\-cr\-at\-eol
 .RS 4
 Treats lines with the indicated type of whitespace change as unchanged for the sake of a three\-way merge\&. Whitespace changes mixed with other changes to a line are not ignored\&. See also
-\fBgit-diff\fR(1)\fB\-b\fR,
-\fB\-w\fR, and
-\fB\-\-ignore\-space\-at\-eol\fR\&.
+\fBgit-diff\fR(1)
+\fB\-b\fR,
+\fB\-w\fR,
+\fB\-\-ignore\-space\-at\-eol\fR, and
+\fB\-\-ignore\-cr\-at\-eol\fR\&.
 .sp
 .RS 4
 .ie n \{\
@@ -752,13 +808,15 @@ configuration variable\&.
 no\-renames
 .RS 4
 Turn off rename detection\&. See also
-\fBgit-diff\fR(1)\fB\-\-no\-renames\fR\&.
+\fBgit-diff\fR(1)
+\fB\-\-no\-renames\fR\&.
 .RE
 .PP
 find\-renames[=<n>]
 .RS 4
 Turn on rename detection, optionally setting the similarity threshold\&. This is the default\&. See also
-\fBgit-diff\fR(1)\fB\-\-find\-renames\fR\&.
+\fBgit-diff\fR(1)
+\fB\-\-find\-renames\fR\&.
 .RE
 .PP
 rename\-threshold=<n>

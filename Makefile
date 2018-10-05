@@ -13,12 +13,16 @@ export makefile := $(realpath $(lastword $(MAKEFILE_LIST)))
 export srcdir   := $(dir $(makefile))
 export mandir   := $(srcdir)/src/git-manpages
 
+ifndef MACOSX_DEPLOYMENT_TARGET
+MACOSX_DEPLOYMENT_TARGET := 10.13
+endif
+
 ifndef DEVELOPER_DIR
 DEVELOPER_DIR := $(shell xcode-select -p)
 endif
 
 ifndef LIBRESSL_PREFIX
-LIBRESSL_PREFIX := /usr/local/libressl
+LIBRESSL_PREFIX := /usr/local/libressl-macOS$(MACOSX_DEPLOYMENT_TARGET)
 endif
 
 include $(DEVELOPER_DIR)/AppleInternal/Makefiles/DT_Signing.mk
@@ -55,14 +59,16 @@ ifndef RC_ARCHS
 RC_ARCHS := $(shell uname -m) $(warning using host architecture)
 endif
 cflags := $(strip $(RC_CFLAGS))
-$(foreach arch,$(RC_ARCHS),$(eval cflags := $(subst $(cflags),-arch $(arch) ,)))
+$(foreach arch,$(RC_ARCHS),$(eval cflags := $(subst $(cflags),-arch $(arch),)))
 export RC_CFLAGS := $(cflags)
+export RC_ARCHFLAGS := $(foreach arch,$(RC_ARCHS),-arch $(arch) )
 
-CFLAGS = -g3 -gdwarf-2 -Os -pipe -Wall -Wformat-security -D_FORTIFY_SOURCE=2 -isysroot $(SDKROOT) -iwithsysroot $(LIBRESSL_PREFIX)/include
+CFLAGS = -g3 -gdwarf-2 -Os -pipe -Wall -Wformat-security -D_FORTIFY_SOURCE=2 -isysroot $(SDKROOT) -iwithsysroot $(LIBRESSL_PREFIX)/include $(RC_CFLAGS)
 LDFLAGS = -sectcreate __TEXT __info_plist $(OBJROOT)/Info.plist -isysroot $(SDKROOT) -L$(SDKROOT)$(LIBRESSL_PREFIX)/lib
 
 STRIP := strip -S
 submakevars := -j`sysctl -n hw.activecpu` prefix=$(PREFIX) \
+  perllibdir=$(PREFIX)/share/git-core/perl \
   ETC_GITCONFIG=/etc/gitconfig \
   ETC_GITATTRIBUTES=/etc/gitattributes \
   PYTHON_PATH='MACOSX_DEPLOYMENT_TARGET="" /usr/bin/python' \
@@ -98,6 +104,7 @@ build: $(OBJROOT)/dsyms.timestamp $(OBJROOT)/codesign.timestamp
 install: install-bin install-man install-contrib
 	rm -rf "$(DSTROOT)$(PREFIX)/share/git-gui"
 	rm -f "$(DSTROOT)$(PREFIX)/libexec/git-core/git-gui"
+	rm -f "$(DSTROOT)$(PREFIX)/libexec/git-core/git-citool"
 	rm -f "$(DSTROOT)$(PREFIX)/share/man/man1/git-gui.1"
 	rm -f "$(DSTROOT)$(PREFIX)/bin/gitk"
 	rm -rf "$(DSTROOT)$(PREFIX)/share/gitk"
@@ -120,13 +127,14 @@ install-contrib:
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-completion.zsh $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-prompt.sh $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/subtree/git-subtree.sh $(DSTROOT)$(PREFIX)/libexec/git-core/git-subtree
-	$(CC) -c $(CFLAGS) $(RC_CFLAGS) $(SRCROOT)/src/git/contrib/credential/osxkeychain/git-credential-osxkeychain.c -o $(OBJROOT)/git-credential-osxkeychain.o
-	$(CC) -o $(DSTROOT)$(PREFIX)/libexec/git-core/git-credential-osxkeychain $(OBJROOT)/git-credential-osxkeychain.o -framework Security
+	$(CC) $(RC_ARCHFLAGS) -c $(CFLAGS) $(SRCROOT)/src/git/contrib/credential/osxkeychain/git-credential-osxkeychain.c -o $(OBJROOT)/git-credential-osxkeychain.o
+	$(CC) $(RC_ARCHFLAGS) -o $(DSTROOT)$(PREFIX)/libexec/git-core/git-credential-osxkeychain $(OBJROOT)/git-credential-osxkeychain.o -framework Security
 
 install-bin: build
 	$(MAKE) -C $(firstarch) $(submakevars) \
 	  'CC=$(CC) -arch $(firstword $(RC_ARCHS))' \
 	  'AR=$(AR)' \
+	  'uname_M=$(firstword $(RC_ARCHS))' 'uname_P=$(firstword $(RC_ARCHS))' \
 	  'DESTDIR=$(DSTROOT)' \
 	  install
 	rm -fr $(DSTROOT)$(PREFIX)/System #XXX Bogus perldoc installation
