@@ -9,6 +9,7 @@
 #include "worktree.h"
 #include "submodule-config.h"
 #include "path.h"
+#include "packfile.h"
 
 static int get_st_mode_bits(const char *path, int *mode)
 {
@@ -191,7 +192,7 @@ static void *add_to_trie(struct trie *root, const char *key, void *value)
 		 * Split this node: child will contain this node's
 		 * existing children.
 		 */
-		child = malloc(sizeof(*child));
+		child = xmalloc(sizeof(*child));
 		memcpy(child->children, root->children, sizeof(root->children));
 
 		child->len = root->len - i - 1;
@@ -716,7 +717,7 @@ char *expand_user_path(const char *path, int real_home)
 			if (!home)
 				goto return_null;
 			if (real_home)
-				strbuf_addstr(&user_path, real_path(home));
+				strbuf_add_real_path(&user_path, home);
 			else
 				strbuf_addstr(&user_path, home);
 #ifdef GIT_WINDOWS_NATIVE

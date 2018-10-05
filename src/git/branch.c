@@ -90,24 +90,24 @@ int install_branch_config(int flag, const char *local, const char *origin, const
 		if (shortname) {
 			if (origin)
 				printf_ln(rebasing ?
-					  _("Branch %s set up to track remote branch %s from %s by rebasing.") :
-					  _("Branch %s set up to track remote branch %s from %s."),
+					  _("Branch '%s' set up to track remote branch '%s' from '%s' by rebasing.") :
+					  _("Branch '%s' set up to track remote branch '%s' from '%s'."),
 					  local, shortname, origin);
 			else
 				printf_ln(rebasing ?
-					  _("Branch %s set up to track local branch %s by rebasing.") :
-					  _("Branch %s set up to track local branch %s."),
+					  _("Branch '%s' set up to track local branch '%s' by rebasing.") :
+					  _("Branch '%s' set up to track local branch '%s'."),
 					  local, shortname);
 		} else {
 			if (origin)
 				printf_ln(rebasing ?
-					  _("Branch %s set up to track remote ref %s by rebasing.") :
-					  _("Branch %s set up to track remote ref %s."),
+					  _("Branch '%s' set up to track remote ref '%s' by rebasing.") :
+					  _("Branch '%s' set up to track remote ref '%s'."),
 					  local, remote);
 			else
 				printf_ln(rebasing ?
-					  _("Branch %s set up to track local ref %s by rebasing.") :
-					  _("Branch %s set up to track local ref %s."),
+					  _("Branch '%s' set up to track local ref '%s' by rebasing.") :
+					  _("Branch '%s' set up to track local ref '%s'."),
 					  local, remote);
 		}
 	}
@@ -191,9 +191,8 @@ int validate_new_branchname(const char *name, struct strbuf *ref,
 
 	if (!attr_only) {
 		const char *head;
-		struct object_id oid;
 
-		head = resolve_ref_unsafe("HEAD", 0, oid.hash, NULL);
+		head = resolve_ref_unsafe("HEAD", 0, NULL, NULL);
 		if (!is_bare_repository() && head && !strcmp(head, ref->buf))
 			die(_("Cannot force update the current branch."));
 	}

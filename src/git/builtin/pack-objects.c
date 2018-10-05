@@ -25,6 +25,7 @@
 #include "sha1-array.h"
 #include "argv-array.h"
 #include "mru.h"
+#include "packfile.h"
 
 static const char *pack_usage[] = {
 	N_("git pack-objects --stdout [<options>...] [< <ref-list> | < <object-list>]"),
@@ -1011,7 +1012,7 @@ static int want_object_in_pack(const unsigned char *sha1,
 			return want;
 	}
 
-	for (entry = packed_git_mru->head; entry; entry = entry->next) {
+	for (entry = packed_git_mru.head; entry; entry = entry->next) {
 		struct packed_git *p = entry->item;
 		off_t offset;
 
@@ -1029,7 +1030,7 @@ static int want_object_in_pack(const unsigned char *sha1,
 			}
 			want = want_found_object(exclude, p);
 			if (!exclude && want > 0)
-				mru_mark(packed_git_mru, entry);
+				mru_mark(&packed_git_mru, entry);
 			if (want != -1)
 				return want;
 		}
@@ -1276,7 +1277,7 @@ static int done_pbase_path_pos(unsigned hash)
 	int lo = 0;
 	int hi = done_pbase_paths_num;
 	while (lo < hi) {
-		int mi = (hi + lo) / 2;
+		int mi = lo + (hi - lo) / 2;
 		if (done_pbase_paths[mi] == hash)
 			return mi;
 		if (done_pbase_paths[mi] < hash)

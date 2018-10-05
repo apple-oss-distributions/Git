@@ -121,15 +121,13 @@ static void status_printf_more(struct wt_status *s, const char *color,
 
 void wt_status_prepare(struct wt_status *s)
 {
-	struct object_id oid;
-
 	memset(s, 0, sizeof(*s));
 	memcpy(s->color_palette, default_wt_status_colors,
 	       sizeof(default_wt_status_colors));
 	s->show_untracked_files = SHOW_NORMAL_UNTRACKED_FILES;
 	s->use_color = -1;
 	s->relative_paths = 1;
-	s->branch = resolve_refdup("HEAD", 0, oid.hash, NULL);
+	s->branch = resolve_refdup("HEAD", 0, NULL, NULL);
 	s->reference = "HEAD";
 	s->fp = stdout;
 	s->index_file = get_index_file();
@@ -934,7 +932,7 @@ size_t wt_status_locate_end(const char *s, size_t len)
 
 void wt_status_add_cut_line(FILE *fp)
 {
-	const char *explanation = _("Do not touch the line above.\nEverything below will be removed.");
+	const char *explanation = _("Do not modify or remove the line above.\nEverything below it will be ignored.");
 	struct strbuf buf = STRBUF_INIT;
 
 	fprintf(fp, "%c %s", comment_line_char, cut_line);
@@ -1026,6 +1024,7 @@ static void wt_longstatus_print_tracking(struct wt_status *s)
 				 comment_line_char);
 	else
 		fputs("\n", s->fp);
+	strbuf_release(&sb);
 }
 
 static int has_unmerged(struct wt_status *s)
@@ -1193,6 +1192,7 @@ static int read_rebase_todolist(const char *fname, struct string_list *lines)
 		string_list_append(lines, line.buf);
 	}
 	fclose(f);
+	strbuf_release(&line);
 	return 0;
 }
 
@@ -2262,8 +2262,10 @@ int has_unstaged_changes(int ignore_submodules)
 	int result;
 
 	init_revisions(&rev_info, NULL);
-	if (ignore_submodules)
+	if (ignore_submodules) {
 		DIFF_OPT_SET(&rev_info.diffopt, IGNORE_SUBMODULES);
+		DIFF_OPT_SET(&rev_info.diffopt, OVERRIDE_SUBMODULE_CONFIG);
+	}
 	DIFF_OPT_SET(&rev_info.diffopt, QUICK);
 	diff_setup_done(&rev_info.diffopt);
 	result = run_diff_files(&rev_info, 0);

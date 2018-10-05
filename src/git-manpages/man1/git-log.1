@@ -2,12 +2,12 @@
 .\"     Title: git-log
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/04/2017
+.\"      Date: 10/30/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.14.0
+.\"    Source: Git 2.15.0
 .\"  Language: English
 .\"
-.TH "GIT\-LOG" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
+.TH "GIT\-LOG" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -423,6 +423,16 @@ is intended, it must be given explicitly\&.
 .RS 4
 Pretend as if all objects mentioned by reflogs are listed on the command line as
 \fB<commit>\fR\&.
+.RE
+.PP
+\-\-single\-worktree
+.RS 4
+By default, all working trees will be examined by the following options when there are more than one (see
+\fBgit-worktree\fR(1)):
+\fB\-\-all\fR,
+\fB\-\-reflog\fR
+and
+\fB\-\-indexed\-objects\fR\&. This option forces them to examine the current working tree only\&.
 .RE
 .PP
 \-\-ignore\-missing
@@ -1459,14 +1469,14 @@ the time zone is omitted when the local time zone is used
 .RS 4
 Print also the parents of the commit (in the form "commit parent\&...")\&. Also enables parent rewriting, see
 \fIHistory Simplification\fR
-below\&.
+above\&.
 .RE
 .PP
 \-\-children
 .RS 4
 Print also the children of the commit (in the form "commit child\&...")\&. Also enables parent rewriting, see
 \fIHistory Simplification\fR
-below\&.
+above\&.
 .RE
 .PP
 \-\-left\-right
@@ -1522,7 +1532,7 @@ Draw a text\-based graphical representation of the commit history on the left ha
 .sp
 This enables parent rewriting, see
 \fIHistory Simplification\fR
-below\&.
+above\&.
 .sp
 This implies the
 \fB\-\-topo\-order\fR
@@ -2432,15 +2442,17 @@ or
 .IP \(bu 2.3
 .\}
 \fI%C(\&...)\fR: color specification, as described under Values in the "CONFIGURATION FILE" section of
-\fBgit-config\fR(1); adding
-\fBauto,\fR
-at the beginning (e\&.g\&.
-\fB%C(auto,red)\fR) will emit color only when colors are enabled for log output (by
+\fBgit-config\fR(1)\&. By default, colors are shown only when enabled for log output (by
 \fBcolor\&.diff\fR,
 \fBcolor\&.ui\fR, or
 \fB\-\-color\fR, and respecting the
 \fBauto\fR
 settings of the former if we are going to a terminal)\&.
+\fB%C(auto,\&.\&.\&.)\fR
+is accepted as a historical synonym for the default (e\&.g\&.,
+\fB%C(auto,red)\fR)\&. Specifying
+\fB%C(always,\&.\&.\&.) will show the colors even when color is not otherwise enabled (though consider just using `\-\-color=always\fR
+to enable color for the whole output, including this format and anything else git might color)\&.
 \fBauto\fR
 alone (i\&.e\&.
 \fB%C(auto)\fR) will turn on auto coloring on the next placeholders until the color is switched again\&.
@@ -2579,7 +2591,15 @@ respectively, but padding both sides (i\&.e\&. the text is centered)
 .IP \(bu 2.3
 .\}
 %(trailers): display the trailers of the body as interpreted by
-\fBgit-interpret-trailers\fR(1)
+\fBgit-interpret-trailers\fR(1)\&. If the
+\fB:only\fR
+option is given, omit non\-trailer lines from the trailer block\&. If the
+\fB:unfold\fR
+option is given, behave as if interpret\-trailer\(cqs
+\fB\-\-unfold\fR
+option was given\&. E\&.g\&.,
+\fB%(trailers:only:unfold)\fR
+to do both\&.
 .RE
 .RE
 .if n \{\
@@ -2912,6 +2932,48 @@ Turn off colored diff\&. It is the same as
 \fB\-\-color=never\fR\&.
 .RE
 .PP
+\-\-color\-moved[=<mode>]
+.RS 4
+Moved lines of code are colored differently\&. The <mode> defaults to
+\fIno\fR
+if the option is not given and to
+\fIzebra\fR
+if the option with no mode is given\&. The mode must be one of:
+.PP
+no
+.RS 4
+Moved lines are not highlighted\&.
+.RE
+.PP
+default
+.RS 4
+Is a synonym for
+\fBzebra\fR\&. This may change to a more sensible mode in the future\&.
+.RE
+.PP
+plain
+.RS 4
+Any line that is added in one location and was removed in another location will be colored with
+\fIcolor\&.diff\&.newMoved\fR\&. Similarly
+\fIcolor\&.diff\&.oldMoved\fR
+will be used for removed lines that are added somewhere else in the diff\&. This mode picks up any moved line, but it is not very useful in a review to determine if a block of code was moved without permutation\&.
+.RE
+.PP
+zebra
+.RS 4
+Blocks of moved text of at least 20 alphanumeric characters are detected greedily\&. The detected blocks are painted using either the
+\fIcolor\&.diff\&.{old,new}Moved\fR
+color or
+\fIcolor\&.diff\&.{old,new}MovedAlternative\fR\&. The change between the two colors indicates that a new block was detected\&.
+.RE
+.PP
+dimmed_zebra
+.RS 4
+Similar to
+\fIzebra\fR, but additional dimming of uninteresting parts of moved code is performed\&. The bordering lines of two adjacent blocks are considered interesting, the rest is uninteresting\&.
+.RE
+.RE
+.PP
 \-\-word\-diff[=<mode>]
 .RS 4
 Show a word diff, using the <mode> to delimit changed words\&. By default, words are delimited by whitespace; see
@@ -2991,20 +3053,26 @@ configuration\&. By default, trailing whitespaces (including lines that solely c
 .PP
 \-\-ws\-error\-highlight=<kind>
 .RS 4
-Highlight whitespace errors on lines specified by <kind> in the color specified by
-\fBcolor\&.diff\&.whitespace\fR\&. <kind> is a comma separated list of
-\fBold\fR,
-\fBnew\fR,
-\fBcontext\fR\&. When this option is not given, only whitespace errors in
+Highlight whitespace errors in the
+\fBcontext\fR,
+\fBold\fR
+or
 \fBnew\fR
-lines are highlighted\&. E\&.g\&.
-\fB\-\-ws\-error\-highlight=new,old\fR
-highlights whitespace errors on both deleted and added lines\&.
+lines of the diff\&. Multiple values are separated by comma,
+\fBnone\fR
+resets previous values,
+\fBdefault\fR
+reset the list to
+\fBnew\fR
+and
 \fBall\fR
-can be used as a short\-hand for
-\fBold,new,context\fR\&. The
+is a shorthand for
+\fBold,new,context\fR\&. When this option is not given, and the configuration variable
 \fBdiff\&.wsErrorHighlight\fR
-configuration variable can be used to specify the default behaviour\&.
+is not set, only whitespace errors in
+\fBnew\fR
+lines are highlighted\&. The whitespace errors are colored whith
+\fBcolor\&.diff\&.whitespace\fR\&.
 .RE
 .PP
 \-\-full\-index

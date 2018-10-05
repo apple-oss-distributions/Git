@@ -3,6 +3,7 @@
 test_description='git clean -i basic tests'
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY"/lib-terminal.sh
 
 test_expect_success 'setup' '
 
@@ -470,6 +471,16 @@ test_expect_success 'git clean -id with prefix and path (ask)' '
 	test -f obj.o &&
 	test -f build/lib.so
 
+'
+
+test_expect_success TTY 'git clean -i paints the header in HEADER color' '
+	>a.out &&
+	echo q |
+	test_terminal git clean -i |
+	test_decode_color |
+	head -n 1 >header &&
+	# not i18ngrep
+	grep "^<BOLD>" header
 '
 
 test_done

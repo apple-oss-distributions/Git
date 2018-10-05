@@ -274,7 +274,7 @@ static int try_difference(const char *arg)
 		return 0;
 	}
 
-	if (!get_sha1_committish(this, oid.hash) && !get_sha1_committish(next, end.hash)) {
+	if (!get_oid_committish(this, &oid) && !get_oid_committish(next, &end)) {
 		show_rev(NORMAL, &end, next);
 		show_rev(symmetric ? NORMAL : REVERSED, &oid, this);
 		if (symmetric) {
@@ -328,7 +328,7 @@ static int try_parent_shorthands(const char *arg)
 		return 0;
 
 	*dotdot = 0;
-	if (get_sha1_committish(arg, oid.hash)) {
+	if (get_oid_committish(arg, &oid)) {
 		*dotdot = '^';
 		return 0;
 	}
@@ -387,6 +387,14 @@ static const char *skipspaces(const char *s)
 	return s;
 }
 
+static char *findspace(const char *s)
+{
+	for (; *s; s++)
+		if (isspace(*s))
+			return (char*)s;
+	return NULL;
+}
+
 static int cmd_parseopt(int argc, const char **argv, const char *prefix)
 {
 	static int keep_dashdash = 0, stop_at_non_option = 0;
@@ -434,7 +442,7 @@ static int cmd_parseopt(int argc, const char **argv, const char *prefix)
 	/* parse: (<short>|<short>,<long>|<long>)[*=?!]*<arghint>? SP+ <help> */
 	while (strbuf_getline(&sb, stdin) != EOF) {
 		const char *s;
-		const char *help;
+		char *help;
 		struct option *o;
 
 		if (!sb.len)
@@ -444,15 +452,17 @@ static int cmd_parseopt(int argc, const char **argv, const char *prefix)
 		memset(opts + onb, 0, sizeof(opts[onb]));
 
 		o = &opts[onb++];
-		help = strchr(sb.buf, ' ');
-		if (!help || *sb.buf == ' ') {
+		help = findspace(sb.buf);
+		if (!help || sb.buf == help) {
 			o->type = OPTION_GROUP;
 			o->help = xstrdup(skipspaces(sb.buf));
 			continue;
 		}
 
+		*help = '\0';
+
 		o->type = OPTION_CALLBACK;
-		o->help = xstrdup(skipspaces(help));
+		o->help = xstrdup(skipspaces(help+1));
 		o->value = &parsed;
 		o->flags = PARSE_OPT_NOARG;
 		o->callback = &parseopt_dump;
@@ -702,7 +712,7 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
 			}
 			if (!strcmp(arg, "--quiet") || !strcmp(arg, "-q")) {
 				quiet = 1;
-				flags |= GET_SHA1_QUIETLY;
+				flags |= GET_OID_QUIETLY;
 				continue;
 			}
 			if (opt_with_value(arg, "--short", &arg)) {
@@ -868,6 +878,11 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
 						: "false");
 				continue;
 			}
+			if (!strcmp(arg, "--is-shallow-repository")) {
+				printf("%s\n", is_repository_shallow() ? "true"
+						: "false");
+				continue;
+			}
 			if (!strcmp(arg, "--shared-index-path")) {
 				if (read_cache() < 0)
 					die(_("Could not read the index"));
@@ -911,7 +926,7 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
 			name++;
 			type = REVERSED;
 		}
-		if (!get_sha1_with_context(name, flags, oid.hash, &unused)) {
+		if (!get_oid_with_context(name, flags, &oid, &unused)) {
 			if (verify)
 				revs_count++;
 			else

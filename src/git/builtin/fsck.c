@@ -15,6 +15,7 @@
 #include "progress.h"
 #include "streaming.h"
 #include "decorate.h"
+#include "packfile.h"
 
 #define REACHABLE 0x0001
 #define SEEN      0x0002
@@ -179,14 +180,9 @@ static int traverse_reachable(void)
 	unsigned int nr = 0;
 	int result = 0;
 	if (show_progress)
-		progress = start_progress_delay(_("Checking connectivity"), 0, 0, 2);
+		progress = start_delayed_progress(_("Checking connectivity"), 0);
 	while (pending.nr) {
-		struct object_array_entry *entry;
-		struct object *obj;
-
-		entry = pending.objects + --pending.nr;
-		obj = entry->item;
-		result |= traverse_one_object(obj);
+		result |= traverse_one_object(object_array_pop(&pending));
 		display_progress(progress, ++nr);
 	}
 	stop_progress(&progress);
@@ -730,12 +726,12 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
 
 	for (i = 0; i < argc; i++) {
 		const char *arg = argv[i];
-		unsigned char sha1[20];
-		if (!get_sha1(arg, sha1)) {
-			struct object *obj = lookup_object(sha1);
+		struct object_id oid;
+		if (!get_oid(arg, &oid)) {
+			struct object *obj = lookup_object(oid.hash);
 
 			if (!obj || !(obj->flags & HAS_OBJ)) {
-				error("%s: object missing", sha1_to_hex(sha1));
+				error("%s: object missing", oid_to_hex(&oid));
 				errors_found |= ERROR_OBJECT;
 				continue;
 			}

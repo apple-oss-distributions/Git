@@ -492,9 +492,12 @@ int send_pack(struct send_pack_args *args,
 			 * we were to send it and we're trying to send the refs
 			 * atomically, abort the whole operation.
 			 */
-			if (use_atomic)
+			if (use_atomic) {
+				strbuf_release(&req_buf);
+				strbuf_release(&cap_buf);
 				return atomic_push_failure(args, remote_refs, ref);
-			/* Fallthrough for non atomic case. */
+			}
+			/* else fallthrough */
 		default:
 			continue;
 		}

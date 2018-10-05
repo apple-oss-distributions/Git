@@ -95,13 +95,6 @@ OPTIONS
 	<tree> option the prefix of all submodule output will be the name of
 	the parent project's <tree> object.
 
---parent-basename <basename>::
-	For internal use only.  In order to produce uniform output with the
-	--recurse-submodules option, this option can be used to provide the
-	basename of a parent's <tree> object to a submodule so the submodule
-	can prefix its output with the parent's name rather than the SHA1 of
-	the submodule.
-
 -a::
 --text::
 	Process binary files as if they were text.
@@ -296,6 +289,9 @@ providing this option will cause it to die.
 <pathspec>...::
 	If given, limit the search to paths matching at least one pattern.
 	Both leading paths match and glob(7) patterns are supported.
++
+For more details about the <pathspec> syntax, see the 'pathspec' entry
+in linkgit:gitglossary[7].
 
 Examples
 --------
@@ -311,6 +307,9 @@ Examples
 `git grep --all-match -e NODE -e Unexpected`::
 	Looks for a line that has `NODE` or `Unexpected` in
 	files that have lines that match both.
+
+`git grep solution -- :^Documentation`::
+	Looks for `solution`, excluding files in `Documentation`.
 
 GIT
 ---

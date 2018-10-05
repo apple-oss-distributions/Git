@@ -301,7 +301,7 @@ static int config_read_branches(const char *key, const char *value, void *cb)
 			}
 			string_list_append(&info->merge, xstrdup(value));
 		} else {
-			int v = git_config_maybe_bool(orig_key, value);
+			int v = git_parse_maybe_bool(value);
 			if (v >= 0)
 				info->rebase = v;
 			else if (!strcmp(value, "preserve"))
@@ -558,19 +558,19 @@ static int read_remote_branches(const char *refname,
 	struct strbuf buf = STRBUF_INIT;
 	struct string_list_item *item;
 	int flag;
-	struct object_id orig_oid;
 	const char *symref;
 
 	strbuf_addf(&buf, "refs/remotes/%s/", rename->old);
 	if (starts_with(refname, buf.buf)) {
 		item = string_list_append(rename->remote_branches, xstrdup(refname));
 		symref = resolve_ref_unsafe(refname, RESOLVE_REF_READING,
-					    orig_oid.hash, &flag);
-		if (flag & REF_ISSYMREF)
+					    NULL, &flag);
+		if (symref && (flag & REF_ISSYMREF))
 			item->util = xstrdup(symref);
 		else
 			item->util = NULL;
 	}
+	strbuf_release(&buf);
 
 	return 0;
 }
@@ -595,6 +595,7 @@ static int migrate_file(struct remote *remote)
 		unlink_or_warn(git_path("remotes/%s", remote->name));
 	else if (remote->origin == REMOTE_BRANCHES)
 		unlink_or_warn(git_path("branches/%s", remote->name));
+	strbuf_release(&buf);
 
 	return 0;
 }
@@ -1563,9 +1564,7 @@ static int set_url(int argc, const char **argv)
 						       "^$", 0);
 		else
 			git_config_set(name_buf.buf, newurl);
-		strbuf_release(&name_buf);
-
-		return 0;
+		goto out;
 	}
 
 	/* Old URL specified. Demand that one matches. */
@@ -1588,6 +1587,8 @@ static int set_url(int argc, const char **argv)
 		git_config_set_multivar(name_buf.buf, newurl, oldurl, 0);
 	else
 		git_config_set_multivar(name_buf.buf, NULL, oldurl, 1);
+out:
+	strbuf_release(&name_buf);
 	return 0;
 }
 

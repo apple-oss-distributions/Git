@@ -2,12 +2,12 @@
 .\"     Title: git-rev-list
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/04/2017
+.\"      Date: 10/30/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.14.0
+.\"    Source: Git 2.15.0
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-LIST" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
+.TH "GIT\-REV\-LIST" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -391,6 +391,16 @@ is intended, it must be given explicitly\&.
 .RS 4
 Pretend as if all objects mentioned by reflogs are listed on the command line as
 \fB<commit>\fR\&.
+.RE
+.PP
+\-\-single\-worktree
+.RS 4
+By default, all working trees will be examined by the following options when there are more than one (see
+\fBgit-worktree\fR(1)):
+\fB\-\-all\fR,
+\fB\-\-reflog\fR
+and
+\fB\-\-indexed\-objects\fR\&. This option forces them to examine the current working tree only\&.
 .RE
 .PP
 \-\-ignore\-missing
@@ -1505,14 +1515,14 @@ Print the contents of the commit in raw\-format; each record is separated with a
 .RS 4
 Print also the parents of the commit (in the form "commit parent\&...")\&. Also enables parent rewriting, see
 \fIHistory Simplification\fR
-below\&.
+above\&.
 .RE
 .PP
 \-\-children
 .RS 4
 Print also the children of the commit (in the form "commit child\&...")\&. Also enables parent rewriting, see
 \fIHistory Simplification\fR
-below\&.
+above\&.
 .RE
 .PP
 \-\-timestamp
@@ -1573,7 +1583,7 @@ Draw a text\-based graphical representation of the commit history on the left ha
 .sp
 This enables parent rewriting, see
 \fIHistory Simplification\fR
-below\&.
+above\&.
 .sp
 This implies the
 \fB\-\-topo\-order\fR
@@ -2444,15 +2454,17 @@ or
 .IP \(bu 2.3
 .\}
 \fI%C(\&...)\fR: color specification, as described under Values in the "CONFIGURATION FILE" section of
-\fBgit-config\fR(1); adding
-\fBauto,\fR
-at the beginning (e\&.g\&.
-\fB%C(auto,red)\fR) will emit color only when colors are enabled for log output (by
+\fBgit-config\fR(1)\&. By default, colors are shown only when enabled for log output (by
 \fBcolor\&.diff\fR,
 \fBcolor\&.ui\fR, or
 \fB\-\-color\fR, and respecting the
 \fBauto\fR
 settings of the former if we are going to a terminal)\&.
+\fB%C(auto,\&.\&.\&.)\fR
+is accepted as a historical synonym for the default (e\&.g\&.,
+\fB%C(auto,red)\fR)\&. Specifying
+\fB%C(always,\&.\&.\&.) will show the colors even when color is not otherwise enabled (though consider just using `\-\-color=always\fR
+to enable color for the whole output, including this format and anything else git might color)\&.
 \fBauto\fR
 alone (i\&.e\&.
 \fB%C(auto)\fR) will turn on auto coloring on the next placeholders until the color is switched again\&.
@@ -2591,7 +2603,15 @@ respectively, but padding both sides (i\&.e\&. the text is centered)
 .IP \(bu 2.3
 .\}
 %(trailers): display the trailers of the body as interpreted by
-\fBgit-interpret-trailers\fR(1)
+\fBgit-interpret-trailers\fR(1)\&. If the
+\fB:only\fR
+option is given, omit non\-trailer lines from the trailer block\&. If the
+\fB:unfold\fR
+option is given, behave as if interpret\-trailer\(cqs
+\fB\-\-unfold\fR
+option was given\&. E\&.g\&.,
+\fB%(trailers:only:unfold)\fR
+to do both\&.
 .RE
 .RE
 .if n \{\

@@ -39,8 +39,8 @@ extern int git_default_config(const char *, const char *, void *);
 extern int git_config_from_file(config_fn_t fn, const char *, void *);
 extern int git_config_from_mem(config_fn_t fn, const enum config_origin_type,
 					const char *name, const char *buf, size_t len, void *data);
-extern int git_config_from_blob_sha1(config_fn_t fn, const char *name,
-				     const unsigned char *sha1, void *data);
+extern int git_config_from_blob_oid(config_fn_t fn, const char *name,
+				    const struct object_id *oid, void *data);
 extern void git_config_push_parameter(const char *text);
 extern int git_config_from_parameters(config_fn_t fn, void *data);
 extern void read_early_config(config_fn_t cb, void *data);
@@ -56,7 +56,6 @@ extern unsigned long git_config_ulong(const char *, const char *);
 extern ssize_t git_config_ssize_t(const char *, const char *);
 extern int git_config_bool_or_int(const char *, const char *, int *);
 extern int git_config_bool(const char *, const char *);
-extern int git_config_maybe_bool(const char *, const char *);
 extern int git_config_string(const char **, const char *, const char *);
 extern int git_config_pathname(const char **, const char *, const char *);
 extern int git_config_set_in_file_gently(const char *, const char *, const char *);
@@ -71,6 +70,8 @@ extern int git_config_set_multivar_in_file_gently(const char *, const char *, co
 extern void git_config_set_multivar_in_file(const char *, const char *, const char *, const char *, int);
 extern int git_config_rename_section(const char *, const char *);
 extern int git_config_rename_section_in_file(const char *, const char *, const char *);
+extern int git_config_copy_section(const char *, const char *);
+extern int git_config_copy_section_in_file(const char *, const char *, const char *);
 extern const char *git_etc_gitconfig(void);
 extern const char *git_xcode_gitconfig(void);
 extern int git_env_bool(const char *, int);
@@ -189,6 +190,16 @@ extern int repo_config_get_maybe_bool(struct repository *repo,
 extern int repo_config_get_pathname(struct repository *repo,
 				    const char *key, const char **dest);
 
+/*
+ * Note: This function exists solely to maintain backward compatibility with
+ * 'fetch' and 'update_clone' storing configuration in '.gitmodules' and should
+ * NOT be used anywhere else.
+ *
+ * Runs the provided config function on the '.gitmodules' file found in the
+ * working directory.
+ */
+extern void config_from_gitmodules(config_fn_t fn, void *data);
+
 extern int git_config_get_value(const char *key, const char **value);
 extern const struct string_list *git_config_get_value_multi(const char *key);
 extern void git_config_clear(void);
@@ -206,6 +217,9 @@ extern int git_config_get_max_percent_split_change(void);
 
 /* This dies if the configured or default date is in the future */
 extern int git_config_get_expiry(const char *key, const char **output);
+
+/* parse either "this many days" integer, or "5.days.ago" approxidate */
+extern int git_config_get_expiry_in_days(const char *key, timestamp_t *, timestamp_t now);
 
 struct key_value_info {
 	const char *filename;

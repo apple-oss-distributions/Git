@@ -30,6 +30,8 @@ If you do not, then do this:
 Once it is setup, then:
 
     git merge -X subtree=src/git $RELEASE_TAG
+    $EDITOR Git.plist
+    git commit --amend Git.plist
 
 Unfortunately, the generated man pages and html documentation are not tagged.
 Check `git log upstream-manpages/master` and `git log upstream-htmldocs/master`

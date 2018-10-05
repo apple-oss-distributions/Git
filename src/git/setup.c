@@ -230,7 +230,7 @@ void verify_filename(const char *prefix,
 		     int diagnose_misspelt_rev)
 {
 	if (*arg == '-')
-		die("bad flag '%s' used after filename", arg);
+		die("option '%s' must come before non-option arguments", arg);
 	if (looks_like_pathspec(arg) || check_filename(prefix, arg))
 		return;
 	die_verify_filename(prefix, arg, diagnose_misspelt_rev);
@@ -312,7 +312,9 @@ int is_git_directory(const char *suspect)
 	size_t len;
 
 	/* Check worktree-related signatures */
-	strbuf_addf(&path, "%s/HEAD", suspect);
+	strbuf_addstr(&path, suspect);
+	strbuf_complete(&path, '/');
+	strbuf_addstr(&path, "HEAD");
 	if (validate_headref(path.buf))
 		goto done;
 
@@ -399,11 +401,6 @@ void setup_work_tree(void)
 	if (getenv(GIT_WORK_TREE_ENVIRONMENT))
 		setenv(GIT_WORK_TREE_ENVIRONMENT, ".", 1);
 
-	/*
-	 * NEEDSWORK: this call can essentially be set_git_dir(get_git_dir())
-	 * which can cause some problems when trying to free the old value of
-	 * gitdir.
-	 */
 	set_git_dir(remove_leading_path(git_dir, work_tree));
 	initialized = 1;
 }
@@ -546,7 +543,8 @@ void read_gitfile_error_die(int error_code, const char *path, const char *dir)
 
 /*
  * Try to read the location of the git directory from the .git file,
- * return path to git directory if found.
+ * return path to git directory if found. The return value comes from
+ * a shared buffer.
  *
  * On failure, if return_error_code is not NULL, return_error_code
  * will be set to an error code and NULL will be returned. If
@@ -1027,7 +1025,7 @@ const char *setup_git_directory_gently(int *nongit_ok)
 {
 	static struct strbuf cwd = STRBUF_INIT;
 	struct strbuf dir = STRBUF_INIT, gitdir = STRBUF_INIT;
-	const char *prefix, *env_prefix;
+	const char *prefix;
 
 	/*
 	 * We may have read an incomplete configuration before
@@ -1084,16 +1082,6 @@ const char *setup_git_directory_gently(int *nongit_ok)
 	default:
 		die("BUG: unhandled setup_git_directory_1() result");
 	}
-
-	/*
-	 * NEEDSWORK: This was a hack in order to get ls-files and grep to have
-	 * properly formated output when recursing submodules.  Once ls-files
-	 * and grep have been changed to perform this recursing in-process this
-	 * needs to be removed.
-	 */
-	env_prefix = getenv(GIT_TOPLEVEL_PREFIX_ENVIRONMENT);
-	if (env_prefix)
-		prefix = env_prefix;
 
 	if (prefix)
 		setenv(GIT_PREFIX_ENVIRONMENT, prefix, 1);

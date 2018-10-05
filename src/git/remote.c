@@ -134,10 +134,14 @@ struct remotes_hash_key {
 };
 
 static int remotes_hash_cmp(const void *unused_cmp_data,
-			    const struct remote *a,
-			    const struct remote *b,
-			    const struct remotes_hash_key *key)
+			    const void *entry,
+			    const void *entry_or_key,
+			    const void *keydata)
 {
+	const struct remote *a = entry;
+	const struct remote *b = entry_or_key;
+	const struct remotes_hash_key *key = keydata;
+
 	if (key)
 		return strncmp(a->name, key->str, key->len) || a->name[key->len];
 	else
@@ -147,7 +151,7 @@ static int remotes_hash_cmp(const void *unused_cmp_data,
 static inline void init_remotes_hash(void)
 {
 	if (!remotes_hash.cmpfn)
-		hashmap_init(&remotes_hash, (hashmap_cmp_fn)remotes_hash_cmp, NULL, 0);
+		hashmap_init(&remotes_hash, remotes_hash_cmp, NULL, 0);
 }
 
 static struct remote *make_remote(const char *name, int len)
@@ -462,7 +466,6 @@ static void alias_all_urls(void)
 static void read_config(void)
 {
 	static int loaded;
-	struct object_id oid;
 	int flag;
 
 	if (loaded)
@@ -471,7 +474,7 @@ static void read_config(void)
 
 	current_branch = NULL;
 	if (startup_info->have_repository) {
-		const char *head_ref = resolve_ref_unsafe("HEAD", 0, oid.hash, &flag);
+		const char *head_ref = resolve_ref_unsafe("HEAD", 0, NULL, &flag);
 		if (head_ref && (flag & REF_ISSYMREF) &&
 		    skip_prefix(head_ref, "refs/heads/", &head_ref)) {
 			current_branch = make_branch(head_ref, 0);
@@ -1081,7 +1084,7 @@ static int try_explicit_object_name(const char *name,
 		return 0;
 	}
 
-	if (get_sha1(name, oid.hash))
+	if (get_oid(name, &oid))
 		return -1;
 
 	if (match) {
@@ -1101,10 +1104,9 @@ static struct ref *make_linked_ref(const char *name, struct ref ***tail)
 static char *guess_ref(const char *name, struct ref *peer)
 {
 	struct strbuf buf = STRBUF_INIT;
-	struct object_id oid;
 
 	const char *r = resolve_ref_unsafe(peer->name, RESOLVE_REF_READING,
-					   oid.hash, NULL);
+					   NULL, NULL);
 	if (!r)
 		return NULL;
 
@@ -1162,12 +1164,11 @@ static int match_explicit(struct ref *src, struct ref *dst,
 		return -1;
 
 	if (!dst_value) {
-		struct object_id oid;
 		int flag;
 
 		dst_value = resolve_ref_unsafe(matched_src->name,
 					       RESOLVE_REF_READING,
-					       oid.hash, &flag);
+					       NULL, &flag);
 		if (!dst_value ||
 		    ((flag & REF_ISSYMREF) &&
 		     !starts_with(dst_value, "refs/heads/")))
@@ -1788,10 +1789,9 @@ const char *branch_get_push(struct branch *branch, struct strbuf *err)
 
 static int ignore_symref_update(const char *refname)
 {
-	struct object_id oid;
 	int flag;
 
-	if (!resolve_ref_unsafe(refname, 0, oid.hash, &flag))
+	if (!resolve_ref_unsafe(refname, 0, NULL, &flag))
 		return 0; /* non-existing refs are OK */
 	return (flag & REF_ISSYMREF);
 }
@@ -2080,7 +2080,7 @@ int format_tracking_info(struct branch *branch, struct strbuf *sb)
 				_("  (use \"git branch --unset-upstream\" to fixup)\n"));
 	} else if (!ours && !theirs) {
 		strbuf_addf(sb,
-			_("Your branch is up-to-date with '%s'.\n"),
+			_("Your branch is up to date with '%s'.\n"),
 			base);
 	} else if (!theirs) {
 		strbuf_addf(sb,
@@ -2297,8 +2297,8 @@ static int parse_push_cas_option(struct push_cas_option *cas, const char *arg, i
 	if (!*colon)
 		entry->use_tracking = 1;
 	else if (!colon[1])
-		hashclr(entry->expect);
-	else if (get_sha1(colon + 1, entry->expect))
+		oidclr(&entry->expect);
+	else if (get_oid(colon + 1, &entry->expect))
 		return error("cannot parse expected object name '%s'", colon + 1);
 	return 0;
 }
@@ -2345,7 +2345,7 @@ static void apply_cas(struct push_cas_option *cas,
 			continue;
 		ref->expect_old_sha1 = 1;
 		if (!entry->use_tracking)
-			hashcpy(ref->old_oid_expect.hash, cas->entry[i].expect);
+			oidcpy(&ref->old_oid_expect, &entry->expect);
 		else if (remote_tracking(remote, ref->name, &ref->old_oid_expect))
 			oidclr(&ref->old_oid_expect);
 		return;

@@ -2,12 +2,12 @@
 .\"     Title: git-diff
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/04/2017
+.\"      Date: 10/30/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.14.0
+.\"    Source: Git 2.15.0
 .\"  Language: English
 .\"
-.TH "GIT\-DIFF" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
+.TH "GIT\-DIFF" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -349,6 +349,50 @@ Turn off colored diff\&. This can be used to override configuration settings\&. 
 \fB\-\-color=never\fR\&.
 .RE
 .PP
+\-\-color\-moved[=<mode>]
+.RS 4
+Moved lines of code are colored differently\&. It can be changed by the
+\fBdiff\&.colorMoved\fR
+configuration setting\&. The <mode> defaults to
+\fIno\fR
+if the option is not given and to
+\fIzebra\fR
+if the option with no mode is given\&. The mode must be one of:
+.PP
+no
+.RS 4
+Moved lines are not highlighted\&.
+.RE
+.PP
+default
+.RS 4
+Is a synonym for
+\fBzebra\fR\&. This may change to a more sensible mode in the future\&.
+.RE
+.PP
+plain
+.RS 4
+Any line that is added in one location and was removed in another location will be colored with
+\fIcolor\&.diff\&.newMoved\fR\&. Similarly
+\fIcolor\&.diff\&.oldMoved\fR
+will be used for removed lines that are added somewhere else in the diff\&. This mode picks up any moved line, but it is not very useful in a review to determine if a block of code was moved without permutation\&.
+.RE
+.PP
+zebra
+.RS 4
+Blocks of moved text of at least 20 alphanumeric characters are detected greedily\&. The detected blocks are painted using either the
+\fIcolor\&.diff\&.{old,new}Moved\fR
+color or
+\fIcolor\&.diff\&.{old,new}MovedAlternative\fR\&. The change between the two colors indicates that a new block was detected\&.
+.RE
+.PP
+dimmed_zebra
+.RS 4
+Similar to
+\fIzebra\fR, but additional dimming of uninteresting parts of moved code is performed\&. The bordering lines of two adjacent blocks are considered interesting, the rest is uninteresting\&.
+.RE
+.RE
+.PP
 \-\-word\-diff[=<mode>]
 .RS 4
 Show a word diff, using the <mode> to delimit changed words\&. By default, words are delimited by whitespace; see
@@ -428,20 +472,26 @@ configuration\&. By default, trailing whitespaces (including lines that solely c
 .PP
 \-\-ws\-error\-highlight=<kind>
 .RS 4
-Highlight whitespace errors on lines specified by <kind> in the color specified by
-\fBcolor\&.diff\&.whitespace\fR\&. <kind> is a comma separated list of
-\fBold\fR,
-\fBnew\fR,
-\fBcontext\fR\&. When this option is not given, only whitespace errors in
+Highlight whitespace errors in the
+\fBcontext\fR,
+\fBold\fR
+or
 \fBnew\fR
-lines are highlighted\&. E\&.g\&.
-\fB\-\-ws\-error\-highlight=new,old\fR
-highlights whitespace errors on both deleted and added lines\&.
+lines of the diff\&. Multiple values are separated by comma,
+\fBnone\fR
+resets previous values,
+\fBdefault\fR
+reset the list to
+\fBnew\fR
+and
 \fBall\fR
-can be used as a short\-hand for
-\fBold,new,context\fR\&. The
+is a shorthand for
+\fBold,new,context\fR\&. When this option is not given, and the configuration variable
 \fBdiff\&.wsErrorHighlight\fR
-configuration variable can be used to specify the default behaviour\&.
+is not set, only whitespace errors in
+\fBnew\fR
+lines are highlighted\&. The whitespace errors are colored whith
+\fBcolor\&.diff\&.whitespace\fR\&.
 .RE
 .PP
 \-\-full\-index

@@ -750,8 +750,9 @@ git-for-each-ref(1) Manual Page
 <div class="verseblock">
 <pre class="content"><em>git for-each-ref</em> [--count=&lt;count&gt;] [--shell|--perl|--python|--tcl]
                    [(--sort=&lt;key&gt;)&#8230;] [--format=&lt;format&gt;] [&lt;pattern&gt;&#8230;]
-                   [--points-at &lt;object&gt;] [(--merged | --no-merged) [&lt;object&gt;]]
-                   [--contains [&lt;object&gt;]] [--no-contains [&lt;object&gt;]]</pre>
+                   [--points-at=&lt;object&gt;]
+                   (--merged[=&lt;object&gt;] | --no-merged[=&lt;object&gt;])
+                   [--contains[=&lt;object&gt;]] [--no-contains[=&lt;object&gt;]]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -772,7 +773,18 @@ host language allowing their direct evaluation in that language.</p></div>
 <div class="sectionbody">
 <div class="dlist"><dl>
 <dt class="hdlist1">
-&lt;count&gt;
+&lt;pattern&gt;&#8230;
+</dt>
+<dd>
+<p>
+        If one or more patterns are given, only refs are shown that
+        match against at least one pattern, either using fnmatch(3) or
+        literally, in the latter case matching completely or from the
+        beginning up to a slash.
+</p>
+</dd>
+<dt class="hdlist1">
+--count=&lt;count&gt;
 </dt>
 <dd>
 <p>
@@ -782,7 +794,7 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
-&lt;key&gt;
+--sort=&lt;key&gt;
 </dt>
 <dd>
 <p>
@@ -794,15 +806,16 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
-&lt;format&gt;
+--format=&lt;format&gt;
 </dt>
 <dd>
 <p>
-        A string that interpolates <code>%(fieldname)</code> from the
-        object pointed at by a ref being shown.  If <code>fieldname</code>
+        A string that interpolates <code>%(fieldname)</code> from a ref being shown
+        and the object it points at.  If <code>fieldname</code>
         is prefixed with an asterisk (<code>*</code>) and the ref points
-        at a tag object, the value for the field in the object
-        tag refers is used.  When unspecified, defaults to
+        at a tag object, use the value for the field in the object
+        which the tag object refers to (instead of the field in the tag object).
+        When unspecified, <code>&lt;format&gt;</code> defaults to
         <code>%(objectname) SPC %(objecttype) TAB %(refname)</code>.
         It also interpolates <code>%%</code> to <code>%</code>, and <code>%xx</code> where <code>xx</code>
         are hex digits interpolates to character with hex code
@@ -810,17 +823,12 @@ host language allowing their direct evaluation in that language.</p></div>
         <code>%09</code> to <code>\t</code> (TAB) and <code>%0a</code> to <code>\n</code> (LF).
 </p>
 </dd>
-<dt class="hdlist1">
-&lt;pattern&gt;&#8230;
-</dt>
-<dd>
-<p>
-        If one or more patterns are given, only refs are shown that
-        match against at least one pattern, either using fnmatch(3) or
-        literally, in the latter case matching completely or from the
-        beginning up to a slash.
-</p>
-</dd>
+</dl></div>
+<div class="paragraph"><p>--color[=&lt;when&gt;]:
+        Respect any colors specified in the <code>--format</code> option. The
+        <code>&lt;when&gt;</code> field must be one of <code>always</code>, <code>never</code>, or <code>auto</code> (if
+        <code>&lt;when&gt;</code> is absent, behave as if <code>always</code> was given).</p></div>
+<div class="dlist"><dl>
 <dt class="hdlist1">
 --shell
 </dt>
@@ -842,7 +850,7 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---points-at &lt;object&gt;
+--points-at=&lt;object&gt;
 </dt>
 <dd>
 <p>
@@ -850,7 +858,7 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---merged [&lt;object&gt;]
+--merged[=&lt;object&gt;]
 </dt>
 <dd>
 <p>
@@ -860,7 +868,7 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---no-merged [&lt;object&gt;]
+--no-merged[=&lt;object&gt;]
 </dt>
 <dd>
 <p>
@@ -870,7 +878,7 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---contains [&lt;object&gt;]
+--contains[=&lt;object&gt;]
 </dt>
 <dd>
 <p>
@@ -879,7 +887,7 @@ host language allowing their direct evaluation in that language.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---no-contains [&lt;object&gt;]
+--no-contains[=&lt;object&gt;]
 </dt>
 <dd>
 <p>
@@ -1003,8 +1011,10 @@ color
 </dt>
 <dd>
 <p>
-        Change output color.  Followed by <code>:&lt;colorname&gt;</code>, where names
-        are described in <code>color.branch.*</code>.
+        Change output color. Followed by <code>:&lt;colorname&gt;</code>, where color
+        names are described under Values in the "CONFIGURATION FILE"
+        section of <a href="git-config.html">git-config(1)</a>.  For example,
+        <code>%(color:bold red)</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1070,11 +1080,15 @@ and <code>date</code> to extract the named component.</p></div>
 <div class="paragraph"><p>The complete message in a commit and tag object is <code>contents</code>.
 Its first line is <code>contents:subject</code>, where subject is the concatenation
 of all lines of the commit message up to the first blank line.  The next
-line is <em>contents:body</em>, where body is all of the lines after the first
+line is <code>contents:body</code>, where body is all of the lines after the first
 blank line.  The optional GPG signature is <code>contents:signature</code>.  The
 first <code>N</code> lines of the message is obtained using <code>contents:lines=N</code>.
 Additionally, the trailers as interpreted by <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
-are obtained as <em>contents:trailers</em>.</p></div>
+are obtained as <code>trailers</code> (or by using the historical alias
+<code>contents:trailers</code>).  Non-trailer lines from the trailer block can be omitted
+with <code>trailers:only</code>. Whitespace-continuations can be removed from trailers so
+that each trailer appears on a line by itself with its full content with
+<code>trailers:unfold</code>. Both can be used together as <code>trailers:unfold,only</code>.</p></div>
 <div class="paragraph"><p>For sorting purposes, fields with numeric values sort in numeric order
 (<code>objectsize</code>, <code>authordate</code>, <code>committerdate</code>, <code>creatordate</code>, <code>taggerdate</code>).
 All other fields are used to sort in their byte-value order.</p></div>
@@ -1207,7 +1221,7 @@ This prints the authorname, if present.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-04-11 01:37:50 PDT
+Last updated 2017-10-11 15:31:05 JST
 </div>
 </div>
 </body>

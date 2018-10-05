@@ -6,6 +6,7 @@
 #include "csum-file.h"
 #include "pack.h"
 #include "strbuf.h"
+#include "packfile.h"
 
 static struct bulk_checkin_state {
 	unsigned plugged:1;
@@ -114,7 +115,10 @@ static int stream_to_pack(struct bulk_checkin_state *state,
 
 		if (size && !s.avail_in) {
 			ssize_t rsize = size < sizeof(ibuf) ? size : sizeof(ibuf);
-			if (read_in_full(fd, ibuf, rsize) != rsize)
+			ssize_t read_result = read_in_full(fd, ibuf, rsize);
+			if (read_result < 0)
+				die_errno("failed to read from '%s'", path);
+			if (read_result != rsize)
 				die("failed to read %d bytes from '%s'",
 				    (int)rsize, path);
 			offset += rsize;

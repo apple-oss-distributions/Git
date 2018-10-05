@@ -153,7 +153,7 @@ you will need to handle the situation manually.
 +
 Version 4 performs a simple pathname compression that reduces index
 size by 30%-50% on large repositories, which results in faster load
-time. Version 4 is relatively young (first released in in 1.8.0 in
+time. Version 4 is relatively young (first released in 1.8.0 in
 October 2012). Other Git implementations such as JGit and libgit2
 may not support it yet.
 
@@ -214,7 +214,7 @@ will remove the intended effect of the option.
 Using --refresh
 ---------------
 `--refresh` does not calculate a new sha1 file or bring the index
-up-to-date for mode/content changes. But what it *does* do is to
+up to date for mode/content changes. But what it *does* do is to
 "re-match" the stat information of a file with the index, so that you
 can refresh the index for a file that hasn't been changed but where
 the stat entry is out of date.

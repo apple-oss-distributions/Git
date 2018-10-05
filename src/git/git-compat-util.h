@@ -749,8 +749,6 @@ const char *inet_ntop(int af, const void *src, char *dst, size_t size);
 extern int git_atexit(void (*handler)(void));
 #endif
 
-extern void release_pack_memory(size_t);
-
 typedef void (*try_to_free_t)(size_t);
 extern try_to_free_t set_try_to_free_routine(try_to_free_t);
 
@@ -1172,5 +1170,25 @@ static inline int is_missing_file_error(int errno_)
 }
 
 extern int cmd_main(int, const char **);
+
+/*
+ * You can mark a stack variable with UNLEAK(var) to avoid it being
+ * reported as a leak by tools like LSAN or valgrind. The argument
+ * should generally be the variable itself (not its address and not what
+ * it points to). It's safe to use this on pointers which may already
+ * have been freed, or on pointers which may still be in use.
+ *
+ * Use this _only_ for a variable that leaks by going out of scope at
+ * program exit (so only from cmd_* functions or their direct helpers).
+ * Normal functions, especially those which may be called multiple
+ * times, should actually free their memory. This is only meant as
+ * an annotation, and does nothing in non-leak-checking builds.
+ */
+#ifdef SUPPRESS_ANNOTATED_LEAKS
+extern void unleak_memory(const void *ptr, size_t len);
+#define UNLEAK(var) unleak_memory(&(var), sizeof(var))
+#else
+#define UNLEAK(var) do {} while (0)
+#endif
 
 #endif

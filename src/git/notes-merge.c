@@ -308,8 +308,6 @@ static void write_buf_to_worktree(const struct object_id *obj,
 			if (errno == EPIPE)
 				break;
 			die_errno("notes-merge");
-		} else if (!ret) {
-			die("notes-merge: disk full?");
 		}
 		size -= ret;
 		buf += ret;
@@ -624,7 +622,7 @@ int notes_merge(struct notes_merge_options *o,
 	if (!oidcmp(&remote->object.oid, base_oid)) {
 		/* Already merged; result == local commit */
 		if (o->verbosity >= 2)
-			printf("Already up-to-date!\n");
+			printf("Already up to date!\n");
 		oidcpy(result_oid, &local->object.oid);
 		goto found_result;
 	}
@@ -709,7 +707,7 @@ int notes_merge_commit(struct notes_merge_options *o,
 		/* write file as blob, and add to partial_tree */
 		if (stat(path.buf, &st))
 			die_errno("Failed to stat '%s'", path.buf);
-		if (index_path(blob_oid.hash, path.buf, &st, HASH_WRITE_OBJECT))
+		if (index_path(&blob_oid, path.buf, &st, HASH_WRITE_OBJECT))
 			die("Failed to write blob object from '%s'", path.buf);
 		if (add_note(partial_tree, &obj_oid, &blob_oid, NULL))
 			die("Failed to add resolved note '%s' to notes tree",

@@ -32,7 +32,7 @@ static int bisearch(ucs_char_t ucs, const struct interval *table, int max)
 	if (ucs < table[0].first || ucs > table[max].last)
 		return 0;
 	while (max >= min) {
-		mid = (min + max) / 2;
+		mid = min + (max - min) / 2;
 		if (ucs > table[mid].last)
 			min = mid + 1;
 		else if (ucs < table[mid].first)
@@ -381,7 +381,7 @@ void strbuf_utf8_replace(struct strbuf *sb_src, int pos, int width,
 		old = src;
 		n = utf8_width((const char**)&src, NULL);
 		if (!src) 	/* broken utf-8, do nothing */
-			return;
+			goto out;
 		if (n && w >= pos && w < pos + width) {
 			if (subst) {
 				memcpy(dst, subst, subst_len);
@@ -397,6 +397,7 @@ void strbuf_utf8_replace(struct strbuf *sb_src, int pos, int width,
 	}
 	strbuf_setlen(&sb_dst, dst - sb_dst.buf);
 	strbuf_swap(sb_src, &sb_dst);
+out:
 	strbuf_release(&sb_dst);
 }
 

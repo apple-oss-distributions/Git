@@ -2,12 +2,12 @@
 .\"     Title: git-pull
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/04/2017
+.\"      Date: 10/30/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.14.0
+.\"    Source: Git 2.15.0
 .\"  Language: English
 .\"
-.TH "GIT\-PULL" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
+.TH "GIT\-PULL" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -142,7 +142,14 @@ Create a merge commit even when the merge resolves as a fast\-forward\&. This is
 .RS 4
 Refuse to merge and exit with a non\-zero status unless the current
 \fBHEAD\fR
-is already up\-to\-date or the merge can be resolved as a fast\-forward\&.
+is already up to date or the merge can be resolved as a fast\-forward\&.
+.RE
+.PP
+\-S[<keyid>], \-\-gpg\-sign[=<keyid>]
+.RS 4
+GPG\-sign the resulting merge commit\&. The
+\fBkeyid\fR
+argument is optional and defaults to the committer identity; if specified, it must be stuck to the option without a space\&.
 .RE
 .PP
 \-\-log[=<n>], \-\-no\-log
@@ -402,8 +409,8 @@ variables instead (see
 \fBgit-fetch\fR(1))\&.
 .sp
 The format of a <refspec> parameter is an optional plus
-\fB+\fR, followed by the source ref <src>, followed by a colon
-\fB:\fR, followed by the destination ref <dst>\&. The colon can be omitted when <dst> is empty\&.
+\fB+\fR, followed by the source <src>, followed by a colon
+\fB:\fR, followed by the destination ref <dst>\&. The colon can be omitted when <dst> is empty\&. <src> is typically a ref, but it can also be a fully spelled hex object name\&.
 .sp
 \fBtag <tag>\fR
 means the same as
@@ -820,7 +827,10 @@ history contains all that happened in it\&.
 theirs
 .RS 4
 This is the opposite of
-\fIours\fR\&.
+\fIours\fR; note that, unlike
+\fIours\fR, there is no
+\fItheirs\fR
+merge stragegy to confuse this merge option with\&.
 .RE
 .PP
 patience

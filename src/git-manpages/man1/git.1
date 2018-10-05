@@ -2,12 +2,12 @@
 .\"     Title: git
 .\"    Author: [see the "Authors" section]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/04/2017
+.\"      Date: 10/30/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.14.0
+.\"    Source: Git 2.15.0
 .\"  Language: English
 .\"
-.TH "GIT" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
+.TH "GIT" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -122,7 +122,10 @@ to the boolean true value (just like
 would in a config file)\&. Including the equals but with an empty value (like
 \fBgit \-c foo\&.bar= \&.\&.\&.\fR) sets
 \fBfoo\&.bar\fR
-to the empty string\&.
+to the empty string which
+\fBgit config \-\-bool\fR
+will convert to
+\fBfalse\fR\&.
 .RE
 .PP
 \-\-exec\-path[=<path>]
@@ -232,6 +235,14 @@ Add "icase" magic to all pathspec\&. This is equivalent to setting the
 \fBGIT_ICASE_PATHSPECS\fR
 environment variable to
 \fB1\fR\&.
+.RE
+.PP
+\-\-no\-optional\-locks
+.RS 4
+Do not perform optional operations that require locks\&. This is equivalent to setting the
+\fBGIT_OPTIONAL_LOCKS\fR
+to
+\fB0\fR\&.
 .RE
 .SH "GIT COMMANDS"
 .sp
@@ -925,7 +936,7 @@ Produce a merge commit message\&.
 .PP
 \fBgit-interpret-trailers\fR(1)
 .RS 4
-help add structured information into commit messages\&.
+add or parse structured information in commit messages\&.
 .RE
 .PP
 \fBgit-mailinfo\fR(1)
@@ -1507,6 +1518,15 @@ Set to 0 to prevent protocols used by fetch/push/clone which are configured to t
 state\&. This is useful to restrict recursive submodule initialization from an untrusted repository or for programs which feed potentially\-untrusted URLS to git commands\&. See
 \fBgit-config\fR(1)
 for more details\&.
+.RE
+.PP
+\fBGIT_OPTIONAL_LOCKS\fR
+.RS 4
+If set to
+\fB0\fR, Git will complete any requested operation without performing any optional sub\-operations that require taking a lock\&. For example, this will prevent
+\fBgit status\fR
+from refreshing the index as a side effect\&. This is useful for processes running in the background which do not want to cause lock contention with other operations on the repository\&. Defaults to
+\fB1\fR\&.
 .RE
 .SH "DISCUSSION"
 .sp

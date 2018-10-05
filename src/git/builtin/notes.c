@@ -328,6 +328,7 @@ static int notes_copy_from_stdin(int force, const char *rewrite_cmd)
 	} else {
 		finish_copy_notes_for_rewrite(c, msg);
 	}
+	strbuf_release(&buf);
 	return ret;
 }
 
@@ -456,7 +457,7 @@ static int add(int argc, const char **argv, const char *prefix)
 			oid_to_hex(&object));
 	}
 
-	prepare_note_data(&object, &d, note->hash);
+	prepare_note_data(&object, &d, note ? note->hash : NULL);
 	if (d.buf.len || allow_empty) {
 		write_note_data(&d, new_note.hash);
 		if (add_note(t, &object, &new_note, combine_notes_overwrite))

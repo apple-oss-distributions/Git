@@ -12,6 +12,7 @@
 #include "exec_cmd.h"
 #include "streaming.h"
 #include "thread-utils.h"
+#include "packfile.h"
 
 static const char index_pack_usage[] =
 "git index-pack [-v] [-o <index-file>] [--keep | --keep=<msg>] [--verify] [--strict] (<pack-file> | --stdin [--fix-thin] [<pack-file>])";
@@ -632,7 +633,7 @@ static int find_ofs_delta(const off_t offset, enum object_type type)
 	int first = 0, last = nr_ofs_deltas;
 
 	while (first < last) {
-		int next = (first + last) / 2;
+		int next = first + (last - first) / 2;
 		struct ofs_delta_entry *delta = &ofs_deltas[next];
 		int cmp;
 
@@ -686,7 +687,7 @@ static int find_ref_delta(const unsigned char *sha1, enum object_type type)
 	int first = 0, last = nr_ref_deltas;
 
 	while (first < last) {
-		int next = (first + last) / 2;
+		int next = first + (last - first) / 2;
 		struct ref_delta_entry *delta = &ref_deltas[next];
 		int cmp;
 

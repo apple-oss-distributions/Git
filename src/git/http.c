@@ -11,6 +11,7 @@
 #include "pkt-line.h"
 #include "gettext.h"
 #include "transport.h"
+#include "packfile.h"
 
 static struct trace_key trace_curl = TRACE_KEY_INIT(CURL);
 #if LIBCURL_VERSION_NUM >= 0x070a08
@@ -91,7 +92,7 @@ static struct {
 	 * here, too
 	 */
 };
-#if LIBCURL_VERSION_NUM >= 0x071600
+#ifdef CURLGSSAPI_DELEGATION_FLAG
 static const char *curl_deleg;
 static struct {
 	const char *name;
@@ -352,7 +353,7 @@ static int http_options(const char *var, const char *value, void *cb)
 	}
 
 	if (!strcmp("http.delegation", var)) {
-#if LIBCURL_VERSION_NUM >= 0x071600
+#ifdef CURLGSSAPI_DELEGATION_FLAG
 		return git_config_string(&curl_deleg, var, value);
 #else
 		warning(_("Delegation control is not supported with cURL < 7.22.0"));
@@ -637,9 +638,7 @@ static int curl_trace(CURL *handle, curl_infotype type, char *data, size_t size,
 	switch (type) {
 	case CURLINFO_TEXT:
 		trace_printf_key(&trace_curl, "== Info: %s", data);
-	default:		/* we ignore unknown types by default */
-		return 0;
-
+		break;
 	case CURLINFO_HEADER_OUT:
 		text = "=> Send header";
 		curl_dump_header(text, (unsigned char *)data, size, DO_FILTER);
@@ -664,6 +663,9 @@ static int curl_trace(CURL *handle, curl_infotype type, char *data, size_t size,
 		text = "<= Recv SSL data";
 		curl_dump_data(text, (unsigned char *)data, size);
 		break;
+
+	default:		/* we ignore unknown types by default */
+		return 0;
 	}
 	return 0;
 }
@@ -677,6 +679,7 @@ void setup_curl_trace(CURL *handle)
 	curl_easy_setopt(handle, CURLOPT_DEBUGDATA, NULL);
 }
 
+#ifdef CURLPROTO_HTTP
 static long get_curl_allowed_protocols(int from_user)
 {
 	long allowed_protocols = 0;
@@ -692,6 +695,7 @@ static long get_curl_allowed_protocols(int from_user)
 
 	return allowed_protocols;
 }
+#endif
 
 static CURL *get_curl_handle(void)
 {
@@ -717,7 +721,7 @@ static CURL *get_curl_handle(void)
 	curl_easy_setopt(result, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
 #endif
 
-#if LIBCURL_VERSION_NUM >= 0x071600
+#ifdef CURLGSSAPI_DELEGATION_FLAG
 	if (curl_deleg) {
 		int i;
 		for (i = 0; i < ARRAY_SIZE(curl_deleg_levels); i++) {
@@ -790,7 +794,7 @@ static CURL *get_curl_handle(void)
 #elif LIBCURL_VERSION_NUM >= 0x071101
 	curl_easy_setopt(result, CURLOPT_POST301, 1);
 #endif
-#if LIBCURL_VERSION_NUM >= 0x071304
+#ifdef CURLPROTO_HTTP
 	curl_easy_setopt(result, CURLOPT_REDIR_PROTOCOLS,
 			 get_curl_allowed_protocols(0));
 	curl_easy_setopt(result, CURLOPT_PROTOCOLS,

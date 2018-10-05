@@ -307,7 +307,6 @@ const struct worktree *find_shared_symref(const char *symref,
 	for (i = 0; worktrees[i]; i++) {
 		struct worktree *wt = worktrees[i];
 		const char *symref_target;
-		unsigned char sha1[20];
 		struct ref_store *refs;
 		int flags;
 
@@ -327,8 +326,9 @@ const struct worktree *find_shared_symref(const char *symref,
 
 		refs = get_worktree_ref_store(wt);
 		symref_target = refs_resolve_ref_unsafe(refs, symref, 0,
-							sha1, &flags);
-		if ((flags & REF_ISSYMREF) && !strcmp(symref_target, target)) {
+							NULL, &flags);
+		if ((flags & REF_ISSYMREF) &&
+		    symref_target && !strcmp(symref_target, target)) {
 			existing = wt;
 			break;
 		}
@@ -384,5 +384,27 @@ int submodule_uses_worktrees(const char *path)
 		break;
 	}
 	closedir(dir);
+	return ret;
+}
+
+int other_head_refs(each_ref_fn fn, void *cb_data)
+{
+	struct worktree **worktrees, **p;
+	int ret = 0;
+
+	worktrees = get_worktrees(0);
+	for (p = worktrees; *p; p++) {
+		struct worktree *wt = *p;
+		struct ref_store *refs;
+
+		if (wt->is_current)
+			continue;
+
+		refs = get_worktree_ref_store(wt);
+		ret = refs_head_ref(refs, fn, cb_data);
+		if (ret)
+			break;
+	}
+	free_worktrees(worktrees);
 	return ret;
 }

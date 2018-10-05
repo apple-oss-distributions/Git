@@ -603,6 +603,7 @@ static int process_connect_service(struct transport *transport,
 			cmdbuf.buf);
 
 exit:
+	strbuf_release(&cmdbuf);
 	fclose(input);
 	return ret;
 }
@@ -926,7 +927,7 @@ static int push_refs_with_export(struct transport *transport,
 		struct object_id oid;
 
 		private = apply_refspecs(data->refspecs, data->refspec_nr, ref->name);
-		if (private && !get_sha1(private, oid.hash)) {
+		if (private && !get_oid(private, &oid)) {
 			strbuf_addf(&buf, "^%s", private);
 			string_list_append(&revlist_args, strbuf_detach(&buf, NULL));
 			oidcpy(&ref->old_oid, &oid);

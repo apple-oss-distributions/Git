@@ -2,12 +2,12 @@
 .\"     Title: git-grep
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/04/2017
+.\"      Date: 10/30/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.14.0
+.\"    Source: Git 2.15.0
 .\"  Language: English
 .\"
-.TH "GIT\-GREP" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
+.TH "GIT\-GREP" "1" "10/30/2017" "Git 2\&.15\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -145,11 +145,6 @@ mechanism\&. Only useful when searching files in the current directory with
 \-\-recurse\-submodules
 .RS 4
 Recursively search in each submodule that has been initialized and checked out in the repository\&. When used in combination with the <tree> option the prefix of all submodule output will be the name of the parent project\(cqs <tree> object\&.
-.RE
-.PP
-\-\-parent\-basename <basename>
-.RS 4
-For internal use only\&. In order to produce uniform output with the \-\-recurse\-submodules option, this option can be used to provide the basename of a parent\(cqs <tree> object to a submodule so the submodule can prefix its output with the parent\(cqs name rather than the SHA1 of the submodule\&.
 .RE
 .PP
 \-a, \-\-text
@@ -377,6 +372,11 @@ Signals the end of options; the rest of the parameters are <pathspec> limiters\&
 <pathspec>\&...
 .RS 4
 If given, limit the search to paths matching at least one pattern\&. Both leading paths match and glob(7) patterns are supported\&.
+.sp
+For more details about the <pathspec> syntax, see the
+\fIpathspec\fR
+entry in
+\fBgitglossary\fR(7)\&.
 .RE
 .SH "EXAMPLES"
 .PP
@@ -404,6 +404,13 @@ Looks for a line that has
 or
 \fBUnexpected\fR
 in files that have lines that match both\&.
+.RE
+.PP
+\fBgit grep solution \-\- :^Documentation\fR
+.RS 4
+Looks for
+\fBsolution\fR, excluding files in
+\fBDocumentation\fR\&.
 .RE
 .SH "GIT"
 .sp

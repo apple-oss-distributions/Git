@@ -59,7 +59,7 @@ struct commit *lookup_commit_reference_by_name(const char *name)
 	struct object_id oid;
 	struct commit *commit;
 
-	if (get_sha1_committish(name, oid.hash))
+	if (get_oid_committish(name, &oid))
 		return NULL;
 	commit = lookup_commit_reference(&oid);
 	if (parse_commit(commit))
@@ -134,35 +134,41 @@ int register_commit_graft(struct commit_graft *graft, int ignore_dups)
 	return 0;
 }
 
-struct commit_graft *read_graft_line(char *buf, int len)
+struct commit_graft *read_graft_line(struct strbuf *line)
 {
 	/* The format is just "Commit Parent1 Parent2 ...\n" */
-	int i;
+	int i, phase;
+	const char *tail = NULL;
 	struct commit_graft *graft = NULL;
-	const int entry_size = GIT_SHA1_HEXSZ + 1;
+	struct object_id dummy_oid, *oid;
 
-	while (len && isspace(buf[len-1]))
-		buf[--len] = '\0';
-	if (buf[0] == '#' || buf[0] == '\0')
+	strbuf_rtrim(line);
+	if (!line->len || line->buf[0] == '#')
 		return NULL;
-	if ((len + 1) % entry_size)
-		goto bad_graft_data;
-	i = (len + 1) / entry_size - 1;
-	graft = xmalloc(st_add(sizeof(*graft), st_mult(GIT_SHA1_RAWSZ, i)));
-	graft->nr_parent = i;
-	if (get_oid_hex(buf, &graft->oid))
-		goto bad_graft_data;
-	for (i = GIT_SHA1_HEXSZ; i < len; i += entry_size) {
-		if (buf[i] != ' ')
+	/*
+	 * phase 0 verifies line, counts hashes in line and allocates graft
+	 * phase 1 fills graft
+	 */
+	for (phase = 0; phase < 2; phase++) {
+		oid = graft ? &graft->oid : &dummy_oid;
+		if (parse_oid_hex(line->buf, oid, &tail))
 			goto bad_graft_data;
-		if (get_sha1_hex(buf + i + 1, graft->parent[i/entry_size].hash))
-			goto bad_graft_data;
+		for (i = 0; *tail != '\0'; i++) {
+			oid = graft ? &graft->parent[i] : &dummy_oid;
+			if (!isspace(*tail++) || parse_oid_hex(tail, oid, &tail))
+				goto bad_graft_data;
+		}
+		if (!graft) {
+			graft = xmalloc(st_add(sizeof(*graft),
+					       st_mult(sizeof(struct object_id), i)));
+			graft->nr_parent = i;
+		}
 	}
 	return graft;
 
 bad_graft_data:
-	error("bad graft data: %s", buf);
-	free(graft);
+	error("bad graft data: %s", line->buf);
+	assert(!graft);
 	return NULL;
 }
 
@@ -174,7 +180,7 @@ static int read_graft_file(const char *graft_file)
 		return -1;
 	while (!strbuf_getwholeline(&buf, fp, '\n')) {
 		/* The format is just "Commit Parent1 Parent2 ...\n" */
-		struct commit_graft *graft = read_graft_line(buf.buf, buf.len);
+		struct commit_graft *graft = read_graft_line(&buf);
 		if (!graft)
 			continue;
 		if (register_commit_graft(graft, 1))
@@ -199,11 +205,11 @@ static void prepare_commit_graft(void)
 	commit_graft_prepared = 1;
 }
 
-struct commit_graft *lookup_commit_graft(const unsigned char *sha1)
+struct commit_graft *lookup_commit_graft(const struct object_id *oid)
 {
 	int pos;
 	prepare_commit_graft();
-	pos = commit_graft_pos(sha1);
+	pos = commit_graft_pos(oid->hash);
 	if (pos < 0)
 		return NULL;
 	return commit_graft[pos];
@@ -334,7 +340,7 @@ int parse_commit_buffer(struct commit *item, const void *buffer, unsigned long s
 	bufptr += tree_entry_len + 1; /* "tree " + "hex sha1" + "\n" */
 	pptr = &item->parents;
 
-	graft = lookup_commit_graft(item->object.oid.hash);
+	graft = lookup_commit_graft(&item->object.oid);
 	while (bufptr + parent_entry_len < tail && !memcmp(bufptr, "parent ", 7)) {
 		struct commit *new_parent;
 
@@ -1080,7 +1086,15 @@ struct commit_list *reduce_heads(struct commit_list *heads)
 	num_head = remove_redundant(array, num_head);
 	for (i = 0; i < num_head; i++)
 		tail = &commit_list_insert(array[i], tail)->next;
+	free(array);
 	return result;
+}
+
+void reduce_heads_replace(struct commit_list **heads)
+{
+	struct commit_list *result = reduce_heads(*heads);
+	free_commit_list(*heads);
+	*heads = result;
 }
 
 static const char gpg_sig_header[] = "gpgsig";
@@ -1564,10 +1578,13 @@ int commit_tree_extended(const char *msg, size_t msg_len,
 	if (encoding_is_utf8 && !verify_utf8(&buffer))
 		fprintf(stderr, _(commit_utf8_warn));
 
-	if (sign_commit && do_sign_commit(&buffer, sign_commit))
-		return -1;
+	if (sign_commit && do_sign_commit(&buffer, sign_commit)) {
+		result = -1;
+		goto out;
+	}
 
 	result = write_sha1_file(buffer.buf, buffer.len, commit_type, ret);
+out:
 	strbuf_release(&buffer);
 	return result;
 }
@@ -1586,7 +1603,7 @@ struct commit *get_merge_parent(const char *name)
 	struct object *obj;
 	struct commit *commit;
 	struct object_id oid;
-	if (get_sha1(name, oid.hash))
+	if (get_oid(name, &oid))
 		return NULL;
 	obj = parse_object(&oid);
 	commit = (struct commit *)peel_to_type(name, 0, obj, OBJ_COMMIT);

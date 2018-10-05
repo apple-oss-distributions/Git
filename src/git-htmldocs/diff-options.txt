@@ -231,6 +231,40 @@ ifdef::git-diff[]
 endif::git-diff[]
 	It is the same as `--color=never`.
 
+--color-moved[=<mode>]::
+	Moved lines of code are colored differently.
+ifdef::git-diff[]
+	It can be changed by the `diff.colorMoved` configuration setting.
+endif::git-diff[]
+	The <mode> defaults to 'no' if the option is not given
+	and to 'zebra' if the option with no mode is given.
+	The mode must be one of:
++
+--
+no::
+	Moved lines are not highlighted.
+default::
+	Is a synonym for `zebra`. This may change to a more sensible mode
+	in the future.
+plain::
+	Any line that is added in one location and was removed
+	in another location will be colored with 'color.diff.newMoved'.
+	Similarly 'color.diff.oldMoved' will be used for removed lines
+	that are added somewhere else in the diff. This mode picks up any
+	moved line, but it is not very useful in a review to determine
+	if a block of code was moved without permutation.
+zebra::
+	Blocks of moved text of at least 20 alphanumeric characters
+	are detected greedily. The detected blocks are
+	painted using either the 'color.diff.{old,new}Moved' color or
+	'color.diff.{old,new}MovedAlternative'. The change between
+	the two colors indicates that a new block was detected.
+dimmed_zebra::
+	Similar to 'zebra', but additional dimming of uninteresting parts
+	of moved code is performed. The bordering lines of two adjacent
+	blocks are considered interesting, the rest is uninteresting.
+--
+
 --word-diff[=<mode>]::
 	Show a word diff, using the <mode> to delimit changed words.
 	By default, words are delimited by whitespace; see
@@ -300,15 +334,14 @@ ifndef::git-format-patch[]
 	with --exit-code.
 
 --ws-error-highlight=<kind>::
-	Highlight whitespace errors on lines specified by <kind>
-	in the color specified by `color.diff.whitespace`.  <kind>
-	is a comma separated list of `old`, `new`, `context`.  When
-	this option is not given, only whitespace errors in `new`
-	lines are highlighted.  E.g. `--ws-error-highlight=new,old`
-	highlights whitespace errors on both deleted and added lines.
-	`all` can be used as a short-hand for `old,new,context`.
-	The `diff.wsErrorHighlight` configuration variable can be
-	used to specify the default behaviour.
+	Highlight whitespace errors in the `context`, `old` or `new`
+	lines of the diff.  Multiple values are separated by comma,
+	`none` resets previous values, `default` reset the list to
+	`new` and `all` is a shorthand for `old,new,context`.  When
+	this option is not given, and the configuration variable
+	`diff.wsErrorHighlight` is not set, only whitespace errors in
+	`new` lines are highlighted. The whitespace errors are colored
+	whith `color.diff.whitespace`.
 
 endif::git-format-patch[]
 

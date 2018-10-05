@@ -23,7 +23,6 @@ int cmd_diff_index(int argc, const char **argv, const char *prefix)
 
 	git_config(git_diff_basic_config, NULL); /* no "diff" UI options */
 	init_revisions(&rev, prefix);
-	gitmodules_config();
 	rev.abbrev = 0;
 	precompose_argv(argc, argv);
 
@@ -57,5 +56,6 @@ int cmd_diff_index(int argc, const char **argv, const char *prefix)
 		return -1;
 	}
 	result = run_diff_index(&rev, cached);
+	UNLEAK(rev);
 	return diff_result_code(&rev.diffopt, result);
 }

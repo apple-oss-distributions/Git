@@ -423,8 +423,10 @@ static int filter_buffer_or_fd(int in, int out, void *data)
 	child_process.in = -1;
 	child_process.out = out;
 
-	if (start_command(&child_process))
+	if (start_command(&child_process)) {
+		strbuf_release(&cmd);
 		return error("cannot fork to run external filter '%s'", params->cmd);
+	}
 
 	sigchain_push(SIGPIPE, SIG_IGN);
 
@@ -564,8 +566,7 @@ static int apply_multi_file_filter(const char *path, const char *src, size_t len
 
 	if (!subprocess_map_initialized) {
 		subprocess_map_initialized = 1;
-		hashmap_init(&subprocess_map, (hashmap_cmp_fn) cmd2process_cmp,
-			     NULL, 0);
+		hashmap_init(&subprocess_map, cmd2process_cmp, NULL, 0);
 		entry = NULL;
 	} else {
 		entry = (struct cmd2process *)subprocess_find_entry(&subprocess_map, cmd);
@@ -1544,8 +1545,9 @@ static int ident_filter_fn(struct stream_filter *filter,
 		switch (ident->state) {
 		default:
 			strbuf_add(&ident->left, head, ident->state);
+			/* fallthrough */
 		case IDENT_SKIPPING:
-			/* fallthru */
+			/* fallthrough */
 		case IDENT_DRAINING:
 			ident_drain(ident, &output, osize_p);
 		}

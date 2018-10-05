@@ -871,16 +871,6 @@ const char *format_subject(struct strbuf *sb, const char *msg,
 	return msg;
 }
 
-static void format_trailers(struct strbuf *sb, const char *msg)
-{
-	struct trailer_info info;
-
-	trailer_info_get(&info, msg);
-	strbuf_add(sb, info.trailer_start,
-		   info.trailer_end - info.trailer_start);
-	trailer_info_release(&info);
-}
-
 static void parse_commit_message(struct format_commit_context *c)
 {
 	const char *msg = c->message + c->message_off;
@@ -1066,6 +1056,24 @@ static size_t parse_padding_placeholder(struct strbuf *sb,
 	return 0;
 }
 
+static int match_placeholder_arg(const char *to_parse, const char *candidate,
+				 const char **end)
+{
+	const char *p;
+
+	if (!(skip_prefix(to_parse, candidate, &p)))
+		return 0;
+	if (*p == ',') {
+		*end = p + 1;
+		return 1;
+	}
+	if (*p == ')') {
+		*end = p;
+		return 1;
+	}
+	return 0;
+}
+
 static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 				const char *placeholder,
 				void *context)
@@ -1074,6 +1082,7 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 	const struct commit *commit = c->commit;
 	const char *msg = c->message;
 	struct commit_list *p;
+	const char *arg;
 	int ch;
 
 	/* these are independent of the commit */
@@ -1292,9 +1301,23 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 		return 1;
 	}
 
-	if (starts_with(placeholder, "(trailers)")) {
-		format_trailers(sb, msg + c->subject_off);
-		return strlen("(trailers)");
+	if (skip_prefix(placeholder, "(trailers", &arg)) {
+		struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
+		if (*arg == ':') {
+			arg++;
+			for (;;) {
+				if (match_placeholder_arg(arg, "only", &arg))
+					opts.only_trailers = 1;
+				else if (match_placeholder_arg(arg, "unfold", &arg))
+					opts.unfold = 1;
+				else
+					break;
+			}
+		}
+		if (*arg == ')') {
+			format_trailers_from_commit(sb, msg + c->subject_off, &opts);
+			return arg - placeholder + 1;
+		}
 	}
 
 	return 0;	/* unknown placeholder */

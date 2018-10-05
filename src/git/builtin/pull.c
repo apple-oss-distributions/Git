@@ -39,7 +39,7 @@ enum rebase_type {
 static enum rebase_type parse_config_rebase(const char *key, const char *value,
 		int fatal)
 {
-	int v = git_config_maybe_bool("pull.rebase", value);
+	int v = git_parse_maybe_bool(value);
 
 	if (!v)
 		return REBASE_FALSE;
@@ -274,7 +274,7 @@ static const char *config_get_ff(void)
 	if (git_config_get_value("pull.ff", &value))
 		return NULL;
 
-	switch (git_config_maybe_bool("pull.ff", value)) {
+	switch (git_parse_maybe_bool(value)) {
 	case 0:
 		return "--no-ff";
 	case 1:
@@ -324,6 +324,10 @@ static int git_pull_config(const char *var, const char *value, void *cb)
 {
 	if (!strcmp(var, "rebase.autostash")) {
 		config_autostash = git_config_bool(var, value);
+		return 0;
+	} else if (!strcmp(var, "submodule.recurse")) {
+		recurse_submodules = git_config_bool(var, value) ?
+			RECURSE_SUBMODULES_ON : RECURSE_SUBMODULES_OFF;
 		return 0;
 	}
 	return git_default_config(var, value, cb);
@@ -741,12 +745,15 @@ static int get_octopus_merge_base(struct object_id *merge_base,
 	if (!is_null_oid(fork_point))
 		commit_list_insert(lookup_commit_reference(fork_point), &revs);
 
-	result = reduce_heads(get_octopus_merge_bases(revs));
+	result = get_octopus_merge_bases(revs);
 	free_commit_list(revs);
+	reduce_heads_replace(&result);
+
 	if (!result)
 		return 1;
 
 	oidcpy(merge_base, &result->item->object.oid);
+	free_commit_list(result);
 	return 0;
 }
 
@@ -815,6 +822,8 @@ int cmd_pull(int argc, const char **argv, const char *prefix)
 	if (!getenv("GIT_REFLOG_ACTION"))
 		set_reflog_message(argc, argv);
 
+	git_config(git_pull_config, NULL);
+
 	argc = parse_options(argc, argv, prefix, pull_options, pull_usage, 0);
 
 	parse_repo_refspecs(argc, argv, &repo, &refspecs);
@@ -824,8 +833,6 @@ int cmd_pull(int argc, const char **argv, const char *prefix)
 
 	if (opt_rebase < 0)
 		opt_rebase = config_get_rebase();
-
-	git_config(git_pull_config, NULL);
 
 	if (read_cache_unmerged())
 		die_resolve_conflict("pull");

@@ -1119,6 +1119,74 @@ explained for the configuration variable <code>core.quotePath</code> (see
 </p>
 </dd>
 <dt class="hdlist1">
+--color-moved[=&lt;mode&gt;]
+</dt>
+<dd>
+<p>
+        Moved lines of code are colored differently.
+        The &lt;mode&gt; defaults to <em>no</em> if the option is not given
+        and to <em>zebra</em> if the option with no mode is given.
+        The mode must be one of:
+</p>
+<div class="openblock">
+<div class="content">
+<div class="dlist"><dl>
+<dt class="hdlist1">
+no
+</dt>
+<dd>
+<p>
+        Moved lines are not highlighted.
+</p>
+</dd>
+<dt class="hdlist1">
+default
+</dt>
+<dd>
+<p>
+        Is a synonym for <code>zebra</code>. This may change to a more sensible mode
+        in the future.
+</p>
+</dd>
+<dt class="hdlist1">
+plain
+</dt>
+<dd>
+<p>
+        Any line that is added in one location and was removed
+        in another location will be colored with <em>color.diff.newMoved</em>.
+        Similarly <em>color.diff.oldMoved</em> will be used for removed lines
+        that are added somewhere else in the diff. This mode picks up any
+        moved line, but it is not very useful in a review to determine
+        if a block of code was moved without permutation.
+</p>
+</dd>
+<dt class="hdlist1">
+zebra
+</dt>
+<dd>
+<p>
+        Blocks of moved text of at least 20 alphanumeric characters
+        are detected greedily. The detected blocks are
+        painted using either the <em>color.diff.{old,new}Moved</em> color or
+        <em>color.diff.{old,new}MovedAlternative</em>. The change between
+        the two colors indicates that a new block was detected.
+</p>
+</dd>
+<dt class="hdlist1">
+dimmed_zebra
+</dt>
+<dd>
+<p>
+        Similar to <em>zebra</em>, but additional dimming of uninteresting parts
+        of moved code is performed. The bordering lines of two adjacent
+        blocks are considered interesting, the rest is uninteresting.
+</p>
+</dd>
+</dl></div>
+</div></div>
+</dd>
+<dt class="hdlist1">
 --word-diff[=&lt;mode&gt;]
 </dt>
 <dd>
@@ -1236,15 +1304,14 @@ override configuration settings.</p></div>
 </dt>
 <dd>
 <p>
-        Highlight whitespace errors on lines specified by &lt;kind&gt;
-        in the color specified by <code>color.diff.whitespace</code>.  &lt;kind&gt;
-        is a comma separated list of <code>old</code>, <code>new</code>, <code>context</code>.  When
-        this option is not given, only whitespace errors in <code>new</code>
-        lines are highlighted.  E.g. <code>--ws-error-highlight=new,old</code>
-        highlights whitespace errors on both deleted and added lines.
-        <code>all</code> can be used as a short-hand for <code>old,new,context</code>.
-        The <code>diff.wsErrorHighlight</code> configuration variable can be
-        used to specify the default behaviour.
+        Highlight whitespace errors in the <code>context</code>, <code>old</code> or <code>new</code>
+        lines of the diff.  Multiple values are separated by comma,
+        <code>none</code> resets previous values, <code>default</code> reset the list to
+        <code>new</code> and <code>all</code> is a shorthand for <code>old,new,context</code>.  When
+        this option is not given, and the configuration variable
+        <code>diff.wsErrorHighlight</code> is not set, only whitespace errors in
+        <code>new</code> lines are highlighted. The whitespace errors are colored
+        whith <code>color.diff.whitespace</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2439,13 +2506,17 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <li>
 <p>
 <em>%C(&#8230;)</em>: color specification, as described under Values in the
-  "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>;
-  adding <code>auto,</code> at the beginning (e.g. <code>%C(auto,red)</code>) will emit
-  color only when colors are enabled for log output (by <code>color.diff</code>,
-  <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code> settings of the
-  former if we are going to a terminal). <code>auto</code> alone (i.e.
-  <code>%C(auto)</code>) will turn on auto coloring on the next placeholders
-  until the color is switched again.
+  "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>.
+  By default, colors are shown only when enabled for log output (by
+  <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code>
+  settings of the former if we are going to a terminal). <code>%C(auto,...)</code>
+  is accepted as a historical synonym for the default (e.g.,
+  <code>%C(auto,red)</code>). Specifying <code>%C(always,...) will show the colors
+  even when color is not otherwise enabled (though consider
+  just using `--color=always</code> to enable color for the whole output,
+  including this format and anything else git might color).  <code>auto</code>
+  alone (i.e. <code>%C(auto)</code>) will turn on auto coloring on the next
+  placeholders until the color is switched again.
 </p>
 </li>
 <li>
@@ -2511,7 +2582,10 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <li>
 <p>
 %(trailers): display the trailers of the body as interpreted by
-  <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
+  <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>. If the <code>:only</code> option is given,
+  omit non-trailer lines from the trailer block.  If the <code>:unfold</code>
+  option is given, behave as if interpret-trailer&#8217;s <code>--unfold</code> option
+  was given. E.g., <code>%(trailers:only:unfold)</code> to do both.
 </p>
 </li>
 </ul></div>
@@ -3195,7 +3269,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-07-13 14:58:50 PDT
+Last updated 2016-07-14 06:58:50 JST
 </div>
 </div>
 </body>

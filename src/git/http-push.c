@@ -11,6 +11,7 @@
 #include "list-objects.h"
 #include "sigchain.h"
 #include "argv-array.h"
+#include "packfile.h"
 
 #ifdef EXPAT_NEEDS_XMLPARSE_H
 #include <xmlparse.h>
@@ -1522,6 +1523,7 @@ static int remote_exists(const char *path)
 		break;
 	case HTTP_ERROR:
 		error("unable to access '%s': %s", url, curl_errorstr);
+		/* fallthrough */
 	default:
 		ret = -1;
 	}

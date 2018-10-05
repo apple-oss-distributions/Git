@@ -1187,6 +1187,19 @@ explicitly.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--single-worktree
+</dt>
+<dd>
+<p>
+        By default, all working trees will be examined by the
+        following options when there are more than one (see
+        <a href="git-worktree.html">git-worktree(1)</a>): <code>--all</code>, <code>--reflog</code> and
+        <code>--indexed-objects</code>.
+        This option forces them to examine the current working tree
+        only.
+</p>
+</dd>
+<dt class="hdlist1">
 --ignore-missing
 </dt>
 <dd>
@@ -2144,7 +2157,7 @@ the time zone is omitted when the local time zone is used
 <dd>
 <p>
         Print also the parents of the commit (in the form "commit parent&#8230;").
-        Also enables parent rewriting, see <em>History Simplification</em> below.
+        Also enables parent rewriting, see <em>History Simplification</em> above.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2153,7 +2166,7 @@ the time zone is omitted when the local time zone is used
 <dd>
 <p>
         Print also the children of the commit (in the form "commit child&#8230;").
-        Also enables parent rewriting, see <em>History Simplification</em> below.
+        Also enables parent rewriting, see <em>History Simplification</em> above.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2207,7 +2220,7 @@ the time zone is omitted when the local time zone is used
         to be drawn properly.
         Cannot be combined with <code>--no-walk</code>.
 </p>
-<div class="paragraph"><p>This enables parent rewriting, see <em>History Simplification</em> below.</p></div>
+<div class="paragraph"><p>This enables parent rewriting, see <em>History Simplification</em> above.</p></div>
 <div class="paragraph"><p>This implies the <code>--topo-order</code> option by default, but the
 <code>--date-order</code> option may also be specified.</p></div>
 </dd>
@@ -2652,13 +2665,17 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <li>
 <p>
 <em>%C(&#8230;)</em>: color specification, as described under Values in the
-  "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>;
-  adding <code>auto,</code> at the beginning (e.g. <code>%C(auto,red)</code>) will emit
-  color only when colors are enabled for log output (by <code>color.diff</code>,
-  <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code> settings of the
-  former if we are going to a terminal). <code>auto</code> alone (i.e.
-  <code>%C(auto)</code>) will turn on auto coloring on the next placeholders
-  until the color is switched again.
+  "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>.
+  By default, colors are shown only when enabled for log output (by
+  <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code>
+  settings of the former if we are going to a terminal). <code>%C(auto,...)</code>
+  is accepted as a historical synonym for the default (e.g.,
+  <code>%C(auto,red)</code>). Specifying <code>%C(always,...) will show the colors
+  even when color is not otherwise enabled (though consider
+  just using `--color=always</code> to enable color for the whole output,
+  including this format and anything else git might color).  <code>auto</code>
+  alone (i.e. <code>%C(auto)</code>) will turn on auto coloring on the next
+  placeholders until the color is switched again.
 </p>
 </li>
 <li>
@@ -2724,7 +2741,10 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <li>
 <p>
 %(trailers): display the trailers of the body as interpreted by
-  <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
+  <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>. If the <code>:only</code> option is given,
+  omit non-trailer lines from the trailer block.  If the <code>:unfold</code>
+  option is given, behave as if interpret-trailer&#8217;s <code>--unfold</code> option
+  was given. E.g., <code>%(trailers:only:unfold)</code> to do both.
 </p>
 </li>
 </ul></div>
@@ -2798,7 +2818,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2015-10-05 13:38:43 PDT
+Last updated 2015-10-06 05:38:43 JST
 </div>
 </div>
 </body>

@@ -149,16 +149,14 @@ static void handle_from(struct mailinfo *mi, const struct strbuf *from)
 	at = strchr(f.buf, '@');
 	if (!at) {
 		parse_bogus_from(mi, from);
-		return;
+		goto out;
 	}
 
 	/*
 	 * If we already have one email, don't take any confusing lines
 	 */
-	if (mi->email.len && strchr(at + 1, '@')) {
-		strbuf_release(&f);
-		return;
-	}
+	if (mi->email.len && strchr(at + 1, '@'))
+		goto out;
 
 	/* Pick up the string around '@', possibly delimited with <>
 	 * pair; that is the email part.
@@ -198,6 +196,7 @@ static void handle_from(struct mailinfo *mi, const struct strbuf *from)
 	}
 
 	get_sane_name(&mi->name, &f, &mi->email);
+out:
 	strbuf_release(&f);
 }
 
@@ -828,6 +827,7 @@ static void handle_filter(struct mailinfo *mi, struct strbuf *line)
 		if (!handle_commit_msg(mi, line))
 			break;
 		mi->filter_stage++;
+		/* fallthrough */
 	case 1:
 		handle_patch(mi, line);
 		break;
@@ -934,6 +934,7 @@ again:
 			error("Detected mismatched boundaries, can't recover");
 			mi->input_error = -1;
 			mi->content_top = mi->content;
+			strbuf_release(&newline);
 			return 0;
 		}
 		handle_filter(mi, &newline);

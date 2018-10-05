@@ -190,6 +190,33 @@ check_describe "test1-lightweight-*" --long --tags --match="test1-*" --match="te
 
 check_describe "test1-lightweight-*" --long --tags --match="test3-*" --match="test1-*" HEAD
 
+test_expect_success 'set-up branches' '
+	git branch branch_A A &&
+	git branch branch_C c &&
+	git update-ref refs/remotes/origin/remote_branch_A "A^{commit}" &&
+	git update-ref refs/remotes/origin/remote_branch_C "c^{commit}" &&
+	git update-ref refs/original/original_branch_A test-annotated~2
+'
+
+check_describe "heads/branch_A*" --all --match="branch_*" --exclude="branch_C" HEAD
+
+check_describe "remotes/origin/remote_branch_A*" --all --match="origin/remote_branch_*" --exclude="origin/remote_branch_C" HEAD
+
+check_describe "original/original_branch_A*" --all test-annotated~1
+
+test_expect_success '--match does not work for other types' '
+	test_must_fail git describe --all --match="*original_branch_*" test-annotated~1
+'
+
+test_expect_success '--exclude does not work for other types' '
+	R=$(git describe --all --exclude="any_pattern_even_not_matching" test-annotated~1) &&
+	case "$R" in
+	*original_branch_A*) echo "fail: Found unknown reference $R with --exclude"
+		false;;
+	*) echo ok: Found some known type;;
+	esac
+'
+
 test_expect_success 'name-rev with exact tags' '
 	echo A >expect &&
 	tag_object=$(git rev-parse refs/tags/A) &&
@@ -199,6 +226,31 @@ test_expect_success 'name-rev with exact tags' '
 	echo "A^0" >expect &&
 	tagged_commit=$(git rev-parse "refs/tags/A^0") &&
 	git name-rev --tags --name-only $tagged_commit >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'name-rev --all' '
+	>expect.unsorted &&
+	for rev in $(git rev-list --all)
+	do
+		git name-rev $rev >>expect.unsorted
+	done &&
+	sort <expect.unsorted >expect &&
+	git name-rev --all >actual.unsorted &&
+	sort <actual.unsorted >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'name-rev --stdin' '
+	>expect.unsorted &&
+	for rev in $(git rev-list --all)
+	do
+		name=$(git name-rev --name-only $rev) &&
+		echo "$rev ($name)" >>expect.unsorted
+	done &&
+	sort <expect.unsorted >expect &&
+	git rev-list --all | git name-rev --stdin >actual.unsorted &&
+	sort <actual.unsorted >actual &&
 	test_cmp expect actual
 '
 
@@ -254,7 +306,38 @@ test_expect_success 'describe chokes on severely broken submodules' '
 '
 test_expect_success 'describe ignoring a borken submodule' '
 	git describe --broken >out &&
+	test_when_finished "mv .git/modules/sub_moved .git/modules/sub1" &&
 	grep broken out
+'
+
+test_expect_failure ULIMIT_STACK_SIZE 'name-rev works in a deep repo' '
+	i=1 &&
+	while test $i -lt 8000
+	do
+		echo "commit refs/heads/master
+committer A U Thor <author@example.com> $((1000000000 + $i * 100)) +0200
+data <<EOF
+commit #$i
+EOF"
+		test $i = 1 && echo "from refs/heads/master^0"
+		i=$(($i + 1))
+	done | git fast-import &&
+	git checkout master &&
+	git tag far-far-away HEAD^ &&
+	echo "HEAD~4000 tags/far-far-away~3999" >expect &&
+	git name-rev HEAD~4000 >actual &&
+	test_cmp expect actual &&
+	run_with_limited_stack git name-rev HEAD~4000 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success ULIMIT_STACK_SIZE 'describe works in a deep repo' '
+	git tag -f far-far-away HEAD~7999 &&
+	echo "far-far-away" >expect &&
+	git describe --tags --abbrev=0 HEAD~4000 >actual &&
+	test_cmp expect actual &&
+	run_with_limited_stack git describe --tags --abbrev=0 HEAD~4000 >actual &&
+	test_cmp expect actual
 '
 
 test_done
