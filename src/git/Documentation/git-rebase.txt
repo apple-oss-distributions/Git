@@ -12,7 +12,7 @@ SYNOPSIS
 	[<upstream> [<branch>]]
 'git rebase' [-i | --interactive] [options] [--exec <cmd>] [--onto <newbase>]
 	--root [<branch>]
-'git rebase' --continue | --skip | --abort | --edit-todo
+'git rebase' --continue | --skip | --abort | --quit | --edit-todo
 
 DESCRIPTION
 -----------
@@ -252,6 +252,11 @@ leave out at most one of A and B, in which case it defaults to HEAD.
 	will be reset to where it was when the rebase operation was
 	started.
 
+--quit::
+	Abort the rebase operation but HEAD is not reset back to the
+	original branch. The index and working tree are also left
+	unchanged as a result.
+
 --keep-empty::
 	Keep the commits that do not change anything from its
 	parents in the result.
@@ -364,6 +369,11 @@ default is `--no-fork-point`, otherwise the default is `--fork-point`.
 	These flags are passed to 'git am' to easily change the dates
 	of the rebased commits (see linkgit:git-am[1]).
 	Incompatible with the --interactive option.
+
+--signoff::
+	This flag is passed to 'git am' to sign off all the rebased
+	commits (see linkgit:git-am[1]). Incompatible with the
+	--interactive option.
 
 -i::
 --interactive::
@@ -665,7 +675,7 @@ on this 'subsystem'.  You might end up with a history like the
 following:
 
 ------------
-    o---o---o---o---o---o---o---o---o  master
+    o---o---o---o---o---o---o---o  master
 	 \
 	  o---o---o---o---o  subsystem
 			   \

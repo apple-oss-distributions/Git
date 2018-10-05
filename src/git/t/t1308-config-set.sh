@@ -215,18 +215,14 @@ test_expect_success 'check line errors for malformed values' '
 		br
 	EOF
 	test_expect_code 128 git br 2>result &&
-	test_i18ngrep "fatal: .*alias\.br.*\.git/config.*line 2" result
+	test_i18ngrep "missing value for .alias\.br" result &&
+	test_i18ngrep "fatal: .*\.git/config" result &&
+	test_i18ngrep "fatal: .*line 2" result
 '
 
 test_expect_success 'error on modifying repo config without repo' '
-	mkdir no-repo &&
-	(
-		GIT_CEILING_DIRECTORIES=$(pwd) &&
-		export GIT_CEILING_DIRECTORIES &&
-		cd no-repo &&
-		test_must_fail git config a.b c 2>err &&
-		grep "not in a git directory" err
-	)
+	nongit test_must_fail git config a.b c 2>err &&
+	grep "not in a git directory" err
 '
 
 cmdline_config="'foo.bar=from-cmdline'"

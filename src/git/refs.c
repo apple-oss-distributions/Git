@@ -3,11 +3,14 @@
  */
 
 #include "cache.h"
+#include "hashmap.h"
 #include "lockfile.h"
+#include "iterator.h"
 #include "refs.h"
 #include "refs/refs-internal.h"
 #include "object.h"
 #include "tag.h"
+#include "submodule.h"
 
 /*
  * List of all available backends
@@ -169,11 +172,23 @@ int refname_is_safe(const char *refname)
 	return 1;
 }
 
+char *refs_resolve_refdup(struct ref_store *refs,
+			  const char *refname, int resolve_flags,
+			  unsigned char *sha1, int *flags)
+{
+	const char *result;
+
+	result = refs_resolve_ref_unsafe(refs, refname, resolve_flags,
+					 sha1, flags);
+	return xstrdup_or_null(result);
+}
+
 char *resolve_refdup(const char *refname, int resolve_flags,
 		     unsigned char *sha1, int *flags)
 {
-	return xstrdup_or_null(resolve_ref_unsafe(refname, resolve_flags,
-						  sha1, flags));
+	return refs_resolve_refdup(get_main_ref_store(),
+				   refname, resolve_flags,
+				   sha1, flags);
 }
 
 /* The argument to filter_refs */
@@ -183,11 +198,18 @@ struct ref_filter {
 	void *cb_data;
 };
 
-int read_ref_full(const char *refname, int resolve_flags, unsigned char *sha1, int *flags)
+int refs_read_ref_full(struct ref_store *refs, const char *refname,
+		       int resolve_flags, unsigned char *sha1, int *flags)
 {
-	if (resolve_ref_unsafe(refname, resolve_flags, sha1, flags))
+	if (refs_resolve_ref_unsafe(refs, refname, resolve_flags, sha1, flags))
 		return 0;
 	return -1;
+}
+
+int read_ref_full(const char *refname, int resolve_flags, unsigned char *sha1, int *flags)
+{
+	return refs_read_ref_full(get_main_ref_store(), refname,
+				  resolve_flags, sha1, flags);
 }
 
 int read_ref(const char *refname, unsigned char *sha1)
@@ -284,34 +306,52 @@ void warn_dangling_symrefs(FILE *fp, const char *msg_fmt, const struct string_li
 	for_each_rawref(warn_if_dangling_symref, &data);
 }
 
+int refs_for_each_tag_ref(struct ref_store *refs, each_ref_fn fn, void *cb_data)
+{
+	return refs_for_each_ref_in(refs, "refs/tags/", fn, cb_data);
+}
+
 int for_each_tag_ref(each_ref_fn fn, void *cb_data)
 {
-	return for_each_ref_in("refs/tags/", fn, cb_data);
+	return refs_for_each_tag_ref(get_main_ref_store(), fn, cb_data);
 }
 
 int for_each_tag_ref_submodule(const char *submodule, each_ref_fn fn, void *cb_data)
 {
-	return for_each_ref_in_submodule(submodule, "refs/tags/", fn, cb_data);
+	return refs_for_each_tag_ref(get_submodule_ref_store(submodule),
+				     fn, cb_data);
+}
+
+int refs_for_each_branch_ref(struct ref_store *refs, each_ref_fn fn, void *cb_data)
+{
+	return refs_for_each_ref_in(refs, "refs/heads/", fn, cb_data);
 }
 
 int for_each_branch_ref(each_ref_fn fn, void *cb_data)
 {
-	return for_each_ref_in("refs/heads/", fn, cb_data);
+	return refs_for_each_branch_ref(get_main_ref_store(), fn, cb_data);
 }
 
 int for_each_branch_ref_submodule(const char *submodule, each_ref_fn fn, void *cb_data)
 {
-	return for_each_ref_in_submodule(submodule, "refs/heads/", fn, cb_data);
+	return refs_for_each_branch_ref(get_submodule_ref_store(submodule),
+					fn, cb_data);
+}
+
+int refs_for_each_remote_ref(struct ref_store *refs, each_ref_fn fn, void *cb_data)
+{
+	return refs_for_each_ref_in(refs, "refs/remotes/", fn, cb_data);
 }
 
 int for_each_remote_ref(each_ref_fn fn, void *cb_data)
 {
-	return for_each_ref_in("refs/remotes/", fn, cb_data);
+	return refs_for_each_remote_ref(get_main_ref_store(), fn, cb_data);
 }
 
 int for_each_remote_ref_submodule(const char *submodule, each_ref_fn fn, void *cb_data)
 {
-	return for_each_ref_in_submodule(submodule, "refs/remotes/", fn, cb_data);
+	return refs_for_each_remote_ref(get_submodule_ref_store(submodule),
+					fn, cb_data);
 }
 
 int head_ref_namespaced(each_ref_fn fn, void *cb_data)
@@ -365,11 +405,11 @@ int for_each_glob_ref(each_ref_fn fn, const char *pattern, void *cb_data)
 
 const char *prettify_refname(const char *name)
 {
-	return name + (
-		starts_with(name, "refs/heads/") ? 11 :
-		starts_with(name, "refs/tags/") ? 10 :
-		starts_with(name, "refs/remotes/") ? 13 :
-		0);
+	if (skip_prefix(name, "refs/heads/", &name) ||
+	    skip_prefix(name, "refs/tags/", &name) ||
+	    skip_prefix(name, "refs/remotes/", &name))
+		; /* nothing */
+	return name;
 }
 
 static const char *ref_rev_parse_rules[] = {
@@ -404,7 +444,7 @@ int refname_match(const char *abbrev_name, const char *full_name)
 static char *substitute_branch_name(const char **string, int *len)
 {
 	struct strbuf buf = STRBUF_INIT;
-	int ret = interpret_branch_name(*string, *len, &buf);
+	int ret = interpret_branch_name(*string, *len, &buf, 0);
 
 	if (ret == *len) {
 		size_t size;
@@ -428,29 +468,31 @@ int expand_ref(const char *str, int len, unsigned char *sha1, char **ref)
 {
 	const char **p, *r;
 	int refs_found = 0;
+	struct strbuf fullref = STRBUF_INIT;
 
 	*ref = NULL;
 	for (p = ref_rev_parse_rules; *p; p++) {
-		char fullref[PATH_MAX];
 		unsigned char sha1_from_ref[20];
 		unsigned char *this_result;
 		int flag;
 
 		this_result = refs_found ? sha1_from_ref : sha1;
-		mksnpath(fullref, sizeof(fullref), *p, len, str);
-		r = resolve_ref_unsafe(fullref, RESOLVE_REF_READING,
+		strbuf_reset(&fullref);
+		strbuf_addf(&fullref, *p, len, str);
+		r = resolve_ref_unsafe(fullref.buf, RESOLVE_REF_READING,
 				       this_result, &flag);
 		if (r) {
 			if (!refs_found++)
 				*ref = xstrdup(r);
 			if (!warn_ambiguous_refs)
 				break;
-		} else if ((flag & REF_ISSYMREF) && strcmp(fullref, "HEAD")) {
-			warning("ignoring dangling symref %s.", fullref);
-		} else if ((flag & REF_ISBROKEN) && strchr(fullref, '/')) {
-			warning("ignoring broken ref %s.", fullref);
+		} else if ((flag & REF_ISSYMREF) && strcmp(fullref.buf, "HEAD")) {
+			warning("ignoring dangling symref %s.", fullref.buf);
+		} else if ((flag & REF_ISBROKEN) && strchr(fullref.buf, '/')) {
+			warning("ignoring broken ref %s.", fullref.buf);
 		}
 	}
+	strbuf_release(&fullref);
 	return refs_found;
 }
 
@@ -459,21 +501,22 @@ int dwim_log(const char *str, int len, unsigned char *sha1, char **log)
 	char *last_branch = substitute_branch_name(&str, &len);
 	const char **p;
 	int logs_found = 0;
+	struct strbuf path = STRBUF_INIT;
 
 	*log = NULL;
 	for (p = ref_rev_parse_rules; *p; p++) {
 		unsigned char hash[20];
-		char path[PATH_MAX];
 		const char *ref, *it;
 
-		mksnpath(path, sizeof(path), *p, len, str);
-		ref = resolve_ref_unsafe(path, RESOLVE_REF_READING,
+		strbuf_reset(&path);
+		strbuf_addf(&path, *p, len, str);
+		ref = resolve_ref_unsafe(path.buf, RESOLVE_REF_READING,
 					 hash, NULL);
 		if (!ref)
 			continue;
-		if (reflog_exists(path))
-			it = path;
-		else if (strcmp(ref, path) && reflog_exists(ref))
+		if (reflog_exists(path.buf))
+			it = path.buf;
+		else if (strcmp(ref, path.buf) && reflog_exists(ref))
 			it = ref;
 		else
 			continue;
@@ -484,6 +527,7 @@ int dwim_log(const char *str, int len, unsigned char *sha1, char **log)
 		if (!warn_ambiguous_refs)
 			break;
 	}
+	strbuf_release(&path);
 	free(last_branch);
 	return logs_found;
 }
@@ -591,19 +635,23 @@ static int delete_pseudoref(const char *pseudoref, const unsigned char *old_sha1
 	return 0;
 }
 
-int delete_ref(const char *refname, const unsigned char *old_sha1,
-	       unsigned int flags)
+int refs_delete_ref(struct ref_store *refs, const char *msg,
+		    const char *refname,
+		    const unsigned char *old_sha1,
+		    unsigned int flags)
 {
 	struct ref_transaction *transaction;
 	struct strbuf err = STRBUF_INIT;
 
-	if (ref_type(refname) == REF_TYPE_PSEUDOREF)
+	if (ref_type(refname) == REF_TYPE_PSEUDOREF) {
+		assert(refs == get_main_ref_store());
 		return delete_pseudoref(refname, old_sha1);
+	}
 
-	transaction = ref_transaction_begin(&err);
+	transaction = ref_store_transaction_begin(refs, &err);
 	if (!transaction ||
 	    ref_transaction_delete(transaction, refname, old_sha1,
-				   flags, NULL, &err) ||
+				   flags, msg, &err) ||
 	    ref_transaction_commit(transaction, &err)) {
 		error("%s", err.buf);
 		ref_transaction_free(transaction);
@@ -613,6 +661,13 @@ int delete_ref(const char *refname, const unsigned char *old_sha1,
 	ref_transaction_free(transaction);
 	strbuf_release(&err);
 	return 0;
+}
+
+int delete_ref(const char *msg, const char *refname,
+	       const unsigned char *old_sha1, unsigned int flags)
+{
+	return refs_delete_ref(get_main_ref_store(), msg, refname,
+			       old_sha1, flags);
 }
 
 int copy_reflog_msg(char *buf, const char *msg)
@@ -638,12 +693,17 @@ int copy_reflog_msg(char *buf, const char *msg)
 
 int should_autocreate_reflog(const char *refname)
 {
-	if (!log_all_ref_updates)
+	switch (log_all_ref_updates) {
+	case LOG_REFS_ALWAYS:
+		return 1;
+	case LOG_REFS_NORMAL:
+		return starts_with(refname, "refs/heads/") ||
+			starts_with(refname, "refs/remotes/") ||
+			starts_with(refname, "refs/notes/") ||
+			!strcmp(refname, "HEAD");
+	default:
 		return 0;
-	return starts_with(refname, "refs/heads/") ||
-		starts_with(refname, "refs/remotes/") ||
-		starts_with(refname, "refs/notes/") ||
-		!strcmp(refname, "HEAD");
+	}
 }
 
 int is_branch(const char *refname)
@@ -669,7 +729,7 @@ struct read_ref_at_cb {
 	int *cutoff_cnt;
 };
 
-static int read_ref_at_ent(unsigned char *osha1, unsigned char *nsha1,
+static int read_ref_at_ent(struct object_id *ooid, struct object_id *noid,
 		const char *email, unsigned long timestamp, int tz,
 		const char *message, void *cb_data)
 {
@@ -693,30 +753,30 @@ static int read_ref_at_ent(unsigned char *osha1, unsigned char *nsha1,
 		 * hold the values for the previous record.
 		 */
 		if (!is_null_sha1(cb->osha1)) {
-			hashcpy(cb->sha1, nsha1);
-			if (hashcmp(cb->osha1, nsha1))
+			hashcpy(cb->sha1, noid->hash);
+			if (hashcmp(cb->osha1, noid->hash))
 				warning("Log for ref %s has gap after %s.",
 					cb->refname, show_date(cb->date, cb->tz, DATE_MODE(RFC2822)));
 		}
 		else if (cb->date == cb->at_time)
-			hashcpy(cb->sha1, nsha1);
-		else if (hashcmp(nsha1, cb->sha1))
+			hashcpy(cb->sha1, noid->hash);
+		else if (hashcmp(noid->hash, cb->sha1))
 			warning("Log for ref %s unexpectedly ended on %s.",
 				cb->refname, show_date(cb->date, cb->tz,
 						       DATE_MODE(RFC2822)));
-		hashcpy(cb->osha1, osha1);
-		hashcpy(cb->nsha1, nsha1);
+		hashcpy(cb->osha1, ooid->hash);
+		hashcpy(cb->nsha1, noid->hash);
 		cb->found_it = 1;
 		return 1;
 	}
-	hashcpy(cb->osha1, osha1);
-	hashcpy(cb->nsha1, nsha1);
+	hashcpy(cb->osha1, ooid->hash);
+	hashcpy(cb->nsha1, noid->hash);
 	if (cb->cnt > 0)
 		cb->cnt--;
 	return 0;
 }
 
-static int read_ref_at_ent_oldest(unsigned char *osha1, unsigned char *nsha1,
+static int read_ref_at_ent_oldest(struct object_id *ooid, struct object_id *noid,
 				  const char *email, unsigned long timestamp,
 				  int tz, const char *message, void *cb_data)
 {
@@ -730,9 +790,9 @@ static int read_ref_at_ent_oldest(unsigned char *osha1, unsigned char *nsha1,
 		*cb->cutoff_tz = tz;
 	if (cb->cutoff_cnt)
 		*cb->cutoff_cnt = cb->reccnt;
-	hashcpy(cb->sha1, osha1);
+	hashcpy(cb->sha1, ooid->hash);
 	if (is_null_sha1(cb->sha1))
-		hashcpy(cb->sha1, nsha1);
+		hashcpy(cb->sha1, noid->hash);
 	/* We just want the first entry */
 	return 1;
 }
@@ -769,11 +829,20 @@ int read_ref_at(const char *refname, unsigned int flags, unsigned long at_time, 
 	return 1;
 }
 
-struct ref_transaction *ref_transaction_begin(struct strbuf *err)
+struct ref_transaction *ref_store_transaction_begin(struct ref_store *refs,
+						    struct strbuf *err)
 {
+	struct ref_transaction *tr;
 	assert(err);
 
-	return xcalloc(1, sizeof(struct ref_transaction));
+	tr = xcalloc(1, sizeof(struct ref_transaction));
+	tr->ref_store = refs;
+	return tr;
+}
+
+struct ref_transaction *ref_transaction_begin(struct strbuf *err)
+{
+	return ref_store_transaction_begin(get_main_ref_store(), err);
 }
 
 void ref_transaction_free(struct ref_transaction *transaction)
@@ -890,18 +959,20 @@ int update_ref_oid(const char *msg, const char *refname,
 		old_oid ? old_oid->hash : NULL, flags, onerr);
 }
 
-int update_ref(const char *msg, const char *refname,
-	       const unsigned char *new_sha1, const unsigned char *old_sha1,
-	       unsigned int flags, enum action_on_err onerr)
+int refs_update_ref(struct ref_store *refs, const char *msg,
+		    const char *refname, const unsigned char *new_sha1,
+		    const unsigned char *old_sha1, unsigned int flags,
+		    enum action_on_err onerr)
 {
 	struct ref_transaction *t = NULL;
 	struct strbuf err = STRBUF_INIT;
 	int ret = 0;
 
 	if (ref_type(refname) == REF_TYPE_PSEUDOREF) {
+		assert(refs == get_main_ref_store());
 		ret = write_pseudoref(refname, new_sha1, old_sha1, &err);
 	} else {
-		t = ref_transaction_begin(&err);
+		t = ref_store_transaction_begin(refs, &err);
 		if (!t ||
 		    ref_transaction_update(t, refname, new_sha1, old_sha1,
 					   flags, msg, &err) ||
@@ -932,12 +1003,22 @@ int update_ref(const char *msg, const char *refname,
 	return 0;
 }
 
+int update_ref(const char *msg, const char *refname,
+	       const unsigned char *new_sha1,
+	       const unsigned char *old_sha1,
+	       unsigned int flags, enum action_on_err onerr)
+{
+	return refs_update_ref(get_main_ref_store(), msg, refname, new_sha1,
+			       old_sha1, flags, onerr);
+}
+
 char *shorten_unambiguous_ref(const char *refname, int strict)
 {
 	int i;
 	static char **scanf_fmts;
 	static int nr_rules;
 	char *short_name;
+	struct strbuf resolved_buf = STRBUF_INIT;
 
 	if (!nr_rules) {
 		/*
@@ -996,7 +1077,6 @@ char *shorten_unambiguous_ref(const char *refname, int strict)
 		 */
 		for (j = 0; j < rules_to_fail; j++) {
 			const char *rule = ref_rev_parse_rules[j];
-			char refname[PATH_MAX];
 
 			/* skip matched rule */
 			if (i == j)
@@ -1007,9 +1087,10 @@ char *shorten_unambiguous_ref(const char *refname, int strict)
 			 * (with this previous rule) to a valid ref
 			 * read_ref() returns 0 on success
 			 */
-			mksnpath(refname, sizeof(refname),
-				 rule, short_name_len, short_name);
-			if (ref_exists(refname))
+			strbuf_reset(&resolved_buf);
+			strbuf_addf(&resolved_buf, rule,
+				    short_name_len, short_name);
+			if (ref_exists(resolved_buf.buf))
 				break;
 		}
 
@@ -1017,10 +1098,13 @@ char *shorten_unambiguous_ref(const char *refname, int strict)
 		 * short name is non-ambiguous if all previous rules
 		 * haven't resolved to a valid ref
 		 */
-		if (j == rules_to_fail)
+		if (j == rules_to_fail) {
+			strbuf_release(&resolved_buf);
 			return short_name;
+		}
 	}
 
+	strbuf_release(&resolved_buf);
 	free(short_name);
 	return xstrdup(refname);
 }
@@ -1029,10 +1113,10 @@ static struct string_list *hide_refs;
 
 int parse_hide_refs_config(const char *var, const char *value, const char *section)
 {
+	const char *key;
 	if (!strcmp("transfer.hiderefs", var) ||
-	    /* NEEDSWORK: use parse_config_key() once both are merged */
-	    (starts_with(var, section) && var[strlen(section)] == '.' &&
-	     !strcmp(var + strlen(section), ".hiderefs"))) {
+	    (!parse_config_key(var, section, NULL, NULL, &key) &&
+	     !strcmp(key, "hiderefs"))) {
 		char *ref;
 		int len;
 
@@ -1113,14 +1197,17 @@ const char *find_descendant_ref(const char *dirname,
 	return NULL;
 }
 
-int rename_ref_available(const char *old_refname, const char *new_refname)
+int refs_rename_ref_available(struct ref_store *refs,
+			      const char *old_refname,
+			      const char *new_refname)
 {
 	struct string_list skip = STRING_LIST_INIT_NODUP;
 	struct strbuf err = STRBUF_INIT;
 	int ok;
 
 	string_list_insert(&skip, old_refname);
-	ok = !verify_refname_available(new_refname, NULL, &skip, &err);
+	ok = !refs_verify_refname_available(refs, new_refname,
+					    NULL, &skip, &err);
 	if (!ok)
 		error("%s", err.buf);
 
@@ -1152,6 +1239,18 @@ int head_ref(each_ref_fn fn, void *cb_data)
 	return head_ref_submodule(NULL, fn, cb_data);
 }
 
+struct ref_iterator *refs_ref_iterator_begin(
+		struct ref_store *refs,
+		const char *prefix, int trim, int flags)
+{
+	struct ref_iterator *iter;
+
+	iter = refs->be->iterator_begin(refs, prefix, flags);
+	iter = prefix_ref_iterator_begin(iter, prefix, trim);
+
+	return iter;
+}
+
 /*
  * Call fn for each reference in the specified submodule for which the
  * refname begins with prefix. If trim is non-zero, then trim that
@@ -1161,34 +1260,43 @@ int head_ref(each_ref_fn fn, void *cb_data)
  * non-zero value, stop the iteration and return that value;
  * otherwise, return 0.
  */
-static int do_for_each_ref(const char *submodule, const char *prefix,
+static int do_for_each_ref(struct ref_store *refs, const char *prefix,
 			   each_ref_fn fn, int trim, int flags, void *cb_data)
 {
-	struct ref_store *refs = get_ref_store(submodule);
 	struct ref_iterator *iter;
 
 	if (!refs)
 		return 0;
 
-	iter = refs->be->iterator_begin(refs, prefix, flags);
-	iter = prefix_ref_iterator_begin(iter, prefix, trim);
+	iter = refs_ref_iterator_begin(refs, prefix, trim, flags);
 
 	return do_for_each_ref_iterator(iter, fn, cb_data);
 }
 
+int refs_for_each_ref(struct ref_store *refs, each_ref_fn fn, void *cb_data)
+{
+	return do_for_each_ref(refs, "", fn, 0, 0, cb_data);
+}
+
 int for_each_ref(each_ref_fn fn, void *cb_data)
 {
-	return do_for_each_ref(NULL, "", fn, 0, 0, cb_data);
+	return refs_for_each_ref(get_main_ref_store(), fn, cb_data);
 }
 
 int for_each_ref_submodule(const char *submodule, each_ref_fn fn, void *cb_data)
 {
-	return do_for_each_ref(submodule, "", fn, 0, 0, cb_data);
+	return refs_for_each_ref(get_submodule_ref_store(submodule), fn, cb_data);
+}
+
+int refs_for_each_ref_in(struct ref_store *refs, const char *prefix,
+			 each_ref_fn fn, void *cb_data)
+{
+	return do_for_each_ref(refs, prefix, fn, strlen(prefix), 0, cb_data);
 }
 
 int for_each_ref_in(const char *prefix, each_ref_fn fn, void *cb_data)
 {
-	return do_for_each_ref(NULL, prefix, fn, strlen(prefix), 0, cb_data);
+	return refs_for_each_ref_in(get_main_ref_store(), prefix, fn, cb_data);
 }
 
 int for_each_fullref_in(const char *prefix, each_ref_fn fn, void *cb_data, unsigned int broken)
@@ -1197,19 +1305,23 @@ int for_each_fullref_in(const char *prefix, each_ref_fn fn, void *cb_data, unsig
 
 	if (broken)
 		flag = DO_FOR_EACH_INCLUDE_BROKEN;
-	return do_for_each_ref(NULL, prefix, fn, 0, flag, cb_data);
+	return do_for_each_ref(get_main_ref_store(),
+			       prefix, fn, 0, flag, cb_data);
 }
 
 int for_each_ref_in_submodule(const char *submodule, const char *prefix,
-		each_ref_fn fn, void *cb_data)
+			      each_ref_fn fn, void *cb_data)
 {
-	return do_for_each_ref(submodule, prefix, fn, strlen(prefix), 0, cb_data);
+	return refs_for_each_ref_in(get_submodule_ref_store(submodule),
+				    prefix, fn, cb_data);
 }
 
 int for_each_replace_ref(each_ref_fn fn, void *cb_data)
 {
-	return do_for_each_ref(NULL, git_replace_ref_base, fn,
-			       strlen(git_replace_ref_base), 0, cb_data);
+	return do_for_each_ref(get_main_ref_store(),
+			       git_replace_ref_base, fn,
+			       strlen(git_replace_ref_base),
+			       0, cb_data);
 }
 
 int for_each_namespaced_ref(each_ref_fn fn, void *cb_data)
@@ -1217,22 +1329,35 @@ int for_each_namespaced_ref(each_ref_fn fn, void *cb_data)
 	struct strbuf buf = STRBUF_INIT;
 	int ret;
 	strbuf_addf(&buf, "%srefs/", get_git_namespace());
-	ret = do_for_each_ref(NULL, buf.buf, fn, 0, 0, cb_data);
+	ret = do_for_each_ref(get_main_ref_store(),
+			      buf.buf, fn, 0, 0, cb_data);
 	strbuf_release(&buf);
 	return ret;
 }
 
-int for_each_rawref(each_ref_fn fn, void *cb_data)
+int refs_for_each_rawref(struct ref_store *refs, each_ref_fn fn, void *cb_data)
 {
-	return do_for_each_ref(NULL, "", fn, 0,
+	return do_for_each_ref(refs, "", fn, 0,
 			       DO_FOR_EACH_INCLUDE_BROKEN, cb_data);
 }
 
+int for_each_rawref(each_ref_fn fn, void *cb_data)
+{
+	return refs_for_each_rawref(get_main_ref_store(), fn, cb_data);
+}
+
+int refs_read_raw_ref(struct ref_store *ref_store,
+		      const char *refname, unsigned char *sha1,
+		      struct strbuf *referent, unsigned int *type)
+{
+	return ref_store->be->read_raw_ref(ref_store, refname, sha1, referent, type);
+}
+
 /* This function needs to return a meaningful errno on failure */
-static const char *resolve_ref_recursively(struct ref_store *refs,
-					   const char *refname,
-					   int resolve_flags,
-					   unsigned char *sha1, int *flags)
+const char *refs_resolve_ref_unsafe(struct ref_store *refs,
+				    const char *refname,
+				    int resolve_flags,
+				    unsigned char *sha1, int *flags)
 {
 	static struct strbuf sb_refname = STRBUF_INIT;
 	int unused_flags;
@@ -1264,8 +1389,8 @@ static const char *resolve_ref_recursively(struct ref_store *refs,
 	for (symref_count = 0; symref_count < SYMREF_MAXDEPTH; symref_count++) {
 		unsigned int read_flags = 0;
 
-		if (refs->be->read_raw_ref(refs, refname,
-					   sha1, &sb_refname, &read_flags)) {
+		if (refs_read_raw_ref(refs, refname,
+				      sha1, &sb_refname, &read_flags)) {
 			*flags |= read_flags;
 			if (errno != ENOENT || (resolve_flags & RESOLVE_REF_READING))
 				return NULL;
@@ -1308,7 +1433,7 @@ static const char *resolve_ref_recursively(struct ref_store *refs,
 /* backend functions */
 int refs_init_db(struct strbuf *err)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	struct ref_store *refs = get_main_ref_store();
 
 	return refs->be->init_db(refs, err);
 }
@@ -1316,7 +1441,7 @@ int refs_init_db(struct strbuf *err)
 const char *resolve_ref_unsafe(const char *refname, int resolve_flags,
 			       unsigned char *sha1, int *flags)
 {
-	return resolve_ref_recursively(get_ref_store(NULL), refname,
+	return refs_resolve_ref_unsafe(get_main_ref_store(), refname,
 				       resolve_flags, sha1, flags);
 }
 
@@ -1337,155 +1462,306 @@ int resolve_gitlink_ref(const char *submodule, const char *refname,
 		/* We need to strip off one or more trailing slashes */
 		char *stripped = xmemdupz(submodule, len);
 
-		refs = get_ref_store(stripped);
+		refs = get_submodule_ref_store(stripped);
 		free(stripped);
 	} else {
-		refs = get_ref_store(submodule);
+		refs = get_submodule_ref_store(submodule);
 	}
 
 	if (!refs)
 		return -1;
 
-	if (!resolve_ref_recursively(refs, refname, 0, sha1, &flags) ||
+	if (!refs_resolve_ref_unsafe(refs, refname, 0, sha1, &flags) ||
 	    is_null_sha1(sha1))
 		return -1;
 	return 0;
 }
 
+struct submodule_hash_entry
+{
+	struct hashmap_entry ent; /* must be the first member! */
+
+	struct ref_store *refs;
+
+	/* NUL-terminated name of submodule: */
+	char submodule[FLEX_ARRAY];
+};
+
+static int submodule_hash_cmp(const void *entry, const void *entry_or_key,
+			      const void *keydata)
+{
+	const struct submodule_hash_entry *e1 = entry, *e2 = entry_or_key;
+	const char *submodule = keydata ? keydata : e2->submodule;
+
+	return strcmp(e1->submodule, submodule);
+}
+
+static struct submodule_hash_entry *alloc_submodule_hash_entry(
+		const char *submodule, struct ref_store *refs)
+{
+	struct submodule_hash_entry *entry;
+
+	FLEX_ALLOC_STR(entry, submodule, submodule);
+	hashmap_entry_init(entry, strhash(submodule));
+	entry->refs = refs;
+	return entry;
+}
+
 /* A pointer to the ref_store for the main repository: */
 static struct ref_store *main_ref_store;
 
-/* A linked list of ref_stores for submodules: */
-static struct ref_store *submodule_ref_stores;
+/* A hashmap of ref_stores, stored by submodule name: */
+static struct hashmap submodule_ref_stores;
 
-void base_ref_store_init(struct ref_store *refs,
-			 const struct ref_storage_be *be,
-			 const char *submodule)
+/*
+ * Return the ref_store instance for the specified submodule. If that
+ * ref_store hasn't been initialized yet, return NULL.
+ */
+static struct ref_store *lookup_submodule_ref_store(const char *submodule)
 {
-	refs->be = be;
-	if (!submodule) {
-		if (main_ref_store)
-			die("BUG: main_ref_store initialized twice");
+	struct submodule_hash_entry *entry;
 
-		refs->submodule = "";
-		refs->next = NULL;
-		main_ref_store = refs;
-	} else {
-		if (lookup_ref_store(submodule))
-			die("BUG: ref_store for submodule '%s' initialized twice",
-			    submodule);
+	if (!submodule_ref_stores.tablesize)
+		/* It's initialized on demand in register_ref_store(). */
+		return NULL;
 
-		refs->submodule = xstrdup(submodule);
-		refs->next = submodule_ref_stores;
-		submodule_ref_stores = refs;
-	}
+	entry = hashmap_get_from_hash(&submodule_ref_stores,
+				      strhash(submodule), submodule);
+	return entry ? entry->refs : NULL;
 }
 
-struct ref_store *ref_store_init(const char *submodule)
+/*
+ * Create, record, and return a ref_store instance for the specified
+ * gitdir.
+ */
+static struct ref_store *ref_store_init(const char *gitdir,
+					unsigned int flags)
 {
 	const char *be_name = "files";
 	struct ref_storage_be *be = find_ref_storage_backend(be_name);
+	struct ref_store *refs;
 
 	if (!be)
 		die("BUG: reference backend %s is unknown", be_name);
 
-	if (!submodule || !*submodule)
-		return be->init(NULL);
-	else
-		return be->init(submodule);
-}
-
-struct ref_store *lookup_ref_store(const char *submodule)
-{
-	struct ref_store *refs;
-
-	if (!submodule || !*submodule)
-		return main_ref_store;
-
-	for (refs = submodule_ref_stores; refs; refs = refs->next) {
-		if (!strcmp(submodule, refs->submodule))
-			return refs;
-	}
-
-	return NULL;
-}
-
-struct ref_store *get_ref_store(const char *submodule)
-{
-	struct ref_store *refs;
-
-	if (!submodule || !*submodule) {
-		refs = lookup_ref_store(NULL);
-
-		if (!refs)
-			refs = ref_store_init(NULL);
-	} else {
-		refs = lookup_ref_store(submodule);
-
-		if (!refs) {
-			struct strbuf submodule_sb = STRBUF_INIT;
-
-			strbuf_addstr(&submodule_sb, submodule);
-			if (is_nonbare_repository_dir(&submodule_sb))
-				refs = ref_store_init(submodule);
-			strbuf_release(&submodule_sb);
-		}
-	}
-
+	refs = be->init(gitdir, flags);
 	return refs;
 }
 
-void assert_main_repository(struct ref_store *refs, const char *caller)
+struct ref_store *get_main_ref_store(void)
 {
-	if (*refs->submodule)
-		die("BUG: %s called for a submodule", caller);
+	if (main_ref_store)
+		return main_ref_store;
+
+	main_ref_store = ref_store_init(get_git_dir(),
+					(REF_STORE_READ |
+					 REF_STORE_WRITE |
+					 REF_STORE_ODB |
+					 REF_STORE_MAIN));
+	return main_ref_store;
+}
+
+/*
+ * Register the specified ref_store to be the one that should be used
+ * for submodule. It is a fatal error to call this function twice for
+ * the same submodule.
+ */
+static void register_submodule_ref_store(struct ref_store *refs,
+					 const char *submodule)
+{
+	if (!submodule_ref_stores.tablesize)
+		hashmap_init(&submodule_ref_stores, submodule_hash_cmp, 0);
+
+	if (hashmap_put(&submodule_ref_stores,
+			alloc_submodule_hash_entry(submodule, refs)))
+		die("BUG: ref_store for submodule '%s' initialized twice",
+		    submodule);
+}
+
+struct ref_store *get_submodule_ref_store(const char *submodule)
+{
+	struct strbuf submodule_sb = STRBUF_INIT;
+	struct ref_store *refs;
+	int ret;
+
+	if (!submodule || !*submodule) {
+		/*
+		 * FIXME: This case is ideally not allowed. But that
+		 * can't happen until we clean up all the callers.
+		 */
+		return get_main_ref_store();
+	}
+
+	refs = lookup_submodule_ref_store(submodule);
+	if (refs)
+		return refs;
+
+	strbuf_addstr(&submodule_sb, submodule);
+	ret = is_nonbare_repository_dir(&submodule_sb);
+	strbuf_release(&submodule_sb);
+	if (!ret)
+		return NULL;
+
+	ret = submodule_to_gitdir(&submodule_sb, submodule);
+	if (ret) {
+		strbuf_release(&submodule_sb);
+		return NULL;
+	}
+
+	/* assume that add_submodule_odb() has been called */
+	refs = ref_store_init(submodule_sb.buf,
+			      REF_STORE_READ | REF_STORE_ODB);
+	register_submodule_ref_store(refs, submodule);
+
+	strbuf_release(&submodule_sb);
+	return refs;
+}
+
+void base_ref_store_init(struct ref_store *refs,
+			 const struct ref_storage_be *be)
+{
+	refs->be = be;
 }
 
 /* backend functions */
-int pack_refs(unsigned int flags)
+int refs_pack_refs(struct ref_store *refs, unsigned int flags)
 {
-	struct ref_store *refs = get_ref_store(NULL);
-
 	return refs->be->pack_refs(refs, flags);
+}
+
+int refs_peel_ref(struct ref_store *refs, const char *refname,
+		  unsigned char *sha1)
+{
+	return refs->be->peel_ref(refs, refname, sha1);
 }
 
 int peel_ref(const char *refname, unsigned char *sha1)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_peel_ref(get_main_ref_store(), refname, sha1);
+}
 
-	return refs->be->peel_ref(refs, refname, sha1);
+int refs_create_symref(struct ref_store *refs,
+		       const char *ref_target,
+		       const char *refs_heads_master,
+		       const char *logmsg)
+{
+	return refs->be->create_symref(refs, ref_target,
+				       refs_heads_master,
+				       logmsg);
 }
 
 int create_symref(const char *ref_target, const char *refs_heads_master,
 		  const char *logmsg)
 {
-	struct ref_store *refs = get_ref_store(NULL);
-
-	return refs->be->create_symref(refs, ref_target, refs_heads_master,
-				       logmsg);
+	return refs_create_symref(get_main_ref_store(), ref_target,
+				  refs_heads_master, logmsg);
 }
 
 int ref_transaction_commit(struct ref_transaction *transaction,
 			   struct strbuf *err)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	struct ref_store *refs = transaction->ref_store;
+
+	if (getenv(GIT_QUARANTINE_ENVIRONMENT)) {
+		strbuf_addstr(err,
+			      _("ref updates forbidden inside quarantine environment"));
+		return -1;
+	}
 
 	return refs->be->transaction_commit(refs, transaction, err);
 }
 
-int verify_refname_available(const char *refname,
-			     const struct string_list *extra,
-			     const struct string_list *skip,
-			     struct strbuf *err)
+int refs_verify_refname_available(struct ref_store *refs,
+				  const char *refname,
+				  const struct string_list *extras,
+				  const struct string_list *skip,
+				  struct strbuf *err)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	const char *slash;
+	const char *extra_refname;
+	struct strbuf dirname = STRBUF_INIT;
+	struct strbuf referent = STRBUF_INIT;
+	struct object_id oid;
+	unsigned int type;
+	struct ref_iterator *iter;
+	int ok;
+	int ret = -1;
 
-	return refs->be->verify_refname_available(refs, refname, extra, skip, err);
+	/*
+	 * For the sake of comments in this function, suppose that
+	 * refname is "refs/foo/bar".
+	 */
+
+	assert(err);
+
+	strbuf_grow(&dirname, strlen(refname) + 1);
+	for (slash = strchr(refname, '/'); slash; slash = strchr(slash + 1, '/')) {
+		/* Expand dirname to the new prefix, not including the trailing slash: */
+		strbuf_add(&dirname, refname + dirname.len, slash - refname - dirname.len);
+
+		/*
+		 * We are still at a leading dir of the refname (e.g.,
+		 * "refs/foo"; if there is a reference with that name,
+		 * it is a conflict, *unless* it is in skip.
+		 */
+		if (skip && string_list_has_string(skip, dirname.buf))
+			continue;
+
+		if (!refs_read_raw_ref(refs, dirname.buf, oid.hash, &referent, &type)) {
+			strbuf_addf(err, "'%s' exists; cannot create '%s'",
+				    dirname.buf, refname);
+			goto cleanup;
+		}
+
+		if (extras && string_list_has_string(extras, dirname.buf)) {
+			strbuf_addf(err, "cannot process '%s' and '%s' at the same time",
+				    refname, dirname.buf);
+			goto cleanup;
+		}
+	}
+
+	/*
+	 * We are at the leaf of our refname (e.g., "refs/foo/bar").
+	 * There is no point in searching for a reference with that
+	 * name, because a refname isn't considered to conflict with
+	 * itself. But we still need to check for references whose
+	 * names are in the "refs/foo/bar/" namespace, because they
+	 * *do* conflict.
+	 */
+	strbuf_addstr(&dirname, refname + dirname.len);
+	strbuf_addch(&dirname, '/');
+
+	iter = refs_ref_iterator_begin(refs, dirname.buf, 0,
+				       DO_FOR_EACH_INCLUDE_BROKEN);
+	while ((ok = ref_iterator_advance(iter)) == ITER_OK) {
+		if (skip &&
+		    string_list_has_string(skip, iter->refname))
+			continue;
+
+		strbuf_addf(err, "'%s' exists; cannot create '%s'",
+			    iter->refname, refname);
+		ref_iterator_abort(iter);
+		goto cleanup;
+	}
+
+	if (ok != ITER_DONE)
+		die("BUG: error while iterating over references");
+
+	extra_refname = find_descendant_ref(dirname.buf, extras, skip);
+	if (extra_refname)
+		strbuf_addf(err, "cannot process '%s' and '%s' at the same time",
+			    refname, extra_refname);
+	else
+		ret = 0;
+
+cleanup:
+	strbuf_release(&referent);
+	strbuf_release(&dirname);
+	return ret;
 }
 
-int for_each_reflog(each_ref_fn fn, void *cb_data)
+int refs_for_each_reflog(struct ref_store *refs, each_ref_fn fn, void *cb_data)
 {
-	struct ref_store *refs = get_ref_store(NULL);
 	struct ref_iterator *iter;
 
 	iter = refs->be->reflog_iterator_begin(refs);
@@ -1493,43 +1769,84 @@ int for_each_reflog(each_ref_fn fn, void *cb_data)
 	return do_for_each_ref_iterator(iter, fn, cb_data);
 }
 
+int for_each_reflog(each_ref_fn fn, void *cb_data)
+{
+	return refs_for_each_reflog(get_main_ref_store(), fn, cb_data);
+}
+
+int refs_for_each_reflog_ent_reverse(struct ref_store *refs,
+				     const char *refname,
+				     each_reflog_ent_fn fn,
+				     void *cb_data)
+{
+	return refs->be->for_each_reflog_ent_reverse(refs, refname,
+						     fn, cb_data);
+}
+
 int for_each_reflog_ent_reverse(const char *refname, each_reflog_ent_fn fn,
 				void *cb_data)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_for_each_reflog_ent_reverse(get_main_ref_store(),
+						refname, fn, cb_data);
+}
 
-	return refs->be->for_each_reflog_ent_reverse(refs, refname,
-						     fn, cb_data);
+int refs_for_each_reflog_ent(struct ref_store *refs, const char *refname,
+			     each_reflog_ent_fn fn, void *cb_data)
+{
+	return refs->be->for_each_reflog_ent(refs, refname, fn, cb_data);
 }
 
 int for_each_reflog_ent(const char *refname, each_reflog_ent_fn fn,
 			void *cb_data)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_for_each_reflog_ent(get_main_ref_store(), refname,
+					fn, cb_data);
+}
 
-	return refs->be->for_each_reflog_ent(refs, refname, fn, cb_data);
+int refs_reflog_exists(struct ref_store *refs, const char *refname)
+{
+	return refs->be->reflog_exists(refs, refname);
 }
 
 int reflog_exists(const char *refname)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_reflog_exists(get_main_ref_store(), refname);
+}
 
-	return refs->be->reflog_exists(refs, refname);
+int refs_create_reflog(struct ref_store *refs, const char *refname,
+		       int force_create, struct strbuf *err)
+{
+	return refs->be->create_reflog(refs, refname, force_create, err);
 }
 
 int safe_create_reflog(const char *refname, int force_create,
 		       struct strbuf *err)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_create_reflog(get_main_ref_store(), refname,
+				  force_create, err);
+}
 
-	return refs->be->create_reflog(refs, refname, force_create, err);
+int refs_delete_reflog(struct ref_store *refs, const char *refname)
+{
+	return refs->be->delete_reflog(refs, refname);
 }
 
 int delete_reflog(const char *refname)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_delete_reflog(get_main_ref_store(), refname);
+}
 
-	return refs->be->delete_reflog(refs, refname);
+int refs_reflog_expire(struct ref_store *refs,
+		       const char *refname, const unsigned char *sha1,
+		       unsigned int flags,
+		       reflog_expiry_prepare_fn prepare_fn,
+		       reflog_expiry_should_prune_fn should_prune_fn,
+		       reflog_expiry_cleanup_fn cleanup_fn,
+		       void *policy_cb_data)
+{
+	return refs->be->reflog_expire(refs, refname, sha1, flags,
+				       prepare_fn, should_prune_fn,
+				       cleanup_fn, policy_cb_data);
 }
 
 int reflog_expire(const char *refname, const unsigned char *sha1,
@@ -1539,31 +1856,38 @@ int reflog_expire(const char *refname, const unsigned char *sha1,
 		  reflog_expiry_cleanup_fn cleanup_fn,
 		  void *policy_cb_data)
 {
-	struct ref_store *refs = get_ref_store(NULL);
-
-	return refs->be->reflog_expire(refs, refname, sha1, flags,
-				       prepare_fn, should_prune_fn,
-				       cleanup_fn, policy_cb_data);
+	return refs_reflog_expire(get_main_ref_store(),
+				  refname, sha1, flags,
+				  prepare_fn, should_prune_fn,
+				  cleanup_fn, policy_cb_data);
 }
 
 int initial_ref_transaction_commit(struct ref_transaction *transaction,
 				   struct strbuf *err)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	struct ref_store *refs = transaction->ref_store;
 
 	return refs->be->initial_transaction_commit(refs, transaction, err);
 }
 
+int refs_delete_refs(struct ref_store *refs, struct string_list *refnames,
+		     unsigned int flags)
+{
+	return refs->be->delete_refs(refs, refnames, flags);
+}
+
 int delete_refs(struct string_list *refnames, unsigned int flags)
 {
-	struct ref_store *refs = get_ref_store(NULL);
+	return refs_delete_refs(get_main_ref_store(), refnames, flags);
+}
 
-	return refs->be->delete_refs(refs, refnames, flags);
+int refs_rename_ref(struct ref_store *refs, const char *oldref,
+		    const char *newref, const char *logmsg)
+{
+	return refs->be->rename_ref(refs, oldref, newref, logmsg);
 }
 
 int rename_ref(const char *oldref, const char *newref, const char *logmsg)
 {
-	struct ref_store *refs = get_ref_store(NULL);
-
-	return refs->be->rename_ref(refs, oldref, newref, logmsg);
+	return refs_rename_ref(get_main_ref_store(), oldref, newref, logmsg);
 }

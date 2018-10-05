@@ -21,11 +21,30 @@
 #include "submodule-config.h"
 #include "submodule.h"
 
+static int recurse_submodules = RECURSE_SUBMODULES_DEFAULT;
+
 static const char * const checkout_usage[] = {
 	N_("git checkout [<options>] <branch>"),
 	N_("git checkout [<options>] [<branch>] -- <file>..."),
 	NULL,
 };
+
+static int option_parse_recurse_submodules(const struct option *opt,
+					   const char *arg, int unset)
+{
+	if (unset) {
+		recurse_submodules = RECURSE_SUBMODULES_OFF;
+		return 0;
+	}
+	if (arg)
+		recurse_submodules =
+			parse_update_recurse_submodules_arg(opt->long_name,
+							    arg);
+	else
+		recurse_submodules = RECURSE_SUBMODULES_ON;
+
+	return 0;
+}
 
 struct checkout_opts {
 	int patch_mode;
@@ -56,8 +75,8 @@ static int post_checkout_hook(struct commit *old, struct commit *new,
 			      int changed)
 {
 	return run_hook_le(NULL, "post-checkout",
-			   sha1_to_hex(old ? old->object.oid.hash : null_sha1),
-			   sha1_to_hex(new ? new->object.oid.hash : null_sha1),
+			   oid_to_hex(old ? &old->object.oid : &null_oid),
+			   oid_to_hex(new ? &new->object.oid : &null_oid),
 			   changed ? "1" : "0", NULL);
 	/* "new" can be NULL when checking out from the index before
 	   a commit exists. */
@@ -216,22 +235,24 @@ static int checkout_merged(int pos, const struct checkout *state)
 	/*
 	 * NEEDSWORK:
 	 * There is absolutely no reason to write this as a blob object
-	 * and create a phony cache entry just to leak.  This hack is
-	 * primarily to get to the write_entry() machinery that massages
-	 * the contents to work-tree format and writes out which only
-	 * allows it for a cache entry.  The code in write_entry() needs
-	 * to be refactored to allow us to feed a <buffer, size, mode>
-	 * instead of a cache entry.  Such a refactoring would help
-	 * merge_recursive as well (it also writes the merge result to the
-	 * object database even when it may contain conflicts).
+	 * and create a phony cache entry.  This hack is primarily to get
+	 * to the write_entry() machinery that massages the contents to
+	 * work-tree format and writes out which only allows it for a
+	 * cache entry.  The code in write_entry() needs to be refactored
+	 * to allow us to feed a <buffer, size, mode> instead of a cache
+	 * entry.  Such a refactoring would help merge_recursive as well
+	 * (it also writes the merge result to the object database even
+	 * when it may contain conflicts).
 	 */
 	if (write_sha1_file(result_buf.ptr, result_buf.size,
 			    blob_type, oid.hash))
 		die(_("Unable to add merge result for '%s'"), path);
+	free(result_buf.ptr);
 	ce = make_cache_entry(mode, oid.hash, path, 2, 0);
 	if (!ce)
 		die(_("make_cache_entry failed for path '%s'"), path);
 	status = checkout_entry(ce, state, NULL);
+	free(ce);
 	return status;
 }
 
@@ -274,7 +295,7 @@ static int checkout_paths(const struct checkout_opts *opts,
 
 	lock_file = xcalloc(1, sizeof(struct lock_file));
 
-	hold_locked_index(lock_file, 1);
+	hold_locked_index(lock_file, LOCK_DIE_ON_ERROR);
 	if (read_cache_preload(&opts->pathspec) < 0)
 		return error(_("index file corrupt"));
 
@@ -452,7 +473,7 @@ static void setup_branch_path(struct branch_info *branch)
 {
 	struct strbuf buf = STRBUF_INIT;
 
-	strbuf_branchname(&buf, branch->name);
+	strbuf_branchname(&buf, branch->name, INTERPRET_BRANCH_LOCAL);
 	if (strcmp(buf.buf, branch->name))
 		branch->name = xstrdup(buf.buf);
 	strbuf_splice(&buf, 0, 0, "refs/heads/", 11);
@@ -467,7 +488,7 @@ static int merge_working_tree(const struct checkout_opts *opts,
 	int ret;
 	struct lock_file *lock_file = xcalloc(1, sizeof(struct lock_file));
 
-	hold_locked_index(lock_file, 1);
+	hold_locked_index(lock_file, LOCK_DIE_ON_ERROR);
 	if (read_cache_preload(NULL) < 0)
 		return error(_("index file corrupt"));
 
@@ -612,22 +633,25 @@ static void update_refs_for_switch(const struct checkout_opts *opts,
 	const char *old_desc, *reflog_msg;
 	if (opts->new_branch) {
 		if (opts->new_orphan_branch) {
-			if (opts->new_branch_log && !log_all_ref_updates) {
+			char *refname;
+
+			refname = mkpathdup("refs/heads/%s", opts->new_orphan_branch);
+			if (opts->new_branch_log &&
+			    !should_autocreate_reflog(refname)) {
 				int ret;
-				char *refname;
 				struct strbuf err = STRBUF_INIT;
 
-				refname = mkpathdup("refs/heads/%s", opts->new_orphan_branch);
 				ret = safe_create_reflog(refname, 1, &err);
-				free(refname);
 				if (ret) {
 					fprintf(stderr, _("Can not do reflog for '%s': %s\n"),
 						opts->new_orphan_branch, err.buf);
 					strbuf_release(&err);
+					free(refname);
 					return;
 				}
 				strbuf_release(&err);
 			}
+			free(refname);
 		}
 		else
 			create_branch(opts->new_branch, new->name,
@@ -811,7 +835,8 @@ static int switch_branches(const struct checkout_opts *opts,
 	int flag, writeout_error = 0;
 	memset(&old, 0, sizeof(old));
 	old.path = path_to_free = resolve_refdup("HEAD", 0, rev.hash, &flag);
-	old.commit = lookup_commit_reference_gently(rev.hash, 1);
+	if (old.path)
+		old.commit = lookup_commit_reference_gently(rev.hash, 1);
 	if (!(flag & REF_ISSYMREF))
 		old.path = NULL;
 
@@ -886,11 +911,10 @@ static int check_tracking_name(struct remote *remote, void *cb_data)
 static const char *unique_tracking_name(const char *name, struct object_id *oid)
 {
 	struct tracking_name_data cb_data = { NULL, NULL, NULL, 1 };
-	char src_ref[PATH_MAX];
-	snprintf(src_ref, PATH_MAX, "refs/heads/%s", name);
-	cb_data.src_ref = src_ref;
+	cb_data.src_ref = xstrfmt("refs/heads/%s", name);
 	cb_data.dst_oid = oid;
 	for_each_remote(check_tracking_name, &cb_data);
+	free(cb_data.src_ref);
 	if (cb_data.unique)
 		return cb_data.dst_ref;
 	free(cb_data.dst_ref);
@@ -1160,6 +1184,9 @@ int cmd_checkout(int argc, const char **argv, const char *prefix)
 				N_("second guess 'git checkout <no-such-branch>'")),
 		OPT_BOOL(0, "ignore-other-worktrees", &opts.ignore_other_worktrees,
 			 N_("do not check if another worktree is holding the given ref")),
+		{ OPTION_CALLBACK, 0, "recurse-submodules", &recurse_submodules,
+			    "checkout", "control recursive updating of submodules",
+			    PARSE_OPT_OPTARG, option_parse_recurse_submodules },
 		OPT_BOOL(0, "progress", &opts.show_progress, N_("force progress reporting")),
 		OPT_END(),
 	};
@@ -1188,6 +1215,12 @@ int cmd_checkout(int argc, const char **argv, const char *prefix)
 	if (conflict_style) {
 		opts.merge = 1; /* implied */
 		git_xmerge_config("merge.conflictstyle", conflict_style, NULL);
+	}
+
+	if (recurse_submodules != RECURSE_SUBMODULES_OFF) {
+		git_config(submodule_config, NULL);
+		if (recurse_submodules != RECURSE_SUBMODULES_DEFAULT)
+			set_config_update_recurse_submodules(recurse_submodules);
 	}
 
 	if ((!!opts.new_branch + !!opts.new_branch_force + !!opts.new_orphan_branch) > 1)
@@ -1256,9 +1289,8 @@ int cmd_checkout(int argc, const char **argv, const char *prefix)
 		 * new_branch && argc > 1 will be caught later.
 		 */
 		if (opts.new_branch && argc == 1)
-			die(_("Cannot update paths and switch to branch '%s' at the same time.\n"
-			      "Did you intend to checkout '%s' which can not be resolved as commit?"),
-			    opts.new_branch, argv[0]);
+			die(_("'%s' is not a commit and a branch '%s' cannot be created from it"),
+				argv[0], opts.new_branch);
 
 		if (opts.force_detach)
 			die(_("git checkout: --detach does not take a path argument '%s'"),

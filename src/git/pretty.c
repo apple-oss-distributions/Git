@@ -10,6 +10,7 @@
 #include "color.h"
 #include "reflog-walk.h"
 #include "gpg-interface.h"
+#include "trailer.h"
 
 static char *user_format;
 static struct cmt_fmt_map {
@@ -782,28 +783,8 @@ struct format_commit_context {
 	size_t body_off;
 
 	/* The following ones are relative to the result struct strbuf. */
-	struct chunk abbrev_commit_hash;
-	struct chunk abbrev_tree_hash;
-	struct chunk abbrev_parent_hashes;
 	size_t wrap_start;
 };
-
-static int add_again(struct strbuf *sb, struct chunk *chunk)
-{
-	if (chunk->len) {
-		strbuf_adddup(sb, chunk->off, chunk->len);
-		return 1;
-	}
-
-	/*
-	 * We haven't seen this chunk before.  Our caller is surely
-	 * going to add it the hard way now.  Remember the most likely
-	 * start of the to-be-added chunk: the current end of the
-	 * struct strbuf.
-	 */
-	chunk->off = sb->len;
-	return 0;
-}
 
 static void parse_commit_header(struct format_commit_context *context)
 {
@@ -887,6 +868,16 @@ const char *format_subject(struct strbuf *sb, const char *msg,
 		first = 0;
 	}
 	return msg;
+}
+
+static void format_trailers(struct strbuf *sb, const char *msg)
+{
+	struct trailer_info info;
+
+	trailer_info_get(&info, msg);
+	strbuf_add(sb, info.trailer_start,
+		   info.trailer_end - info.trailer_start);
+	trailer_info_release(&info);
 }
 
 static void parse_commit_message(struct format_commit_context *c)
@@ -1136,24 +1127,16 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 		return 1;
 	case 'h':		/* abbreviated commit hash */
 		strbuf_addstr(sb, diff_get_color(c->auto_color, DIFF_COMMIT));
-		if (add_again(sb, &c->abbrev_commit_hash)) {
-			strbuf_addstr(sb, diff_get_color(c->auto_color, DIFF_RESET));
-			return 1;
-		}
 		strbuf_add_unique_abbrev(sb, commit->object.oid.hash,
 					 c->pretty_ctx->abbrev);
 		strbuf_addstr(sb, diff_get_color(c->auto_color, DIFF_RESET));
-		c->abbrev_commit_hash.len = sb->len - c->abbrev_commit_hash.off;
 		return 1;
 	case 'T':		/* tree hash */
 		strbuf_addstr(sb, oid_to_hex(&commit->tree->object.oid));
 		return 1;
 	case 't':		/* abbreviated tree hash */
-		if (add_again(sb, &c->abbrev_tree_hash))
-			return 1;
 		strbuf_add_unique_abbrev(sb, commit->tree->object.oid.hash,
 					 c->pretty_ctx->abbrev);
-		c->abbrev_tree_hash.len = sb->len - c->abbrev_tree_hash.off;
 		return 1;
 	case 'P':		/* parent hashes */
 		for (p = commit->parents; p; p = p->next) {
@@ -1163,16 +1146,12 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 		}
 		return 1;
 	case 'p':		/* abbreviated parent hashes */
-		if (add_again(sb, &c->abbrev_parent_hashes))
-			return 1;
 		for (p = commit->parents; p; p = p->next) {
 			if (p != commit->parents)
 				strbuf_addch(sb, ' ');
 			strbuf_add_unique_abbrev(sb, p->item->object.oid.hash,
 						 c->pretty_ctx->abbrev);
 		}
-		c->abbrev_parent_hashes.len = sb->len -
-		                              c->abbrev_parent_hashes.off;
 		return 1;
 	case 'm':		/* left/right/bottom */
 		strbuf_addstr(sb, get_revision_mark(NULL, commit));
@@ -1292,6 +1271,12 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 		strbuf_addstr(sb, msg + c->body_off);
 		return 1;
 	}
+
+	if (starts_with(placeholder, "(trailers)")) {
+		format_trailers(sb, msg + c->subject_off);
+		return strlen("(trailers)");
+	}
+
 	return 0;	/* unknown placeholder */
 }
 
@@ -1590,8 +1575,9 @@ void pp_title_line(struct pretty_print_context *pp,
 				pp->preserve_subject ? "\n" : " ");
 
 	strbuf_grow(sb, title.len + 1024);
-	if (pp->subject) {
-		strbuf_addstr(sb, pp->subject);
+	if (pp->print_email_subject) {
+		if (pp->rev)
+			fmt_output_email_subject(sb, pp->rev);
 		if (needs_rfc2047_encoding(title.buf, title.len, RFC2047_SUBJECT))
 			add_rfc2047(sb, title.buf, title.len,
 						encoding, RFC2047_SUBJECT);
@@ -1801,7 +1787,7 @@ void pretty_print_commit(struct pretty_print_context *pp,
 	}
 
 	pp_header(pp, encoding, commit, &msg, sb);
-	if (pp->fmt != CMIT_FMT_ONELINE && !pp->subject) {
+	if (pp->fmt != CMIT_FMT_ONELINE && !pp->print_email_subject) {
 		strbuf_addch(sb, '\n');
 	}
 

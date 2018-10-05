@@ -80,7 +80,7 @@ struct wt_status {
 	int hints;
 
 	enum wt_status_format status_format;
-	unsigned char sha1_commit[GIT_SHA1_RAWSZ]; /* when not Initial */
+	unsigned char sha1_commit[GIT_MAX_RAWSZ]; /* when not Initial */
 
 	/* These are computed during processing of the individual sections */
 	int commitable;
@@ -112,7 +112,7 @@ struct wt_status_state {
 	unsigned char cherry_pick_head_sha1[20];
 };
 
-void wt_status_truncate_message_at_cut_line(struct strbuf *);
+size_t wt_status_locate_end(const char *s, size_t len);
 void wt_status_add_cut_line(FILE *fp);
 void wt_status_prepare(struct wt_status *s);
 void wt_status_print(struct wt_status *s);

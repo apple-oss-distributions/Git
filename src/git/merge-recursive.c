@@ -235,6 +235,8 @@ static int add_cacheinfo(struct merge_options *o,
 		struct cache_entry *nce;
 
 		nce = refresh_cache_entry(ce, CE_MATCH_REFRESH | CE_MATCH_IGNORE_MISSING);
+		if (!nce)
+			return err(o, _("addinfo_cache failed for path '%s'"), path);
 		if (nce != ce)
 			ret = add_cache_entry(nce, options);
 	}
@@ -388,12 +390,10 @@ static struct string_list *get_unmerged(void)
 	return unmerged;
 }
 
-static int string_list_df_name_compare(const void *a, const void *b)
+static int string_list_df_name_compare(const char *one, const char *two)
 {
-	const struct string_list_item *one = a;
-	const struct string_list_item *two = b;
-	int onelen = strlen(one->string);
-	int twolen = strlen(two->string);
+	int onelen = strlen(one);
+	int twolen = strlen(two);
 	/*
 	 * Here we only care that entries for D/F conflicts are
 	 * adjacent, in particular with the file of the D/F conflict
@@ -406,8 +406,8 @@ static int string_list_df_name_compare(const void *a, const void *b)
 	 * since in other cases any changes in their order due to
 	 * sorting cause no problems for us.
 	 */
-	int cmp = df_name_compare(one->string, onelen, S_IFDIR,
-				  two->string, twolen, S_IFDIR);
+	int cmp = df_name_compare(one, onelen, S_IFDIR,
+				  two, twolen, S_IFDIR);
 	/*
 	 * Now that 'foo' and 'foo/bar' compare equal, we have to make sure
 	 * that 'foo' comes before 'foo/bar'.
@@ -451,8 +451,8 @@ static void record_df_conflict_files(struct merge_options *o,
 		string_list_append(&df_sorted_entries, next->string)->util =
 				   next->util;
 	}
-	qsort(df_sorted_entries.items, entries->nr, sizeof(*entries->items),
-	      string_list_df_name_compare);
+	df_sorted_entries.cmp = string_list_df_name_compare;
+	string_list_sort(&df_sorted_entries);
 
 	string_list_clear(&o->df_conflict_file_set, 1);
 	for (i = 0; i < df_sorted_entries.nr; i++) {
@@ -664,7 +664,13 @@ static char *unique_path(struct merge_options *o, const char *path, const char *
 	return strbuf_detach(&newpath, NULL);
 }
 
-static int dir_in_way(const char *path, int check_working_copy)
+/**
+ * Check whether a directory in the index is in the way of an incoming
+ * file.  Return 1 if so.  If check_working_copy is non-zero, also
+ * check the working directory.  If empty_ok is non-zero, also return
+ * 0 in the case where the working-tree dir exists but is empty.
+ */
+static int dir_in_way(const char *path, int check_working_copy, int empty_ok)
 {
 	int pos;
 	struct strbuf dirpath = STRBUF_INIT;
@@ -684,7 +690,8 @@ static int dir_in_way(const char *path, int check_working_copy)
 	}
 
 	strbuf_release(&dirpath);
-	return check_working_copy && !lstat(path, &st) && S_ISDIR(st.st_mode);
+	return check_working_copy && !lstat(path, &st) && S_ISDIR(st.st_mode) &&
+		!(empty_ok && is_empty_dir(path));
 }
 
 static int was_tracked(const char *path)
@@ -1054,16 +1061,20 @@ static int merge_file_one(struct merge_options *o,
 }
 
 static int handle_change_delete(struct merge_options *o,
-				 const char *path,
+				 const char *path, const char *old_path,
 				 const struct object_id *o_oid, int o_mode,
-				 const struct object_id *a_oid, int a_mode,
-				 const struct object_id *b_oid, int b_mode,
+				 const struct object_id *changed_oid,
+				 int changed_mode,
+				 const char *change_branch,
+				 const char *delete_branch,
 				 const char *change, const char *change_past)
 {
-	char *renamed = NULL;
+	char *alt_path = NULL;
+	const char *update_path = path;
 	int ret = 0;
-	if (dir_in_way(path, !o->call_depth)) {
-		renamed = unique_path(o, path, a_oid ? o->branch1 : o->branch2);
+
+	if (dir_in_way(path, !o->call_depth, 0)) {
+		update_path = alt_path = unique_path(o, path, change_branch);
 	}
 
 	if (o->call_depth) {
@@ -1074,43 +1085,43 @@ static int handle_change_delete(struct merge_options *o,
 		 */
 		ret = remove_file_from_cache(path);
 		if (!ret)
-			ret = update_file(o, 0, o_oid, o_mode,
-					  renamed ? renamed : path);
-	} else if (!a_oid) {
-		if (!renamed) {
-			output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
-			       "and %s in %s. Version %s of %s left in tree."),
-			       change, path, o->branch1, change_past,
-			       o->branch2, o->branch2, path);
-			ret = update_file(o, 0, b_oid, b_mode, path);
-		} else {
-			output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
-			       "and %s in %s. Version %s of %s left in tree at %s."),
-			       change, path, o->branch1, change_past,
-			       o->branch2, o->branch2, path, renamed);
-			ret = update_file(o, 0, b_oid, b_mode, renamed);
-		}
+			ret = update_file(o, 0, o_oid, o_mode, update_path);
 	} else {
-		if (!renamed) {
-			output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
-			       "and %s in %s. Version %s of %s left in tree."),
-			       change, path, o->branch2, change_past,
-			       o->branch1, o->branch1, path);
+		if (!alt_path) {
+			if (!old_path) {
+				output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
+				       "and %s in %s. Version %s of %s left in tree."),
+				       change, path, delete_branch, change_past,
+				       change_branch, change_branch, path);
+			} else {
+				output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
+				       "and %s to %s in %s. Version %s of %s left in tree."),
+				       change, old_path, delete_branch, change_past, path,
+				       change_branch, change_branch, path);
+			}
 		} else {
-			output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
-			       "and %s in %s. Version %s of %s left in tree at %s."),
-			       change, path, o->branch2, change_past,
-			       o->branch1, o->branch1, path, renamed);
-			ret = update_file(o, 0, a_oid, a_mode, renamed);
+			if (!old_path) {
+				output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
+				       "and %s in %s. Version %s of %s left in tree at %s."),
+				       change, path, delete_branch, change_past,
+				       change_branch, change_branch, path, alt_path);
+			} else {
+				output(o, 1, _("CONFLICT (%s/delete): %s deleted in %s "
+				       "and %s to %s in %s. Version %s of %s left in tree at %s."),
+				       change, old_path, delete_branch, change_past, path,
+				       change_branch, change_branch, path, alt_path);
+			}
 		}
 		/*
-		 * No need to call update_file() on path when !renamed, since
-		 * that would needlessly touch path.  We could call
-		 * update_file_flags() with update_cache=0 and update_wd=0,
-		 * but that's a no-op.
+		 * No need to call update_file() on path when change_branch ==
+		 * o->branch1 && !alt_path, since that would needlessly touch
+		 * path.  We could call update_file_flags() with update_cache=0
+		 * and update_wd=0, but that's a no-op.
 		 */
+		if (change_branch != o->branch1 || alt_path)
+			ret = update_file(o, 0, changed_oid, changed_mode, update_path);
 	}
-	free(renamed);
+	free(alt_path);
 
 	return ret;
 }
@@ -1118,28 +1129,17 @@ static int handle_change_delete(struct merge_options *o,
 static int conflict_rename_delete(struct merge_options *o,
 				   struct diff_filepair *pair,
 				   const char *rename_branch,
-				   const char *other_branch)
+				   const char *delete_branch)
 {
 	const struct diff_filespec *orig = pair->one;
 	const struct diff_filespec *dest = pair->two;
-	const struct object_id *a_oid = NULL;
-	const struct object_id *b_oid = NULL;
-	int a_mode = 0;
-	int b_mode = 0;
-
-	if (rename_branch == o->branch1) {
-		a_oid = &dest->oid;
-		a_mode = dest->mode;
-	} else {
-		b_oid = &dest->oid;
-		b_mode = dest->mode;
-	}
 
 	if (handle_change_delete(o,
 				 o->call_depth ? orig->path : dest->path,
+				 o->call_depth ? NULL : orig->path,
 				 &orig->oid, orig->mode,
-				 a_oid, a_mode,
-				 b_oid, b_mode,
+				 &dest->oid, dest->mode,
+				 rename_branch, delete_branch,
 				 _("rename"), _("renamed")))
 		return -1;
 
@@ -1195,7 +1195,7 @@ static int handle_file(struct merge_options *o,
 		remove_file(o, 0, rename->path, 0);
 		dst_name = unique_path(o, rename->path, cur_branch);
 	} else {
-		if (dir_in_way(rename->path, !o->call_depth)) {
+		if (dir_in_way(rename->path, !o->call_depth, 0)) {
 			dst_name = unique_path(o, rename->path, cur_branch);
 			output(o, 1, _("%s is a directory in %s adding as %s instead"),
 			       rename->path, other_branch, dst_name);
@@ -1383,14 +1383,11 @@ static int process_renames(struct merge_options *o,
 			branch1 = o->branch1;
 			branch2 = o->branch2;
 		} else {
-			struct rename *tmp;
 			renames1 = b_renames;
 			renames2Dst = &a_by_dst;
 			branch1 = o->branch2;
 			branch2 = o->branch1;
-			tmp = ren2;
-			ren2 = ren1;
-			ren1 = tmp;
+			SWAP(ren2, ren1);
 		}
 
 		if (ren1->processed)
@@ -1658,11 +1655,27 @@ static int handle_modify_delete(struct merge_options *o,
 				 struct object_id *a_oid, int a_mode,
 				 struct object_id *b_oid, int b_mode)
 {
+	const char *modify_branch, *delete_branch;
+	struct object_id *changed_oid;
+	int changed_mode;
+
+	if (a_oid) {
+		modify_branch = o->branch1;
+		delete_branch = o->branch2;
+		changed_oid = a_oid;
+		changed_mode = a_mode;
+	} else {
+		modify_branch = o->branch2;
+		delete_branch = o->branch1;
+		changed_oid = b_oid;
+		changed_mode = b_mode;
+	}
+
 	return handle_change_delete(o,
-				    path,
+				    path, NULL,
 				    o_oid, o_mode,
-				    a_oid, a_mode,
-				    b_oid, b_mode,
+				    changed_oid, changed_mode,
+				    modify_branch, delete_branch,
 				    _("modify"), _("modified"));
 }
 
@@ -1704,7 +1717,8 @@ static int merge_content(struct merge_options *o,
 			 o->branch2 == rename_conflict_info->branch1) ?
 			pair1->two->path : pair1->one->path;
 
-		if (dir_in_way(path, !o->call_depth))
+		if (dir_in_way(path, !o->call_depth,
+			       S_ISGITLINK(pair1->two->mode)))
 			df_conflict_remains = 1;
 	}
 	if (merge_file_special_markers(o, &one, &a, &b,
@@ -1862,7 +1876,8 @@ static int process_entry(struct merge_options *o,
 			oid = b_oid;
 			conf = _("directory/file");
 		}
-		if (dir_in_way(path, !o->call_depth)) {
+		if (dir_in_way(path, !o->call_depth,
+			       S_ISGITLINK(a_mode))) {
 			char *new_path = unique_path(o, path, add_branch);
 			clean_merge = 0;
 			output(o, 1, _("CONFLICT (%s): There is a directory with name %s in %s. "
@@ -2124,7 +2139,7 @@ int merge_recursive_generic(struct merge_options *o,
 		}
 	}
 
-	hold_locked_index(lock, 1);
+	hold_locked_index(lock, LOCK_DIE_ON_ERROR);
 	clean = merge_recursive(o, head_commit, next_commit, ca,
 			result);
 	if (clean < 0)
@@ -2194,11 +2209,11 @@ int parse_merge_opt(struct merge_options *o, const char *s)
 		o->xdl_opts |= value;
 	}
 	else if (!strcmp(s, "ignore-space-change"))
-		o->xdl_opts |= XDF_IGNORE_WHITESPACE_CHANGE;
+		DIFF_XDL_SET(o, IGNORE_WHITESPACE_CHANGE);
 	else if (!strcmp(s, "ignore-all-space"))
-		o->xdl_opts |= XDF_IGNORE_WHITESPACE;
+		DIFF_XDL_SET(o, IGNORE_WHITESPACE);
 	else if (!strcmp(s, "ignore-space-at-eol"))
-		o->xdl_opts |= XDF_IGNORE_WHITESPACE_AT_EOL;
+		DIFF_XDL_SET(o, IGNORE_WHITESPACE_AT_EOL);
 	else if (!strcmp(s, "renormalize"))
 		o->renormalize = 1;
 	else if (!strcmp(s, "no-renormalize"))

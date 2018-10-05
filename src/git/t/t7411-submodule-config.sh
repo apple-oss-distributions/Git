@@ -93,6 +93,20 @@ test_expect_success 'error message contains blob reference' '
 	)
 '
 
+test_expect_success 'using different treeishs works' '
+	(
+		cd super &&
+		git tag new_tag &&
+		tree=$(git rev-parse HEAD^{tree}) &&
+		commit=$(git rev-parse HEAD^{commit}) &&
+		test-submodule-config $commit b >expect &&
+		test-submodule-config $tree b >actual.1 &&
+		test-submodule-config new_tag b >actual.2 &&
+		test_cmp expect actual.1 &&
+		test_cmp expect actual.2
+	)
+'
+
 cat >super/expect_url <<EOF
 Submodule url: 'git@somewhere.else.net:a.git' for path 'b'
 Submodule url: 'git@somewhere.else.net:submodule.git' for path 'submodule'
@@ -120,9 +134,30 @@ test_expect_success 'reading of local configuration' '
 			"" submodule \
 				>actual &&
 		test_cmp expect_local_path actual &&
-		git config submodule.a.url $old_a &&
-		git config submodule.submodule.url $old_submodule &&
+		git config submodule.a.url "$old_a" &&
+		git config submodule.submodule.url "$old_submodule" &&
 		git config --unset submodule.a.path c
+	)
+'
+
+cat >super/expect_url <<EOF
+Submodule url: '../submodule' for path 'b'
+Submodule url: 'git@somewhere.else.net:submodule.git' for path 'submodule'
+EOF
+
+test_expect_success 'reading of local configuration for uninitialized submodules' '
+	(
+		cd super &&
+		git submodule deinit -f b &&
+		old_submodule=$(git config submodule.submodule.url) &&
+		git config submodule.submodule.url git@somewhere.else.net:submodule.git &&
+		test-submodule-config --url \
+			"" b \
+			"" submodule \
+				>actual &&
+		test_cmp expect_url actual &&
+		git config submodule.submodule.url "$old_submodule" &&
+		git submodule init b
 	)
 '
 

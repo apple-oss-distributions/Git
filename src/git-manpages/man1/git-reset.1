@@ -2,12 +2,12 @@
 .\"     Title: git-reset
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-RESET" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-RESET" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -361,6 +361,51 @@ $ git reset \-\-keep start                    \fB(3)\fR
 \fB2. \fRIn the ideal world, you could have realized that the earlier commit did not belong to the new topic when you created and switched to branch2 (i\&.e\&. "git checkout \-b branch2 start"), but nobody is perfect\&.
 .br
 \fB3. \fRBut you can use "reset \-\-keep" to remove the unwanted commit after you switched to "branch2"\&.
+.br
+.RE
+.PP
+Split a commit apart into a sequence of commits
+.RS 4
+Suppose that you have created lots of logically separate changes and commited them together\&. Then, later you decide that it might be better to have each logical chunk associated with its own commit\&. You can use git reset to rewind history without changing the contents of your local files, and then successively use
+\fBgit add \-p\fR
+to interactively select which hunks to include into each commit, using
+\fBgit commit \-c\fR
+to pre\-populate the commit message\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git reset \-N HEAD^                        \fB(1)\fR
+$ git add \-p                                \fB(2)\fR
+$ git diff \-\-cached                         \fB(3)\fR
+$ git commit \-c HEAD@{1}                    \fB(4)\fR
+\&.\&.\&.                                         \fB(5)\fR
+$ git add \&.\&.\&.                               \fB(6)\fR
+$ git diff \-\-cached                         \fB(7)\fR
+$ git commit \&.\&.\&.                            \fB(8)\fR
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+\fB1. \fRFirst, reset the history back one commit so that we remove the original commit, but leave the working tree with all the changes\&. The \-N ensures that any new files added with HEAD are still marked so that git add \-p will find them\&.
+.br
+\fB2. \fRNext, we interactively select diff hunks to add using the git add \-p facility\&. This will ask you about each diff hunk in sequence and you can use simple commands such as "yes, include this", "No don\(cqt include this" or even the very powerful "edit" facility\&.
+.br
+\fB3. \fROnce satisfied with the hunks you want to include, you should verify what has been prepared for the first commit by using git diff \-\-cached\&. This shows all the changes that have been moved into the index and are about to be committed\&.
+.br
+\fB4. \fRNext, commit the changes stored in the index\&. The \-c option specifies to pre\-populate the commit message from the original message that you started is a special notation for the commit that HEAD used to be at prior to the original reset commit (1 change ago)\&. See
+\fBgit-reflog\fR(1)
+for more details\&. You may also use any other valid commit reference\&.
+.br
+\fB5. \fRYou can repeat steps 2\-4 multiple times to break the original code into any number of commits\&.
+.br
+\fB6. \fRNow you\(cqve split out many of the changes into their own commits, and might no longer use the patch mode of git add, in order to select all remaining uncommitted changes\&.
+.br
+\fB7. \fROnce again, check to verify that you\(cqve included what you want to\&. You may also wish to verify that git diff doesn\(cqt show any remaining changes to be committed later\&.
+.br
+\fB8. \fRAnd finally create the final commit\&.
 .br
 .RE
 .SH "DISCUSSION"

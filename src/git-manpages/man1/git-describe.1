@@ -2,12 +2,12 @@
 .\"     Title: git-describe
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-DESCRIBE" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-DESCRIBE" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -48,10 +48,9 @@ By default (without \-\-all or \-\-tags) \fBgit describe\fR only shows annotated
 Commit\-ish object names to describe\&. Defaults to HEAD if omitted\&.
 .RE
 .PP
-\-\-dirty[=<mark>]
+\-\-dirty[=<mark>], \-\-broken[=<mark>]
 .RS 4
-Describe the working tree\&. It means describe HEAD and appends <mark> (\fB\-dirty\fR
-by default) if the working tree is dirty\&.
+Describe the state of the working tree\&. When the working tree matches HEAD, the output is the same as "git describe HEAD"\&. If the working tree has local modification "\-dirty" is appended to it\&. If a repository is corrupt and Git cannot determine if there is local modification, Git will error out, unless \(oq\-\-broken\(cq is given, which appends the suffix "\-broken" instead\&.
 .RE
 .PP
 \-\-all
@@ -102,7 +101,18 @@ Always output the long format (the tag, the number of commits and the abbreviate
 .RS 4
 Only consider tags matching the given
 \fBglob(7)\fR
-pattern, excluding the "refs/tags/" prefix\&. This can be used to avoid leaking private tags from the repository\&.
+pattern, excluding the "refs/tags/" prefix\&. This can be used to avoid leaking private tags from the repository\&. If given multiple times, a list of patterns will be accumulated, and tags matching any of the patterns will be considered\&. Use
+\fB\-\-no\-match\fR
+to clear and reset the list of patterns\&.
+.RE
+.PP
+\-\-exclude <pattern>
+.RS 4
+Do not consider tags matching the given
+\fBglob(7)\fR
+pattern, excluding the "refs/tags/" prefix\&. This can be used to narrow the tag space and find only tags matching some meaningful criteria\&. If given multiple times, a list of patterns will be accumulated and tags matching any of the patterns will be excluded\&. When combined with \-\-match a tag will be considered when it matches at least one \-\-match pattern and does not match any of the \-\-exclude patterns\&. Use
+\fB\-\-no\-exclude\fR
+to clear and reset the list of patterns\&.
 .RE
 .PP
 \-\-always

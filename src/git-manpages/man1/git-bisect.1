@@ -2,12 +2,12 @@
 .\"     Title: git-bisect
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-BISECT" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-BISECT" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -45,8 +45,8 @@ The command takes various subcommands, and different options depending on the su
 .nf
 git bisect start [\-\-term\-{old,good}=<term> \-\-term\-{new,bad}=<term>]
                  [\-\-no\-checkout] [<bad> [<good>\&.\&.\&.]] [\-\-] [<paths>\&.\&.\&.]
-git bisect (bad|new) [<rev>]
-git bisect (good|old) [<rev>\&.\&.\&.]
+git bisect (bad|new|<term\-new>) [<rev>]
+git bisect (good|old|<term\-old>) [<rev>\&.\&.\&.]
 git bisect terms [\-\-term\-good | \-\-term\-bad]
 git bisect skip [(<rev>|<range>)\&.\&.\&.]
 git bisect reset [<commit>]
@@ -172,7 +172,7 @@ Sometimes you are not looking for the commit that introduced a breakage, but rat
 .sp
 In such cases it can be very confusing to use the terms "good" and "bad" to refer to "the state before the change" and "the state after the change"\&. So instead, you can use the terms "old" and "new", respectively, in place of "good" and "bad"\&. (But note that you cannot mix "good" and "bad" with "old" and "new" in a single session\&.)
 .sp
-In this more general usage, you provide \fBgit bisect\fR with a "new" commit has some property and an "old" commit that doesn\(cqt have that property\&. Each time \fBgit bisect\fR checks out a commit, you test if that commit has the property\&. If it does, mark the commit as "new"; otherwise, mark it as "old"\&. When the bisection is done, \fBgit bisect\fR will report which commit introduced the property\&.
+In this more general usage, you provide \fBgit bisect\fR with a "new" commit that has some property and an "old" commit that doesn\(cqt have that property\&. Each time \fBgit bisect\fR checks out a commit, you test if that commit has the property\&. If it does, mark the commit as "new"; otherwise, mark it as "old"\&. When the bisection is done, \fBgit bisect\fR will report which commit introduced the property\&.
 .sp
 To use "old" and "new" instead of "good" and bad, you must run \fBgit bisect start\fR without commits as argument and then run the following commands to add the commits:
 .sp

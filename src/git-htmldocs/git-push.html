@@ -1030,6 +1030,47 @@ still experimental and their semantics may change as we gain experience
 with this feature.</p></div>
 <div class="paragraph"><p>"--no-force-with-lease" will cancel all the previous --force-with-lease on the
 command line.</p></div>
+<div class="paragraph"><p>A general note on safety: supplying this option without an expected
+value, i.e. as <code>--force-with-lease</code> or <code>--force-with-lease=&lt;refname&gt;</code>
+interacts very badly with anything that implicitly runs <code>git fetch</code> on
+the remote to be pushed to in the background, e.g. <code>git fetch origin</code>
+on your repository in a cronjob.</p></div>
+<div class="paragraph"><p>The protection it offers over <code>--force</code> is ensuring that subsequent
+changes your work wasn&#8217;t based on aren&#8217;t clobbered, but this is
+trivially defeated if some background process is updating refs in the
+background. We don&#8217;t have anything except the remote tracking info to
+go by as a heuristic for refs you&#8217;re expected to have seen &amp; are
+willing to clobber.</p></div>
+<div class="paragraph"><p>If your editor or some other system is running <code>git fetch</code> in the
+background for you a way to mitigate this is to simply set up another
+remote:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>git remote add origin-push $(git config remote.origin.url)
+git fetch origin-push</code></pre>
+</div></div>
+<div class="paragraph"><p>Now when the background process runs <code>git fetch origin</code> the references
+on <code>origin-push</code> won&#8217;t be updated, and thus commands like:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>git push --force-with-lease origin-push</code></pre>
+</div></div>
+<div class="paragraph"><p>Will fail unless you manually run <code>git fetch origin-push</code>. This method
+is of course entirely defeated by something that runs <code>git fetch
+--all</code>, in that case you&#8217;d need to either disable it or do something
+more tedious like:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>git fetch              # update 'master' from remote
+git tag base master    # mark our base point
+git rebase -i master   # rewrite some commits
+git push --force-with-lease=master:base master:master</code></pre>
+</div></div>
+<div class="paragraph"><p>I.e. create a <code>base</code> tag for versions of the upstream code that you&#8217;ve
+seen and are willing to overwrite, then rewrite history, and finally
+force push changes to <code>master</code> if the remote version is still at
+<code>base</code>, regardless of what your local <code>remotes/origin/master</code> has been
+updated to in the background.</p></div>
 </dd>
 <dt class="hdlist1">
 -f
@@ -1129,7 +1170,7 @@ origin +master</code> to force a push to the <code>master</code> branch). See th
 --no-recurse-submodules
 </dt>
 <dt class="hdlist1">
---recurse-submodules=check|on-demand|no
+--recurse-submodules=check|on-demand|only|no
 </dt>
 <dd>
 <p>
@@ -1140,11 +1181,12 @@ origin +master</code> to force a push to the <code>master</code> branch). See th
         remote of the submodule. If any commits are missing the push will
         be aborted and exit with non-zero status. If <em>on-demand</em> is used
         all submodules that changed in the revisions to be pushed will be
-        pushed. If on-demand was not able to push all necessary revisions
-        it will also be aborted and exit with non-zero status. A value of
-        <em>no</em> or using <code>--no-recurse-submodules</code> can be used to override the
-        push.recurseSubmodules configuration variable when no submodule
-        recursion is required.
+        pushed. If on-demand was not able to push all necessary revisions it will
+        also be aborted and exit with non-zero status. If <em>only</em> is used all
+        submodules will be recursively pushed while the superproject is left
+        unpushed. A value of <em>no</em> or using <code>--no-recurse-submodules</code> can be used
+        to override the push.recurseSubmodules configuration variable when no
+        submodule recursion is required.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1781,6 +1823,46 @@ a <code>git gc</code> command on the origin repository.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_security">SECURITY</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>The fetch and push protocols are not designed to prevent one side from
+stealing data from the other repository that was not intended to be
+shared. If you have private data that you need to protect from a malicious
+peer, your best option is to store it in another repository. This applies
+to both clients and servers. In particular, namespaces on a server are not
+effective for read access control; you should only grant read access to a
+namespace to clients that you would trust with read access to the entire
+repository.</p></div>
+<div class="paragraph"><p>The known attack vectors are as follows:</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+The victim sends "have" lines advertising the IDs of objects it has that
+  are not explicitly intended to be shared but can be used to optimize the
+  transfer if the peer also has them. The attacker chooses an object ID X
+  to steal and sends a ref to X, but isn&#8217;t required to send the content of
+  X because the victim already has it. Now the victim believes that the
+  attacker has X, and it sends the content of X back to the attacker
+  later. (This attack is most straightforward for a client to perform on a
+  server, by creating a ref to X in the namespace the client has access
+  to and then fetching it. The most likely way for a server to perform it
+  on a client is to "merge" X into a public branch and hope that the user
+  does additional work on this branch and pushes it back to the server
+  without noticing the merge.)
+</p>
+</li>
+<li>
+<p>
+As in #1, the attacker chooses an object ID X to steal. The victim sends
+  an object Y that the attacker already has, and the attacker falsely
+  claims to have X and not Y, so the victim sends Y as a delta against X.
+  The delta reveals regions of X that are similar to Y to the attacker.
+</p>
+</li>
+</ol></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_git">GIT</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Part of the <a href="git.html">git(1)</a> suite</p></div>
@@ -1790,7 +1872,7 @@ a <code>git gc</code> command on the origin repository.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-08-10 13:26:51 PDT
+Last updated 2017-04-27 11:19:22 JST
 </div>
 </div>
 </body>

@@ -100,6 +100,23 @@ test_expect_success 'git branch -m n/n n should work' '
 	git reflog exists refs/heads/n
 '
 
+# The topmost entry in reflog for branch bbb is about branch creation.
+# Hence, we compare bbb@{1} (instead of bbb@{0}) with aaa@{0}.
+
+test_expect_success 'git branch -m bbb should rename checked out branch' '
+	test_when_finished git branch -D bbb &&
+	test_when_finished git checkout master &&
+	git checkout -b aaa &&
+	git commit --allow-empty -m "a new commit" &&
+	git rev-parse aaa@{0} >expect &&
+	git branch -m bbb &&
+	git rev-parse bbb@{1} >actual &&
+	test_cmp expect actual &&
+	git symbolic-ref HEAD >actual &&
+	echo refs/heads/bbb >expect &&
+	test_cmp expect actual
+'
+
 test_expect_success 'git branch -m o/o o should fail when o/p exists' '
 	git branch o/o &&
 	git branch o/p &&
@@ -137,6 +154,23 @@ test_expect_success 'git branch -M baz bam should succeed when baz is checked ou
 	git branch bam &&
 	git branch -M baz bam &&
 	test $(git rev-parse --abbrev-ref HEAD) = bam
+'
+
+test_expect_success 'git branch -M baz bam should add entries to .git/logs/HEAD' '
+	msg="Branch: renamed refs/heads/baz to refs/heads/bam" &&
+	grep " 0\{40\}.*$msg$" .git/logs/HEAD &&
+	grep "^0\{40\}.*$msg$" .git/logs/HEAD
+'
+
+test_expect_success 'resulting reflog can be shown by log -g' '
+	oid=$(git rev-parse HEAD) &&
+	cat >expect <<-EOF &&
+	HEAD@{0} $oid $msg
+	HEAD@{1} $oid $msg
+	HEAD@{2} $oid checkout: moving from foo to baz
+	EOF
+	git log -g --format="%gd %H %gs" -3 HEAD >actual &&
+	test_cmp expect actual
 '
 
 test_expect_success 'git branch -M baz bam should succeed when baz is checked out as linked working tree' '
@@ -205,6 +239,31 @@ test_expect_success 'git branch --list -d t should fail' '
 	test_must_fail git branch --list -d t &&
 	git branch -d t &&
 	test_path_is_missing .git/refs/heads/t
+'
+
+test_expect_success 'git branch --list -v with --abbrev' '
+	test_when_finished "git branch -D t" &&
+	git branch t &&
+	git branch -v --list t >actual.default &&
+	git branch -v --list --abbrev t >actual.abbrev &&
+	test_cmp actual.default actual.abbrev &&
+
+	git branch -v --list --no-abbrev t >actual.noabbrev &&
+	git branch -v --list --abbrev=0 t >actual.0abbrev &&
+	test_cmp actual.noabbrev actual.0abbrev &&
+
+	git branch -v --list --abbrev=36 t >actual.36abbrev &&
+	# how many hexdigits are used?
+	read name objdefault rest <actual.abbrev &&
+	read name obj36 rest <actual.36abbrev &&
+	objfull=$(git rev-parse --verify t) &&
+
+	# are we really getting abbreviations?
+	test "$obj36" != "$objdefault" &&
+	expr "$obj36" : "$objdefault" >/dev/null &&
+	test "$objfull" != "$obj36" &&
+	expr "$objfull" : "$obj36" >/dev/null
+
 '
 
 test_expect_success 'git branch --column' '
@@ -307,7 +366,7 @@ test_expect_success 'git branch -m s/s s should work when s/t is deleted' '
 
 test_expect_success 'config information was renamed, too' '
 	test $(git config branch.s.dummy) = Hello &&
-	test_must_fail git config branch.s/s/dummy
+	test_must_fail git config branch.s/s.dummy
 '
 
 test_expect_success 'deleting a symref' '
@@ -945,6 +1004,10 @@ test_expect_success 'refuse --edit-description on unborn branch for now' '
 
 test_expect_success '--merged catches invalid object names' '
 	test_must_fail git branch --merged 0000000000000000000000000000000000000000
+'
+
+test_expect_success '--merged is incompatible with --no-merged' '
+	test_must_fail git branch --merged HEAD --no-merged HEAD
 '
 
 test_expect_success 'tracking with unexpected .fetch refspec' '

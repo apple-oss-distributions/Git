@@ -151,7 +151,8 @@ struct dir_struct {
 		DIR_NO_GITLINKS = 1<<3,
 		DIR_COLLECT_IGNORED = 1<<4,
 		DIR_SHOW_IGNORED_TOO = 1<<5,
-		DIR_COLLECT_KILLED_ONLY = 1<<6
+		DIR_COLLECT_KILLED_ONLY = 1<<6,
+		DIR_KEEP_UNTRACKED_CONTENTS = 1<<7
 	} flags;
 	struct dir_entry **entries;
 	struct dir_entry **ignored;
@@ -326,6 +327,9 @@ static inline int dir_path_match(const struct dir_entry *ent,
 			      has_trailing_dir);
 }
 
+int cmp_dir_entry(const void *p1, const void *p2);
+int check_dir_entry_contains(const struct dir_entry *out, const struct dir_entry *in);
+
 void untracked_cache_invalidate_path(struct index_state *, const char *);
 void untracked_cache_remove_from_index(struct index_state *, const char *);
 void untracked_cache_add_to_index(struct index_state *, const char *);
@@ -335,4 +339,8 @@ struct untracked_cache *read_untracked_extension(const void *data, unsigned long
 void write_untracked_extension(struct strbuf *out, struct untracked_cache *untracked);
 void add_untracked_cache(struct index_state *istate);
 void remove_untracked_cache(struct index_state *istate);
+extern void connect_work_tree_and_git_dir(const char *work_tree, const char *git_dir);
+extern void relocate_gitdir(const char *path,
+			    const char *old_git_dir,
+			    const char *new_git_dir);
 #endif

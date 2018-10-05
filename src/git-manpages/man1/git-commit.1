@@ -2,12 +2,12 @@
 .\"     Title: git-commit
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-COMMIT" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-COMMIT" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -165,7 +165,7 @@ for details\&.
 .PP
 \-\-reset\-author
 .RS 4
-When used with \-C/\-c/\-\-amend options, or when committing after a a conflicting cherry\-pick, declare that the authorship of the resulting commit now belongs to the committer\&. This also renews the author timestamp\&.
+When used with \-C/\-c/\-\-amend options, or when committing after a conflicting cherry\-pick, declare that the authorship of the resulting commit now belongs to the committer\&. This also renews the author timestamp\&.
 .RE
 .PP
 \-\-short
@@ -191,7 +191,7 @@ for details\&. Implies
 .PP
 \-\-long
 .RS 4
-When doing a dry\-run, give the output in a the long\-format\&. Implies
+When doing a dry\-run, give the output in the long\-format\&. Implies
 \fB\-\-dry\-run\fR\&.
 .RE
 .PP
@@ -201,9 +201,14 @@ When showing
 \fBshort\fR
 or
 \fBporcelain\fR
-status output, terminate entries in the status output with NUL, instead of LF\&. If no format is given, implies the
+status output, print the filename verbatim and terminate the entries with NUL, instead of LF\&. If no format is given, implies the
 \fB\-\-porcelain\fR
-output format\&.
+output format\&. Without the
+\fB\-z\fR
+option, filenames with "unusual" characters are quoted as explained for the configuration variable
+\fBcore\&.quotePath\fR
+(see
+\fBgit-config\fR(1))\&.
 .RE
 .PP
 \-F <file>, \-\-file=<file>
@@ -380,7 +385,9 @@ Before making a commit out of staged contents so far, stage the contents of path
 Make a commit by taking the updated working tree contents of the paths specified on the command line, disregarding any contents that have been staged for other paths\&. This is the default mode of operation of
 \fIgit commit\fR
 if any paths are given on the command line, in which case this option can be omitted\&. If this option is specified together with
-\fB\-\-amend\fR, then no paths need to be specified, which can be used to amend the last commit without committing changes that have already been staged\&.
+\fB\-\-amend\fR, then no paths need to be specified, which can be used to amend the last commit without committing changes that have already been staged\&. If used together with
+\fB\-\-allow\-empty\fR
+paths are also not required, and an empty commit will be created\&.
 .RE
 .PP
 \-u[<mode>], \-\-untracked\-files[=<mode>]
@@ -502,8 +509,8 @@ It is
 \fB<unix timestamp>\fR
 is the number of seconds since the UNIX epoch\&.
 \fB<time zone offset>\fR
-is a positive or negative offset from UTC\&. For example CET (which is 2 hours ahead UTC) is
-\fB+0200\fR\&.
+is a positive or negative offset from UTC\&. For example CET (which is 1 hour ahead of UTC) is
+\fB+0100\fR\&.
 .RE
 .PP
 RFC 2822
@@ -759,7 +766,7 @@ Note that we deliberately chose not to re\-code the commit log message when a co
 The editor used to edit the commit log message will be chosen from the \fBGIT_EDITOR\fR environment variable, the core\&.editor configuration variable, the \fBVISUAL\fR environment variable, or the \fBEDITOR\fR environment variable (in that order)\&. See \fBgit-var\fR(1) for details\&.
 .SH "HOOKS"
 .sp
-This command can run \fBcommit\-msg\fR, \fBprepare\-commit\-msg\fR, \fBpre\-commit\fR, and \fBpost\-commit\fR hooks\&. See \fBgithooks\fR(5) for more information\&.
+This command can run \fBcommit\-msg\fR, \fBprepare\-commit\-msg\fR, \fBpre\-commit\fR, \fBpost\-commit\fR and \fBpost\-rewrite\fR hooks\&. See \fBgithooks\fR(5) for more information\&.
 .SH "FILES"
 .PP
 \fB$GIT_DIR/COMMIT_EDITMSG\fR

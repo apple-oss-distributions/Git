@@ -39,6 +39,10 @@ test_expect_success setup '
 		echo "a+bc"
 		echo "abc"
 	} >ab &&
+	{
+		echo d &&
+		echo 0
+	} >d0 &&
 	echo vvv >v &&
 	echo ww w >w &&
 	echo x x xx x >x &&
@@ -978,6 +982,72 @@ test_expect_success 'grep -e -- -- path' '
 	test_cmp expected actual
 '
 
+test_expect_success 'dashdash disambiguates rev as rev' '
+	test_when_finished "rm -f master" &&
+	echo content >master &&
+	echo master:hello.c >expect &&
+	git grep -l o master -- hello.c >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'dashdash disambiguates pathspec as pathspec' '
+	test_when_finished "git rm -f master" &&
+	echo content >master &&
+	git add master &&
+	echo master:content >expect &&
+	git grep o -- master >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'report bogus arg without dashdash' '
+	test_must_fail git grep o does-not-exist
+'
+
+test_expect_success 'report bogus rev with dashdash' '
+	test_must_fail git grep o hello.c --
+'
+
+test_expect_success 'allow non-existent path with dashdash' '
+	# We need a real match so grep exits with success.
+	tree=$(git ls-tree HEAD |
+	       sed s/hello.c/not-in-working-tree/ |
+	       git mktree) &&
+	git grep o "$tree" -- not-in-working-tree
+'
+
+test_expect_success 'grep --no-index pattern -- path' '
+	rm -fr non &&
+	mkdir -p non/git &&
+	(
+		GIT_CEILING_DIRECTORIES="$(pwd)/non" &&
+		export GIT_CEILING_DIRECTORIES &&
+		cd non/git &&
+		echo hello >hello &&
+		echo goodbye >goodbye &&
+		echo hello:hello >expect &&
+		git grep --no-index o -- hello >actual &&
+		test_cmp expect actual
+	)
+'
+
+test_expect_success 'grep --no-index complains of revs' '
+	test_must_fail git grep --no-index o master -- 2>err &&
+	test_i18ngrep "cannot be used with revs" err
+'
+
+test_expect_success 'grep --no-index prefers paths to revs' '
+	test_when_finished "rm -f master" &&
+	echo content >master &&
+	echo master:content >expect &&
+	git grep --no-index o master >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'grep --no-index does not "diagnose" revs' '
+	test_must_fail git grep --no-index o :1:hello.c 2>err &&
+	test_i18ngrep ! -i "did you mean" err
+'
+
 cat >expected <<EOF
 hello.c:int main(int argc, const char **argv)
 hello.c:	printf("Hello world.\n");
@@ -1105,36 +1175,36 @@ test_expect_success 'grep pattern with grep.patternType=fixed, =basic, =extended
 '
 
 test_expect_success 'grep -G -F -P -E pattern' '
-	>empty &&
-	test_must_fail git grep -G -F -P -E "a\x{2b}b\x{2a}c" ab >actual &&
-	test_cmp empty actual
+	echo "d0:d" >expected &&
+	git grep -G -F -P -E "[\d]" d0 >actual &&
+	test_cmp expected actual
 '
 
 test_expect_success 'grep pattern with grep.patternType=fixed, =basic, =perl, =extended' '
-	>empty &&
-	test_must_fail git \
+	echo "d0:d" >expected &&
+	git \
 		-c grep.patterntype=fixed \
 		-c grep.patterntype=basic \
 		-c grep.patterntype=perl \
 		-c grep.patterntype=extended \
-		grep "a\x{2b}b\x{2a}c" ab >actual &&
-	test_cmp empty actual
+		grep "[\d]" d0 >actual &&
+	test_cmp expected actual
 '
 
 test_expect_success LIBPCRE 'grep -G -F -E -P pattern' '
-	echo "ab:a+b*c" >expected &&
-	git grep -G -F -E -P "a\x{2b}b\x{2a}c" ab >actual &&
+	echo "d0:0" >expected &&
+	git grep -G -F -E -P "[\d]" d0 >actual &&
 	test_cmp expected actual
 '
 
 test_expect_success LIBPCRE 'grep pattern with grep.patternType=fixed, =basic, =extended, =perl' '
-	echo "ab:a+b*c" >expected &&
+	echo "d0:0" >expected &&
 	git \
 		-c grep.patterntype=fixed \
 		-c grep.patterntype=basic \
 		-c grep.patterntype=extended \
 		-c grep.patterntype=perl \
-		grep "a\x{2b}b\x{2a}c" ab >actual &&
+		grep "[\d]" d0 >actual &&
 	test_cmp expected actual
 '
 

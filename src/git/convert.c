@@ -279,15 +279,16 @@ static int crlf_to_git(const char *path, const char *src, size_t len,
 		if (convert_is_binary(len, &stats))
 			return 0;
 		/*
-		 * If the file in the index has any CR in it, do not convert.
-		 * This is the new safer autocrlf handling.
+		 * If the file in the index has any CR in it, do not
+		 * convert.  This is the new safer autocrlf handling,
+		 * unless we want to renormalize in a merge or
+		 * cherry-pick.
 		 */
-		if (checksafe == SAFE_CRLF_RENORMALIZE)
-			checksafe = SAFE_CRLF_FALSE;
-		else if (has_cr_in_index(path))
+		if ((checksafe != SAFE_CRLF_RENORMALIZE) && has_cr_in_index(path))
 			convert_crlf_into_lf = 0;
 	}
-	if (checksafe && len) {
+	if ((checksafe == SAFE_CRLF_WARN ||
+	    (checksafe == SAFE_CRLF_FAIL)) && len) {
 		struct text_stat new_stats;
 		memcpy(&new_stats, &stats, sizeof(new_stats));
 		/* simulate "git add" */
@@ -1027,7 +1028,7 @@ static int ident_to_worktree(const char *path, const char *src, size_t len,
 	return 1;
 }
 
-static enum crlf_action git_path_check_crlf(struct git_attr_check *check)
+static enum crlf_action git_path_check_crlf(struct attr_check_item *check)
 {
 	const char *value = check->value;
 
@@ -1044,7 +1045,7 @@ static enum crlf_action git_path_check_crlf(struct git_attr_check *check)
 	return CRLF_UNDEFINED;
 }
 
-static enum eol git_path_check_eol(struct git_attr_check *check)
+static enum eol git_path_check_eol(struct attr_check_item *check)
 {
 	const char *value = check->value;
 
@@ -1057,7 +1058,7 @@ static enum eol git_path_check_eol(struct git_attr_check *check)
 	return EOL_UNSET;
 }
 
-static struct convert_driver *git_path_check_convert(struct git_attr_check *check)
+static struct convert_driver *git_path_check_convert(struct attr_check_item *check)
 {
 	const char *value = check->value;
 	struct convert_driver *drv;
@@ -1070,7 +1071,7 @@ static struct convert_driver *git_path_check_convert(struct git_attr_check *chec
 	return NULL;
 }
 
-static int git_path_check_ident(struct git_attr_check *check)
+static int git_path_check_ident(struct attr_check_item *check)
 {
 	const char *value = check->value;
 
@@ -1084,24 +1085,19 @@ struct conv_attrs {
 	int ident;
 };
 
-static const char *conv_attr_name[] = {
-	"crlf", "ident", "filter", "eol", "text",
-};
-#define NUM_CONV_ATTRS ARRAY_SIZE(conv_attr_name)
-
 static void convert_attrs(struct conv_attrs *ca, const char *path)
 {
-	int i;
-	static struct git_attr_check ccheck[NUM_CONV_ATTRS];
+	static struct attr_check *check;
 
-	if (!ccheck[0].attr) {
-		for (i = 0; i < NUM_CONV_ATTRS; i++)
-			ccheck[i].attr = git_attr(conv_attr_name[i]);
+	if (!check) {
+		check = attr_check_initl("crlf", "ident", "filter",
+					 "eol", "text", NULL);
 		user_convert_tail = &user_convert;
 		git_config(read_convert_config, NULL);
 	}
 
-	if (!git_check_attr(path, NUM_CONV_ATTRS, ccheck)) {
+	if (!git_check_attr(path, check)) {
+		struct attr_check_item *ccheck = check->items;
 		ca->crlf_action = git_path_check_crlf(ccheck + 4);
 		if (ca->crlf_action == CRLF_UNDEFINED)
 			ca->crlf_action = git_path_check_crlf(ccheck + 0);

@@ -11,6 +11,7 @@
 #include "commit-slab.h"
 #include "prio-queue.h"
 #include "sha1-lookup.h"
+#include "wt-status.h"
 
 static struct commit_extra_header *read_commit_extra_header_lines(const char *buf, size_t len, const char **);
 
@@ -415,8 +416,7 @@ int find_commit_subject(const char *commit_buffer, const char **subject)
 		p++;
 	if (*p) {
 		p = skip_blank_lines(p + 2);
-		for (eol = p; *eol && *eol != '\n'; eol++)
-			; /* do nothing */
+		eol = strchrnul(p, '\n');
 	} else
 		eol = p;
 
@@ -1308,11 +1308,11 @@ void for_each_mergetag(each_mergetag_fn fn, struct commit *commit, void *data)
 
 static inline int standard_header_field(const char *field, size_t len)
 {
-	return ((len == 4 && !memcmp(field, "tree ", 5)) ||
-		(len == 6 && !memcmp(field, "parent ", 7)) ||
-		(len == 6 && !memcmp(field, "author ", 7)) ||
-		(len == 9 && !memcmp(field, "committer ", 10)) ||
-		(len == 8 && !memcmp(field, "encoding ", 9)));
+	return ((len == 4 && !memcmp(field, "tree", 4)) ||
+		(len == 6 && !memcmp(field, "parent", 6)) ||
+		(len == 6 && !memcmp(field, "author", 6)) ||
+		(len == 9 && !memcmp(field, "committer", 9)) ||
+		(len == 8 && !memcmp(field, "encoding", 8)));
 }
 
 static int excluded_header_field(const char *field, size_t len, const char **exclude)
@@ -1322,8 +1322,7 @@ static int excluded_header_field(const char *field, size_t len, const char **exc
 
 	while (*exclude) {
 		size_t xlen = strlen(*exclude);
-		if (len == xlen &&
-		    !memcmp(field, *exclude, xlen) && field[xlen] == ' ')
+		if (len == xlen && !memcmp(field, *exclude, xlen))
 			return 1;
 		exclude++;
 	}
@@ -1354,12 +1353,11 @@ static struct commit_extra_header *read_commit_extra_header_lines(
 		strbuf_reset(&buf);
 		it = NULL;
 
-		eof = strchr(line, ' ');
-		if (next <= eof)
+		eof = memchr(line, ' ', next - line);
+		if (!eof)
 			eof = next;
-
-		if (standard_header_field(line, eof - line) ||
-		    excluded_header_field(line, eof - line, exclude))
+		else if (standard_header_field(line, eof - line) ||
+			 excluded_header_field(line, eof - line, exclude))
 			continue;
 
 		it = xcalloc(1, sizeof(*it));
@@ -1649,47 +1647,47 @@ const char *find_commit_header(const char *msg, const char *key, size_t *out_len
 }
 
 /*
- * Inspect sb and determine the true "end" of the log message, in
+ * Inspect the given string and determine the true "end" of the log message, in
  * order to find where to put a new Signed-off-by: line.  Ignored are
- * trailing comment lines and blank lines, and also the traditional
- * "Conflicts:" block that is not commented out, so that we can use
- * "git commit -s --amend" on an existing commit that forgot to remove
- * it.
+ * trailing comment lines and blank lines.  To support "git commit -s
+ * --amend" on an existing commit, we also ignore "Conflicts:".  To
+ * support "git commit -v", we truncate at cut lines.
  *
  * Returns the number of bytes from the tail to ignore, to be fed as
  * the second parameter to append_signoff().
  */
-int ignore_non_trailer(struct strbuf *sb)
+int ignore_non_trailer(const char *buf, size_t len)
 {
 	int boc = 0;
 	int bol = 0;
 	int in_old_conflicts_block = 0;
+	size_t cutoff = wt_status_locate_end(buf, len);
 
-	while (bol < sb->len) {
-		char *next_line;
+	while (bol < cutoff) {
+		const char *next_line = memchr(buf + bol, '\n', len - bol);
 
-		if (!(next_line = memchr(sb->buf + bol, '\n', sb->len - bol)))
-			next_line = sb->buf + sb->len;
+		if (!next_line)
+			next_line = buf + len;
 		else
 			next_line++;
 
-		if (sb->buf[bol] == comment_line_char || sb->buf[bol] == '\n') {
+		if (buf[bol] == comment_line_char || buf[bol] == '\n') {
 			/* is this the first of the run of comments? */
 			if (!boc)
 				boc = bol;
 			/* otherwise, it is just continuing */
-		} else if (starts_with(sb->buf + bol, "Conflicts:\n")) {
+		} else if (starts_with(buf + bol, "Conflicts:\n")) {
 			in_old_conflicts_block = 1;
 			if (!boc)
 				boc = bol;
-		} else if (in_old_conflicts_block && sb->buf[bol] == '\t') {
+		} else if (in_old_conflicts_block && buf[bol] == '\t') {
 			; /* a pathname in the conflicts block */
 		} else if (boc) {
 			/* the previous was not trailing comment */
 			boc = 0;
 			in_old_conflicts_block = 0;
 		}
-		bol = next_line - sb->buf;
+		bol = next_line - buf;
 	}
-	return boc ? sb->len - boc : 0;
+	return boc ? len - boc : len - cutoff;
 }

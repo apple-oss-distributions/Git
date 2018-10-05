@@ -897,7 +897,7 @@ that, you can recover from it with <em>git reset</em>.</p></div>
 <dd>
 <p>
         When used with -C/-c/--amend options, or when committing after a
-        a conflicting cherry-pick, declare that the authorship of the
+        conflicting cherry-pick, declare that the authorship of the
         resulting commit now belongs to the committer. This also renews
         the author timestamp.
 </p>
@@ -934,7 +934,7 @@ that, you can recover from it with <em>git reset</em>.</p></div>
 </dt>
 <dd>
 <p>
-        When doing a dry-run, give the output in a the long-format.
+        When doing a dry-run, give the output in the long-format.
         Implies <code>--dry-run</code>.
 </p>
 </dd>
@@ -946,9 +946,12 @@ that, you can recover from it with <em>git reset</em>.</p></div>
 </dt>
 <dd>
 <p>
-        When showing <code>short</code> or <code>porcelain</code> status output, terminate
-        entries in the status output with NUL, instead of LF. If no
-        format is given, implies the <code>--porcelain</code> output format.
+        When showing <code>short</code> or <code>porcelain</code> status output, print the
+        filename verbatim and terminate the entries with NUL, instead of LF.
+        If no format is given, implies the <code>--porcelain</code> output format.
+        Without the <code>-z</code> option, filenames with "unusual" characters are
+        quoted as explained for the configuration variable <code>core.quotePath</code>
+        (see <a href="git-config.html">git-config(1)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1220,7 +1223,8 @@ FROM UPSTREAM REBASE" section in <a href="git-rebase.html">git-rebase(1)</a>.)</
         If this option is specified together with <code>--amend</code>, then
         no paths need to be specified, which can be used to amend
         the last commit without committing changes that have
-        already been staged.
+        already been staged. If used together with <code>--allow-empty</code>
+        paths are also not required, and an empty commit will be created.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1380,7 +1384,7 @@ Git internal format
         It is <code>&lt;unix timestamp&gt; &lt;time zone offset&gt;</code>, where <code>&lt;unix
         timestamp&gt;</code> is the number of seconds since the UNIX epoch.
         <code>&lt;time zone offset&gt;</code> is a positive or negative offset from UTC.
-        For example CET (which is 2 hours ahead UTC) is <code>+0200</code>.
+        For example CET (which is 1 hour ahead of UTC) is <code>+0100</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1609,7 +1613,7 @@ order).  See <a href="git-var.html">git-var(1)</a> for details.</p></div>
 <h2 id="_hooks">HOOKS</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>This command can run <code>commit-msg</code>, <code>prepare-commit-msg</code>, <code>pre-commit</code>,
-and <code>post-commit</code> hooks.  See <a href="githooks.html">githooks(5)</a> for more
+<code>post-commit</code> and <code>post-rewrite</code> hooks.  See <a href="githooks.html">githooks(5)</a> for more
 information.</p></div>
 </div>
 </div>
@@ -1652,7 +1656,7 @@ information.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-10-17 15:22:26 PDT
+Last updated 2017-05-04 23:33:43 JST
 </div>
 </div>
 </body>

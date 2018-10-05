@@ -3,6 +3,7 @@
 #include "walker.h"
 #include "http.h"
 #include "list.h"
+#include "transport.h"
 
 struct alt_base {
 	char *base;
@@ -160,6 +161,37 @@ static void prefetch(struct walker *walker, unsigned char *sha1)
 #endif
 }
 
+static int is_alternate_allowed(const char *url)
+{
+	const char *protocols[] = {
+		"http", "https", "ftp", "ftps"
+	};
+	int i;
+
+	if (http_follow_config != HTTP_FOLLOW_ALWAYS) {
+		warning("alternate disabled by http.followRedirects: %s", url);
+		return 0;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(protocols); i++) {
+		const char *end;
+		if (skip_prefix(url, protocols[i], &end) &&
+		    starts_with(end, "://"))
+			break;
+	}
+
+	if (i >= ARRAY_SIZE(protocols)) {
+		warning("ignoring alternate with unknown protocol: %s", url);
+		return 0;
+	}
+	if (!is_transport_allowed(protocols[i], 0)) {
+		warning("ignoring alternate with restricted protocol: %s", url);
+		return 0;
+	}
+
+	return 1;
+}
+
 static void process_alternates_response(void *callback_data)
 {
 	struct alternates_request *alt_req =
@@ -269,23 +301,30 @@ static void process_alternates_response(void *callback_data)
 					okay = 1;
 				}
 			}
-			/* skip "objects\n" at end */
 			if (okay) {
 				struct strbuf target = STRBUF_INIT;
 				strbuf_add(&target, base, serverlen);
-				strbuf_add(&target, data + i, posn - i - 7);
-				if (walker->get_verbosely)
-					fprintf(stderr, "Also look at %s\n",
+				strbuf_add(&target, data + i, posn - i);
+				if (!strbuf_strip_suffix(&target, "objects")) {
+					warning("ignoring alternate that does"
+						" not end in 'objects': %s",
 						target.buf);
-				newalt = xmalloc(sizeof(*newalt));
-				newalt->next = NULL;
-				newalt->base = strbuf_detach(&target, NULL);
-				newalt->got_indices = 0;
-				newalt->packs = NULL;
+					strbuf_release(&target);
+				} else if (is_alternate_allowed(target.buf)) {
+					warning("adding alternate object store: %s",
+						target.buf);
+					newalt = xmalloc(sizeof(*newalt));
+					newalt->next = NULL;
+					newalt->base = strbuf_detach(&target, NULL);
+					newalt->got_indices = 0;
+					newalt->packs = NULL;
 
-				while (tail->next != NULL)
-					tail = tail->next;
-				tail->next = newalt;
+					while (tail->next != NULL)
+						tail = tail->next;
+					tail->next = newalt;
+				} else {
+					strbuf_release(&target);
+				}
 			}
 		}
 		i = posn + 1;
@@ -480,10 +519,13 @@ static int fetch_object(struct walker *walker, unsigned char *sha1)
 	 * we turned off CURLOPT_FAILONERROR to avoid losing a
 	 * persistent connection and got CURLE_OK.
 	 */
-	if (req->http_code == 404 && req->curl_result == CURLE_OK &&
+	if (req->http_code >= 300 && req->curl_result == CURLE_OK &&
 			(starts_with(req->url, "http://") ||
-			 starts_with(req->url, "https://")))
+			 starts_with(req->url, "https://"))) {
 		req->curl_result = CURLE_HTTP_RETURNED_ERROR;
+		xsnprintf(req->errorstr, sizeof(req->errorstr),
+			  "HTTP request failed");
+	}
 
 	if (obj_req->state == ABORTED) {
 		ret = error("Request for %s aborted", hex);

@@ -125,12 +125,16 @@ static int test_if_untracked_cache_is_supported(void)
 	struct stat st;
 	struct stat_data base;
 	int fd, ret = 0;
+	char *cwd;
 
 	strbuf_addstr(&mtime_dir, "mtime-test-XXXXXX");
 	if (!mkdtemp(mtime_dir.buf))
 		die_errno("Could not make temporary directory");
 
-	fprintf(stderr, _("Testing mtime in '%s' "), xgetcwd());
+	cwd = xgetcwd();
+	fprintf(stderr, _("Testing mtime in '%s' "), cwd);
+	free(cwd);
+
 	atexit(remove_test_directory);
 	xstat_mtime_dir(&st);
 	fill_stat_data(&base, &st);
@@ -1012,6 +1016,7 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 	/* We can't free this memory, it becomes part of a linked list parsed atexit() */
 	lock_file = xcalloc(1, sizeof(struct lock_file));
 
+	/* we will diagnose later if it turns out that we need to update it */
 	newfd = hold_locked_index(lock_file, 0);
 	if (newfd < 0)
 		lock_error = errno;
@@ -1098,17 +1103,20 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 	}
 
 	if (split_index > 0) {
-		init_split_index(&the_index);
-		the_index.cache_changed |= SPLIT_INDEX_ORDERED;
-	} else if (!split_index && the_index.split_index) {
-		/*
-		 * can't discard_split_index(&the_index); because that
-		 * will destroy split_index->base->cache[], which may
-		 * be shared with the_index.cache[]. So yeah we're
-		 * leaking a bit here.
-		 */
-		the_index.split_index = NULL;
-		the_index.cache_changed |= SOMETHING_CHANGED;
+		if (git_config_get_split_index() == 0)
+			warning(_("core.splitIndex is set to false; "
+				  "remove or change it, if you really want to "
+				  "enable split index"));
+		if (the_index.split_index)
+			the_index.cache_changed |= SPLIT_INDEX_ORDERED;
+		else
+			add_split_index(&the_index);
+	} else if (!split_index) {
+		if (git_config_get_split_index() == 1)
+			warning(_("core.splitIndex is set to true; "
+				  "remove or change it, if you really want to "
+				  "disable split index"));
+		remove_split_index(&the_index);
 	}
 
 	switch (untracked_cache) {

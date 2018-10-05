@@ -360,7 +360,7 @@ EOF
 test_expect_success 'status -s -b' '
 
 	git status -s -b >output &&
-	test_cmp expect output
+	test_i18ncmp expect output
 
 '
 
@@ -370,7 +370,7 @@ test_expect_success 'status -s -z -b' '
 	git status -s -z -b >output &&
 	nul_to_q <output >output.q &&
 	mv output.q output &&
-	test_cmp expect output
+	test_i18ncmp expect output
 '
 
 test_expect_success 'setup dir3' '
@@ -687,7 +687,7 @@ EOF
 test_expect_success 'status -s -b with color.status' '
 
 	git status -s -b | test_decode_color >output &&
-	test_cmp expect output
+	test_i18ncmp expect output
 
 '
 
@@ -1494,7 +1494,7 @@ EOF
 test_expect_success 'git commit -m will commit a staged but ignored submodule' '
 	git commit -uno -m message &&
 	git status -s --ignore-submodules=dirty >output &&
-	 test_i18ngrep ! "^M. sm" output &&
+	test_i18ngrep ! "^M. sm" output &&
 	git config --remove-section submodule.subname &&
 	git config -f .gitmodules  --remove-section submodule.subname
 '

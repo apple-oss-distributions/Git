@@ -39,7 +39,7 @@ static const char * const builtin_clone_usage[] = {
 };
 
 static int option_no_checkout, option_bare, option_mirror, option_single_branch = -1;
-static int option_local = -1, option_no_hardlinks, option_shared, option_recursive;
+static int option_local = -1, option_no_hardlinks, option_shared;
 static int option_shallow_submodules;
 static int deepen;
 static char *option_template, *option_depth, *option_since;
@@ -56,6 +56,21 @@ static struct string_list option_required_reference = STRING_LIST_INIT_NODUP;
 static struct string_list option_optional_reference = STRING_LIST_INIT_NODUP;
 static int option_dissociate;
 static int max_jobs = -1;
+static struct string_list option_recurse_submodules = STRING_LIST_INIT_NODUP;
+
+static int recurse_submodules_cb(const struct option *opt,
+				 const char *arg, int unset)
+{
+	if (unset)
+		string_list_clear((struct string_list *)opt->value, 0);
+	else if (arg)
+		string_list_append((struct string_list *)opt->value, arg);
+	else
+		string_list_append((struct string_list *)opt->value,
+				   (const char *)opt->defval);
+
+	return 0;
+}
 
 static struct option builtin_clone_options[] = {
 	OPT__VERBOSITY(&option_verbosity),
@@ -74,10 +89,13 @@ static struct option builtin_clone_options[] = {
 		    N_("don't use local hardlinks, always copy")),
 	OPT_BOOL('s', "shared", &option_shared,
 		    N_("setup as shared repository")),
-	OPT_BOOL(0, "recursive", &option_recursive,
-		    N_("initialize submodules in the clone")),
-	OPT_BOOL(0, "recurse-submodules", &option_recursive,
-		    N_("initialize submodules in the clone")),
+	{ OPTION_CALLBACK, 0, "recursive", &option_recurse_submodules,
+	  N_("pathspec"), N_("initialize submodules in the clone"),
+	  PARSE_OPT_OPTARG | PARSE_OPT_HIDDEN, recurse_submodules_cb,
+	  (intptr_t)"." },
+	{ OPTION_CALLBACK, 0, "recurse-submodules", &option_recurse_submodules,
+	  N_("pathspec"), N_("initialize submodules in the clone"),
+	  PARSE_OPT_OPTARG, recurse_submodules_cb, (intptr_t)"." },
 	OPT_INTEGER('j', "jobs", &max_jobs,
 		    N_("number of submodules cloned in parallel")),
 	OPT_STRING(0, "template", &option_template, N_("template-directory"),
@@ -99,7 +117,7 @@ static struct option builtin_clone_options[] = {
 	OPT_STRING(0, "shallow-since", &option_since, N_("time"),
 		    N_("create a shallow clone since a specific time")),
 	OPT_STRING_LIST(0, "shallow-exclude", &option_not, N_("revision"),
-			N_("deepen history of shallow clone by excluding rev")),
+			N_("deepen history of shallow clone, excluding rev")),
 	OPT_BOOL(0, "single-branch", &option_single_branch,
 		    N_("clone only one branch, HEAD or --branch")),
 	OPT_BOOL(0, "shallow-submodules", &option_shallow_submodules,
@@ -170,7 +188,7 @@ static char *get_repo_path(const char *repo, int *is_bundle)
 
 	strbuf_addstr(&path, repo);
 	raw = get_repo_path_1(&path, is_bundle);
-	canon = raw ? xstrdup(absolute_path(raw)) : NULL;
+	canon = raw ? absolute_pathdup(raw) : NULL;
 	strbuf_release(&path);
 	return canon;
 }
@@ -681,7 +699,7 @@ static void update_head(const struct ref *our, const struct ref *remote,
 
 static int checkout(int submodule_progress)
 {
-	unsigned char sha1[20];
+	struct object_id oid;
 	char *head;
 	struct lock_file *lock_file;
 	struct unpack_trees_options opts;
@@ -692,7 +710,7 @@ static int checkout(int submodule_progress)
 	if (option_no_checkout)
 		return 0;
 
-	head = resolve_refdup("HEAD", RESOLVE_REF_READING, sha1, NULL);
+	head = resolve_refdup("HEAD", RESOLVE_REF_READING, oid.hash, NULL);
 	if (!head) {
 		warning(_("remote HEAD refers to nonexistent ref, "
 			  "unable to checkout.\n"));
@@ -700,7 +718,7 @@ static int checkout(int submodule_progress)
 	}
 	if (!strcmp(head, "HEAD")) {
 		if (advice_detached_head)
-			detach_advice(sha1_to_hex(sha1));
+			detach_advice(oid_to_hex(&oid));
 	} else {
 		if (!starts_with(head, "refs/heads/"))
 			die(_("HEAD not found below refs/heads!"));
@@ -711,7 +729,7 @@ static int checkout(int submodule_progress)
 	setup_work_tree();
 
 	lock_file = xcalloc(1, sizeof(struct lock_file));
-	hold_locked_index(lock_file, 1);
+	hold_locked_index(lock_file, LOCK_DIE_ON_ERROR);
 
 	memset(&opts, 0, sizeof opts);
 	opts.update = 1;
@@ -721,7 +739,7 @@ static int checkout(int submodule_progress)
 	opts.src_index = &the_index;
 	opts.dst_index = &the_index;
 
-	tree = parse_tree_indirect(sha1);
+	tree = parse_tree_indirect(oid.hash);
 	parse_tree(tree);
 	init_tree_desc(&t, tree->buffer, tree->size);
 	if (unpack_trees(1, &t, &opts) < 0)
@@ -731,9 +749,9 @@ static int checkout(int submodule_progress)
 		die(_("unable to write new index file"));
 
 	err |= run_hook_le(NULL, "post-checkout", sha1_to_hex(null_sha1),
-			   sha1_to_hex(sha1), "1", NULL);
+			   oid_to_hex(&oid), "1", NULL);
 
-	if (!err && option_recursive) {
+	if (!err && (option_recurse_submodules.nr > 0)) {
 		struct argv_array args = ARGV_ARRAY_INIT;
 		argv_array_pushl(&args, "submodule", "update", "--init", "--recursive", NULL);
 
@@ -755,7 +773,9 @@ static int checkout(int submodule_progress)
 
 static int write_one_config(const char *key, const char *value, void *data)
 {
-	return git_config_set_multivar_gently(key, value ? value : "true", "^$", 0);
+	return git_config_set_multivar_gently(key,
+					      value ? value : "true",
+					      CONFIG_REGEX_NONE, 0);
 }
 
 static void write_config(struct string_list *config)
@@ -894,7 +914,7 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
 
 	path = get_repo_path(repo_name, &is_bundle);
 	if (path)
-		repo = xstrdup(absolute_path(repo_name));
+		repo = absolute_pathdup(repo_name);
 	else if (!strchr(repo_name, ':'))
 		die(_("repository '%s' does not exist"), repo_name);
 	else
@@ -957,7 +977,25 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
 			fprintf(stderr, _("Cloning into '%s'...\n"), dir);
 	}
 
-	if (option_recursive) {
+	if (option_recurse_submodules.nr > 0) {
+		struct string_list_item *item;
+		struct strbuf sb = STRBUF_INIT;
+
+		/* remove duplicates */
+		string_list_sort(&option_recurse_submodules);
+		string_list_remove_duplicates(&option_recurse_submodules, 0);
+
+		/*
+		 * NEEDSWORK: In a multi-working-tree world, this needs to be
+		 * set in the per-worktree config.
+		 */
+		for_each_string_list_item(item, &option_recurse_submodules) {
+			strbuf_addf(&sb, "submodule.active=%s",
+				    item->string);
+			string_list_append(&option_config,
+					   strbuf_detach(&sb, NULL));
+		}
+
 		if (option_required_reference.nr &&
 		    option_optional_reference.nr)
 			die(_("clone --recursive is not compatible with "

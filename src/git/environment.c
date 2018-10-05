@@ -21,7 +21,6 @@ int ignore_case;
 int assume_unchanged;
 int prefer_symlink_refs;
 int is_bare_repository_cfg = -1; /* unspecified */
-int log_all_ref_updates = -1; /* unspecified */
 int warn_ambiguous_refs = 1;
 int warn_on_object_refname_ambiguity = 1;
 int ref_paranoia = -1;
@@ -34,7 +33,7 @@ const char *git_attributes_file;
 const char *git_hooks_path;
 int zlib_compression_level = Z_BEST_SPEED;
 int core_compression_level;
-int core_compression_seen;
+int pack_compression_level = Z_DEFAULT_COMPRESSION;
 int fsync_object_files;
 size_t packed_git_window_size = DEFAULT_PACKED_GIT_WINDOW_SIZE;
 size_t packed_git_limit = DEFAULT_PACKED_GIT_LIMIT;
@@ -64,6 +63,7 @@ int merge_log_config = -1;
 int precomposed_unicode = -1; /* see probe_utf8_pathname_composition() */
 unsigned long pack_size_limit_cfg;
 enum hide_dotfiles_type hide_dotfiles = HIDE_DOTFILES_DOTGITONLY;
+enum log_refs_config log_all_ref_updates = LOG_REFS_UNSET;
 
 #ifndef PROTECT_HFS_DEFAULT
 #define PROTECT_HFS_DEFAULT 0
@@ -167,8 +167,11 @@ static void setup_git_env(void)
 	const char *replace_ref_base;
 
 	git_dir = getenv(GIT_DIR_ENVIRONMENT);
-	if (!git_dir)
+	if (!git_dir) {
+		if (!startup_info->have_repository)
+			BUG("setup_git_env called without repository");
 		git_dir = DEFAULT_GIT_DIR_ENVIRONMENT;
+	}
 	gitfile = read_gitfile(git_dir);
 	git_dir = xstrdup(gitfile ? gitfile : git_dir);
 	if (get_common_dir(&sb, git_dir))
@@ -259,7 +262,7 @@ void set_git_work_tree(const char *new_work_tree)
 		return;
 	}
 	git_work_tree_initialized = 1;
-	work_tree = xstrdup(real_path(new_work_tree));
+	work_tree = real_pathdup(new_work_tree, 1);
 }
 
 const char *get_git_work_tree(void)
@@ -274,7 +277,7 @@ char *get_object_directory(void)
 	return git_object_dir;
 }
 
-int odb_mkstemp(char *template, size_t limit, const char *pattern)
+int odb_mkstemp(struct strbuf *template, const char *pattern)
 {
 	int fd;
 	/*
@@ -282,32 +285,28 @@ int odb_mkstemp(char *template, size_t limit, const char *pattern)
 	 * restrictive except to remove write permission.
 	 */
 	int mode = 0444;
-	snprintf(template, limit, "%s/%s",
-		 get_object_directory(), pattern);
-	fd = git_mkstemp_mode(template, mode);
+	git_path_buf(template, "objects/%s", pattern);
+	fd = git_mkstemp_mode(template->buf, mode);
 	if (0 <= fd)
 		return fd;
 
 	/* slow path */
 	/* some mkstemp implementations erase template on failure */
-	snprintf(template, limit, "%s/%s",
-		 get_object_directory(), pattern);
-	safe_create_leading_directories(template);
-	return xmkstemp_mode(template, mode);
+	git_path_buf(template, "objects/%s", pattern);
+	safe_create_leading_directories(template->buf);
+	return xmkstemp_mode(template->buf, mode);
 }
 
-int odb_pack_keep(char *name, size_t namesz, const unsigned char *sha1)
+int odb_pack_keep(const char *name)
 {
 	int fd;
 
-	snprintf(name, namesz, "%s/pack/pack-%s.keep",
-		 get_object_directory(), sha1_to_hex(sha1));
 	fd = open(name, O_RDWR|O_CREAT|O_EXCL, 0600);
 	if (0 <= fd)
 		return fd;
 
 	/* slow path */
-	safe_create_leading_directories(name);
+	safe_create_leading_directories_const(name);
 	return open(name, O_RDWR|O_CREAT|O_EXCL, 0600);
 }
 

@@ -752,7 +752,7 @@ git-rebase(1) Manual Page
         [&lt;upstream&gt; [&lt;branch&gt;]]
 <em>git rebase</em> [-i | --interactive] [options] [--exec &lt;cmd&gt;] [--onto &lt;newbase&gt;]
         --root [&lt;branch&gt;]
-<em>git rebase</em> --continue | --skip | --abort | --edit-todo</pre>
+<em>git rebase</em> --continue | --skip | --abort | --quit | --edit-todo</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1034,6 +1034,16 @@ leave out at most one of A and B, in which case it defaults to HEAD.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--quit
+</dt>
+<dd>
+<p>
+        Abort the rebase operation but HEAD is not reset back to the
+        original branch. The index and working tree are also left
+        unchanged as a result.
+</p>
+</dd>
+<dt class="hdlist1">
 --keep-empty
 </dt>
 <dd>
@@ -1251,6 +1261,16 @@ default is <code>--no-fork-point</code>, otherwise the default is <code>--fork-p
         These flags are passed to <em>git am</em> to easily change the dates
         of the rebased commits (see <a href="git-am.html">git-am(1)</a>).
         Incompatible with the --interactive option.
+</p>
+</dd>
+<dt class="hdlist1">
+--signoff
+</dt>
+<dd>
+<p>
+        This flag is passed to <em>git am</em> to sign off all the rebased
+        commits (see <a href="git-am.html">git-am(1)</a>). Incompatible with the
+        --interactive option.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2022,7 +2042,7 @@ reorder commits tend to produce counterintuitive results.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-07-13 14:58:50 PDT
+Last updated 2017-04-27 11:19:22 JST
 </div>
 </div>
 </body>

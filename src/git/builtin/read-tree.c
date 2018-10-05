@@ -15,10 +15,13 @@
 #include "builtin.h"
 #include "parse-options.h"
 #include "resolve-undo.h"
+#include "submodule.h"
+#include "submodule-config.h"
 
 static int nr_trees;
 static int read_empty;
 static struct tree *trees[MAX_UNPACK_TREES];
+static int recurse_submodules = RECURSE_SUBMODULES_DEFAULT;
 
 static int list_tree(unsigned char *sha1)
 {
@@ -96,6 +99,23 @@ static int debug_merge(const struct cache_entry * const *stages,
 	return 0;
 }
 
+static int option_parse_recurse_submodules(const struct option *opt,
+					   const char *arg, int unset)
+{
+	if (unset) {
+		recurse_submodules = RECURSE_SUBMODULES_OFF;
+		return 0;
+	}
+	if (arg)
+		recurse_submodules =
+			parse_update_recurse_submodules_arg(opt->long_name,
+							    arg);
+	else
+		recurse_submodules = RECURSE_SUBMODULES_ON;
+
+	return 0;
+}
+
 static struct lock_file lock_file;
 
 int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
@@ -109,34 +129,37 @@ int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 		{ OPTION_CALLBACK, 0, "index-output", NULL, N_("file"),
 		  N_("write resulting index to <file>"),
 		  PARSE_OPT_NONEG, index_output_cb },
-		OPT_SET_INT(0, "empty", &read_empty,
-			    N_("only empty the index"), 1),
+		OPT_BOOL(0, "empty", &read_empty,
+			    N_("only empty the index")),
 		OPT__VERBOSE(&opts.verbose_update, N_("be verbose")),
 		OPT_GROUP(N_("Merging")),
-		OPT_SET_INT('m', NULL, &opts.merge,
-			    N_("perform a merge in addition to a read"), 1),
-		OPT_SET_INT(0, "trivial", &opts.trivial_merges_only,
-			    N_("3-way merge if no file level merging required"), 1),
-		OPT_SET_INT(0, "aggressive", &opts.aggressive,
-			    N_("3-way merge in presence of adds and removes"), 1),
-		OPT_SET_INT(0, "reset", &opts.reset,
-			    N_("same as -m, but discard unmerged entries"), 1),
+		OPT_BOOL('m', NULL, &opts.merge,
+			 N_("perform a merge in addition to a read")),
+		OPT_BOOL(0, "trivial", &opts.trivial_merges_only,
+			 N_("3-way merge if no file level merging required")),
+		OPT_BOOL(0, "aggressive", &opts.aggressive,
+			 N_("3-way merge in presence of adds and removes")),
+		OPT_BOOL(0, "reset", &opts.reset,
+			 N_("same as -m, but discard unmerged entries")),
 		{ OPTION_STRING, 0, "prefix", &opts.prefix, N_("<subdirectory>/"),
 		  N_("read the tree into the index under <subdirectory>/"),
 		  PARSE_OPT_NONEG | PARSE_OPT_LITERAL_ARGHELP },
-		OPT_SET_INT('u', NULL, &opts.update,
-			    N_("update working tree with merge result"), 1),
+		OPT_BOOL('u', NULL, &opts.update,
+			 N_("update working tree with merge result")),
 		{ OPTION_CALLBACK, 0, "exclude-per-directory", &opts,
 		  N_("gitignore"),
 		  N_("allow explicitly ignored files to be overwritten"),
 		  PARSE_OPT_NONEG, exclude_per_directory_cb },
-		OPT_SET_INT('i', NULL, &opts.index_only,
-			    N_("don't check the working tree after merging"), 1),
+		OPT_BOOL('i', NULL, &opts.index_only,
+			 N_("don't check the working tree after merging")),
 		OPT__DRY_RUN(&opts.dry_run, N_("don't update the index or the work tree")),
-		OPT_SET_INT(0, "no-sparse-checkout", &opts.skip_sparse_checkout,
-			    N_("skip applying sparse checkout filter"), 1),
-		OPT_SET_INT(0, "debug-unpack", &opts.debug_unpack,
-			    N_("debug unpack-trees"), 1),
+		OPT_BOOL(0, "no-sparse-checkout", &opts.skip_sparse_checkout,
+			 N_("skip applying sparse checkout filter")),
+		OPT_BOOL(0, "debug-unpack", &opts.debug_unpack,
+			 N_("debug unpack-trees")),
+		{ OPTION_CALLBACK, 0, "recurse-submodules", &recurse_submodules,
+			    "checkout", "control recursive updating of submodules",
+			    PARSE_OPT_OPTARG, option_parse_recurse_submodules },
 		OPT_END()
 	};
 
@@ -150,7 +173,13 @@ int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 	argc = parse_options(argc, argv, unused_prefix, read_tree_options,
 			     read_tree_usage, 0);
 
-	hold_locked_index(&lock_file, 1);
+	hold_locked_index(&lock_file, LOCK_DIE_ON_ERROR);
+
+	if (recurse_submodules != RECURSE_SUBMODULES_DEFAULT) {
+		gitmodules_config();
+		git_config(submodule_config, NULL);
+		set_config_update_recurse_submodules(RECURSE_SUBMODULES_ON);
+	}
 
 	prefix_set = opts.prefix ? 1 : 0;
 	if (1 < opts.merge + opts.reset + prefix_set)
@@ -181,7 +210,7 @@ int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 			die("failed to unpack tree object %s", arg);
 		stage++;
 	}
-	if (nr_trees == 0 && !read_empty)
+	if (!nr_trees && !read_empty && !opts.merge)
 		warning("read-tree: emptying the index with no arguments is deprecated; use --empty");
 	else if (nr_trees > 0 && read_empty)
 		die("passing trees as arguments contradicts --empty");
@@ -197,9 +226,10 @@ int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 		setup_work_tree();
 
 	if (opts.merge) {
-		if (stage < 2)
-			die("just how do you expect me to merge %d trees?", stage-1);
 		switch (stage - 1) {
+		case 0:
+			die("you must specify at least one tree to merge");
+			break;
 		case 1:
 			opts.fn = opts.prefix ? bind_merge : oneway_merge;
 			break;

@@ -2,12 +2,12 @@
 .\"     Title: git-difftool
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-DIFFTOOL" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-DIFFTOOL" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -133,7 +133,7 @@ when this option is specified\&. Additionally,
 is set in the environment\&.
 .RE
 .PP
-\-g, \-\-gui
+\-g, \-\-[no\-]gui
 .RS 4
 When
 \fIgit\-difftool\fR
@@ -144,7 +144,9 @@ or
 option the default diff tool will be read from the configured
 \fBdiff\&.guitool\fR
 variable instead of
-\fBdiff\&.tool\fR\&.
+\fBdiff\&.tool\fR\&. The
+\fB\-\-no\-gui\fR
+option can be used to override this setting\&.
 .RE
 .PP
 \-\-[no\-]trust\-exit\-code

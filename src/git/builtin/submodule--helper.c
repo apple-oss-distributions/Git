@@ -4,7 +4,6 @@
 #include "quote.h"
 #include "pathspec.h"
 #include "dir.h"
-#include "utf8.h"
 #include "submodule.h"
 #include "submodule-config.h"
 #include "string-list.h"
@@ -270,6 +269,29 @@ static int module_list_compute(int argc, const char **argv,
 	return result;
 }
 
+static void module_list_active(struct module_list *list)
+{
+	int i;
+	struct module_list active_modules = MODULE_LIST_INIT;
+
+	gitmodules_config();
+
+	for (i = 0; i < list->nr; i++) {
+		const struct cache_entry *ce = list->entries[i];
+
+		if (!is_submodule_initialized(ce->name))
+			continue;
+
+		ALLOC_GROW(active_modules.entries,
+			   active_modules.nr + 1,
+			   active_modules.alloc);
+		active_modules.entries[active_modules.nr++] = ce;
+	}
+
+	free(list->entries);
+	*list = active_modules;
+}
+
 static int module_list(int argc, const char **argv, const char *prefix)
 {
 	int i;
@@ -303,7 +325,7 @@ static int module_list(int argc, const char **argv, const char *prefix)
 			printf("%06o %s %d\t", ce->ce_mode,
 			       oid_to_hex(&ce->oid), ce_stage(ce));
 
-		utf8_fprintf(stdout, "%s\n", ce->name);
+		fprintf(stdout, "%s\n", ce->name);
 	}
 	return 0;
 }
@@ -317,8 +339,12 @@ static void init_submodule(const char *path, const char *prefix, int quiet)
 	/* Only loads from .gitmodules, no overlay with .git/config */
 	gitmodules_config();
 
-	if (prefix) {
-		strbuf_addf(&sb, "%s%s", prefix, path);
+	if (prefix && get_super_prefix())
+		die("BUG: cannot have prefix and superprefix");
+	else if (prefix)
+		displaypath = xstrdup(relative_path(path, prefix, &sb));
+	else if (get_super_prefix()) {
+		strbuf_addf(&sb, "%s%s", get_super_prefix(), path);
 		displaypath = strbuf_detach(&sb, NULL);
 	} else
 		displaypath = xstrdup(path);
@@ -330,6 +356,18 @@ static void init_submodule(const char *path, const char *prefix, int quiet)
 			displaypath);
 
 	/*
+	 * NEEDSWORK: In a multi-working-tree world, this needs to be
+	 * set in the per-worktree config.
+	 *
+	 * Set active flag for the submodule being initialized
+	 */
+	if (!is_submodule_initialized(path)) {
+		strbuf_reset(&sb);
+		strbuf_addf(&sb, "submodule.%s.active", sub->name);
+		git_config_set_gently(sb.buf, "true");
+	}
+
+	/*
 	 * Copy url setting when it is not set yet.
 	 * To look up the url in .git/config, we must not fall back to
 	 * .gitmodules, so look it up directly.
@@ -337,11 +375,11 @@ static void init_submodule(const char *path, const char *prefix, int quiet)
 	strbuf_reset(&sb);
 	strbuf_addf(&sb, "submodule.%s.url", sub->name);
 	if (git_config_get_string(sb.buf, &url)) {
-		url = xstrdup(sub->url);
-
-		if (!url)
+		if (!sub->url)
 			die(_("No url found for submodule path '%s' in .gitmodules"),
 				displaypath);
+
+		url = xstrdup(sub->url);
 
 		/* Possibly a url relative to parent */
 		if (starts_with_dot_dot_slash(url) ||
@@ -352,12 +390,10 @@ static void init_submodule(const char *path, const char *prefix, int quiet)
 			strbuf_addf(&remotesb, "remote.%s.url", remote);
 			free(remote);
 
-			if (git_config_get_string(remotesb.buf, &remoteurl))
-				/*
-				 * The repository is its own
-				 * authoritative upstream
-				 */
+			if (git_config_get_string(remotesb.buf, &remoteurl)) {
+				warning(_("could not lookup configuration '%s'. Assuming this repository is its own authoritative upstream."), remotesb.buf);
 				remoteurl = xgetcwd();
+			}
 			relurl = relative_url(remoteurl, url, NULL);
 			strbuf_release(&remotesb);
 			free(remoteurl);
@@ -403,9 +439,6 @@ static int module_init(int argc, const char **argv, const char *prefix)
 	int i;
 
 	struct option module_init_options[] = {
-		OPT_STRING(0, "prefix", &prefix,
-			   N_("path"),
-			   N_("alternative anchor for relative paths")),
 		OPT__QUIET(&quiet, N_("Suppress output for initializing a submodule")),
 		OPT_END()
 	};
@@ -420,6 +453,13 @@ static int module_init(int argc, const char **argv, const char *prefix)
 
 	if (module_list_compute(argc, argv, prefix, &pathspec, &list) < 0)
 		return 1;
+
+	/*
+	 * If there are no path args and submodule.active is set then,
+	 * by default, only initialize 'active' modules.
+	 */
+	if (!argc && git_config_get_value_multi("submodule.active"))
+		module_list_active(&list);
 
 	for (i = 0; i < list.nr; i++)
 		init_submodule(list.entries[i]->name, prefix, quiet);
@@ -498,9 +538,9 @@ static int add_possible_reference_from_superproject(
 
 	/*
 	 * If the alternate object store is another repository, try the
-	 * standard layout with .git/modules/<name>/objects
+	 * standard layout with .git/(modules/<name>)+/objects
 	 */
-	if (ends_with(alt->path, ".git/objects")) {
+	if (ends_with(alt->path, "/objects")) {
 		char *sm_alternate;
 		struct strbuf sb = STRBUF_INIT;
 		struct strbuf err = STRBUF_INIT;
@@ -578,11 +618,10 @@ static int module_clone(int argc, const char **argv, const char *prefix)
 	const char *name = NULL, *url = NULL, *depth = NULL;
 	int quiet = 0;
 	int progress = 0;
-	FILE *submodule_dot_git;
 	char *p, *path = NULL, *sm_gitdir;
-	struct strbuf rel_path = STRBUF_INIT;
 	struct strbuf sb = STRBUF_INIT;
 	struct string_list reference = STRING_LIST_INIT_NODUP;
+	char *sm_alternate = NULL, *error_strategy = NULL;
 
 	struct option module_clone_options[] = {
 		OPT_STRING(0, "prefix", &prefix,
@@ -624,7 +663,7 @@ static int module_clone(int argc, const char **argv, const char *prefix)
 				   module_clone_options);
 
 	strbuf_addf(&sb, "%s/modules/%s", get_git_dir(), name);
-	sm_gitdir = xstrdup(absolute_path(sb.buf));
+	sm_gitdir = absolute_pathdup(sb.buf);
 	strbuf_reset(&sb);
 
 	if (!is_absolute_path(path)) {
@@ -651,29 +690,27 @@ static int module_clone(int argc, const char **argv, const char *prefix)
 		strbuf_reset(&sb);
 	}
 
-	/* Write a .git file in the submodule to redirect to the superproject. */
-	strbuf_addf(&sb, "%s/.git", path);
-	if (safe_create_leading_directories_const(sb.buf) < 0)
-		die(_("could not create leading directories of '%s'"), sb.buf);
-	submodule_dot_git = fopen(sb.buf, "w");
-	if (!submodule_dot_git)
-		die_errno(_("cannot open file '%s'"), sb.buf);
+	/* Connect module worktree and git dir */
+	connect_work_tree_and_git_dir(path, sm_gitdir);
 
-	fprintf_or_die(submodule_dot_git, "gitdir: %s\n",
-		       relative_path(sm_gitdir, path, &rel_path));
-	if (fclose(submodule_dot_git))
-		die(_("could not close file %s"), sb.buf);
-	strbuf_reset(&sb);
-	strbuf_reset(&rel_path);
-
-	/* Redirect the worktree of the submodule in the superproject's config */
 	p = git_pathdup_submodule(path, "config");
 	if (!p)
 		die(_("could not get submodule directory for '%s'"), path);
-	git_config_set_in_file(p, "core.worktree",
-			       relative_path(path, sm_gitdir, &rel_path));
+
+	/* setup alternateLocation and alternateErrorStrategy in the cloned submodule if needed */
+	git_config_get_string("submodule.alternateLocation", &sm_alternate);
+	if (sm_alternate)
+		git_config_set_in_file(p, "submodule.alternateLocation",
+					   sm_alternate);
+	git_config_get_string("submodule.alternateErrorStrategy", &error_strategy);
+	if (error_strategy)
+		git_config_set_in_file(p, "submodule.alternateErrorStrategy",
+					   error_strategy);
+
+	free(sm_alternate);
+	free(error_strategy);
+
 	strbuf_release(&sb);
-	strbuf_release(&rel_path);
 	free(sm_gitdir);
 	free(path);
 	free(p);
@@ -745,7 +782,6 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
 	struct strbuf displaypath_sb = STRBUF_INIT;
 	struct strbuf sb = STRBUF_INIT;
 	const char *displaypath = NULL;
-	char *url = NULL;
 	int needs_cloning = 0;
 
 	if (ce_stage(ce)) {
@@ -779,15 +815,8 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
 		goto cleanup;
 	}
 
-	/*
-	 * Looking up the url in .git/config.
-	 * We must not fall back to .gitmodules as we only want
-	 * to process configured submodules.
-	 */
-	strbuf_reset(&sb);
-	strbuf_addf(&sb, "submodule.%s.url", sub->name);
-	git_config_get_string(sb.buf, &url);
-	if (!url) {
+	/* Check if the submodule has been initialized. */
+	if (!is_submodule_initialized(ce->name)) {
 		next_submodule_warn_missing(suc, out, displaypath);
 		goto cleanup;
 	}
@@ -821,7 +850,7 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
 		argv_array_push(&child->args, "--depth=1");
 	argv_array_pushl(&child->args, "--path", sub->path, NULL);
 	argv_array_pushl(&child->args, "--name", sub->name, NULL);
-	argv_array_pushl(&child->args, "--url", url, NULL);
+	argv_array_pushl(&child->args, "--url", sub->url, NULL);
 	if (suc->references.nr) {
 		struct string_list_item *item;
 		for_each_string_list_item(item, &suc->references)
@@ -831,7 +860,6 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
 		argv_array_push(&child->args, suc->depth);
 
 cleanup:
-	free(url);
 	strbuf_reset(&displaypath_sb);
 	strbuf_reset(&sb);
 
@@ -1009,7 +1037,7 @@ static int update_clone(int argc, const char **argv, const char *prefix)
 		return 1;
 
 	for_each_string_list_item(item, &suc.projectlines)
-		utf8_fprintf(stdout, "%s", item->string);
+		fprintf(stdout, "%s", item->string);
 
 	return 0;
 }
@@ -1076,21 +1104,118 @@ static int resolve_remote_submodule_branch(int argc, const char **argv,
 	return 0;
 }
 
+static int push_check(int argc, const char **argv, const char *prefix)
+{
+	struct remote *remote;
+
+	if (argc < 2)
+		die("submodule--helper push-check requires at least 1 argument");
+
+	/*
+	 * The remote must be configured.
+	 * This is to avoid pushing to the exact same URL as the parent.
+	 */
+	remote = pushremote_get(argv[1]);
+	if (!remote || remote->origin == REMOTE_UNCONFIGURED)
+		die("remote '%s' not configured", argv[1]);
+
+	/* Check the refspec */
+	if (argc > 2) {
+		int i, refspec_nr = argc - 2;
+		struct ref *local_refs = get_local_heads();
+		struct refspec *refspec = parse_push_refspec(refspec_nr,
+							     argv + 2);
+
+		for (i = 0; i < refspec_nr; i++) {
+			struct refspec *rs = refspec + i;
+
+			if (rs->pattern || rs->matching)
+				continue;
+
+			/*
+			 * LHS must match a single ref
+			 * NEEDSWORK: add logic to special case 'HEAD' once
+			 * working with submodules in a detached head state
+			 * ceases to be the norm.
+			 */
+			if (count_refspec_match(rs->src, local_refs, NULL) != 1)
+				die("src refspec '%s' must name a ref",
+				    rs->src);
+		}
+		free_refspec(refspec_nr, refspec);
+	}
+
+	return 0;
+}
+
+static int absorb_git_dirs(int argc, const char **argv, const char *prefix)
+{
+	int i;
+	struct pathspec pathspec;
+	struct module_list list = MODULE_LIST_INIT;
+	unsigned flags = ABSORB_GITDIR_RECURSE_SUBMODULES;
+
+	struct option embed_gitdir_options[] = {
+		OPT_STRING(0, "prefix", &prefix,
+			   N_("path"),
+			   N_("path into the working tree")),
+		OPT_BIT(0, "--recursive", &flags, N_("recurse into submodules"),
+			ABSORB_GITDIR_RECURSE_SUBMODULES),
+		OPT_END()
+	};
+
+	const char *const git_submodule_helper_usage[] = {
+		N_("git submodule--helper embed-git-dir [<path>...]"),
+		NULL
+	};
+
+	argc = parse_options(argc, argv, prefix, embed_gitdir_options,
+			     git_submodule_helper_usage, 0);
+
+	gitmodules_config();
+	git_config(submodule_config, NULL);
+
+	if (module_list_compute(argc, argv, prefix, &pathspec, &list) < 0)
+		return 1;
+
+	for (i = 0; i < list.nr; i++)
+		absorb_git_dir_into_superproject(prefix,
+				list.entries[i]->name, flags);
+
+	return 0;
+}
+
+static int is_active(int argc, const char **argv, const char *prefix)
+{
+	if (argc != 2)
+		die("submodule--helper is-active takes exactly 1 argument");
+
+	gitmodules_config();
+
+	return !is_submodule_initialized(argv[1]);
+}
+
+#define SUPPORT_SUPER_PREFIX (1<<0)
+
 struct cmd_struct {
 	const char *cmd;
 	int (*fn)(int, const char **, const char *);
+	unsigned option;
 };
 
 static struct cmd_struct commands[] = {
-	{"list", module_list},
-	{"name", module_name},
-	{"clone", module_clone},
-	{"update-clone", update_clone},
-	{"relative-path", resolve_relative_path},
-	{"resolve-relative-url", resolve_relative_url},
-	{"resolve-relative-url-test", resolve_relative_url_test},
-	{"init", module_init},
-	{"remote-branch", resolve_remote_submodule_branch}
+	{"list", module_list, 0},
+	{"name", module_name, 0},
+	{"clone", module_clone, 0},
+	{"update-clone", update_clone, 0},
+	{"relative-path", resolve_relative_path, 0},
+	{"resolve-relative-url", resolve_relative_url, 0},
+	{"resolve-relative-url-test", resolve_relative_url_test, 0},
+	{"init", module_init, SUPPORT_SUPER_PREFIX},
+	{"remote-branch", resolve_remote_submodule_branch, 0},
+	{"push-check", push_check, 0},
+	{"absorb-git-dirs", absorb_git_dirs, SUPPORT_SUPER_PREFIX},
+	{"is-active", is_active, 0},
 };
 
 int cmd_submodule__helper(int argc, const char **argv, const char *prefix)
@@ -1100,9 +1225,15 @@ int cmd_submodule__helper(int argc, const char **argv, const char *prefix)
 		die(_("submodule--helper subcommand must be "
 		      "called with a subcommand"));
 
-	for (i = 0; i < ARRAY_SIZE(commands); i++)
-		if (!strcmp(argv[1], commands[i].cmd))
+	for (i = 0; i < ARRAY_SIZE(commands); i++) {
+		if (!strcmp(argv[1], commands[i].cmd)) {
+			if (get_super_prefix() &&
+			    !(commands[i].option & SUPPORT_SUPER_PREFIX))
+				die(_("%s doesn't support --super-prefix"),
+				    commands[i].cmd);
 			return commands[i].fn(argc - 1, argv + 1, prefix);
+		}
+	}
 
 	die(_("'%s' is not a valid submodule--helper "
 	      "subcommand"), argv[1]);

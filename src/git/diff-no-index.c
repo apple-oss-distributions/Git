@@ -185,10 +185,8 @@ static int queue_diff(struct diff_options *o,
 		struct diff_filespec *d1, *d2;
 
 		if (DIFF_OPT_TST(o, REVERSE_DIFF)) {
-			unsigned tmp;
-			const char *tmp_c;
-			tmp = mode1; mode1 = mode2; mode2 = tmp;
-			tmp_c = name1; name1 = name2; name2 = tmp_c;
+			SWAP(mode1, mode2);
+			SWAP(name1, name2);
 		}
 
 		d1 = noindex_filespec(name1, mode1);
@@ -238,7 +236,7 @@ static void fixup_paths(const char **path, struct strbuf *replacement)
 void diff_no_index(struct rev_info *revs,
 		   int argc, const char **argv)
 {
-	int i, prefixlen;
+	int i;
 	const char *paths[2];
 	struct strbuf replacement = STRBUF_INIT;
 	const char *prefix = revs->prefix;
@@ -259,7 +257,6 @@ void diff_no_index(struct rev_info *revs,
 		}
 	}
 
-	prefixlen = prefix ? strlen(prefix) : 0;
 	for (i = 0; i < 2; i++) {
 		const char *p = argv[argc - 2 + i];
 		if (!strcmp(p, "-"))
@@ -268,8 +265,8 @@ void diff_no_index(struct rev_info *revs,
 			 * path that is "-", spell it as "./-".
 			 */
 			p = file_from_standard_input;
-		else if (prefixlen)
-			p = xstrdup(prefix_filename(prefix, prefixlen, p));
+		else if (prefix)
+			p = prefix_filename(prefix, p);
 		paths[i] = p;
 	}
 

@@ -126,12 +126,12 @@ test_expect_success 'NUL separation with --stat' '
 	test_i18ncmp expected actual
 '
 
-test_expect_failure 'NUL termination with --stat' '
+test_expect_failure C_LOCALE_OUTPUT 'NUL termination with --stat' '
 	stat0_part=$(git diff --stat HEAD^ HEAD) &&
 	stat1_part=$(git diff-tree --no-commit-id --stat --root HEAD^) &&
 	printf "add bar\n$stat0_part\n\0$(commit_msg)\n$stat1_part\n0" >expected &&
 	git log -z --stat --pretty="tformat:%s" >actual &&
-	test_i18ncmp expected actual
+	test_cmp expected actual
 '
 
 test_expect_success 'setup more commits' '
@@ -533,6 +533,32 @@ test_expect_success 'clean log decoration' '
 	EOF
 	sort actual >actual1 &&
 	test_cmp expected actual1
+'
+
+cat >trailers <<EOF
+Signed-off-by: A U Thor <author@example.com>
+Acked-by: A U Thor <author@example.com>
+[ v2 updated patch description ]
+Signed-off-by: A U Thor <author@example.com>
+EOF
+
+test_expect_success 'pretty format %(trailers) shows trailers' '
+	echo "Some contents" >trailerfile &&
+	git add trailerfile &&
+	git commit -F - <<-EOF &&
+	trailers: this commit message has trailers
+
+	This commit is a test commit with trailers at the end. We parse this
+	message and display the trailers using %bT
+
+	$(cat trailers)
+	EOF
+	git log --no-walk --pretty="%(trailers)" >actual &&
+	cat >expect <<-EOF &&
+	$(cat trailers)
+
+	EOF
+	test_cmp expect actual
 '
 
 test_done

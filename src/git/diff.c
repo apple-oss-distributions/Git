@@ -28,11 +28,11 @@
 
 static int diff_detect_rename_default;
 static int diff_indent_heuristic; /* experimental */
-static int diff_compaction_heuristic; /* experimental */
 static int diff_rename_limit_default = 400;
 static int diff_suppress_blank_empty;
 static int diff_use_color_default = -1;
 static int diff_context_default = 3;
+static int diff_interhunk_context_default;
 static const char *diff_word_regex_cfg;
 static const char *external_diff_cmd_cfg;
 static const char *diff_order_file_cfg;
@@ -223,16 +223,8 @@ void init_diff_ui_defaults(void)
 
 int git_diff_heuristic_config(const char *var, const char *value, void *cb)
 {
-	if (!strcmp(var, "diff.indentheuristic")) {
+	if (!strcmp(var, "diff.indentheuristic"))
 		diff_indent_heuristic = git_config_bool(var, value);
-		if (diff_indent_heuristic)
-			diff_compaction_heuristic = 0;
-	}
-	if (!strcmp(var, "diff.compactionheuristic")) {
-		diff_compaction_heuristic = git_config_bool(var, value);
-		if (diff_compaction_heuristic)
-			diff_indent_heuristic = 0;
-	}
 	return 0;
 }
 
@@ -245,6 +237,12 @@ int git_diff_ui_config(const char *var, const char *value, void *cb)
 	if (!strcmp(var, "diff.context")) {
 		diff_context_default = git_config_int(var, value);
 		if (diff_context_default < 0)
+			return -1;
+		return 0;
+	}
+	if (!strcmp(var, "diff.interhunkcontext")) {
+		diff_interhunk_context_default = git_config_int(var, value);
+		if (diff_interhunk_context_default < 0)
 			return -1;
 		return 0;
 	}
@@ -400,7 +398,7 @@ static struct diff_tempfile {
 	 */
 	const char *name;
 
-	char hex[GIT_SHA1_HEXSZ + 1];
+	char hex[GIT_MAX_HEXSZ + 1];
 	char mode[10];
 
 	/*
@@ -913,7 +911,7 @@ static int fn_out_diff_words_write_helper(FILE *fp,
 /*
  * '--color-words' algorithm can be described as:
  *
- *   1. collect a the minus/plus lines of a diff hunk, divided into
+ *   1. collect the minus/plus lines of a diff hunk, divided into
  *      minus-lines and plus-lines;
  *
  *   2. break both minus-lines and plus-lines into words and
@@ -2872,8 +2870,25 @@ int diff_populate_filespec(struct diff_filespec *s, unsigned int flags)
 			s->should_free = 1;
 			return 0;
 		}
-		if (size_only)
+
+		/*
+		 * Even if the caller would be happy with getting
+		 * only the size, we cannot return early at this
+		 * point if the path requires us to run the content
+		 * conversion.
+		 */
+		if (size_only && !would_convert_to_git(s->path))
 			return 0;
+
+		/*
+		 * Note: this check uses xsize_t(st.st_size) that may
+		 * not be the true size of the blob after it goes
+		 * through convert_to_git().  This may not strictly be
+		 * correct, but the whole point of big_file_threshold
+		 * and is_binary check being that we want to avoid
+		 * opening the file and inspecting the contents, this
+		 * is probably fine.
+		 */
 		if ((flags & CHECK_BINARY) &&
 		    s->size > big_file_threshold && s->is_binary == -1) {
 			s->is_binary = 1;
@@ -3017,7 +3032,7 @@ static struct diff_tempfile *prepare_temp_file(const char *name,
 			if (!one->oid_valid)
 				sha1_to_hex_r(temp->hex, null_sha1);
 			else
-				sha1_to_hex_r(temp->hex, one->oid.hash);
+				oid_to_hex_r(temp->hex, &one->oid);
 			/* Even though we may sometimes borrow the
 			 * contents from the work tree, we always want
 			 * one->mode.  mode is trustworthy even when
@@ -3106,7 +3121,8 @@ static const char *diff_abbrev_oid(const struct object_id *oid, int abbrev)
 			abbrev = FALLBACK_DEFAULT_ABBREV;
 		if (abbrev > GIT_SHA1_HEXSZ)
 			die("BUG: oid abbreviation out of range: %d", abbrev);
-		hex[abbrev] = '\0';
+		if (abbrev)
+			hex[abbrev] = '\0';
 		return hex;
 	}
 }
@@ -3364,11 +3380,13 @@ void diff_setup(struct diff_options *options)
 
 	options->file = stdout;
 
+	options->abbrev = DEFAULT_ABBREV;
 	options->line_termination = '\n';
 	options->break_opt = -1;
 	options->rename_limit = -1;
 	options->dirstat_permille = diff_dirstat_permille_default;
 	options->context = diff_context_default;
+	options->interhunkcontext = diff_interhunk_context_default;
 	options->ws_error_highlight = ws_error_highlight_default;
 	DIFF_OPT_SET(options, RENAME_EMPTY);
 
@@ -3380,8 +3398,6 @@ void diff_setup(struct diff_options *options)
 	options->xdl_opts |= diff_algorithm;
 	if (diff_indent_heuristic)
 		DIFF_XDL_SET(options, INDENT_HEURISTIC);
-	else if (diff_compaction_heuristic)
-		DIFF_XDL_SET(options, COMPACTION_HEURISTIC);
 
 	options->orderfile = diff_order_file_cfg;
 
@@ -3876,16 +3892,10 @@ int diff_opt_parse(struct diff_options *options,
 		DIFF_XDL_SET(options, IGNORE_WHITESPACE_AT_EOL);
 	else if (!strcmp(arg, "--ignore-blank-lines"))
 		DIFF_XDL_SET(options, IGNORE_BLANK_LINES);
-	else if (!strcmp(arg, "--indent-heuristic")) {
+	else if (!strcmp(arg, "--indent-heuristic"))
 		DIFF_XDL_SET(options, INDENT_HEURISTIC);
-		DIFF_XDL_CLR(options, COMPACTION_HEURISTIC);
-	} else if (!strcmp(arg, "--no-indent-heuristic"))
+	else if (!strcmp(arg, "--no-indent-heuristic"))
 		DIFF_XDL_CLR(options, INDENT_HEURISTIC);
-	else if (!strcmp(arg, "--compaction-heuristic")) {
-		DIFF_XDL_SET(options, COMPACTION_HEURISTIC);
-		DIFF_XDL_CLR(options, INDENT_HEURISTIC);
-	} else if (!strcmp(arg, "--no-compaction-heuristic"))
-		DIFF_XDL_CLR(options, COMPACTION_HEURISTIC);
 	else if (!strcmp(arg, "--patience"))
 		options->xdl_opts = DIFF_WITH_ALG(options, PATIENCE_DIFF);
 	else if (!strcmp(arg, "--histogram"))
@@ -4013,8 +4023,7 @@ int diff_opt_parse(struct diff_options *options,
 	else if (!strcmp(arg, "--pickaxe-regex"))
 		options->pickaxe_opts |= DIFF_PICKAXE_REGEX;
 	else if ((argcount = short_opt('O', av, &optarg))) {
-		const char *path = prefix_filename(prefix, strlen(prefix), optarg);
-		options->orderfile = xstrdup(path);
+		options->orderfile = prefix_filename(prefix, optarg);
 		return argcount;
 	}
 	else if ((argcount = parse_long_opt("diff-filter", av, &optarg))) {
@@ -4024,6 +4033,8 @@ int diff_opt_parse(struct diff_options *options,
 			    offending, optarg);
 		return argcount;
 	}
+	else if (!strcmp(arg, "--no-abbrev"))
+		options->abbrev = 0;
 	else if (!strcmp(arg, "--abbrev"))
 		options->abbrev = DEFAULT_ABBREV;
 	else if (skip_prefix(arg, "--abbrev=", &arg)) {
@@ -4059,13 +4070,14 @@ int diff_opt_parse(struct diff_options *options,
 	else if (!strcmp(arg, "--no-function-context"))
 		DIFF_OPT_CLR(options, FUNCCONTEXT);
 	else if ((argcount = parse_long_opt("output", av, &optarg))) {
-		const char *path = prefix_filename(prefix, strlen(prefix), optarg);
+		char *path = prefix_filename(prefix, optarg);
 		options->file = fopen(path, "w");
 		if (!options->file)
 			die_errno("Could not open '%s'", path);
 		options->close_file = 1;
 		if (options->use_color != GIT_COLOR_ALWAYS)
 			options->use_color = GIT_COLOR_NEVER;
+		free(path);
 		return argcount;
 	} else
 		return 0;
@@ -4207,7 +4219,7 @@ const char *diff_aligned_abbrev(const struct object_id *oid, int len)
 	 * uniqueness across all objects (statistically speaking).
 	 */
 	if (abblen < GIT_SHA1_HEXSZ - 3) {
-		static char hex[GIT_SHA1_HEXSZ + 1];
+		static char hex[GIT_MAX_HEXSZ + 1];
 		if (len < abblen && abblen <= len + 2)
 			xsnprintf(hex, sizeof(hex), "%s%.*s", abbrev, len+3-abblen, "..");
 		else
@@ -4455,6 +4467,7 @@ static void flush_one_pair(struct diff_filepair *p, struct diff_options *opt)
 		name_a = p->two->path;
 		name_b = NULL;
 		strip_prefix(opt->prefix_length, &name_a, &name_b);
+		fprintf(opt->file, "%s", diff_line_prefix(opt));
 		write_name_quoted(name_a, opt->file, opt->line_termination);
 	}
 }
@@ -4557,6 +4570,19 @@ static void patch_id_consume(void *priv, char *line, unsigned long len)
 	data->patchlen += new_len;
 }
 
+static void patch_id_add_string(git_SHA_CTX *ctx, const char *str)
+{
+	git_SHA1_Update(ctx, str, strlen(str));
+}
+
+static void patch_id_add_mode(git_SHA_CTX *ctx, unsigned mode)
+{
+	/* large enough for 2^32 in octal */
+	char buf[12];
+	int len = xsnprintf(buf, sizeof(buf), "%06o", mode);
+	git_SHA1_Update(ctx, buf, len);
+}
+
 /* returns 0 upon success, and writes result into sha1 */
 static int diff_get_patch_id(struct diff_options *options, unsigned char *sha1, int diff_header_only)
 {
@@ -4564,7 +4590,6 @@ static int diff_get_patch_id(struct diff_options *options, unsigned char *sha1, 
 	int i;
 	git_SHA_CTX ctx;
 	struct patch_id_t data;
-	char buffer[PATH_MAX * 4 + 20];
 
 	git_SHA1_Init(&ctx);
 	memset(&data, 0, sizeof(struct patch_id_t));
@@ -4596,36 +4621,30 @@ static int diff_get_patch_id(struct diff_options *options, unsigned char *sha1, 
 
 		len1 = remove_space(p->one->path, strlen(p->one->path));
 		len2 = remove_space(p->two->path, strlen(p->two->path));
-		if (p->one->mode == 0)
-			len1 = snprintf(buffer, sizeof(buffer),
-					"diff--gita/%.*sb/%.*s"
-					"newfilemode%06o"
-					"---/dev/null"
-					"+++b/%.*s",
-					len1, p->one->path,
-					len2, p->two->path,
-					p->two->mode,
-					len2, p->two->path);
-		else if (p->two->mode == 0)
-			len1 = snprintf(buffer, sizeof(buffer),
-					"diff--gita/%.*sb/%.*s"
-					"deletedfilemode%06o"
-					"---a/%.*s"
-					"+++/dev/null",
-					len1, p->one->path,
-					len2, p->two->path,
-					p->one->mode,
-					len1, p->one->path);
-		else
-			len1 = snprintf(buffer, sizeof(buffer),
-					"diff--gita/%.*sb/%.*s"
-					"---a/%.*s"
-					"+++b/%.*s",
-					len1, p->one->path,
-					len2, p->two->path,
-					len1, p->one->path,
-					len2, p->two->path);
-		git_SHA1_Update(&ctx, buffer, len1);
+		patch_id_add_string(&ctx, "diff--git");
+		patch_id_add_string(&ctx, "a/");
+		git_SHA1_Update(&ctx, p->one->path, len1);
+		patch_id_add_string(&ctx, "b/");
+		git_SHA1_Update(&ctx, p->two->path, len2);
+
+		if (p->one->mode == 0) {
+			patch_id_add_string(&ctx, "newfilemode");
+			patch_id_add_mode(&ctx, p->two->mode);
+			patch_id_add_string(&ctx, "---/dev/null");
+			patch_id_add_string(&ctx, "+++b/");
+			git_SHA1_Update(&ctx, p->two->path, len2);
+		} else if (p->two->mode == 0) {
+			patch_id_add_string(&ctx, "deletedfilemode");
+			patch_id_add_mode(&ctx, p->one->mode);
+			patch_id_add_string(&ctx, "---a/");
+			git_SHA1_Update(&ctx, p->one->path, len1);
+			patch_id_add_string(&ctx, "+++/dev/null");
+		} else {
+			patch_id_add_string(&ctx, "---a/");
+			git_SHA1_Update(&ctx, p->one->path, len1);
+			patch_id_add_string(&ctx, "+++b/");
+			git_SHA1_Update(&ctx, p->two->path, len2);
+		}
 
 		if (diff_header_only)
 			continue;
@@ -5122,14 +5141,10 @@ void diff_change(struct diff_options *options,
 		return;
 
 	if (DIFF_OPT_TST(options, REVERSE_DIFF)) {
-		unsigned tmp;
-		const unsigned char *tmp_c;
-		tmp = old_mode; old_mode = new_mode; new_mode = tmp;
-		tmp_c = old_sha1; old_sha1 = new_sha1; new_sha1 = tmp_c;
-		tmp = old_sha1_valid; old_sha1_valid = new_sha1_valid;
-			new_sha1_valid = tmp;
-		tmp = old_dirty_submodule; old_dirty_submodule = new_dirty_submodule;
-			new_dirty_submodule = tmp;
+		SWAP(old_mode, new_mode);
+		SWAP(old_sha1, new_sha1);
+		SWAP(old_sha1_valid, new_sha1_valid);
+		SWAP(old_dirty_submodule, new_dirty_submodule);
 	}
 
 	if (options->prefix &&

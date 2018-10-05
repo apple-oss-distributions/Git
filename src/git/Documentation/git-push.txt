@@ -217,6 +217,47 @@ with this feature.
 +
 "--no-force-with-lease" will cancel all the previous --force-with-lease on the
 command line.
++
+A general note on safety: supplying this option without an expected
+value, i.e. as `--force-with-lease` or `--force-with-lease=<refname>`
+interacts very badly with anything that implicitly runs `git fetch` on
+the remote to be pushed to in the background, e.g. `git fetch origin`
+on your repository in a cronjob.
++
+The protection it offers over `--force` is ensuring that subsequent
+changes your work wasn't based on aren't clobbered, but this is
+trivially defeated if some background process is updating refs in the
+background. We don't have anything except the remote tracking info to
+go by as a heuristic for refs you're expected to have seen & are
+willing to clobber.
++
+If your editor or some other system is running `git fetch` in the
+background for you a way to mitigate this is to simply set up another
+remote:
++
+	git remote add origin-push $(git config remote.origin.url)
+	git fetch origin-push
++
+Now when the background process runs `git fetch origin` the references
+on `origin-push` won't be updated, and thus commands like:
++
+	git push --force-with-lease origin-push
++
+Will fail unless you manually run `git fetch origin-push`. This method
+is of course entirely defeated by something that runs `git fetch
+--all`, in that case you'd need to either disable it or do something
+more tedious like:
++
+	git fetch              # update 'master' from remote
+	git tag base master    # mark our base point
+	git rebase -i master   # rewrite some commits
+	git push --force-with-lease=master:base master:master
++
+I.e. create a `base` tag for versions of the upstream code that you've
+seen and are willing to overwrite, then rewrite history, and finally
+force push changes to `master` if the remote version is still at
+`base`, regardless of what your local `remotes/origin/master` has been
+updated to in the background.
 
 -f::
 --force::
@@ -272,7 +313,7 @@ origin +master` to force a push to the `master` branch). See the
 	standard error stream is not directed to a terminal.
 
 --no-recurse-submodules::
---recurse-submodules=check|on-demand|no::
+--recurse-submodules=check|on-demand|only|no::
 	May be used to make sure all submodule commits used by the
 	revisions to be pushed are available on a remote-tracking branch.
 	If 'check' is used Git will verify that all submodule commits that
@@ -280,11 +321,12 @@ origin +master` to force a push to the `master` branch). See the
 	remote of the submodule. If any commits are missing the push will
 	be aborted and exit with non-zero status. If 'on-demand' is used
 	all submodules that changed in the revisions to be pushed will be
-	pushed. If on-demand was not able to push all necessary revisions
-	it will also be aborted and exit with non-zero status. A value of
-	'no' or using `--no-recurse-submodules` can be used to override the
-	push.recurseSubmodules configuration variable when no submodule
-	recursion is required.
+	pushed. If on-demand was not able to push all necessary revisions it will
+	also be aborted and exit with non-zero status. If 'only' is used all
+	submodules will be recursively pushed while the superproject is left
+	unpushed. A value of 'no' or using `--no-recurse-submodules` can be used
+	to override the push.recurseSubmodules configuration variable when no
+	submodule recursion is required.
 
 --[no-]verify::
 	Toggle the pre-push hook (see linkgit:githooks[5]).  The
@@ -558,6 +600,8 @@ The above command would change the origin repository to
 Commits A and B would no longer belong to a branch with a symbolic name,
 and so would be unreachable.  As such, these commits would be removed by
 a `git gc` command on the origin repository.
+
+include::transfer-data-leaks.txt[]
 
 GIT
 ---

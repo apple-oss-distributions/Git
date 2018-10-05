@@ -74,8 +74,9 @@ struct rev_info {
 	/* topo-sort */
 	enum rev_sort_order sort_order;
 
-	unsigned int	early_output:1,
-			ignore_missing:1,
+	unsigned int early_output;
+
+	unsigned int	ignore_missing:1,
 			ignore_missing_links:1;
 
 	/* Traversal flags */
@@ -258,8 +259,6 @@ extern void put_revision_mark(const struct rev_info *revs,
 
 extern void mark_parents_uninteresting(struct commit *commit);
 extern void mark_tree_uninteresting(struct tree *tree);
-
-char *path_name(struct strbuf *path, const char *name);
 
 extern void show_object_with_name(FILE *, struct object *, const char *);
 

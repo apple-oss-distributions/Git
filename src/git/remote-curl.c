@@ -22,6 +22,7 @@ struct options {
 	unsigned long depth;
 	char *deepen_since;
 	struct string_list deepen_not;
+	struct string_list push_options;
 	unsigned progress : 1,
 		check_self_contained_and_connected : 1,
 		cloning : 1,
@@ -139,6 +140,9 @@ static int set_option(const char *name, const char *value)
 		else
 			return -1;
 		return 0;
+	} else if (!strcmp(name, "push-option")) {
+		string_list_append(&options.push_options, value);
+		return 0;
 
 #if LIBCURL_VERSION_NUM >= 0x070a08
 	} else if (!strcmp(name, "family")) {
@@ -163,7 +167,7 @@ struct discovery {
 	char *buf;
 	size_t len;
 	struct ref *refs;
-	struct sha1_array shallow;
+	struct oid_array shallow;
 	unsigned proto_git : 1;
 };
 static struct discovery *last_discovery;
@@ -230,7 +234,7 @@ static void free_discovery(struct discovery *d)
 	if (d) {
 		if (d == last_discovery)
 			last_discovery = NULL;
-		free(d->shallow.sha1);
+		free(d->shallow.oid);
 		free(d->buf_alloc);
 		free_refs(d->refs);
 		free(d);
@@ -274,7 +278,7 @@ static struct discovery *discover_refs(const char *service, int for_push)
 	struct strbuf effective_url = STRBUF_INIT;
 	struct discovery *last = last_discovery;
 	int http_ret, maybe_smart = 0;
-	struct http_get_options options;
+	struct http_get_options http_options;
 
 	if (last && !strcmp(service, last->service))
 		return last;
@@ -291,15 +295,16 @@ static struct discovery *discover_refs(const char *service, int for_push)
 		strbuf_addf(&refs_url, "service=%s", service);
 	}
 
-	memset(&options, 0, sizeof(options));
-	options.content_type = &type;
-	options.charset = &charset;
-	options.effective_url = &effective_url;
-	options.base_url = &url;
-	options.no_cache = 1;
-	options.keep_error = 1;
+	memset(&http_options, 0, sizeof(http_options));
+	http_options.content_type = &type;
+	http_options.charset = &charset;
+	http_options.effective_url = &effective_url;
+	http_options.base_url = &url;
+	http_options.initial_request = 1;
+	http_options.no_cache = 1;
+	http_options.keep_error = 1;
 
-	http_ret = http_get_strbuf(refs_url.buf, &buffer, &options);
+	http_ret = http_get_strbuf(refs_url.buf, &buffer, &http_options);
 	switch (http_ret) {
 	case HTTP_OK:
 		break;
@@ -313,6 +318,9 @@ static struct discovery *discover_refs(const char *service, int for_push)
 		show_http_message(&type, &charset, &buffer);
 		die("unable to access '%s': %s", url.buf, curl_errorstr);
 	}
+
+	if (options.verbosity && !starts_with(refs_url.buf, url.buf))
+		warning(_("redirecting to %s"), url.buf);
 
 	last= xcalloc(1, sizeof(*last_discovery));
 	last->service = service;
@@ -400,6 +408,7 @@ struct rpc_state {
 	size_t pos;
 	int in;
 	int out;
+	int any_written;
 	struct strbuf result;
 	unsigned gzip_request : 1;
 	unsigned initial_buffer : 1;
@@ -456,6 +465,8 @@ static size_t rpc_in(char *ptr, size_t eltsize,
 {
 	size_t size = eltsize * nmemb;
 	struct rpc_state *rpc = buffer_;
+	if (size)
+		rpc->any_written = 1;
 	write_or_die(rpc->in, ptr, size);
 	return size;
 }
@@ -518,6 +529,12 @@ static int probe_rpc(struct rpc_state *rpc, struct slot_results *results)
 	curl_slist_free_all(headers);
 	strbuf_release(&buf);
 	return err;
+}
+
+static curl_off_t xcurl_off_t(ssize_t len) {
+	if (len > maximum_signed_value_of_type(curl_off_t))
+		die("cannot handle pushes this big");
+	return (curl_off_t) len;
 }
 
 static int post_rpc(struct rpc_state *rpc)
@@ -603,7 +620,7 @@ retry:
 		 * and we just need to send it.
 		 */
 		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDS, gzip_body);
-		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE, gzip_size);
+		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE_LARGE, xcurl_off_t(gzip_size));
 
 	} else if (use_gzip && 1024 < rpc->len) {
 		/* The client backend isn't giving us compressed data so
@@ -634,7 +651,7 @@ retry:
 
 		headers = curl_slist_append(headers, "Content-Encoding: gzip");
 		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDS, gzip_body);
-		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE, gzip_size);
+		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE_LARGE, xcurl_off_t(gzip_size));
 
 		if (options.verbosity > 1) {
 			fprintf(stderr, "POST %s (gzip %lu to %lu bytes)\n",
@@ -647,7 +664,7 @@ retry:
 		 * more normal Content-Length approach.
 		 */
 		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDS, rpc->buf);
-		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE, rpc->len);
+		curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE_LARGE, xcurl_off_t(rpc->len));
 		if (options.verbosity > 1) {
 			fprintf(stderr, "POST %s (%lu bytes)\n",
 				rpc->service_name, (unsigned long)rpc->len);
@@ -659,12 +676,17 @@ retry:
 	curl_easy_setopt(slot->curl, CURLOPT_WRITEFUNCTION, rpc_in);
 	curl_easy_setopt(slot->curl, CURLOPT_FILE, rpc);
 
+
+	rpc->any_written = 0;
 	err = run_slot(slot, NULL);
 	if (err == HTTP_REAUTH && !large_request) {
 		credential_fill(&http_auth);
 		goto retry;
 	}
 	if (err != HTTP_OK)
+		err = -1;
+
+	if (!rpc->any_written)
 		err = -1;
 
 	curl_slist_free_all(headers);
@@ -931,6 +953,9 @@ static int push_git(struct discovery *heads, int nr_spec, char **specs)
 		argv_array_push(&args, "--quiet");
 	else if (options.verbosity > 1)
 		argv_array_push(&args, "--verbose");
+	for (i = 0; i < options.push_options.nr; i++)
+		argv_array_pushf(&args, "--push-option=%s",
+				 options.push_options.items[i].string);
 	argv_array_push(&args, options.progress ? "--progress" : "--no-progress");
 	for_each_string_list_item(cas_option, &cas_options)
 		argv_array_push(&args, cas_option->string);
@@ -1016,6 +1041,7 @@ int cmd_main(int argc, const char **argv)
 	options.progress = !!isatty(2);
 	options.thin = 1;
 	string_list_init(&options.deepen_not, 1);
+	string_list_init(&options.push_options, 1);
 
 	remote = remote_get(argv[1]);
 

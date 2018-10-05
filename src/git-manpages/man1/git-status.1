@@ -2,12 +2,12 @@
 .\"     Title: git-status
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-STATUS" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-STATUS" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -313,6 +313,10 @@ U           U    unmerged, both modified
 .RE
 .\}
 .sp
+Submodules have more state and instead report M the submodule has a different HEAD than recorded in the index m the submodule has modified content ? the submodule has untracked files since modified content or untracked files in a submodule cannot be added via \fBgit add\fR in the superproject to prepare a commit\&.
+.sp
+\fIm\fR and \fI?\fR are applied recursively\&. For example if a nested submodule in a submodule contains an untracked file, this is reported as \fI?\fR as well\&.
+.sp
 If \-b is used the short\-format status is preceded by a line
 .sp
 .if n \{\
@@ -351,6 +355,8 @@ The user\(cqs status\&.relativePaths configuration is not respected; paths shown
 .RE
 .sp
 There is also an alternate \-z format recommended for machine parsing\&. In that format, the status field is the same, but some other things change\&. First, the \fI\->\fR is omitted from rename entries and the field order is reversed (e\&.g \fIfrom \-> to\fR becomes \fIto from\fR)\&. Second, a NUL (ASCII 0) follows each filename, replacing space as a field separator and the terminating newline (but a space still separates the status field from the first filename)\&. Third, filenames containing special characters are not specially formatted; no quoting or backslash\-escaping is performed\&.
+.sp
+Any submodule changes are reported as modified \fBM\fR instead of \fBm\fR or single \fB?\fR\&.
 .SS "Porcelain Format Version 2"
 .sp
 Version 2 format adds more detailed information about the state of the worktree and changed items\&. Version 2 also defines an extensible set of easy to parse optional headers\&.
@@ -512,7 +518,7 @@ Ignored items have the following format:
 .sp
 When the \fB\-z\fR option is given, pathnames are printed as is and without any quoting and lines are terminated with a NUL (ASCII 0x00) byte\&.
 .sp
-Otherwise, all pathnames will be "C\-quoted" if they contain any tab, linefeed, double quote, or backslash characters\&. In C\-quoting, these characters will be replaced with the corresponding C\-style escape sequences and the resulting pathname will be double quoted\&.
+Without the \fB\-z\fR option, pathnames with "unusual" characters are quoted as explained for the configuration variable \fBcore\&.quotePath\fR (see \fBgit-config\fR(1))\&.
 .SH "CONFIGURATION"
 .sp
 The command honors \fBcolor\&.status\fR (or \fBstatus\&.color\fR \(em they mean the same thing and the latter is kept for backward compatibility) and \fBcolor\&.status\&.<slot>\fR configuration variables to colorize its output\&.

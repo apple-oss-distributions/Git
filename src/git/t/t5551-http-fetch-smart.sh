@@ -119,6 +119,10 @@ test_expect_success 'redirects re-root further requests' '
 	git clone $HTTPD_URL/smart-redir-limited/repo.git repo-redir-limited
 '
 
+test_expect_success 're-rooting dies on insane schemes' '
+	test_must_fail git clone $HTTPD_URL/insane-redir/repo.git insane
+'
+
 test_expect_success 'clone from password-protected repository' '
 	echo two >expect &&
 	set_askpass user@host pass@host &&
@@ -274,6 +278,58 @@ test_expect_success 'large fetch-pack requests can be split across POSTs' '
 		clone --bare "$HTTPD_URL/smart/repo.git" split.git 2>err &&
 	grep "^=> Send header: POST" err >posts &&
 	test_line_count = 2 posts
+'
+
+test_expect_success 'test allowreachablesha1inwant' '
+	test_when_finished "rm -rf test_reachable.git" &&
+	server="$HTTPD_DOCUMENT_ROOT_PATH/repo.git" &&
+	master_sha=$(git -C "$server" rev-parse refs/heads/master) &&
+	git -C "$server" config uploadpack.allowreachablesha1inwant 1 &&
+
+	git init --bare test_reachable.git &&
+	git -C test_reachable.git remote add origin "$HTTPD_URL/smart/repo.git" &&
+	git -C test_reachable.git fetch origin "$master_sha"
+'
+
+test_expect_success 'test allowreachablesha1inwant with unreachable' '
+	test_when_finished "rm -rf test_reachable.git; git reset --hard $(git rev-parse HEAD)" &&
+
+	#create unreachable sha
+	echo content >file2 &&
+	git add file2 &&
+	git commit -m two &&
+	git push public HEAD:refs/heads/doomed &&
+	git push public :refs/heads/doomed &&
+
+	server="$HTTPD_DOCUMENT_ROOT_PATH/repo.git" &&
+	master_sha=$(git -C "$server" rev-parse refs/heads/master) &&
+	git -C "$server" config uploadpack.allowreachablesha1inwant 1 &&
+
+	git init --bare test_reachable.git &&
+	git -C test_reachable.git remote add origin "$HTTPD_URL/smart/repo.git" &&
+	test_must_fail git -C test_reachable.git fetch origin "$(git rev-parse HEAD)"
+'
+
+test_expect_success 'test allowanysha1inwant with unreachable' '
+	test_when_finished "rm -rf test_reachable.git; git reset --hard $(git rev-parse HEAD)" &&
+
+	#create unreachable sha
+	echo content >file2 &&
+	git add file2 &&
+	git commit -m two &&
+	git push public HEAD:refs/heads/doomed &&
+	git push public :refs/heads/doomed &&
+
+	server="$HTTPD_DOCUMENT_ROOT_PATH/repo.git" &&
+	master_sha=$(git -C "$server" rev-parse refs/heads/master) &&
+	git -C "$server" config uploadpack.allowreachablesha1inwant 1 &&
+
+	git init --bare test_reachable.git &&
+	git -C test_reachable.git remote add origin "$HTTPD_URL/smart/repo.git" &&
+	test_must_fail git -C test_reachable.git fetch origin "$(git rev-parse HEAD)" &&
+
+	git -C "$server" config uploadpack.allowanysha1inwant 1 &&
+	git -C test_reachable.git fetch origin "$(git rev-parse HEAD)"
 '
 
 test_expect_success EXPENSIVE 'http can handle enormous ref negotiation' '

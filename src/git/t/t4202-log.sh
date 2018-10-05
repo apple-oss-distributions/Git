@@ -4,6 +4,7 @@ test_description='git log'
 
 . ./test-lib.sh
 . "$TEST_DIRECTORY/lib-gpg.sh"
+. "$TEST_DIRECTORY/lib-terminal.sh"
 
 test_expect_success setup '
 
@@ -359,6 +360,28 @@ test_expect_success 'log --graph --line-prefix="| | | " with merge' '
 	test_cmp expect actual
 '
 
+cat > expect.colors <<\EOF
+*   Merge branch 'side'
+<BLUE>|<RESET><CYAN>\<RESET>
+<BLUE>|<RESET> * side-2
+<BLUE>|<RESET> * side-1
+* <CYAN>|<RESET> Second
+* <CYAN>|<RESET> sixth
+* <CYAN>|<RESET> fifth
+* <CYAN>|<RESET> fourth
+<CYAN>|<RESET><CYAN>/<RESET>
+* third
+* second
+* initial
+EOF
+
+test_expect_success 'log --graph with merge with log.graphColors' '
+	test_config log.graphColors " blue,invalid-color, cyan, red  , " &&
+	git log --color=always --graph --date-order --pretty=tformat:%s |
+		test_decode_color | sed "s/ *\$//" >actual &&
+	test_cmp expect.colors actual
+'
+
 test_expect_success 'log --raw --graph -m with merge' '
 	git log --raw --graph --oneline -m master | head -n 500 >actual &&
 	grep "initial" actual
@@ -376,7 +399,7 @@ cat > expect <<\EOF
 | |
 | |     Merge branch 'side'
 | |
-| * commit side
+| * commit tags/side-2
 | | Author: A U Thor <author@example.com>
 | |
 | |     side-2
@@ -498,7 +521,7 @@ test_expect_success 'log --graph with merge' '
 '
 
 test_expect_success 'log.decorate configuration' '
-	git log --oneline >expect.none &&
+	git log --oneline --no-decorate >expect.none &&
 	git log --oneline --decorate >expect.short &&
 	git log --oneline --decorate=full >expect.full &&
 
@@ -552,6 +575,25 @@ test_expect_success 'log.decorate configuration' '
 	git log --pretty=raw >actual &&
 	test_cmp expect.raw actual
 
+'
+
+test_expect_success 'log.decorate config parsing' '
+	git log --oneline --decorate=full >expect.full &&
+	git log --oneline --decorate=short >expect.short &&
+
+	test_config log.decorate full &&
+	test_config log.mailmap true &&
+	git log --oneline >actual &&
+	test_cmp expect.full actual &&
+	git log --oneline --decorate=short >actual &&
+	test_cmp expect.short actual
+'
+
+test_expect_success TTY 'log output on a TTY' '
+	git log --oneline --decorate >expect.short &&
+
+	test_terminal git log --oneline >actual &&
+	test_cmp expect.short actual
 '
 
 test_expect_success 'reflog is expected format' '
@@ -1190,6 +1232,54 @@ test_expect_success 'log --line-prefix="*** " --graph with diff and stats' '
 	test_i18ncmp expect actual.sanitized
 '
 
+cat >expect <<-\EOF
+* reach
+|
+| A	reach.t
+* Merge branch 'tangle'
+*   Merge branch 'side'
+|\
+| * side-2
+|
+|   A	2
+* Second
+|
+| A	one
+* sixth
+
+  D	a/two
+EOF
+
+test_expect_success 'log --graph with --name-status' '
+	git log --graph --format=%s --name-status tangle..reach >actual &&
+	sanitize_output <actual >actual.sanitized &&
+	test_cmp expect actual.sanitized
+'
+
+cat >expect <<-\EOF
+* reach
+|
+| reach.t
+* Merge branch 'tangle'
+*   Merge branch 'side'
+|\
+| * side-2
+|
+|   2
+* Second
+|
+| one
+* sixth
+
+  a/two
+EOF
+
+test_expect_success 'log --graph with --name-only' '
+	git log --graph --format=%s --name-only tangle..reach >actual &&
+	sanitize_output <actual >actual.sanitized &&
+	test_cmp expect actual.sanitized
+'
+
 test_expect_success 'dotdot is a parent directory' '
 	mkdir -p a/b &&
 	( echo sixth && echo fifth ) >expect &&
@@ -1299,6 +1389,15 @@ test_expect_success 'log --source paints tag names' '
 	1ac6c77	source-tag one
 	EOF
 	git log --oneline --source source-tag source-a >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'log --source paints symmetric ranges' '
+	cat >expect <<-\EOF &&
+	09e12a9	source-b three
+	8e393e1	source-a two
+	EOF
+	git log --oneline --source source-a...source-b >actual &&
 	test_cmp expect actual
 '
 

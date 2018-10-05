@@ -1105,8 +1105,8 @@ parents) and <code>--max-parents=-1</code> (negative numbers denote no upper lim
 </dt>
 <dd>
 <p>
-        Pretend as if all the refs in <code>refs/</code> are listed on the
-        command line as <em>&lt;commit&gt;</em>.
+        Pretend as if all the refs in <code>refs/</code>, along with <code>HEAD</code>, are
+        listed on the command line as <em>&lt;commit&gt;</em>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2711,6 +2711,8 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%&gt;&lt;(&lt;N&gt;)</em>, <em>%&gt;&lt;|(&lt;N&gt;)</em>: similar to <em>% &lt;(&lt;N&gt;)</em>, <em>%&lt;|(&lt;N&gt;)</em>
   respectively, but padding both sides (i.e. the text is centered)
+-%(trailers): display the trailers of the body as interpreted by
+  <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
 </p>
 </li>
 </ul></div>
@@ -2784,7 +2786,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2015-10-05 13:38:43 PDT
+Last updated 2015-10-06 05:38:43 JST
 </div>
 </div>
 </body>

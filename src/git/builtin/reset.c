@@ -256,7 +256,7 @@ static int reset_refs(const char *rev, const struct object_id *oid)
 		update_ref_oid(msg.buf, "ORIG_HEAD", orig, old_orig, 0,
 			   UPDATE_REFS_MSG_ON_ERR);
 	} else if (old_orig)
-		delete_ref("ORIG_HEAD", old_orig->hash, 0);
+		delete_ref(NULL, "ORIG_HEAD", old_orig->hash, 0);
 	set_reflog_message(&msg, "updating HEAD", rev);
 	update_ref_status = update_ref_oid(msg.buf, "HEAD", oid, orig, 0,
 				       UPDATE_REFS_MSG_ON_ERR);
@@ -354,7 +354,7 @@ int cmd_reset(int argc, const char **argv, const char *prefix)
 
 	if (reset_type != SOFT) {
 		struct lock_file *lock = xcalloc(1, sizeof(*lock));
-		hold_locked_index(lock, 1);
+		hold_locked_index(lock, LOCK_DIE_ON_ERROR);
 		if (reset_type == MIXED) {
 			int flags = quiet ? REFRESH_QUIET : REFRESH_IN_PORCELAIN;
 			if (read_from_tree(&pathspec, &oid, intent_to_add))

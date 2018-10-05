@@ -122,7 +122,7 @@ static struct option builtin_fetch_options[] = {
 	OPT_STRING(0, "shallow-since", &deepen_since, N_("time"),
 		   N_("deepen history of shallow repository based on time")),
 	OPT_STRING_LIST(0, "shallow-exclude", &deepen_not, N_("revision"),
-			N_("deepen history of shallow clone by excluding rev")),
+			N_("deepen history of shallow clone, excluding rev")),
 	OPT_INTEGER(0, "deepen", &deepen_relative,
 		    N_("deepen history of shallow clone")),
 	{ OPTION_SET_INT, 0, "unshallow", &unshallow, NULL,
@@ -359,9 +359,6 @@ static struct ref *get_ref_map(struct transport *transport,
 
 		for (i = 0; i < fetch_refspec_nr; i++)
 			get_fetch_map(ref_map, &fetch_refspec[i], &oref_tail, 1);
-
-		if (tags == TAGS_SET)
-			get_fetch_map(remote_refs, tag_refspec, &tail, 0);
 	} else if (refmap_array) {
 		die("--refmap option is only meaningful with command-line refspec(s).");
 	} else {
@@ -424,7 +421,7 @@ static int s_update_ref(const char *action,
 			struct ref *ref,
 			int check_old)
 {
-	char msg[1024];
+	char *msg;
 	char *rla = getenv("GIT_REFLOG_ACTION");
 	struct ref_transaction *transaction;
 	struct strbuf err = STRBUF_INIT;
@@ -434,7 +431,7 @@ static int s_update_ref(const char *action,
 		return 0;
 	if (!rla)
 		rla = default_rla.buf;
-	snprintf(msg, sizeof(msg), "%s: %s", rla, action);
+	msg = xstrfmt("%s: %s", rla, action);
 
 	transaction = ref_transaction_begin(&err);
 	if (!transaction ||
@@ -452,11 +449,13 @@ static int s_update_ref(const char *action,
 
 	ref_transaction_free(transaction);
 	strbuf_release(&err);
+	free(msg);
 	return 0;
 fail:
 	ref_transaction_free(transaction);
 	error("%s", err.buf);
 	strbuf_release(&err);
+	free(msg);
 	return df_conflict ? STORE_REF_ERROR_DF_CONFLICT
 			   : STORE_REF_ERROR_OTHER;
 }
@@ -662,7 +661,7 @@ static int update_local_ref(struct ref *ref,
 
 		if ((recurse_submodules != RECURSE_SUBMODULES_OFF) &&
 		    (recurse_submodules != RECURSE_SUBMODULES_ON))
-			check_for_new_submodule_commits(ref->new_oid.hash);
+			check_for_new_submodule_commits(&ref->new_oid);
 		r = s_update_ref(msg, ref, 0);
 		format_display(display, r ? '!' : '*', what,
 			       r ? _("unable to update local ref") : NULL,
@@ -678,7 +677,7 @@ static int update_local_ref(struct ref *ref,
 		strbuf_add_unique_abbrev(&quickref, ref->new_oid.hash, DEFAULT_ABBREV);
 		if ((recurse_submodules != RECURSE_SUBMODULES_OFF) &&
 		    (recurse_submodules != RECURSE_SUBMODULES_ON))
-			check_for_new_submodule_commits(ref->new_oid.hash);
+			check_for_new_submodule_commits(&ref->new_oid);
 		r = s_update_ref("fast-forward", ref, 1);
 		format_display(display, r ? '!' : ' ', quickref.buf,
 			       r ? _("unable to update local ref") : NULL,
@@ -693,7 +692,7 @@ static int update_local_ref(struct ref *ref,
 		strbuf_add_unique_abbrev(&quickref, ref->new_oid.hash, DEFAULT_ABBREV);
 		if ((recurse_submodules != RECURSE_SUBMODULES_OFF) &&
 		    (recurse_submodules != RECURSE_SUBMODULES_ON))
-			check_for_new_submodule_commits(ref->new_oid.hash);
+			check_for_new_submodule_commits(&ref->new_oid);
 		r = s_update_ref("forced-update", ref, 1);
 		format_display(display, r ? '!' : '+', quickref.buf,
 			       r ? _("unable to update local ref") : _("forced update"),
@@ -1180,7 +1179,7 @@ static int add_remote_or_group(const char *name, struct string_list *list)
 	git_config(get_remote_group, &g);
 	if (list->nr == prev_nr) {
 		struct remote *remote = remote_get(name);
-		if (!remote_is_configured(remote))
+		if (!remote_is_configured(remote, 0))
 			return 0;
 		string_list_append(list, remote->name);
 	}

@@ -147,7 +147,7 @@ static void add_pending_object_with_path(struct rev_info *revs,
 		revs->no_walk = 0;
 	if (revs->reflog_info && obj->type == OBJ_COMMIT) {
 		struct strbuf buf = STRBUF_INIT;
-		int len = interpret_branch_name(name, 0, &buf);
+		int len = interpret_branch_name(name, 0, &buf, 0);
 		int st;
 
 		if (0 < len && name[len] && buf.len)
@@ -230,7 +230,7 @@ static struct commit *handle_commit(struct rev_info *revs,
 			die("bad tag");
 		object = parse_object(tag->tagged->oid.hash);
 		if (!object) {
-			if (flags & UNINTERESTING)
+			if (revs->ignore_missing_links || (flags & UNINTERESTING))
 				return NULL;
 			die("bad object %s", oid_to_hex(&tag->tagged->oid));
 		}
@@ -1196,11 +1196,11 @@ static void handle_refs(const char *submodule, struct rev_info *revs, unsigned f
 	for_each(submodule, handle_one_ref, &cb);
 }
 
-static void handle_one_reflog_commit(unsigned char *sha1, void *cb_data)
+static void handle_one_reflog_commit(struct object_id *oid, void *cb_data)
 {
 	struct all_refs_cb *cb = cb_data;
-	if (!is_null_sha1(sha1)) {
-		struct object *o = parse_object(sha1);
+	if (!is_null_oid(oid)) {
+		struct object *o = parse_object(oid->hash);
 		if (o) {
 			o->flags |= cb->all_flags;
 			/* ??? CMDLINEFLAGS ??? */
@@ -1214,12 +1214,12 @@ static void handle_one_reflog_commit(unsigned char *sha1, void *cb_data)
 	}
 }
 
-static int handle_one_reflog_ent(unsigned char *osha1, unsigned char *nsha1,
+static int handle_one_reflog_ent(struct object_id *ooid, struct object_id *noid,
 		const char *email, unsigned long timestamp, int tz,
 		const char *message, void *cb_data)
 {
-	handle_one_reflog_commit(osha1, cb_data);
-	handle_one_reflog_commit(nsha1, cb_data);
+	handle_one_reflog_commit(ooid, cb_data);
+	handle_one_reflog_commit(noid, cb_data);
 	return 0;
 }
 
@@ -1429,134 +1429,168 @@ static void prepare_show_merge(struct rev_info *revs)
 	revs->limited = 1;
 }
 
+static int dotdot_missing(const char *arg, char *dotdot,
+			  struct rev_info *revs, int symmetric)
+{
+	if (revs->ignore_missing)
+		return 0;
+	/* de-munge so we report the full argument */
+	*dotdot = '.';
+	die(symmetric
+	    ? "Invalid symmetric difference expression %s"
+	    : "Invalid revision range %s", arg);
+}
+
+static int handle_dotdot_1(const char *arg, char *dotdot,
+			   struct rev_info *revs, int flags,
+			   int cant_be_filename,
+			   struct object_context *a_oc,
+			   struct object_context *b_oc)
+{
+	const char *a_name, *b_name;
+	struct object_id a_oid, b_oid;
+	struct object *a_obj, *b_obj;
+	unsigned int a_flags, b_flags;
+	int symmetric = 0;
+	unsigned int flags_exclude = flags ^ (UNINTERESTING | BOTTOM);
+	unsigned int oc_flags = GET_SHA1_COMMITTISH | GET_SHA1_RECORD_PATH;
+
+	a_name = arg;
+	if (!*a_name)
+		a_name = "HEAD";
+
+	b_name = dotdot + 2;
+	if (*b_name == '.') {
+		symmetric = 1;
+		b_name++;
+	}
+	if (!*b_name)
+		b_name = "HEAD";
+
+	if (get_sha1_with_context(a_name, oc_flags, a_oid.hash, a_oc) ||
+	    get_sha1_with_context(b_name, oc_flags, b_oid.hash, b_oc))
+		return -1;
+
+	if (!cant_be_filename) {
+		*dotdot = '.';
+		verify_non_filename(revs->prefix, arg);
+		*dotdot = '\0';
+	}
+
+	a_obj = parse_object(a_oid.hash);
+	b_obj = parse_object(b_oid.hash);
+	if (!a_obj || !b_obj)
+		return dotdot_missing(arg, dotdot, revs, symmetric);
+
+	if (!symmetric) {
+		/* just A..B */
+		b_flags = flags;
+		a_flags = flags_exclude;
+	} else {
+		/* A...B -- find merge bases between the two */
+		struct commit *a, *b;
+		struct commit_list *exclude;
+
+		a = lookup_commit_reference(a_obj->oid.hash);
+		b = lookup_commit_reference(b_obj->oid.hash);
+		if (!a || !b)
+			return dotdot_missing(arg, dotdot, revs, symmetric);
+
+		exclude = get_merge_bases(a, b);
+		add_rev_cmdline_list(revs, exclude, REV_CMD_MERGE_BASE,
+				     flags_exclude);
+		add_pending_commit_list(revs, exclude, flags_exclude);
+		free_commit_list(exclude);
+
+		b_flags = flags;
+		a_flags = flags | SYMMETRIC_LEFT;
+	}
+
+	a_obj->flags |= a_flags;
+	b_obj->flags |= b_flags;
+	add_rev_cmdline(revs, a_obj, a_name, REV_CMD_LEFT, a_flags);
+	add_rev_cmdline(revs, b_obj, b_name, REV_CMD_RIGHT, b_flags);
+	add_pending_object_with_path(revs, a_obj, a_name, a_oc->mode, a_oc->path);
+	add_pending_object_with_path(revs, b_obj, b_name, b_oc->mode, b_oc->path);
+	return 0;
+}
+
+static int handle_dotdot(const char *arg,
+			 struct rev_info *revs, int flags,
+			 int cant_be_filename)
+{
+	struct object_context a_oc, b_oc;
+	char *dotdot = strstr(arg, "..");
+	int ret;
+
+	if (!dotdot)
+		return -1;
+
+	memset(&a_oc, 0, sizeof(a_oc));
+	memset(&b_oc, 0, sizeof(b_oc));
+
+	*dotdot = '\0';
+	ret = handle_dotdot_1(arg, dotdot, revs, flags, cant_be_filename,
+			      &a_oc, &b_oc);
+	*dotdot = '.';
+
+	free(a_oc.path);
+	free(b_oc.path);
+
+	return ret;
+}
+
 int handle_revision_arg(const char *arg_, struct rev_info *revs, int flags, unsigned revarg_opt)
 {
 	struct object_context oc;
-	char *dotdot;
+	char *mark;
 	struct object *object;
 	unsigned char sha1[20];
 	int local_flags;
 	const char *arg = arg_;
 	int cant_be_filename = revarg_opt & REVARG_CANNOT_BE_FILENAME;
-	unsigned get_sha1_flags = 0;
+	unsigned get_sha1_flags = GET_SHA1_RECORD_PATH;
 
 	flags = flags & UNINTERESTING ? flags | BOTTOM : flags & ~BOTTOM;
 
-	dotdot = strstr(arg, "..");
-	if (dotdot) {
-		unsigned char from_sha1[20];
-		const char *next = dotdot + 2;
-		const char *this = arg;
-		int symmetric = *next == '.';
-		unsigned int flags_exclude = flags ^ (UNINTERESTING | BOTTOM);
-		static const char head_by_default[] = "HEAD";
-		unsigned int a_flags;
-
-		*dotdot = 0;
-		next += symmetric;
-
-		if (!*next)
-			next = head_by_default;
-		if (dotdot == arg)
-			this = head_by_default;
-		if (this == head_by_default && next == head_by_default &&
-		    !symmetric) {
-			/*
-			 * Just ".."?  That is not a range but the
-			 * pathspec for the parent directory.
-			 */
-			if (!cant_be_filename) {
-				*dotdot = '.';
-				return -1;
-			}
-		}
-		if (!get_sha1_committish(this, from_sha1) &&
-		    !get_sha1_committish(next, sha1)) {
-			struct object *a_obj, *b_obj;
-
-			if (!cant_be_filename) {
-				*dotdot = '.';
-				verify_non_filename(revs->prefix, arg);
-			}
-
-			a_obj = parse_object(from_sha1);
-			b_obj = parse_object(sha1);
-			if (!a_obj || !b_obj) {
-			missing:
-				if (revs->ignore_missing)
-					return 0;
-				die(symmetric
-				    ? "Invalid symmetric difference expression %s"
-				    : "Invalid revision range %s", arg);
-			}
-
-			if (!symmetric) {
-				/* just A..B */
-				a_flags = flags_exclude;
-			} else {
-				/* A...B -- find merge bases between the two */
-				struct commit *a, *b;
-				struct commit_list *exclude;
-
-				a = (a_obj->type == OBJ_COMMIT
-				     ? (struct commit *)a_obj
-				     : lookup_commit_reference(a_obj->oid.hash));
-				b = (b_obj->type == OBJ_COMMIT
-				     ? (struct commit *)b_obj
-				     : lookup_commit_reference(b_obj->oid.hash));
-				if (!a || !b)
-					goto missing;
-				exclude = get_merge_bases(a, b);
-				add_rev_cmdline_list(revs, exclude,
-						     REV_CMD_MERGE_BASE,
-						     flags_exclude);
-				add_pending_commit_list(revs, exclude,
-							flags_exclude);
-				free_commit_list(exclude);
-
-				a_flags = flags | SYMMETRIC_LEFT;
-			}
-
-			a_obj->flags |= a_flags;
-			b_obj->flags |= flags;
-			add_rev_cmdline(revs, a_obj, this,
-					REV_CMD_LEFT, a_flags);
-			add_rev_cmdline(revs, b_obj, next,
-					REV_CMD_RIGHT, flags);
-			add_pending_object(revs, a_obj, this);
-			add_pending_object(revs, b_obj, next);
-			return 0;
-		}
-		*dotdot = '.';
+	if (!cant_be_filename && !strcmp(arg, "..")) {
+		/*
+		 * Just ".."?  That is not a range but the
+		 * pathspec for the parent directory.
+		 */
+		return -1;
 	}
 
-	dotdot = strstr(arg, "^@");
-	if (dotdot && !dotdot[2]) {
-		*dotdot = 0;
+	if (!handle_dotdot(arg, revs, flags, revarg_opt))
+		return 0;
+
+	mark = strstr(arg, "^@");
+	if (mark && !mark[2]) {
+		*mark = 0;
 		if (add_parents_only(revs, arg, flags, 0))
 			return 0;
-		*dotdot = '^';
+		*mark = '^';
 	}
-	dotdot = strstr(arg, "^!");
-	if (dotdot && !dotdot[2]) {
-		*dotdot = 0;
+	mark = strstr(arg, "^!");
+	if (mark && !mark[2]) {
+		*mark = 0;
 		if (!add_parents_only(revs, arg, flags ^ (UNINTERESTING | BOTTOM), 0))
-			*dotdot = '^';
+			*mark = '^';
 	}
-	dotdot = strstr(arg, "^-");
-	if (dotdot) {
+	mark = strstr(arg, "^-");
+	if (mark) {
 		int exclude_parent = 1;
 
-		if (dotdot[2]) {
+		if (mark[2]) {
 			char *end;
-			exclude_parent = strtoul(dotdot + 2, &end, 10);
+			exclude_parent = strtoul(mark + 2, &end, 10);
 			if (*end != '\0' || !exclude_parent)
 				return -1;
 		}
 
-		*dotdot = 0;
+		*mark = 0;
 		if (!add_parents_only(revs, arg, flags ^ (UNINTERESTING | BOTTOM), exclude_parent))
-			*dotdot = '^';
+			*mark = '^';
 	}
 
 	local_flags = 0;
@@ -1566,7 +1600,7 @@ int handle_revision_arg(const char *arg_, struct rev_info *revs, int flags, unsi
 	}
 
 	if (revarg_opt & REVARG_COMMITTISH)
-		get_sha1_flags = GET_SHA1_COMMITTISH;
+		get_sha1_flags |= GET_SHA1_COMMITTISH;
 
 	if (get_sha1_with_context(arg, get_sha1_flags, sha1, &oc))
 		return revs->ignore_missing ? 0 : -1;
@@ -1574,7 +1608,8 @@ int handle_revision_arg(const char *arg_, struct rev_info *revs, int flags, unsi
 		verify_non_filename(revs->prefix, arg);
 	object = get_reference(revs, arg, sha1, flags ^ local_flags);
 	add_rev_cmdline(revs, object, arg_, REV_CMD_REV, flags ^ local_flags);
-	add_pending_object_with_mode(revs, object, arg, oc.mode);
+	add_pending_object_with_path(revs, object, arg, oc.mode, oc.path);
+	free(oc.path);
 	return 0;
 }
 
@@ -1690,8 +1725,8 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->max_count = atoi(argv[1]);
 		revs->no_walk = 0;
 		return 2;
-	} else if (starts_with(arg, "-n")) {
-		revs->max_count = atoi(arg + 2);
+	} else if (skip_prefix(arg, "-n", &optarg)) {
+		revs->max_count = atoi(optarg);
 		revs->no_walk = 0;
 	} else if ((argcount = parse_long_opt("max-age", argv, &optarg))) {
 		revs->max_age = atoi(optarg);
@@ -1750,16 +1785,13 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 	} else if (!strcmp(arg, "--author-date-order")) {
 		revs->sort_order = REV_SORT_BY_AUTHOR_DATE;
 		revs->topo_order = 1;
-	} else if (starts_with(arg, "--early-output")) {
-		int count = 100;
-		switch (arg[14]) {
-		case '=':
-			count = atoi(arg+15);
-			/* Fallthrough */
-		case 0:
-			revs->topo_order = 1;
-		       revs->early_output = count;
-		}
+	} else if (!strcmp(arg, "--early-output")) {
+		revs->early_output = 100;
+		revs->topo_order = 1;
+	} else if (skip_prefix(arg, "--early-output=", &optarg)) {
+		if (strtoul_ui(optarg, 10, &revs->early_output) < 0)
+			die("'%s': not a non-negative integer", optarg);
+		revs->topo_order = 1;
 	} else if (!strcmp(arg, "--parents")) {
 		revs->rewrite_parents = 1;
 		revs->print_parents = 1;
@@ -1775,13 +1807,13 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->min_parents = 2;
 	} else if (!strcmp(arg, "--no-merges")) {
 		revs->max_parents = 1;
-	} else if (starts_with(arg, "--min-parents=")) {
-		revs->min_parents = atoi(arg+14);
-	} else if (starts_with(arg, "--no-min-parents")) {
+	} else if (skip_prefix(arg, "--min-parents=", &optarg)) {
+		revs->min_parents = atoi(optarg);
+	} else if (!strcmp(arg, "--no-min-parents")) {
 		revs->min_parents = 0;
-	} else if (starts_with(arg, "--max-parents=")) {
-		revs->max_parents = atoi(arg+14);
-	} else if (starts_with(arg, "--no-max-parents")) {
+	} else if (skip_prefix(arg, "--max-parents=", &optarg)) {
+		revs->max_parents = atoi(optarg);
+	} else if (!strcmp(arg, "--no-max-parents")) {
 		revs->max_parents = -1;
 	} else if (!strcmp(arg, "--boundary")) {
 		revs->boundary = 1;
@@ -1862,14 +1894,15 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->verbose_header = 1;
 		revs->pretty_given = 1;
 		get_commit_format(NULL, revs);
-	} else if (starts_with(arg, "--pretty=") || starts_with(arg, "--format=")) {
+	} else if (skip_prefix(arg, "--pretty=", &optarg) ||
+		   skip_prefix(arg, "--format=", &optarg)) {
 		/*
 		 * Detached form ("--pretty X" as opposed to "--pretty=X")
 		 * not allowed, since the argument is optional.
 		 */
 		revs->verbose_header = 1;
 		revs->pretty_given = 1;
-		get_commit_format(arg+9, revs);
+		get_commit_format(optarg, revs);
 	} else if (!strcmp(arg, "--expand-tabs")) {
 		revs->expand_tabs_in_log = 8;
 	} else if (!strcmp(arg, "--no-expand-tabs")) {
@@ -1887,26 +1920,23 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->show_signature = 1;
 	} else if (!strcmp(arg, "--no-show-signature")) {
 		revs->show_signature = 0;
-	} else if (!strcmp(arg, "--show-linear-break") ||
-		   starts_with(arg, "--show-linear-break=")) {
-		if (starts_with(arg, "--show-linear-break="))
-			revs->break_bar = xstrdup(arg + 20);
-		else
-			revs->break_bar = "                    ..........";
+	} else if (!strcmp(arg, "--show-linear-break")) {
+		revs->break_bar = "                    ..........";
 		revs->track_linear = 1;
 		revs->track_first_time = 1;
-	} else if (starts_with(arg, "--show-notes=") ||
-		   starts_with(arg, "--notes=")) {
+	} else if (skip_prefix(arg, "--show-linear-break=", &optarg)) {
+		revs->break_bar = xstrdup(optarg);
+		revs->track_linear = 1;
+		revs->track_first_time = 1;
+	} else if (skip_prefix(arg, "--show-notes=", &optarg) ||
+		   skip_prefix(arg, "--notes=", &optarg)) {
 		struct strbuf buf = STRBUF_INIT;
 		revs->show_notes = 1;
 		revs->show_notes_given = 1;
-		if (starts_with(arg, "--show-notes")) {
-			if (revs->notes_opt.use_default_notes < 0)
-				revs->notes_opt.use_default_notes = 1;
-			strbuf_addstr(&buf, arg+13);
-		}
-		else
-			strbuf_addstr(&buf, arg+8);
+		if (starts_with(arg, "--show-notes=") &&
+		    revs->notes_opt.use_default_notes < 0)
+			revs->notes_opt.use_default_notes = 1;
+		strbuf_addstr(&buf, optarg);
 		expand_notes_ref(&buf);
 		string_list_append(&revs->notes_opt.extra_notes_refs,
 				   strbuf_detach(&buf, NULL));
@@ -1943,8 +1973,8 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->abbrev = 0;
 	} else if (!strcmp(arg, "--abbrev")) {
 		revs->abbrev = DEFAULT_ABBREV;
-	} else if (starts_with(arg, "--abbrev=")) {
-		revs->abbrev = strtoul(arg + 9, NULL, 10);
+	} else if (skip_prefix(arg, "--abbrev=", &optarg)) {
+		revs->abbrev = strtoul(optarg, NULL, 10);
 		if (revs->abbrev < MINIMUM_ABBREV)
 			revs->abbrev = MINIMUM_ABBREV;
 		else if (revs->abbrev > 40)
@@ -2104,20 +2134,20 @@ static int handle_revision_pseudo_opt(const char *submodule,
 	} else if ((argcount = parse_long_opt("exclude", argv, &optarg))) {
 		add_ref_exclusion(&revs->ref_excludes, optarg);
 		return argcount;
-	} else if (starts_with(arg, "--branches=")) {
+	} else if (skip_prefix(arg, "--branches=", &optarg)) {
 		struct all_refs_cb cb;
 		init_all_refs_cb(&cb, revs, *flags);
-		for_each_glob_ref_in(handle_one_ref, arg + 11, "refs/heads/", &cb);
+		for_each_glob_ref_in(handle_one_ref, optarg, "refs/heads/", &cb);
 		clear_ref_exclusion(&revs->ref_excludes);
-	} else if (starts_with(arg, "--tags=")) {
+	} else if (skip_prefix(arg, "--tags=", &optarg)) {
 		struct all_refs_cb cb;
 		init_all_refs_cb(&cb, revs, *flags);
-		for_each_glob_ref_in(handle_one_ref, arg + 7, "refs/tags/", &cb);
+		for_each_glob_ref_in(handle_one_ref, optarg, "refs/tags/", &cb);
 		clear_ref_exclusion(&revs->ref_excludes);
-	} else if (starts_with(arg, "--remotes=")) {
+	} else if (skip_prefix(arg, "--remotes=", &optarg)) {
 		struct all_refs_cb cb;
 		init_all_refs_cb(&cb, revs, *flags);
-		for_each_glob_ref_in(handle_one_ref, arg + 10, "refs/remotes/", &cb);
+		for_each_glob_ref_in(handle_one_ref, optarg, "refs/remotes/", &cb);
 		clear_ref_exclusion(&revs->ref_excludes);
 	} else if (!strcmp(arg, "--reflog")) {
 		add_reflogs_to_pending(revs, *flags);
@@ -2127,14 +2157,14 @@ static int handle_revision_pseudo_opt(const char *submodule,
 		*flags ^= UNINTERESTING | BOTTOM;
 	} else if (!strcmp(arg, "--no-walk")) {
 		revs->no_walk = REVISION_WALK_NO_WALK_SORTED;
-	} else if (starts_with(arg, "--no-walk=")) {
+	} else if (skip_prefix(arg, "--no-walk=", &optarg)) {
 		/*
 		 * Detached form ("--no-walk X" as opposed to "--no-walk=X")
 		 * not allowed, since the argument is optional.
 		 */
-		if (!strcmp(arg + 10, "sorted"))
+		if (!strcmp(optarg, "sorted"))
 			revs->no_walk = REVISION_WALK_NO_WALK_SORTED;
-		else if (!strcmp(arg + 10, "unsorted"))
+		else if (!strcmp(optarg, "unsorted"))
 			revs->no_walk = REVISION_WALK_NO_WALK_UNSORTED;
 		else
 			return error("invalid argument to --no-walk");

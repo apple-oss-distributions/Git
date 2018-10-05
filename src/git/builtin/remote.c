@@ -186,7 +186,7 @@ static int add(int argc, const char **argv)
 	url = argv[1];
 
 	remote = remote_get(name);
-	if (remote_is_configured(remote))
+	if (remote_is_configured(remote, 1))
 		die(_("remote %s already exists."), name);
 
 	strbuf_addf(&buf2, "refs/heads/test:refs/remotes/%s/test", name);
@@ -618,14 +618,14 @@ static int mv(int argc, const char **argv)
 	rename.remote_branches = &remote_branches;
 
 	oldremote = remote_get(rename.old);
-	if (!remote_is_configured(oldremote))
+	if (!remote_is_configured(oldremote, 1))
 		die(_("No such remote: %s"), rename.old);
 
 	if (!strcmp(rename.old, rename.new) && oldremote->origin != REMOTE_CONFIG)
 		return migrate_file(oldremote);
 
 	newremote = remote_get(rename.new);
-	if (remote_is_configured(newremote))
+	if (remote_is_configured(newremote, 1))
 		die(_("remote %s already exists."), rename.new);
 
 	strbuf_addf(&buf, "refs/heads/test:refs/remotes/%s/test", rename.new);
@@ -691,7 +691,7 @@ static int mv(int argc, const char **argv)
 		read_ref_full(item->string, RESOLVE_REF_READING, oid.hash, &flag);
 		if (!(flag & REF_ISSYMREF))
 			continue;
-		if (delete_ref(item->string, NULL, REF_NODEREF))
+		if (delete_ref(NULL, item->string, NULL, REF_NODEREF))
 			die(_("deleting '%s' failed"), item->string);
 	}
 	for (i = 0; i < remote_branches.nr; i++) {
@@ -753,7 +753,7 @@ static int rm(int argc, const char **argv)
 		usage_with_options(builtin_remote_rm_usage, options);
 
 	remote = remote_get(argv[1]);
-	if (!remote_is_configured(remote))
+	if (!remote_is_configured(remote, 1))
 		die(_("No such remote: %s"), argv[1]);
 
 	known_remotes.to_delete = remote;
@@ -769,7 +769,9 @@ static int rm(int argc, const char **argv)
 				strbuf_reset(&buf);
 				strbuf_addf(&buf, "branch.%s.%s",
 						item->string, *k);
-				git_config_set(buf.buf, NULL);
+				result = git_config_set_gently(buf.buf, NULL);
+				if (result && result != CONFIG_NOTHING_SET)
+					die(_("could not unset '%s'"), buf.buf);
 			}
 		}
 	}
@@ -1149,8 +1151,11 @@ static int show(int argc, const char **argv)
 			url_nr = states.remote->url_nr;
 		}
 		for (i = 0; i < url_nr; i++)
-			/* TRANSLATORS: the colon ':' should align with
-			   the one in "  Fetch URL: %s" translation */
+			/*
+			 * TRANSLATORS: the colon ':' should align
+			 * with the one in " Fetch URL: %s"
+			 * translation.
+			 */
 			printf_ln(_("  Push  URL: %s"), url[i]);
 		if (!i)
 			printf_ln(_("  Push  URL: %s"), _("(no URL)"));
@@ -1248,7 +1253,7 @@ static int set_head(int argc, const char **argv)
 			head_name = xstrdup(states.heads.items[0].string);
 		free_remote_ref_states(&states);
 	} else if (opt_d && !opt_a && argc == 1) {
-		if (delete_ref(buf.buf, NULL, REF_NODEREF))
+		if (delete_ref(NULL, buf.buf, NULL, REF_NODEREF))
 			result |= error(_("Could not delete %s"), buf.buf);
 	} else
 		usage_with_options(builtin_remote_sethead_usage, options);
@@ -1415,7 +1420,7 @@ static int set_remote_branches(const char *remotename, const char **branches,
 	strbuf_addf(&key, "remote.%s.fetch", remotename);
 
 	remote = remote_get(remotename);
-	if (!remote_is_configured(remote))
+	if (!remote_is_configured(remote, 1))
 		die(_("No such remote '%s'"), remotename);
 
 	if (!add_mode && remove_all_fetch_refspecs(remotename, key.buf)) {
@@ -1469,7 +1474,7 @@ static int get_url(int argc, const char **argv)
 	remotename = argv[0];
 
 	remote = remote_get(remotename);
-	if (!remote_is_configured(remote))
+	if (!remote_is_configured(remote, 1))
 		die(_("No such remote '%s'"), remotename);
 
 	url_nr = 0;
@@ -1537,7 +1542,7 @@ static int set_url(int argc, const char **argv)
 		oldurl = newurl;
 
 	remote = remote_get(remotename);
-	if (!remote_is_configured(remote))
+	if (!remote_is_configured(remote, 1))
 		die(_("No such remote '%s'"), remotename);
 
 	if (push_mode) {

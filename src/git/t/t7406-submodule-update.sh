@@ -140,6 +140,23 @@ test_expect_success 'submodule update --init --recursive from subdirectory' '
 	test_i18ncmp expect2 actual2
 '
 
+cat <<EOF >expect2
+Submodule 'foo/sub' ($pwd/withsubs/../rebasing) registered for path 'sub'
+EOF
+
+test_expect_success 'submodule update --init from and of subdirectory' '
+	git init withsubs &&
+	(cd withsubs &&
+	 mkdir foo &&
+	 git submodule add "$(pwd)/../rebasing" foo/sub &&
+	 (cd foo &&
+	  git submodule deinit -f sub &&
+	  git submodule update --init sub 2>../../actual2
+	 )
+	) &&
+	test_i18ncmp expect2 actual2
+'
+
 apos="'";
 test_expect_success 'submodule update does not fetch already present commits' '
 	(cd submodule &&
@@ -424,6 +441,16 @@ test_expect_success 'submodule update - command in .git/config catches failure -
 	test_i18ncmp actual expect
 '
 
+test_expect_success 'submodule update - command run for initial population of submodule' '
+	cat >expect <<-EOF &&
+	Execution of '\''false $submodulesha1'\'' failed in submodule path '\''submodule'\''
+	EOF
+	rm -rf super/submodule &&
+	test_must_fail git -C super submodule update 2>actual &&
+	test_i18ncmp expect actual &&
+	git -C super submodule update --checkout
+'
+
 cat << EOF >expect
 Execution of 'false $submodulesha1' failed in submodule path '../super/submodule'
 Failed to recurse into submodule path '../super'
@@ -476,6 +503,7 @@ test_expect_success 'submodule init picks up merge' '
 '
 
 test_expect_success 'submodule update --merge  - ignores --merge  for new submodules' '
+	test_config -C super submodule.submodule.update checkout &&
 	(cd super &&
 	 rm -rf submodule &&
 	 git submodule update submodule &&
@@ -488,6 +516,7 @@ test_expect_success 'submodule update --merge  - ignores --merge  for new submod
 '
 
 test_expect_success 'submodule update --rebase - ignores --rebase for new submodules' '
+	test_config -C super submodule.submodule.update checkout &&
 	(cd super &&
 	 rm -rf submodule &&
 	 git submodule update submodule &&

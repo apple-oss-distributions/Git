@@ -1,6 +1,7 @@
 #include "cache.h"
 #include "builtin.h"
 #include "exec_cmd.h"
+#include "run-command.h"
 #include "levenshtein.h"
 #include "help.h"
 #include "common-cmds.h"
@@ -94,33 +95,6 @@ static void pretty_print_cmdnames(struct cmdnames *cmds, unsigned int colopts)
 	copts.padding = 2;
 	print_columns(&list, colopts, &copts);
 	string_list_clear(&list, 0);
-}
-
-static int is_executable(const char *name)
-{
-	struct stat st;
-
-	if (stat(name, &st) || /* stat, not lstat */
-	    !S_ISREG(st.st_mode))
-		return 0;
-
-#if defined(GIT_WINDOWS_NATIVE)
-{	/* cannot trust the executable bit, peek into the file instead */
-	char buf[3] = { 0 };
-	int n;
-	int fd = open(name, O_RDONLY);
-	st.st_mode &= ~S_IXUSR;
-	if (fd >= 0) {
-		n = read(fd, buf, 2);
-		if (n == 2)
-			/* DOS executables start with "MZ" */
-			if (!strcmp(buf, "#!") || !strcmp(buf, "MZ"))
-				st.st_mode |= S_IXUSR;
-		close(fd);
-	}
-}
-#endif
-	return st.st_mode & S_IXUSR;
 }
 
 static void list_commands_in_dir(struct cmdnames *cmds,
@@ -315,7 +289,7 @@ const char *help_unknown_cmd(const char *cmd)
 	memset(&other_cmds, 0, sizeof(other_cmds));
 	memset(&aliases, 0, sizeof(aliases));
 
-	git_config(git_unknown_cmd_config, NULL);
+	read_early_config(git_unknown_cmd_config, NULL);
 
 	load_command_list("git-", &main_cmds, &other_cmds);
 
@@ -381,12 +355,18 @@ const char *help_unknown_cmd(const char *cmd)
 		clean_cmdnames(&main_cmds);
 		fprintf_ln(stderr,
 			   _("WARNING: You called a Git command named '%s', "
-			     "which does not exist.\n"
-			     "Continuing under the assumption that you meant '%s'"),
-			cmd, assumed);
-		if (autocorrect > 0) {
-			fprintf_ln(stderr, _("in %0.1f seconds automatically..."),
-				(float)autocorrect/10.0);
+			     "which does not exist."),
+			   cmd);
+		if (autocorrect < 0)
+			fprintf_ln(stderr,
+				   _("Continuing under the assumption that "
+				     "you meant '%s'."),
+				   assumed);
+		else {
+			fprintf_ln(stderr,
+				   _("Continuing in %0.1f seconds, "
+				     "assuming that you meant '%s'."),
+				   (float)autocorrect/10.0, assumed);
 			sleep_millisec(autocorrect * 100);
 		}
 		return assumed;
@@ -396,8 +376,8 @@ const char *help_unknown_cmd(const char *cmd)
 
 	if (SIMILAR_ENOUGH(best_similarity)) {
 		fprintf_ln(stderr,
-			   Q_("\nDid you mean this?",
-			      "\nDid you mean one of these?",
+			   Q_("\nThe most similar command is",
+			      "\nThe most similar commands are",
 			   n));
 
 		for (i = 0; i < n; i++)

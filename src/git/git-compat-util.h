@@ -189,6 +189,9 @@
 #include <sys/sysctl.h>
 #endif
 
+#if defined(__CYGWIN__)
+#include "compat/cygwin.h"
+#endif
 #if defined(__MINGW32__)
 /* pull in Windows compatibility stuff */
 #include "compat/mingw.h"
@@ -445,7 +448,6 @@ extern void (*get_error_routine(void))(const char *err, va_list params);
 extern void set_warn_routine(void (*routine)(const char *warn, va_list params));
 extern void (*get_warn_routine(void))(const char *warn, va_list params);
 extern void set_die_is_recursing_routine(int (*routine)(void));
-extern void set_error_handle(FILE *);
 
 extern int starts_with(const char *str, const char *prefix);
 
@@ -526,6 +528,16 @@ static inline int ends_with(const char *str, const char *suffix)
 	size_t len;
 	return strip_suffix(str, suffix, &len);
 }
+
+#define SWAP(a, b) do {						\
+	void *_swap_a_ptr = &(a);				\
+	void *_swap_b_ptr = &(b);				\
+	unsigned char _swap_buffer[sizeof(a)];			\
+	memcpy(_swap_buffer, _swap_a_ptr, sizeof(a));		\
+	memcpy(_swap_a_ptr, _swap_b_ptr, sizeof(a) +		\
+	       BUILD_ASSERT_OR_ZERO(sizeof(a) == sizeof(b)));	\
+	memcpy(_swap_b_ptr, _swap_buffer, sizeof(a));		\
+} while (0)
 
 #if defined(NO_MMAP) || defined(USE_WIN32_MMAP)
 
@@ -627,11 +639,6 @@ extern int gitsetenv(const char *, const char *, int);
 #ifdef NO_MKDTEMP
 #define mkdtemp gitmkdtemp
 extern char *gitmkdtemp(char *);
-#endif
-
-#ifdef NO_MKSTEMPS
-#define mkstemps gitmkstemps
-extern int gitmkstemps(char *, int);
 #endif
 
 #ifdef NO_UNSETENV
@@ -793,8 +800,6 @@ extern FILE *xfopen(const char *path, const char *mode);
 extern FILE *xfdopen(int fd, const char *mode);
 extern int xmkstemp(char *template);
 extern int xmkstemp_mode(char *template, int mode);
-extern int odb_mkstemp(char *template, size_t limit, const char *pattern);
-extern int odb_pack_keep(char *name, size_t namesz, const unsigned char *sha1);
 extern char *xgetcwd(void);
 extern FILE *fopen_for_writing(const char *path);
 
@@ -880,6 +885,12 @@ static inline size_t xsize_t(off_t len)
 
 __attribute__((format (printf, 3, 4)))
 extern int xsnprintf(char *dst, size_t max, const char *fmt, ...);
+
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 256
+#endif
+
+extern int xgethostname(char *buf, size_t len);
 
 /* in ctype.c, for kwset users */
 extern const unsigned char tolower_trans_tbl[256];
@@ -988,6 +999,17 @@ static inline void sane_qsort(void *base, size_t nmemb, size_t size,
 		qsort(base, nmemb, size, compar);
 }
 
+#ifndef HAVE_ISO_QSORT_S
+int git_qsort_s(void *base, size_t nmemb, size_t size,
+		int (*compar)(const void *, const void *, void *), void *ctx);
+#define qsort_s git_qsort_s
+#endif
+
+#define QSORT_S(base, n, compar, ctx) do {			\
+	if (qsort_s((base), (n), sizeof(*(base)), compar, ctx))	\
+		die("BUG: qsort_s() failed");			\
+} while (0)
+
 #ifndef REG_STARTEND
 #error "Git requires REG_STARTEND support. Compile with NO_REGEX=NeedsStartEnd"
 #endif
@@ -1042,6 +1064,15 @@ static inline int regexec_buf(const regex_t *preg, const char *buf, size_t size,
 
 #if defined(__GNUC__) || (_MSC_VER >= 1400) || defined(__C99_MACRO_WITH_VA_ARGS)
 #define HAVE_VARIADIC_MACROS 1
+#endif
+
+#ifdef HAVE_VARIADIC_MACROS
+__attribute__((format (printf, 3, 4))) NORETURN
+void BUG_fl(const char *file, int line, const char *fmt, ...);
+#define BUG(...) BUG_fl(__FILE__, __LINE__, __VA_ARGS__)
+#else
+__attribute__((format (printf, 1, 2))) NORETURN
+void BUG(const char *fmt, ...);
 #endif
 
 /*

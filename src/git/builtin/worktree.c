@@ -24,6 +24,7 @@ struct add_opts {
 	int force;
 	int detach;
 	int checkout;
+	int keep_locked;
 	const char *new_branch;
 	int force_new_branch;
 };
@@ -106,8 +107,7 @@ static void prune_worktrees(void)
 			printf("%s\n", reason.buf);
 		if (show_only)
 			continue;
-		strbuf_reset(&path);
-		strbuf_addstr(&path, git_path("worktrees/%s", d->d_name));
+		git_path_buf(&path, "worktrees/%s", d->d_name);
 		ret = remove_dir_recursively(&path, 0);
 		if (ret < 0 && errno == ENOTDIR)
 			ret = unlink(path.buf);
@@ -125,9 +125,9 @@ static int prune(int ac, const char **av, const char *prefix)
 {
 	struct option options[] = {
 		OPT__DRY_RUN(&show_only, N_("do not remove, show only")),
-		OPT__VERBOSE(&verbose, N_("report pruned objects")),
+		OPT__VERBOSE(&verbose, N_("report pruned working trees")),
 		OPT_EXPIRY_DATE(0, "expire", &expire,
-				N_("expire objects older than <time>")),
+				N_("expire working trees older than <time>")),
 		OPT_END()
 	};
 
@@ -215,8 +215,7 @@ static int add_worktree(const char *path, const char *refname,
 	}
 
 	name = worktree_basename(path, &len);
-	strbuf_addstr(&sb_repo,
-		      git_path("worktrees/%.*s", (int)(path + len - name), name));
+	git_path_buf(&sb_repo, "worktrees/%.*s", (int)(path + len - name), name);
 	len = sb_repo.len;
 	if (safe_create_leading_directories_const(sb_repo.buf))
 		die_errno(_("could not create leading directories of '%s'"),
@@ -242,7 +241,10 @@ static int add_worktree(const char *path, const char *refname,
 	 * after the preparation is over.
 	 */
 	strbuf_addf(&sb, "%s/locked", sb_repo.buf);
-	write_file(sb.buf, "initializing");
+	if (!opts->keep_locked)
+		write_file(sb.buf, "initializing");
+	else
+		write_file(sb.buf, "added with --lock");
 
 	strbuf_addf(&sb_git, "%s/.git", path);
 	if (safe_create_leading_directories_const(sb_git.buf))
@@ -303,9 +305,11 @@ static int add_worktree(const char *path, const char *refname,
 	junk_git_dir = NULL;
 
 done:
-	strbuf_reset(&sb);
-	strbuf_addf(&sb, "%s/locked", sb_repo.buf);
-	unlink_or_warn(sb.buf);
+	if (ret || !opts->keep_locked) {
+		strbuf_reset(&sb);
+		strbuf_addf(&sb, "%s/locked", sb_repo.buf);
+		unlink_or_warn(sb.buf);
+	}
 	argv_array_clear(&child_env);
 	strbuf_release(&sb);
 	strbuf_release(&symref);
@@ -318,7 +322,8 @@ static int add(int ac, const char **av, const char *prefix)
 {
 	struct add_opts opts;
 	const char *new_branch_force = NULL;
-	const char *path, *branch;
+	char *path;
+	const char *branch;
 	struct option options[] = {
 		OPT__FORCE(&opts.force, N_("checkout <branch> even if already checked out in other worktree")),
 		OPT_STRING('b', NULL, &opts.new_branch, N_("branch"),
@@ -327,6 +332,7 @@ static int add(int ac, const char **av, const char *prefix)
 			   N_("create or reset a branch")),
 		OPT_BOOL(0, "detach", &opts.detach, N_("detach HEAD at named commit")),
 		OPT_BOOL(0, "checkout", &opts.checkout, N_("populate the new working tree")),
+		OPT_BOOL(0, "lock", &opts.keep_locked, N_("keep the new working tree locked")),
 		OPT_END()
 	};
 
@@ -338,7 +344,7 @@ static int add(int ac, const char **av, const char *prefix)
 	if (ac < 1 || ac > 2)
 		usage_with_options(worktree_usage, options);
 
-	path = prefix_filename(prefix, strlen(prefix), av[0]);
+	path = prefix_filename(prefix, av[0]);
 	branch = ac < 2 ? "HEAD" : av[1];
 
 	if (!strcmp(branch, "-"))
@@ -388,7 +394,7 @@ static void show_worktree_porcelain(struct worktree *wt)
 		printf("HEAD %s\n", sha1_to_hex(wt->head_sha1));
 		if (wt->is_detached)
 			printf("detached\n");
-		else
+		else if (wt->head_ref)
 			printf("branch %s\n", wt->head_ref);
 	}
 	printf("\n");
@@ -406,10 +412,14 @@ static void show_worktree(struct worktree *wt, int path_maxlen, int abbrev_len)
 	else {
 		strbuf_addf(&sb, "%-*s ", abbrev_len,
 				find_unique_abbrev(wt->head_sha1, DEFAULT_ABBREV));
-		if (!wt->is_detached)
-			strbuf_addf(&sb, "[%s]", shorten_unambiguous_ref(wt->head_ref, 0));
-		else
+		if (wt->is_detached)
 			strbuf_addstr(&sb, "(detached HEAD)");
+		else if (wt->head_ref) {
+			char *ref = shorten_unambiguous_ref(wt->head_ref, 0);
+			strbuf_addf(&sb, "[%s]", ref);
+			free(ref);
+		} else
+			strbuf_addstr(&sb, "(error)");
 	}
 	printf("%s\n", sb.buf);
 
@@ -445,7 +455,7 @@ static int list(int ac, const char **av, const char *prefix)
 	if (ac)
 		usage_with_options(worktree_usage, options);
 	else {
-		struct worktree **worktrees = get_worktrees();
+		struct worktree **worktrees = get_worktrees(GWT_SORT_LINKED);
 		int path_maxlen = 0, abbrev = DEFAULT_ABBREV, i;
 
 		if (!porcelain)
@@ -476,7 +486,7 @@ static int lock_worktree(int ac, const char **av, const char *prefix)
 	if (ac != 1)
 		usage_with_options(worktree_usage, options);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(0);
 	wt = find_worktree(worktrees, prefix, av[0]);
 	if (!wt)
 		die(_("'%s' is not a working tree"), av[0]);
@@ -509,7 +519,7 @@ static int unlock_worktree(int ac, const char **av, const char *prefix)
 	if (ac != 1)
 		usage_with_options(worktree_usage, options);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(0);
 	wt = find_worktree(worktrees, prefix, av[0]);
 	if (!wt)
 		die(_("'%s' is not a working tree"), av[0]);

@@ -1022,6 +1022,15 @@ U           U    unmerged, both modified
 !           !    ignored
 -------------------------------------------------</code></pre>
 </div></div>
+<div class="paragraph"><p>Submodules have more state and instead report
+                M    the submodule has a different HEAD than
+                     recorded in the index
+                m    the submodule has modified content
+                ?    the submodule has untracked files
+since modified content or untracked files in a submodule cannot be added
+via <code>git add</code> in the superproject to prepare a commit.</p></div>
+<div class="paragraph"><p><em>m</em> and <em>?</em> are applied recursively. For example if a nested submodule
+in a submodule contains an untracked file, this is reported as <em>?</em> as well.</p></div>
 <div class="paragraph"><p>If -b is used the short-format status is preceded by a line</p></div>
 <div class="literalblock">
 <div class="content">
@@ -1058,6 +1067,7 @@ and the terminating newline (but a space still separates the status
 field from the first filename).  Third, filenames containing special
 characters are not specially formatted; no quoting or
 backslash-escaping is performed.</p></div>
+<div class="paragraph"><p>Any submodule changes are reported as modified <code>M</code> instead of <code>m</code> or single <code>?</code>.</p></div>
 </div>
 <div class="sect2">
 <h3 id="_porcelain_format_version_2">Porcelain Format Version 2</h3>
@@ -1171,10 +1181,9 @@ found in the worktree.</p></div>
 <div class="paragraph"><p>When the <code>-z</code> option is given, pathnames are printed as is and
 without any quoting and lines are terminated with a NUL (ASCII 0x00)
 byte.</p></div>
-<div class="paragraph"><p>Otherwise, all pathnames will be "C-quoted" if they contain any tab,
-linefeed, double quote, or backslash characters. In C-quoting, these
-characters will be replaced with the corresponding C-style escape
-sequences and the resulting pathname will be double quoted.</p></div>
+<div class="paragraph"><p>Without the <code>-z</code> option, pathnames with "unusual" characters are
+quoted as explained for the configuration variable <code>core.quotePath</code>
+(see <a href="git-config.html">git-config(1)</a>).</p></div>
 </div>
 </div>
 </div>
@@ -1216,7 +1225,7 @@ output but does not honor these settings.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-09-12 17:53:34 PDT
+Last updated 2017-04-20 14:32:42 JST
 </div>
 </div>
 </body>

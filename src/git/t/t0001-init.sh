@@ -258,6 +258,9 @@ test_expect_success POSIXPERM 'init creates a new deep directory (umask vs. shar
 	(
 		# Leading directories should honor umask while
 		# the repository itself should follow "shared"
+		mkdir newdir &&
+		# Remove a default ACL if possible.
+		(setfacl -k newdir 2>/dev/null || true) &&
 		umask 002 &&
 		git init --bare --shared=0660 newdir/a/b/c &&
 		test_path_is_dir newdir/a/b/c/refs &&
@@ -310,6 +313,20 @@ test_expect_success 'init with separate gitdir' '
 	echo "gitdir: $(pwd)/realgitdir" >expected &&
 	test_cmp expected newdir/.git &&
 	test_path_is_dir realgitdir/refs
+'
+
+test_expect_success 'init in long base path' '
+	# exceed initial buffer size of strbuf_getcwd()
+	component=123456789abcdef &&
+	test_when_finished "chmod 0700 $component; rm -rf $component" &&
+	p31=$component/$component &&
+	p127=$p31/$p31/$p31/$p31 &&
+	mkdir -p $p127 &&
+	chmod 0111 $component &&
+	(
+		cd $p127 &&
+		git init newdir
+	)
 '
 
 test_expect_success 're-init on .git file' '

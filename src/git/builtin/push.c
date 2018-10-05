@@ -194,15 +194,18 @@ static void setup_push_upstream(struct remote *remote, struct branch *branch,
 			die_push_simple(branch, remote);
 	}
 
-	strbuf_addf(&refspec, "%s:%s", branch->name, branch->merge[0]->src);
+	strbuf_addf(&refspec, "%s:%s", branch->refname, branch->merge[0]->src);
 	add_refspec(refspec.buf);
 }
 
 static void setup_push_current(struct remote *remote, struct branch *branch)
 {
+	struct strbuf refspec = STRBUF_INIT;
+
 	if (!branch)
 		die(_(message_detached_head_die), remote->name);
-	add_refspec(branch->name);
+	strbuf_addf(&refspec, "%s:%s", branch->refname, branch->refname);
+	add_refspec(refspec.buf);
 }
 
 static int is_workflow_triangular(struct remote *remote)
@@ -507,8 +510,8 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 	int push_cert = -1;
 	int rc;
 	const char *repo = NULL;	/* default repository */
-	static struct string_list push_options = STRING_LIST_INIT_DUP;
-	static struct string_list_item *item;
+	struct string_list push_options = STRING_LIST_INIT_DUP;
+	const struct string_list_item *item;
 
 	struct option options[] = {
 		OPT__VERBOSITY(&verbosity),
@@ -565,6 +568,8 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 		flags |= TRANSPORT_RECURSE_SUBMODULES_CHECK;
 	else if (recurse_submodules == RECURSE_SUBMODULES_ON_DEMAND)
 		flags |= TRANSPORT_RECURSE_SUBMODULES_ON_DEMAND;
+	else if (recurse_submodules == RECURSE_SUBMODULES_ONLY)
+		flags |= TRANSPORT_RECURSE_SUBMODULES_ONLY;
 
 	if (tags)
 		add_refspec("refs/tags/*");
@@ -579,6 +584,7 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 			die(_("push options must not have new line characters"));
 
 	rc = do_push(repo, flags, &push_options);
+	string_list_clear(&push_options, 0);
 	if (rc == -1)
 		usage_with_options(push_usage, options);
 	else

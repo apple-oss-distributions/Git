@@ -748,7 +748,7 @@ git-worktree(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git worktree add</em> [-f] [--detach] [--checkout] [-b &lt;new-branch&gt;] &lt;path&gt; [&lt;branch&gt;]
+<pre class="content"><em>git worktree add</em> [-f] [--detach] [--checkout] [--lock] [-b &lt;new-branch&gt;] &lt;path&gt; [&lt;branch&gt;]
 <em>git worktree list</em> [--porcelain]
 <em>git worktree lock</em> [--reason &lt;string&gt;] &lt;worktree&gt;
 <em>git worktree prune</em> [-n] [-v] [--expire &lt;expire&gt;]
@@ -796,7 +796,7 @@ is linked to the current repository, sharing everything except working
 directory specific files such as HEAD, index, etc. <code>-</code> may also be
 specified as <code>&lt;branch&gt;</code>; it is synonymous with <code>@{-1}</code>.
 </p>
-<div class="paragraph"><p>If <code>&lt;branch&gt;</code> is omitted and neither <code>-b</code> nor <code>-B</code> nor <code>--detached</code> used,
+<div class="paragraph"><p>If <code>&lt;branch&gt;</code> is omitted and neither <code>-b</code> nor <code>-B</code> nor <code>--detach</code> used,
 then, as a convenience, a new branch based at HEAD is created automatically,
 as if <code>-b $(basename &lt;path&gt;)</code> was specified.</p></div>
 </dd>
@@ -893,6 +893,16 @@ Unlock a working tree, allowing it to be pruned, moved or deleted.
         be used to suppress checkout in order to make customizations,
         such as configuring sparse-checkout. See "Sparse checkout"
         in <a href="git-read-tree.html">git-read-tree(1)</a>.
+</p>
+</dd>
+<dt class="hdlist1">
+--lock
+</dt>
+<dd>
+<p>
+        Keep the working tree locked after creation. This is the
+        equivalent of <code>git worktree lock</code> after <code>git worktree add</code>,
+        but without race condition.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1098,7 +1108,7 @@ performed manually, such as:</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-11-17 14:06:06 PST
+Last updated 2017-04-27 11:19:22 JST
 </div>
 </div>
 </body>

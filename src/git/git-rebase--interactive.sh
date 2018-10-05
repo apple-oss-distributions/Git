@@ -5,7 +5,7 @@
 # Copyright (c) 2006 Johannes E. Schindelin
 #
 # The original idea comes from Eric W. Biederman, in
-# http://article.gmane.org/gmane.comp.version-control.git/22407
+# https://public-inbox.org/git/m1odwkyuf5.fsf_-_@ebiederm.dsl.xmission.com/
 #
 # The file containing rebase commands, comments, and empty lines.
 # This file is created by "git rebase -i" then edited by the user.  As
@@ -425,7 +425,7 @@ update_squash_messages () {
 	if test -f "$squash_msg"; then
 		mv "$squash_msg" "$squash_msg".bak || exit
 		count=$(($(sed -n \
-			-e "1s/^$comment_char.*\([0-9][0-9]*\).*/\1/p" \
+			-e "1s/^$comment_char[^0-9]*\([0-9][0-9]*\).*/\1/p" \
 			-e "q" < "$squash_msg".bak)+1))
 		{
 			printf '%s\n' "$comment_char $(eval_ngettext \
@@ -437,7 +437,8 @@ update_squash_messages () {
 			}' <"$squash_msg".bak
 		} >"$squash_msg"
 	else
-		commit_message HEAD > "$fixup_msg" || die "$(gettext "Cannot write \$fixup_msg")"
+		commit_message HEAD >"$fixup_msg" ||
+		die "$(eval_gettext "Cannot write \$fixup_msg")"
 		count=2
 		{
 			printf '%s\n' "$comment_char $(gettext "This is a combination of 2 commits.")"
@@ -1068,6 +1069,10 @@ git_rebase__interactive () {
 
 case "$action" in
 continue)
+	if test ! -d "$rewritten"
+	then
+		exec git rebase--helper ${force_rebase:+--no-ff} --continue
+	fi
 	# do we have anything to commit?
 	if git diff-index --cached --quiet HEAD --
 	then
@@ -1127,6 +1132,10 @@ first and then run 'git rebase --continue' again.")"
 skip)
 	git rerere clear
 
+	if test ! -d "$rewritten"
+	then
+		exec git rebase--helper ${force_rebase:+--no-ff} --continue
+	fi
 	do_rest
 	return 0
 	;;
@@ -1313,6 +1322,11 @@ expand_todo_ids
 test -d "$rewritten" || test -n "$force_rebase" || skip_unnecessary_picks
 
 checkout_onto
+if test -z "$rebase_root" && test ! -d "$rewritten"
+then
+	require_clean_work_tree "rebase"
+	exec git rebase--helper ${force_rebase:+--no-ff} --continue
+fi
 do_rest
 
 }

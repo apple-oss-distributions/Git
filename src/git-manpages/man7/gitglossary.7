@@ -2,12 +2,12 @@
 .\"     Title: gitglossary
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GITGLOSSARY" "7" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GITGLOSSARY" "7" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -590,10 +590,75 @@ Glob magic is incompatible with literal magic\&.
 .RE
 .RE
 .PP
+attr
+.RS 4
+After
+\fBattr:\fR
+comes a space separated list of "attribute requirements", all of which must be met in order for the path to be considered a match; this is in addition to the usual non\-magic pathspec pattern matching\&. See
+\fBgitattributes\fR(5)\&.
+.sp
+Each of the attribute requirements for the path takes one of these forms:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"\fBATTR\fR" requires that the attribute
+\fBATTR\fR
+be set\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"\fB\-ATTR\fR" requires that the attribute
+\fBATTR\fR
+be unset\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"\fBATTR=VALUE\fR" requires that the attribute
+\fBATTR\fR
+be set to the string
+\fBVALUE\fR\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"\fB!ATTR\fR" requires that the attribute
+\fBATTR\fR
+be unspecified\&.
+.RE
+.RE
+.PP
 exclude
 .RS 4
 After a path matches any non\-exclude pathspec, it will be run through all exclude pathspec (magic signature:
-\fB!\fR)\&. If it matches, the path is ignored\&.
+\fB!\fR
+or its synonym
+\fB^\fR)\&. If it matches, the path is ignored\&. When there is no non\-exclude pathspec, the exclusion is applied to the result set as if invoked without any pathspec\&.
 .RE
 .RE
 .PP
@@ -992,7 +1057,7 @@ commit\(cqs tree, plus any local changes that you have made but not yet committe
 \fBgittutorial\fR(7), \fBgittutorial-2\fR(7), \fBgitcvs-migration\fR(7), \fBgiteveryday\fR(7), \m[blue]\fBThe Git User\(cqs Manual\fR\m[]\&\s-2\u[1]\d\s+2
 .SH "GIT"
 .sp
-Part of the \fBgit\fR(1) suite\&.
+Part of the \fBgit\fR(1) suite
 .SH "NOTES"
 .IP " 1." 4
 The Git User\(cqs Manual

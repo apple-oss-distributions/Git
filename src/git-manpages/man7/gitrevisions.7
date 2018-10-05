@@ -2,12 +2,12 @@
 .\"     Title: gitrevisions
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GITREVISIONS" "7" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GITREVISIONS" "7" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -247,7 +247,7 @@ to a branchname (short form
 \fI<branchname>@{u}\fR) refers to the branch that the branch specified by branchname is set to build on top of (configured with
 \fBbranch\&.<name>\&.remote\fR
 and
-\fBbranch\&.<name>\&.merge\fR)\&. A missing branchname defaults to the current one\&.
+\fBbranch\&.<name>\&.merge\fR)\&. A missing branchname defaults to the current one\&. These suffixes are also accepted when spelled in uppercase, and they mean the same thing no matter the case\&.
 .RE
 .PP
 \fI<branchname>@{push}\fR, e\&.g\&. \fImaster@{push}\fR, \fI@{push}\fR
@@ -287,6 +287,8 @@ Note in the example that we set up a triangular workflow, where we pull from one
 \fI@{push}\fR
 is the same as
 \fI@{upstream}\fR, and there is no need for it\&.
+.sp
+This suffix is also accepted when spelled in uppercase, and means the same thing no matter the case\&.
 .RE
 .PP
 \fI<rev>^\fR, e\&.g\&. \fIHEAD^, v1\&.5\&.1^0\fR
@@ -509,7 +511,7 @@ The \fIr1^@\fR notation means all parents of \fIr1\fR\&.
 .sp
 The \fIr1^!\fR notation includes commit \fIr1\fR but excludes all of its parents\&. By itself, this notation denotes the single commit \fIr1\fR\&.
 .sp
-The \fI<rev>^\-{<n>}\fR notation includes \fI<rev>\fR but excludes the <n>th parent (i\&.e\&. a shorthand for \fI<rev>^<n>\&.\&.<rev>\fR), with \fI<n>\fR = 1 if not given\&. This is typically useful for merge commits where you can just pass \fI<commit>^\-\fR to get all the commits in the branch that was merged in merge commit \fI<commit>\fR (including \fI<commit>\fR itself)\&.
+The \fI<rev>^\-<n>\fR notation includes \fI<rev>\fR but excludes the <n>th parent (i\&.e\&. a shorthand for \fI<rev>^<n>\&.\&.<rev>\fR), with \fI<n>\fR = 1 if not given\&. This is typically useful for merge commits where you can just pass \fI<commit>^\-\fR to get all the commits in the branch that was merged in merge commit \fI<commit>\fR (including \fI<commit>\fR itself)\&.
 .sp
 While \fI<rev>^<n>\fR was about specifying a single commit parent, these three notations also consider its parents\&. For example you can say \fIHEAD^2^@\fR, however you cannot say \fIHEAD^@^2\fR\&.
 .SH "REVISION RANGE SUMMARY"
@@ -556,7 +558,7 @@ and then all its parents prefixed with
 to exclude them (and their ancestors)\&.
 .RE
 .PP
-\fI<rev>^\-{<n>}\fR, e\&.g\&. \fIHEAD^\-, HEAD^\-2\fR
+\fI<rev>^\-<n>\fR, e\&.g\&. \fIHEAD^\-, HEAD^\-2\fR
 .RS 4
 Equivalent to
 \fI<rev>^<n>\&.\&.<rev>\fR, with

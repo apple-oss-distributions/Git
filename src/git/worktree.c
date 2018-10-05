@@ -88,21 +88,13 @@ static struct worktree *get_main_worktree(void)
 
 	strbuf_addf(&path, "%s/HEAD", get_git_common_dir());
 
-	if (parse_ref(path.buf, &head_ref, &is_detached) < 0)
-		goto done;
-
-	worktree = xmalloc(sizeof(struct worktree));
+	worktree = xcalloc(1, sizeof(*worktree));
 	worktree->path = strbuf_detach(&worktree_path, NULL);
-	worktree->id = NULL;
 	worktree->is_bare = is_bare;
-	worktree->head_ref = NULL;
 	worktree->is_detached = is_detached;
-	worktree->is_current = 0;
-	add_head_info(&head_ref, worktree);
-	worktree->lock_reason = NULL;
-	worktree->lock_reason_valid = 0;
+	if (!parse_ref(path.buf, &head_ref, &is_detached))
+		add_head_info(&head_ref, worktree);
 
-done:
 	strbuf_release(&path);
 	strbuf_release(&worktree_path);
 	strbuf_release(&head_ref);
@@ -138,16 +130,11 @@ static struct worktree *get_linked_worktree(const char *id)
 	if (parse_ref(path.buf, &head_ref, &is_detached) < 0)
 		goto done;
 
-	worktree = xmalloc(sizeof(struct worktree));
+	worktree = xcalloc(1, sizeof(*worktree));
 	worktree->path = strbuf_detach(&worktree_path, NULL);
 	worktree->id = xstrdup(id);
-	worktree->is_bare = 0;
-	worktree->head_ref = NULL;
 	worktree->is_detached = is_detached;
-	worktree->is_current = 0;
 	add_head_info(&head_ref, worktree);
-	worktree->lock_reason = NULL;
-	worktree->lock_reason_valid = 0;
 
 done:
 	strbuf_release(&path);
@@ -158,7 +145,7 @@ done:
 
 static void mark_current_worktree(struct worktree **worktrees)
 {
-	char *git_dir = xstrdup(absolute_path(get_git_dir()));
+	char *git_dir = absolute_pathdup(get_git_dir());
 	int i;
 
 	for (i = 0; worktrees[i]; i++) {
@@ -173,7 +160,14 @@ static void mark_current_worktree(struct worktree **worktrees)
 	free(git_dir);
 }
 
-struct worktree **get_worktrees(void)
+static int compare_worktree(const void *a_, const void *b_)
+{
+	const struct worktree *const *a = a_;
+	const struct worktree *const *b = b_;
+	return fspathcmp((*a)->path, (*b)->path);
+}
+
+struct worktree **get_worktrees(unsigned flags)
 {
 	struct worktree **list = NULL;
 	struct strbuf path = STRBUF_INIT;
@@ -181,10 +175,9 @@ struct worktree **get_worktrees(void)
 	struct dirent *d;
 	int counter = 0, alloc = 2;
 
-	list = xmalloc(alloc * sizeof(struct worktree *));
+	ALLOC_ARRAY(list, alloc);
 
-	if ((list[counter] = get_main_worktree()))
-		counter++;
+	list[counter++] = get_main_worktree();
 
 	strbuf_addf(&path, "%s/worktrees", get_git_common_dir());
 	dir = opendir(path.buf);
@@ -204,6 +197,13 @@ struct worktree **get_worktrees(void)
 	}
 	ALLOC_GROW(list, counter + 1, alloc);
 	list[counter] = NULL;
+
+	if (flags & GWT_SORT_LINKED)
+		/*
+		 * don't sort the first item (main worktree), which will
+		 * always be the first
+		 */
+		QSORT(list + 1, counter - 1, compare_worktree);
 
 	mark_current_worktree(list);
 	return list;
@@ -250,16 +250,19 @@ struct worktree *find_worktree(struct worktree **list,
 {
 	struct worktree *wt;
 	char *path;
+	char *to_free = NULL;
 
 	if ((wt = find_worktree_by_suffix(list, arg)))
 		return wt;
 
-	arg = prefix_filename(prefix, strlen(prefix), arg);
-	path = xstrdup(real_path(arg));
+	if (prefix)
+		arg = to_free = prefix_filename(prefix, arg);
+	path = real_pathdup(arg, 1);
 	for (; *list; list++)
 		if (!fspathcmp(path, real_path((*list)->path)))
 			break;
 	free(path);
+	free(to_free);
 	return *list;
 }
 
@@ -341,7 +344,7 @@ const struct worktree *find_shared_symref(const char *symref,
 
 	if (worktrees)
 		free_worktrees(worktrees);
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(0);
 
 	for (i = 0; worktrees[i]; i++) {
 		struct worktree *wt = worktrees[i];
@@ -379,4 +382,54 @@ const struct worktree *find_shared_symref(const char *symref,
 	strbuf_release(&sb);
 
 	return existing;
+}
+
+int submodule_uses_worktrees(const char *path)
+{
+	char *submodule_gitdir;
+	struct strbuf sb = STRBUF_INIT;
+	DIR *dir;
+	struct dirent *d;
+	int ret = 0;
+	struct repository_format format;
+
+	submodule_gitdir = git_pathdup_submodule(path, "%s", "");
+	if (!submodule_gitdir)
+		return 0;
+
+	/* The env would be set for the superproject. */
+	get_common_dir_noenv(&sb, submodule_gitdir);
+	free(submodule_gitdir);
+
+	/*
+	 * The check below is only known to be good for repository format
+	 * version 0 at the time of writing this code.
+	 */
+	strbuf_addstr(&sb, "/config");
+	read_repository_format(&format, sb.buf);
+	if (format.version != 0) {
+		strbuf_release(&sb);
+		return 1;
+	}
+
+	/* Replace config by worktrees. */
+	strbuf_setlen(&sb, sb.len - strlen("config"));
+	strbuf_addstr(&sb, "worktrees");
+
+	/* See if there is any file inside the worktrees directory. */
+	dir = opendir(sb.buf);
+	strbuf_release(&sb);
+
+	if (!dir)
+		return 0;
+
+	while ((d = readdir(dir)) != NULL) {
+		if (is_dot_or_dotdot(d->d_name))
+			continue;
+
+		ret = 1;
+		break;
+	}
+	closedir(dir);
+	return ret;
 }

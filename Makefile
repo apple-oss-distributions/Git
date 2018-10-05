@@ -101,6 +101,9 @@ install: install-bin install-man install-contrib
 	rm -rf "$(DSTROOT)$(PREFIX)/share/gitk"
 	rm -f "$(DSTROOT)$(PREFIX)/share/man/man1/gitk.1"
 	rm -rf "$(DSTROOT)$(PREFIX)/share/man/man3"
+	rm -f "$(DSTROOT)$(PREFIX)"/bin/git-cvs*
+	rm -f "$(DSTROOT)$(PREFIX)"/libexec/git-core/git-cvs*
+	rm -f "$(DSTROOT)$(PREFIX)"/share/man/man*/*cvs*
 	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/Git.plist $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitconfig $(DSTROOT)$(PREFIX)/share/git-core
@@ -109,6 +112,8 @@ install: install-bin install-man install-contrib
 install-contrib:
 	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-completion.bash $(DSTROOT)$(PREFIX)/share/git-core
+	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-completion.tcsh $(DSTROOT)$(PREFIX)/share/git-core
+	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-completion.zsh $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-prompt.sh $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/subtree/git-subtree.sh $(DSTROOT)$(PREFIX)/libexec/git-core/git-subtree
 	$(CC) -c $(CFLAGS) $(RC_CFLAGS) $(SRCROOT)/src/git/contrib/credential/osxkeychain/git-credential-osxkeychain.c -o $(OBJROOT)/git-credential-osxkeychain.o
@@ -180,7 +185,7 @@ $(OBJROOT)/$(1)/dir.timestamp:
 $(OBJROOT)/$(1)/ditto.timestamp: $(OBJROOT)/$(1)/dir.timestamp
 	ditto $$(CURDIR)/src/git $$(dir $$@) && touch $$@
 
-$(OBJROOT)/$(1)/build.timestamp: $(OBJROOT)/$(1)/ditto.timestamp $(OBJROOT)/Info.plist $(OBJROOT)/libcrypto.dylib $(OBJROOT)/libssl.dylib
+$(OBJROOT)/$(1)/build.timestamp: $(OBJROOT)/$(1)/ditto.timestamp $(OBJROOT)/Info.plist
 	cat /dev/null > $$(OBJROOT)/$(1)/program-list
 	$$(MAKE) -C $$(dir $$@) $$(submakevars) \
 	  'CC=$$(CC) -arch $(1)' \
@@ -189,14 +194,6 @@ $(OBJROOT)/$(1)/build.timestamp: $(OBJROOT)/$(1)/ditto.timestamp $(OBJROOT)/Info
 	  && touch $$@
 
 endef
-
-# Remove this when <rdar://problem/25891622> is fixed
-$(OBJROOT)/libcrypto.dylib: $(SDKROOT)/usr/lib/libcrypto.35.dylib
-	ln -s $(SDKROOT)/usr/lib/libcrypto.35.dylib $(OBJROOT)/libcrypto.dylib
-
-# Remove this when <rdar://problem/25891622> is fixed
-$(OBJROOT)/libssl.dylib: $(SDKROOT)/usr/lib/libssl.35.dylib
-	ln -s $(SDKROOT)/usr/lib/libssl.35.dylib $(OBJROOT)/libssl.dylib
 
 $(foreach arch,$(RC_ARCHS),$(eval $(call each_arch,$(arch))))
 

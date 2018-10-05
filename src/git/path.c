@@ -471,39 +471,19 @@ const char *worktree_git_path(const struct worktree *wt, const char *fmt, ...)
 }
 
 /* Returns 0 on success, negative on failure. */
-#define SUBMODULE_PATH_ERR_NOT_CONFIGURED -1
 static int do_submodule_path(struct strbuf *buf, const char *path,
 			     const char *fmt, va_list args)
 {
-	const char *git_dir;
 	struct strbuf git_submodule_common_dir = STRBUF_INIT;
 	struct strbuf git_submodule_dir = STRBUF_INIT;
-	const struct submodule *sub;
-	int err = 0;
+	int ret;
 
-	strbuf_addstr(buf, path);
-	strbuf_complete(buf, '/');
-	strbuf_addstr(buf, ".git");
+	ret = submodule_to_gitdir(&git_submodule_dir, path);
+	if (ret)
+		goto cleanup;
 
-	git_dir = read_gitfile(buf->buf);
-	if (git_dir) {
-		strbuf_reset(buf);
-		strbuf_addstr(buf, git_dir);
-	}
-	if (!is_git_directory(buf->buf)) {
-		gitmodules_config();
-		sub = submodule_from_path(null_sha1, path);
-		if (!sub) {
-			err = SUBMODULE_PATH_ERR_NOT_CONFIGURED;
-			goto cleanup;
-		}
-		strbuf_reset(buf);
-		strbuf_git_path(buf, "%s/%s", "modules", sub->name);
-	}
-
-	strbuf_addch(buf, '/');
-	strbuf_addbuf(&git_submodule_dir, buf);
-
+	strbuf_complete(&git_submodule_dir, '/');
+	strbuf_addbuf(buf, &git_submodule_dir);
 	strbuf_vaddf(buf, fmt, args);
 
 	if (get_common_dir_noenv(&git_submodule_common_dir, git_submodule_dir.buf))
@@ -514,8 +494,7 @@ static int do_submodule_path(struct strbuf *buf, const char *path,
 cleanup:
 	strbuf_release(&git_submodule_dir);
 	strbuf_release(&git_submodule_common_dir);
-
-	return err;
+	return ret;
 }
 
 char *git_pathdup_submodule(const char *path, const char *fmt, ...)
@@ -638,8 +617,10 @@ static struct passwd *getpw_str(const char *username, size_t len)
  * Return a string with ~ and ~user expanded via getpw*.  If buf != NULL,
  * then it is a newly allocated string. Returns NULL on getpw failure or
  * if path is NULL.
+ *
+ * If real_home is true, real_path($HOME) is used in the expansion.
  */
-char *expand_user_path(const char *path)
+char *expand_user_path(const char *path, int real_home)
 {
 	struct strbuf user_path = STRBUF_INIT;
 	const char *to_copy = path;
@@ -654,7 +635,10 @@ char *expand_user_path(const char *path)
 			const char *home = getenv("HOME");
 			if (!home)
 				goto return_null;
-			strbuf_addstr(&user_path, home);
+			if (real_home)
+				strbuf_addstr(&user_path, real_path(home));
+			else
+				strbuf_addstr(&user_path, home);
 #ifdef GIT_WINDOWS_NATIVE
 			convert_slashes(user_path.buf);
 #endif
@@ -723,7 +707,7 @@ const char *enter_repo(const char *path, int strict)
 		strbuf_add(&validated_path, path, len);
 
 		if (used_path.buf[0] == '~') {
-			char *newpath = expand_user_path(used_path.buf);
+			char *newpath = expand_user_path(used_path.buf, 0);
 			if (!newpath)
 				return NULL;
 			strbuf_attach(&used_path, newpath, strlen(newpath),
@@ -991,7 +975,7 @@ const char *remove_leading_path(const char *in, const char *prefix)
  *
  * Performs the following normalizations on src, storing the result in dst:
  * - Ensures that components are separated by '/' (Windows only)
- * - Squashes sequences of '/'.
+ * - Squashes sequences of '/' except "//server/share" on Windows
  * - Removes "." components.
  * - Removes ".." components, and the components the precede them.
  * Returns failure (non-zero) if a ".." component appears as first path
@@ -1014,17 +998,22 @@ const char *remove_leading_path(const char *in, const char *prefix)
 int normalize_path_copy_len(char *dst, const char *src, int *prefix_len)
 {
 	char *dst0;
-	int i;
+	const char *end;
 
-	for (i = has_dos_drive_prefix(src); i > 0; i--)
-		*dst++ = *src++;
+	/*
+	 * Copy initial part of absolute path: "/", "C:/", "//server/share/".
+	 */
+	end = src + offset_1st_component(src);
+	while (src < end) {
+		char c = *src++;
+		if (is_dir_sep(c))
+			c = '/';
+		*dst++ = c;
+	}
 	dst0 = dst;
 
-	if (is_dir_sep(*src)) {
-		*dst++ = '/';
-		while (is_dir_sep(*src))
-			src++;
-	}
+	while (is_dir_sep(*src))
+		src++;
 
 	for (;;) {
 		char c = *src;
@@ -1252,6 +1241,11 @@ int is_ntfs_dotgit(const char *name)
 		}
 }
 
+int looks_like_command_line_option(const char *str)
+{
+	return str && str[0] == '-';
+}
+
 char *xdg_config_home(const char *filename)
 {
 	const char *home, *config_home;
@@ -1264,6 +1258,21 @@ char *xdg_config_home(const char *filename)
 	home = getenv("HOME");
 	if (home)
 		return mkpathdup("%s/.config/git/%s", home, filename);
+	return NULL;
+}
+
+char *xdg_cache_home(const char *filename)
+{
+	const char *home, *cache_home;
+
+	assert(filename);
+	cache_home = getenv("XDG_CACHE_HOME");
+	if (cache_home && *cache_home)
+		return mkpathdup("%s/git/%s", cache_home, filename);
+
+	home = getenv("HOME");
+	if (home)
+		return mkpathdup("%s/.cache/git/%s", home, filename);
 	return NULL;
 }
 

@@ -12,7 +12,8 @@ USAGE="[--quiet] add [-b <branch>] [-f|--force] [--name <name>] [--reference <re
    or: $dashless [--quiet] update [--init] [--remote] [-N|--no-fetch] [-f|--force] [--checkout|--merge|--rebase] [--[no-]recommend-shallow] [--reference <repository>] [--recursive] [--] [<path>...]
    or: $dashless [--quiet] summary [--cached|--files] [--summary-limit <n>] [commit] [--] [<path>...]
    or: $dashless [--quiet] foreach [--recursive] <command>
-   or: $dashless [--quiet] sync [--recursive] [--] [<path>...]"
+   or: $dashless [--quiet] sync [--recursive] [--] [<path>...]
+   or: $dashless [--quiet] absorbgitdirs [--] [<path>...]"
 OPTIONS_SPEC=
 SUBDIRECTORY_OK=Yes
 . git-sh-setup
@@ -21,14 +22,10 @@ require_work_tree
 wt_prefix=$(git rev-parse --show-prefix)
 cd_to_toplevel
 
-# Restrict ourselves to a vanilla subset of protocols; the URLs
-# we get are under control of a remote repository, and we do not
-# want them kicking off arbitrary git-remote-* programs.
-#
-# If the user has already specified a set of allowed protocols,
-# we assume they know what they're doing and use that instead.
-: ${GIT_ALLOW_PROTOCOL=file:git:http:https:ssh}
-export GIT_ALLOW_PROTOCOL
+# Tell the rest of git that any URLs we get don't come
+# directly from the user, so it can apply policy as appropriate.
+GIT_PROTOCOL_FROM_USER=0
+export GIT_PROTOCOL_FROM_USER
 
 command=
 branch=
@@ -207,8 +204,14 @@ cmd_add()
 			tstart
 			s|/*$||
 		')
-	git ls-files --error-unmatch "$sm_path" > /dev/null 2>&1 &&
-	die "$(eval_gettext "'\$sm_path' already exists in the index")"
+	if test -z "$force"
+	then
+		git ls-files --error-unmatch "$sm_path" > /dev/null 2>&1 &&
+		die "$(eval_gettext "'\$sm_path' already exists in the index")"
+	else
+		git ls-files -s "$sm_path" | sane_grep -v "^160000" > /dev/null 2>&1 &&
+		die "$(eval_gettext "'\$sm_path' already exists in the index and is not a submodule")"
+	fi
 
 	if test -z "$force" && ! git add --dry-run --ignore-missing "$sm_path" > /dev/null 2>&1
 	then
@@ -275,6 +278,20 @@ or you are unsure what this means choose another name with the '--name' option."
 	fi &&
 	git add --force .gitmodules ||
 	die "$(eval_gettext "Failed to register submodule '\$sm_path'")"
+
+	# NEEDSWORK: In a multi-working-tree world, this needs to be
+	# set in the per-worktree config.
+	if git config --get submodule.active >/dev/null
+	then
+		# If the submodule being adding isn't already covered by the
+		# current configured pathspec, set the submodule's active flag
+		if ! git submodule--helper is-active "$sm_path"
+		then
+			git config submodule."$sm_name".active "true"
+		fi
+	else
+		git config submodule."$sm_name".active "true"
+	fi
 }
 
 #
@@ -315,7 +332,7 @@ cmd_foreach()
 		git submodule--helper list --prefix "$wt_prefix" ||
 		echo "#unmatched" $?
 	} |
-	while read mode sha1 stage sm_path
+	while read -r mode sha1 stage sm_path
 	do
 		die_if_unmatched "$mode" "$sha1"
 		if test -e "$sm_path"/.git
@@ -374,7 +391,7 @@ cmd_init()
 		shift
 	done
 
-	git ${wt_prefix:+-C "$wt_prefix"} submodule--helper init ${GIT_QUIET:+--quiet} ${prefix:+--prefix "$prefix"} "$@"
+	git ${wt_prefix:+-C "$wt_prefix"} ${prefix:+--super-prefix "$prefix"} submodule--helper init ${GIT_QUIET:+--quiet}  "$@"
 }
 
 #
@@ -424,7 +441,7 @@ cmd_deinit()
 		git submodule--helper list --prefix "$wt_prefix" "$@" ||
 		echo "#unmatched" $?
 	} |
-	while read mode sha1 stage sm_path
+	while read -r mode sha1 stage sm_path
 	do
 		die_if_unmatched "$mode" "$sha1"
 		name=$(git submodule--helper name "$sm_path") || exit
@@ -588,7 +605,7 @@ cmd_update()
 		"$@" || echo "#unmatched" $?
 	} | {
 	err=
-	while read mode sha1 stage just_cloned sm_path
+	while read -r mode sha1 stage just_cloned sm_path
 	do
 		die_if_unmatched "$mode" "$sha1"
 
@@ -610,7 +627,10 @@ cmd_update()
 		if test $just_cloned -eq 1
 		then
 			subsha1=
-			update_module=checkout
+			case "$update_module" in
+			merge | rebase | none)
+				update_module=checkout ;;
+			esac
 		else
 			subsha1=$(sanitize_submodule_env; cd "$sm_path" &&
 				git rev-parse --verify HEAD) ||
@@ -827,7 +847,7 @@ cmd_summary() {
 	# Get modified modules cared by user
 	modules=$(git $diff_cmd $cached --ignore-submodules=dirty --raw $head -- "$@" |
 		sane_egrep '^:([0-7]* )?160000' |
-		while read mod_src mod_dst sha1_src sha1_dst status sm_path
+		while read -r mod_src mod_dst sha1_src sha1_dst status sm_path
 		do
 			# Always show modules deleted or type-changed (blob<->module)
 			if test "$status" = D || test "$status" = T
@@ -853,7 +873,7 @@ cmd_summary() {
 	git $diff_cmd $cached --ignore-submodules=dirty --raw $head -- $modules |
 	sane_egrep '^:([0-7]* )?160000' |
 	cut -c2- |
-	while read mod_src mod_dst sha1_src sha1_dst status name
+	while read -r mod_src mod_dst sha1_src sha1_dst status name
 	do
 		if test -z "$cached" &&
 			test $sha1_dst = 0000000000000000000000000000000000000000
@@ -1000,18 +1020,17 @@ cmd_status()
 		git submodule--helper list --prefix "$wt_prefix" "$@" ||
 		echo "#unmatched" $?
 	} |
-	while read mode sha1 stage sm_path
+	while read -r mode sha1 stage sm_path
 	do
 		die_if_unmatched "$mode" "$sha1"
 		name=$(git submodule--helper name "$sm_path") || exit
-		url=$(git config submodule."$name".url)
 		displaypath=$(git submodule--helper relative-path "$prefix$sm_path" "$wt_prefix")
 		if test "$stage" = U
 		then
 			say "U$sha1 $displaypath"
 			continue
 		fi
-		if test -z "$url" ||
+		if ! git submodule--helper is-active "$sm_path" ||
 		{
 			! test -d "$sm_path"/.git &&
 			! test -f "$sm_path"/.git
@@ -1081,9 +1100,16 @@ cmd_sync()
 		git submodule--helper list --prefix "$wt_prefix" "$@" ||
 		echo "#unmatched" $?
 	} |
-	while read mode sha1 stage sm_path
+	while read -r mode sha1 stage sm_path
 	do
 		die_if_unmatched "$mode" "$sha1"
+
+		# skip inactive submodules
+		if ! git submodule--helper is-active "$sm_path"
+		then
+			continue
+		fi
+
 		name=$(git submodule--helper name "$sm_path")
 		url=$(git config -f .gitmodules --get submodule."$name".url)
 
@@ -1106,29 +1132,31 @@ cmd_sync()
 			;;
 		esac
 
-		if git config "submodule.$name.url" >/dev/null 2>/dev/null
+		displaypath=$(git submodule--helper relative-path "$prefix$sm_path" "$wt_prefix")
+		say "$(eval_gettext "Synchronizing submodule url for '\$displaypath'")"
+		git config submodule."$name".url "$super_config_url"
+
+		if test -e "$sm_path"/.git
 		then
-			displaypath=$(git submodule--helper relative-path "$prefix$sm_path" "$wt_prefix")
-			say "$(eval_gettext "Synchronizing submodule url for '\$displaypath'")"
-			git config submodule."$name".url "$super_config_url"
+		(
+			sanitize_submodule_env
+			cd "$sm_path"
+			remote=$(get_default_remote)
+			git config remote."$remote".url "$sub_origin_url"
 
-			if test -e "$sm_path"/.git
+			if test -n "$recursive"
 			then
-			(
-				sanitize_submodule_env
-				cd "$sm_path"
-				remote=$(get_default_remote)
-				git config remote."$remote".url "$sub_origin_url"
-
-				if test -n "$recursive"
-				then
-					prefix="$prefix$sm_path/"
-					eval cmd_sync
-				fi
-			)
+				prefix="$prefix$sm_path/"
+				eval cmd_sync
 			fi
+		)
 		fi
 	done
+}
+
+cmd_absorbgitdirs()
+{
+	git submodule--helper absorb-git-dirs --prefix "$wt_prefix" "$@"
 }
 
 # This loop parses the command line arguments to find the
@@ -1140,7 +1168,7 @@ cmd_sync()
 while test $# != 0 && test -z "$command"
 do
 	case "$1" in
-	add | foreach | init | deinit | update | status | summary | sync)
+	add | foreach | init | deinit | update | status | summary | sync | absorbgitdirs)
 		command=$1
 		;;
 	-q|--quiet)

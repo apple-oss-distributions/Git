@@ -155,6 +155,15 @@ test_expect_success 'amend --only ignores staged contents' '
 	git diff --exit-code
 '
 
+test_expect_success 'allow-empty --only ignores staged contents' '
+	echo changed-again >file &&
+	git add file &&
+	git commit --allow-empty --only -m "empty" &&
+	git cat-file blob HEAD:file >file.actual &&
+	test_cmp file.expect file.actual &&
+	git diff --exit-code
+'
+
 test_expect_success 'set up editor' '
 	cat >editor <<-\EOF &&
 	#!/bin/sh
@@ -456,6 +465,42 @@ $alt" &&
 		echo
 		git var GIT_COMMITTER_IDENT |
 		sed -e "s/>.*/>/" -e "s/^/Signed-off-by: /"
+	) >expected &&
+	test_cmp expected actual
+'
+
+test_expect_success 'signoff respects trailer config' '
+
+	echo 5 >positive &&
+	git add positive &&
+	git commit -s -m "subject
+
+non-trailer line
+Myfooter: x" &&
+	git cat-file commit HEAD | sed -e "1,/^\$/d" > actual &&
+	(
+		echo subject
+		echo
+		echo non-trailer line
+		echo Myfooter: x
+		echo
+		echo "Signed-off-by: $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL>"
+	) >expected &&
+	test_cmp expected actual &&
+
+	echo 6 >positive &&
+	git add positive &&
+	git -c "trailer.Myfooter.ifexists=add" commit -s -m "subject
+
+non-trailer line
+Myfooter: x" &&
+	git cat-file commit HEAD | sed -e "1,/^\$/d" > actual &&
+	(
+		echo subject
+		echo
+		echo non-trailer line
+		echo Myfooter: x
+		echo "Signed-off-by: $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL>"
 	) >expected &&
 	test_cmp expected actual
 '

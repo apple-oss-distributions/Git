@@ -36,6 +36,7 @@ struct progress {
 	unsigned delay;
 	unsigned delayed_percent_treshold;
 	struct throughput *throughput;
+	uint64_t start_ns;
 };
 
 static volatile sig_atomic_t progress_update;
@@ -221,6 +222,7 @@ struct progress *start_progress_delay(const char *title, unsigned total,
 	progress->delayed_percent_treshold = percent_treshold;
 	progress->delay = delay;
 	progress->throughput = NULL;
+	progress->start_ns = getnanotime();
 	set_progress_signal();
 	return progress;
 }
@@ -243,21 +245,20 @@ void stop_progress_msg(struct progress **p_progress, const char *msg)
 	*p_progress = NULL;
 	if (progress->last_value != -1) {
 		/* Force the last update */
-		char buf[128], *bufp;
-		size_t len = strlen(msg) + 5;
+		char *buf;
 		struct throughput *tp = progress->throughput;
 
-		bufp = (len < sizeof(buf)) ? buf : xmallocz(len);
 		if (tp) {
-			unsigned int rate = !tp->avg_misecs ? 0 :
-					tp->avg_bytes / tp->avg_misecs;
+			uint64_t now_ns = getnanotime();
+			unsigned int misecs, rate;
+			misecs = ((now_ns - progress->start_ns) * 4398) >> 32;
+			rate = tp->curr_total / (misecs ? misecs : 1);
 			throughput_string(&tp->display, tp->curr_total, rate);
 		}
 		progress_update = 1;
-		xsnprintf(bufp, len + 1, ", %s.\n", msg);
-		display(progress, progress->last_value, bufp);
-		if (buf != bufp)
-			free(bufp);
+		buf = xstrfmt(", %s.\n", msg);
+		display(progress, progress->last_value, buf);
+		free(buf);
 	}
 	clear_progress_signal();
 	if (progress->throughput)

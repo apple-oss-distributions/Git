@@ -2,12 +2,12 @@
 .\"     Title: git
 .\"    Author: [see the "Authors" section]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -474,11 +474,6 @@ Prune all unreachable objects from the object database\&.
 \fBgit-reflog\fR(1)
 .RS 4
 Manage reflog information\&.
-.RE
-.PP
-\fBgit-relink\fR(1)
-.RS 4
-Hardlink common objects in local repositories\&.
 .RE
 .PP
 \fBgit-remote\fR(1)
@@ -1111,6 +1106,20 @@ directory is used\&.
 \fBGIT_ALTERNATE_OBJECT_DIRECTORIES\fR
 .RS 4
 Due to the immutable nature of Git objects, old objects can be archived into shared, read\-only directories\&. This variable specifies a ":" separated (on Windows ";" separated) list of Git object directories which can be used to search for Git objects\&. New objects will not be written to these directories\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+Entries that begin with `"` (double\-quote) will be interpreted
+as C\-style quoted paths, removing leading and trailing
+double\-quotes and respecting backslash escapes\&. E\&.g\&., the value
+`"path\-with\-\e"\-and\-:\-in\-it":vanilla\-path` has two paths:
+`path\-with\-"\-and\-:\-in\-it` and `vanilla\-path`\&.
+.fi
+.if n \{\
+.RE
+.\}
 .RE
 .PP
 \fBGIT_DIR\fR
@@ -1305,6 +1314,15 @@ Usually it is easier to configure any desired options through your personal
 file\&. Please consult your ssh documentation for further details\&.
 .RE
 .PP
+\fBGIT_SSH_VARIANT\fR
+.RS 4
+If this environment variable is set, it overrides Git\(cqs autodetection whether
+\fBGIT_SSH\fR/\fBGIT_SSH_COMMAND\fR/\fBcore\&.sshCommand\fR
+refer to OpenSSH, plink or tortoiseplink\&. This variable overrides the config setting
+\fBssh\&.variant\fR
+that serves the same purpose\&.
+.RE
+.PP
 \fBGIT_ASKPASS\fR
 .RS 4
 If this environment variable is set, then Git commands which need to acquire passwords or passphrases (e\&.g\&. for HTTP or IMAP authentication) will call this program with a suitable prompt as command\-line argument and read the password from its STDOUT\&. See also the
@@ -1468,75 +1486,27 @@ If set to
 .PP
 \fBGIT_ALLOW_PROTOCOL\fR
 .RS 4
-If set, provide a colon\-separated list of protocols which are allowed to be used with fetch/push/clone\&. This is useful to restrict recursive submodule initialization from an untrusted repository\&. Any protocol not mentioned will be disallowed (i\&.e\&., this is a whitelist, not a blacklist)\&. If the variable is not set at all, all protocols are enabled\&. The protocol names currently used by git are:
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fBfile\fR: any local file\-based path (including
-\fBfile://\fR
-URLs, or local paths)
+If set to a colon\-separated list of protocols, behave as if
+\fBprotocol\&.allow\fR
+is set to
+\fBnever\fR, and each of the listed protocols has
+\fBprotocol\&.<name>\&.allow\fR
+set to
+\fBalways\fR
+(overriding any existing configuration)\&. In other words, any protocol not mentioned will be disallowed (i\&.e\&., this is a whitelist, not a blacklist)\&. See the description of
+\fBprotocol\&.allow\fR
+in
+\fBgit-config\fR(1)
+for more details\&.
 .RE
-.sp
+.PP
+\fBGIT_PROTOCOL_FROM_USER\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fBgit\fR: the anonymous git protocol over a direct TCP connection (or proxy, if configured)
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fBssh\fR: git over ssh (including
-\fBhost:path\fR
-syntax,
-\fBssh://\fR, etc)\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fBhttp\fR: git over http, both "smart http" and "dumb http"\&. Note that this does
-\fInot\fR
-include
-\fBhttps\fR; if you want both, you should specify both as
-\fBhttp:https\fR\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-any external helpers are named by their protocol (e\&.g\&., use
-\fBhg\fR
-to allow the
-\fBgit\-remote\-hg\fR
-helper)
-.RE
+Set to 0 to prevent protocols used by fetch/push/clone which are configured to the
+\fBuser\fR
+state\&. This is useful to restrict recursive submodule initialization from an untrusted repository or for programs which feed potentially\-untrusted URLS to git commands\&. See
+\fBgit-config\fR(1)
+for more details\&.
 .RE
 .SH "DISCUSSION"
 .sp

@@ -384,6 +384,9 @@ int mingw_raise(int sig);
  * ANSI emulation wrappers
  */
 
+int winansi_isatty(int fd);
+#define isatty winansi_isatty
+
 void winansi_init(void);
 HANDLE winansi_get_osfhandle(int fd);
 
@@ -395,7 +398,11 @@ HANDLE winansi_get_osfhandle(int fd);
 	(isalpha(*(path)) && (path)[1] == ':' ? 2 : 0)
 int mingw_skip_dos_drive_prefix(char **path);
 #define skip_dos_drive_prefix mingw_skip_dos_drive_prefix
-#define is_dir_sep(c) ((c) == '/' || (c) == '\\')
+static inline int mingw_is_dir_sep(int c)
+{
+	return c == '/' || c == '\\';
+}
+#define is_dir_sep mingw_is_dir_sep
 static inline char *mingw_find_last_dir_sep(const char *path)
 {
 	char *ret = NULL;

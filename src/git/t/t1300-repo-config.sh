@@ -703,6 +703,12 @@ test_expect_success 'invalid unit' '
 	test_i18ngrep "bad numeric config value .1auto. for .aninvalid.unit. in file .git/config: invalid unit" actual
 '
 
+test_expect_success 'line number is reported correctly' '
+	printf "[bool]\n\tvar\n" >invalid &&
+	test_must_fail git config -f invalid --path bool.var 2>actual &&
+	test_i18ngrep "line 2" actual
+'
+
 test_expect_success 'invalid stdin config' '
 	echo "[broken" | test_must_fail git config --list --file - >output 2>&1 &&
 	test_i18ngrep "bad config line 1 in standard input" output
@@ -1069,6 +1075,13 @@ test_expect_success 'git -c works with aliases of builtins' '
 	test_cmp expect actual
 '
 
+test_expect_success 'aliases can be CamelCased' '
+	test_config alias.CamelCased "rev-parse HEAD" &&
+	git CamelCased >out &&
+	git rev-parse HEAD >expect &&
+	test_cmp expect out
+'
+
 test_expect_success 'git -c does not split values on equals' '
 	echo "value with = in it" >expect &&
 	git -c core.foo="value with = in it" config core.foo >actual &&
@@ -1096,6 +1109,68 @@ test_expect_success 'multiple git -c appends config' '
 	git -c x.one=1 x >actual &&
 	test_cmp expect actual
 '
+
+test_expect_success 'last one wins: two level vars' '
+
+	# sec.var and sec.VAR are the same variable, as the first
+	# and the last level of a configuration variable name is
+	# case insensitive.
+
+	echo VAL >expect &&
+
+	git -c sec.var=val -c sec.VAR=VAL config --get sec.var >actual &&
+	test_cmp expect actual &&
+	git -c SEC.var=val -c sec.var=VAL config --get sec.var >actual &&
+	test_cmp expect actual &&
+
+	git -c sec.var=val -c sec.VAR=VAL config --get SEC.var >actual &&
+	test_cmp expect actual &&
+	git -c SEC.var=val -c sec.var=VAL config --get sec.VAR >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'last one wins: three level vars' '
+
+	# v.a.r and v.A.r are not the same variable, as the middle
+	# level of a three-level configuration variable name is
+	# case sensitive.
+
+	echo val >expect &&
+	git -c v.a.r=val -c v.A.r=VAL config --get v.a.r >actual &&
+	test_cmp expect actual &&
+	git -c v.a.r=val -c v.A.r=VAL config --get V.a.R >actual &&
+	test_cmp expect actual &&
+
+	# v.a.r and V.a.R are the same variable, as the first
+	# and the last level of a configuration variable name is
+	# case insensitive.
+
+	echo VAL >expect &&
+	git -c v.a.r=val -c v.a.R=VAL config --get v.a.r >actual &&
+	test_cmp expect actual &&
+	git -c v.a.r=val -c V.a.r=VAL config --get v.a.r >actual &&
+	test_cmp expect actual &&
+	git -c v.a.r=val -c v.a.R=VAL config --get V.a.R >actual &&
+	test_cmp expect actual &&
+	git -c v.a.r=val -c V.a.r=VAL config --get V.a.R >actual &&
+	test_cmp expect actual
+'
+
+for VAR in a .a a. a.0b a."b c". a."b c".0d
+do
+	test_expect_success "git -c $VAR=VAL rejects invalid '$VAR'" '
+		test_must_fail git -c "$VAR=VAL" config -l
+	'
+done
+
+for VAR in a.b a."b c".d
+do
+	test_expect_success "git -c $VAR=VAL works with valid '$VAR'" '
+		echo VAL >expect &&
+		git -c "$VAR=VAL" config --get "$VAR" >actual &&
+		test_cmp expect actual
+	'
+done
 
 test_expect_success 'git -c is not confused by empty environment' '
 	GIT_CONFIG_PARAMETERS="" git -c x.one=1 config --list
@@ -1174,6 +1249,111 @@ test_expect_success 'urlmatch' '
 		echo http.sslverify false
 	} >expect &&
 	git config --get-urlmatch HTTP https://weak.example.com >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'urlmatch favors more specific URLs' '
+	cat >.git/config <<-\EOF &&
+	[http "https://example.com/"]
+		cookieFile = /tmp/root.txt
+	[http "https://example.com/subdirectory"]
+		cookieFile = /tmp/subdirectory.txt
+	[http "https://user@example.com/"]
+		cookieFile = /tmp/user.txt
+	[http "https://averylonguser@example.com/"]
+		cookieFile = /tmp/averylonguser.txt
+	[http "https://preceding.example.com"]
+		cookieFile = /tmp/preceding.txt
+	[http "https://*.example.com"]
+		cookieFile = /tmp/wildcard.txt
+	[http "https://*.example.com/wildcardwithsubdomain"]
+		cookieFile = /tmp/wildcardwithsubdomain.txt
+	[http "https://trailing.example.com"]
+		cookieFile = /tmp/trailing.txt
+	[http "https://user@*.example.com/"]
+		cookieFile = /tmp/wildcardwithuser.txt
+	[http "https://sub.example.com/"]
+		cookieFile = /tmp/sub.txt
+	EOF
+
+	echo http.cookiefile /tmp/root.txt >expect &&
+	git config --get-urlmatch HTTP https://example.com >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/subdirectory.txt >expect &&
+	git config --get-urlmatch HTTP https://example.com/subdirectory >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/subdirectory.txt >expect &&
+	git config --get-urlmatch HTTP https://example.com/subdirectory/nested >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/user.txt >expect &&
+	git config --get-urlmatch HTTP https://user@example.com/ >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/subdirectory.txt >expect &&
+	git config --get-urlmatch HTTP https://averylonguser@example.com/subdirectory >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/preceding.txt >expect &&
+	git config --get-urlmatch HTTP https://preceding.example.com >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/wildcard.txt >expect &&
+	git config --get-urlmatch HTTP https://wildcard.example.com >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/sub.txt >expect &&
+	git config --get-urlmatch HTTP https://sub.example.com/wildcardwithsubdomain >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/trailing.txt >expect &&
+	git config --get-urlmatch HTTP https://trailing.example.com >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/sub.txt >expect &&
+	git config --get-urlmatch HTTP https://user@sub.example.com >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'urlmatch with wildcard' '
+	cat >.git/config <<-\EOF &&
+	[http]
+		sslVerify
+	[http "https://*.example.com"]
+		sslVerify = false
+		cookieFile = /tmp/cookie.txt
+	EOF
+
+	test_expect_code 1 git config --bool --get-urlmatch doesnt.exist https://good.example.com >actual &&
+	test_must_be_empty actual &&
+
+	echo true >expect &&
+	git config --bool --get-urlmatch http.SSLverify https://example.com >actual &&
+	test_cmp expect actual &&
+
+	echo true >expect &&
+	git config --bool --get-urlmatch http.SSLverify https://good-example.com >actual &&
+	test_cmp expect actual &&
+
+	echo true >expect &&
+	git config --bool --get-urlmatch http.sslverify https://deep.nested.example.com >actual &&
+	test_cmp expect actual &&
+
+	echo false >expect &&
+	git config --bool --get-urlmatch http.sslverify https://good.example.com >actual &&
+	test_cmp expect actual &&
+
+	{
+		echo http.cookiefile /tmp/cookie.txt &&
+		echo http.sslverify false
+	} >expect &&
+	git config --get-urlmatch HTTP https://good.example.com >actual &&
+	test_cmp expect actual &&
+
+	echo http.sslverify >expect &&
+	git config --get-urlmatch HTTP https://more.example.com.au >actual &&
 	test_cmp expect actual
 '
 
@@ -1370,6 +1550,12 @@ test_expect_success !MINGW '--show-origin blob ref' '
 	git commit -m "new config file" &&
 	git config --blob=master:"$CUSTOM_CONFIG_FILE" --show-origin --list >output &&
 	test_cmp expect output
+'
+
+test_expect_success '--local requires a repo' '
+	# we expect 128 to ensure that we do not simply
+	# fail to find anything and return code "1"
+	test_expect_code 128 nongit git config --local foo.bar
 '
 
 test_done

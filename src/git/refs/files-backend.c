@@ -1,6 +1,7 @@
 #include "../cache.h"
 #include "../refs.h"
 #include "refs-internal.h"
+#include "ref-cache.h"
 #include "../iterator.h"
 #include "../dir-iterator.h"
 #include "../lockfile.h"
@@ -12,507 +13,6 @@ struct ref_lock {
 	struct lock_file *lk;
 	struct object_id old_oid;
 };
-
-struct ref_entry;
-
-/*
- * Information used (along with the information in ref_entry) to
- * describe a single cached reference.  This data structure only
- * occurs embedded in a union in struct ref_entry, and only when
- * (ref_entry->flag & REF_DIR) is zero.
- */
-struct ref_value {
-	/*
-	 * The name of the object to which this reference resolves
-	 * (which may be a tag object).  If REF_ISBROKEN, this is
-	 * null.  If REF_ISSYMREF, then this is the name of the object
-	 * referred to by the last reference in the symlink chain.
-	 */
-	struct object_id oid;
-
-	/*
-	 * If REF_KNOWS_PEELED, then this field holds the peeled value
-	 * of this reference, or null if the reference is known not to
-	 * be peelable.  See the documentation for peel_ref() for an
-	 * exact definition of "peelable".
-	 */
-	struct object_id peeled;
-};
-
-struct files_ref_store;
-
-/*
- * Information used (along with the information in ref_entry) to
- * describe a level in the hierarchy of references.  This data
- * structure only occurs embedded in a union in struct ref_entry, and
- * only when (ref_entry.flag & REF_DIR) is set.  In that case,
- * (ref_entry.flag & REF_INCOMPLETE) determines whether the references
- * in the directory have already been read:
- *
- *     (ref_entry.flag & REF_INCOMPLETE) unset -- a directory of loose
- *         or packed references, already read.
- *
- *     (ref_entry.flag & REF_INCOMPLETE) set -- a directory of loose
- *         references that hasn't been read yet (nor has any of its
- *         subdirectories).
- *
- * Entries within a directory are stored within a growable array of
- * pointers to ref_entries (entries, nr, alloc).  Entries 0 <= i <
- * sorted are sorted by their component name in strcmp() order and the
- * remaining entries are unsorted.
- *
- * Loose references are read lazily, one directory at a time.  When a
- * directory of loose references is read, then all of the references
- * in that directory are stored, and REF_INCOMPLETE stubs are created
- * for any subdirectories, but the subdirectories themselves are not
- * read.  The reading is triggered by get_ref_dir().
- */
-struct ref_dir {
-	int nr, alloc;
-
-	/*
-	 * Entries with index 0 <= i < sorted are sorted by name.  New
-	 * entries are appended to the list unsorted, and are sorted
-	 * only when required; thus we avoid the need to sort the list
-	 * after the addition of every reference.
-	 */
-	int sorted;
-
-	/* A pointer to the files_ref_store that contains this ref_dir. */
-	struct files_ref_store *ref_store;
-
-	struct ref_entry **entries;
-};
-
-/*
- * Bit values for ref_entry::flag.  REF_ISSYMREF=0x01,
- * REF_ISPACKED=0x02, REF_ISBROKEN=0x04 and REF_BAD_NAME=0x08 are
- * public values; see refs.h.
- */
-
-/*
- * The field ref_entry->u.value.peeled of this value entry contains
- * the correct peeled value for the reference, which might be
- * null_sha1 if the reference is not a tag or if it is broken.
- */
-#define REF_KNOWS_PEELED 0x10
-
-/* ref_entry represents a directory of references */
-#define REF_DIR 0x20
-
-/*
- * Entry has not yet been read from disk (used only for REF_DIR
- * entries representing loose references)
- */
-#define REF_INCOMPLETE 0x40
-
-/*
- * A ref_entry represents either a reference or a "subdirectory" of
- * references.
- *
- * Each directory in the reference namespace is represented by a
- * ref_entry with (flags & REF_DIR) set and containing a subdir member
- * that holds the entries in that directory that have been read so
- * far.  If (flags & REF_INCOMPLETE) is set, then the directory and
- * its subdirectories haven't been read yet.  REF_INCOMPLETE is only
- * used for loose reference directories.
- *
- * References are represented by a ref_entry with (flags & REF_DIR)
- * unset and a value member that describes the reference's value.  The
- * flag member is at the ref_entry level, but it is also needed to
- * interpret the contents of the value field (in other words, a
- * ref_value object is not very much use without the enclosing
- * ref_entry).
- *
- * Reference names cannot end with slash and directories' names are
- * always stored with a trailing slash (except for the top-level
- * directory, which is always denoted by "").  This has two nice
- * consequences: (1) when the entries in each subdir are sorted
- * lexicographically by name (as they usually are), the references in
- * a whole tree can be generated in lexicographic order by traversing
- * the tree in left-to-right, depth-first order; (2) the names of
- * references and subdirectories cannot conflict, and therefore the
- * presence of an empty subdirectory does not block the creation of a
- * similarly-named reference.  (The fact that reference names with the
- * same leading components can conflict *with each other* is a
- * separate issue that is regulated by verify_refname_available().)
- *
- * Please note that the name field contains the fully-qualified
- * reference (or subdirectory) name.  Space could be saved by only
- * storing the relative names.  But that would require the full names
- * to be generated on the fly when iterating in do_for_each_ref(), and
- * would break callback functions, who have always been able to assume
- * that the name strings that they are passed will not be freed during
- * the iteration.
- */
-struct ref_entry {
-	unsigned char flag; /* ISSYMREF? ISPACKED? */
-	union {
-		struct ref_value value; /* if not (flags&REF_DIR) */
-		struct ref_dir subdir; /* if (flags&REF_DIR) */
-	} u;
-	/*
-	 * The full name of the reference (e.g., "refs/heads/master")
-	 * or the full name of the directory with a trailing slash
-	 * (e.g., "refs/heads/"):
-	 */
-	char name[FLEX_ARRAY];
-};
-
-static void read_loose_refs(const char *dirname, struct ref_dir *dir);
-static int search_ref_dir(struct ref_dir *dir, const char *refname, size_t len);
-static struct ref_entry *create_dir_entry(struct files_ref_store *ref_store,
-					  const char *dirname, size_t len,
-					  int incomplete);
-static void add_entry_to_dir(struct ref_dir *dir, struct ref_entry *entry);
-
-static struct ref_dir *get_ref_dir(struct ref_entry *entry)
-{
-	struct ref_dir *dir;
-	assert(entry->flag & REF_DIR);
-	dir = &entry->u.subdir;
-	if (entry->flag & REF_INCOMPLETE) {
-		read_loose_refs(entry->name, dir);
-
-		/*
-		 * Manually add refs/bisect, which, being
-		 * per-worktree, might not appear in the directory
-		 * listing for refs/ in the main repo.
-		 */
-		if (!strcmp(entry->name, "refs/")) {
-			int pos = search_ref_dir(dir, "refs/bisect/", 12);
-			if (pos < 0) {
-				struct ref_entry *child_entry;
-				child_entry = create_dir_entry(dir->ref_store,
-							       "refs/bisect/",
-							       12, 1);
-				add_entry_to_dir(dir, child_entry);
-				read_loose_refs("refs/bisect",
-						&child_entry->u.subdir);
-			}
-		}
-		entry->flag &= ~REF_INCOMPLETE;
-	}
-	return dir;
-}
-
-static struct ref_entry *create_ref_entry(const char *refname,
-					  const unsigned char *sha1, int flag,
-					  int check_name)
-{
-	struct ref_entry *ref;
-
-	if (check_name &&
-	    check_refname_format(refname, REFNAME_ALLOW_ONELEVEL))
-		die("Reference has invalid format: '%s'", refname);
-	FLEX_ALLOC_STR(ref, name, refname);
-	hashcpy(ref->u.value.oid.hash, sha1);
-	oidclr(&ref->u.value.peeled);
-	ref->flag = flag;
-	return ref;
-}
-
-static void clear_ref_dir(struct ref_dir *dir);
-
-static void free_ref_entry(struct ref_entry *entry)
-{
-	if (entry->flag & REF_DIR) {
-		/*
-		 * Do not use get_ref_dir() here, as that might
-		 * trigger the reading of loose refs.
-		 */
-		clear_ref_dir(&entry->u.subdir);
-	}
-	free(entry);
-}
-
-/*
- * Add a ref_entry to the end of dir (unsorted).  Entry is always
- * stored directly in dir; no recursion into subdirectories is
- * done.
- */
-static void add_entry_to_dir(struct ref_dir *dir, struct ref_entry *entry)
-{
-	ALLOC_GROW(dir->entries, dir->nr + 1, dir->alloc);
-	dir->entries[dir->nr++] = entry;
-	/* optimize for the case that entries are added in order */
-	if (dir->nr == 1 ||
-	    (dir->nr == dir->sorted + 1 &&
-	     strcmp(dir->entries[dir->nr - 2]->name,
-		    dir->entries[dir->nr - 1]->name) < 0))
-		dir->sorted = dir->nr;
-}
-
-/*
- * Clear and free all entries in dir, recursively.
- */
-static void clear_ref_dir(struct ref_dir *dir)
-{
-	int i;
-	for (i = 0; i < dir->nr; i++)
-		free_ref_entry(dir->entries[i]);
-	free(dir->entries);
-	dir->sorted = dir->nr = dir->alloc = 0;
-	dir->entries = NULL;
-}
-
-/*
- * Create a struct ref_entry object for the specified dirname.
- * dirname is the name of the directory with a trailing slash (e.g.,
- * "refs/heads/") or "" for the top-level directory.
- */
-static struct ref_entry *create_dir_entry(struct files_ref_store *ref_store,
-					  const char *dirname, size_t len,
-					  int incomplete)
-{
-	struct ref_entry *direntry;
-	FLEX_ALLOC_MEM(direntry, name, dirname, len);
-	direntry->u.subdir.ref_store = ref_store;
-	direntry->flag = REF_DIR | (incomplete ? REF_INCOMPLETE : 0);
-	return direntry;
-}
-
-static int ref_entry_cmp(const void *a, const void *b)
-{
-	struct ref_entry *one = *(struct ref_entry **)a;
-	struct ref_entry *two = *(struct ref_entry **)b;
-	return strcmp(one->name, two->name);
-}
-
-static void sort_ref_dir(struct ref_dir *dir);
-
-struct string_slice {
-	size_t len;
-	const char *str;
-};
-
-static int ref_entry_cmp_sslice(const void *key_, const void *ent_)
-{
-	const struct string_slice *key = key_;
-	const struct ref_entry *ent = *(const struct ref_entry * const *)ent_;
-	int cmp = strncmp(key->str, ent->name, key->len);
-	if (cmp)
-		return cmp;
-	return '\0' - (unsigned char)ent->name[key->len];
-}
-
-/*
- * Return the index of the entry with the given refname from the
- * ref_dir (non-recursively), sorting dir if necessary.  Return -1 if
- * no such entry is found.  dir must already be complete.
- */
-static int search_ref_dir(struct ref_dir *dir, const char *refname, size_t len)
-{
-	struct ref_entry **r;
-	struct string_slice key;
-
-	if (refname == NULL || !dir->nr)
-		return -1;
-
-	sort_ref_dir(dir);
-	key.len = len;
-	key.str = refname;
-	r = bsearch(&key, dir->entries, dir->nr, sizeof(*dir->entries),
-		    ref_entry_cmp_sslice);
-
-	if (r == NULL)
-		return -1;
-
-	return r - dir->entries;
-}
-
-/*
- * Search for a directory entry directly within dir (without
- * recursing).  Sort dir if necessary.  subdirname must be a directory
- * name (i.e., end in '/').  If mkdir is set, then create the
- * directory if it is missing; otherwise, return NULL if the desired
- * directory cannot be found.  dir must already be complete.
- */
-static struct ref_dir *search_for_subdir(struct ref_dir *dir,
-					 const char *subdirname, size_t len,
-					 int mkdir)
-{
-	int entry_index = search_ref_dir(dir, subdirname, len);
-	struct ref_entry *entry;
-	if (entry_index == -1) {
-		if (!mkdir)
-			return NULL;
-		/*
-		 * Since dir is complete, the absence of a subdir
-		 * means that the subdir really doesn't exist;
-		 * therefore, create an empty record for it but mark
-		 * the record complete.
-		 */
-		entry = create_dir_entry(dir->ref_store, subdirname, len, 0);
-		add_entry_to_dir(dir, entry);
-	} else {
-		entry = dir->entries[entry_index];
-	}
-	return get_ref_dir(entry);
-}
-
-/*
- * If refname is a reference name, find the ref_dir within the dir
- * tree that should hold refname.  If refname is a directory name
- * (i.e., ends in '/'), then return that ref_dir itself.  dir must
- * represent the top-level directory and must already be complete.
- * Sort ref_dirs and recurse into subdirectories as necessary.  If
- * mkdir is set, then create any missing directories; otherwise,
- * return NULL if the desired directory cannot be found.
- */
-static struct ref_dir *find_containing_dir(struct ref_dir *dir,
-					   const char *refname, int mkdir)
-{
-	const char *slash;
-	for (slash = strchr(refname, '/'); slash; slash = strchr(slash + 1, '/')) {
-		size_t dirnamelen = slash - refname + 1;
-		struct ref_dir *subdir;
-		subdir = search_for_subdir(dir, refname, dirnamelen, mkdir);
-		if (!subdir) {
-			dir = NULL;
-			break;
-		}
-		dir = subdir;
-	}
-
-	return dir;
-}
-
-/*
- * Find the value entry with the given name in dir, sorting ref_dirs
- * and recursing into subdirectories as necessary.  If the name is not
- * found or it corresponds to a directory entry, return NULL.
- */
-static struct ref_entry *find_ref(struct ref_dir *dir, const char *refname)
-{
-	int entry_index;
-	struct ref_entry *entry;
-	dir = find_containing_dir(dir, refname, 0);
-	if (!dir)
-		return NULL;
-	entry_index = search_ref_dir(dir, refname, strlen(refname));
-	if (entry_index == -1)
-		return NULL;
-	entry = dir->entries[entry_index];
-	return (entry->flag & REF_DIR) ? NULL : entry;
-}
-
-/*
- * Remove the entry with the given name from dir, recursing into
- * subdirectories as necessary.  If refname is the name of a directory
- * (i.e., ends with '/'), then remove the directory and its contents.
- * If the removal was successful, return the number of entries
- * remaining in the directory entry that contained the deleted entry.
- * If the name was not found, return -1.  Please note that this
- * function only deletes the entry from the cache; it does not delete
- * it from the filesystem or ensure that other cache entries (which
- * might be symbolic references to the removed entry) are updated.
- * Nor does it remove any containing dir entries that might be made
- * empty by the removal.  dir must represent the top-level directory
- * and must already be complete.
- */
-static int remove_entry(struct ref_dir *dir, const char *refname)
-{
-	int refname_len = strlen(refname);
-	int entry_index;
-	struct ref_entry *entry;
-	int is_dir = refname[refname_len - 1] == '/';
-	if (is_dir) {
-		/*
-		 * refname represents a reference directory.  Remove
-		 * the trailing slash; otherwise we will get the
-		 * directory *representing* refname rather than the
-		 * one *containing* it.
-		 */
-		char *dirname = xmemdupz(refname, refname_len - 1);
-		dir = find_containing_dir(dir, dirname, 0);
-		free(dirname);
-	} else {
-		dir = find_containing_dir(dir, refname, 0);
-	}
-	if (!dir)
-		return -1;
-	entry_index = search_ref_dir(dir, refname, refname_len);
-	if (entry_index == -1)
-		return -1;
-	entry = dir->entries[entry_index];
-
-	memmove(&dir->entries[entry_index],
-		&dir->entries[entry_index + 1],
-		(dir->nr - entry_index - 1) * sizeof(*dir->entries)
-		);
-	dir->nr--;
-	if (dir->sorted > entry_index)
-		dir->sorted--;
-	free_ref_entry(entry);
-	return dir->nr;
-}
-
-/*
- * Add a ref_entry to the ref_dir (unsorted), recursing into
- * subdirectories as necessary.  dir must represent the top-level
- * directory.  Return 0 on success.
- */
-static int add_ref(struct ref_dir *dir, struct ref_entry *ref)
-{
-	dir = find_containing_dir(dir, ref->name, 1);
-	if (!dir)
-		return -1;
-	add_entry_to_dir(dir, ref);
-	return 0;
-}
-
-/*
- * Emit a warning and return true iff ref1 and ref2 have the same name
- * and the same sha1.  Die if they have the same name but different
- * sha1s.
- */
-static int is_dup_ref(const struct ref_entry *ref1, const struct ref_entry *ref2)
-{
-	if (strcmp(ref1->name, ref2->name))
-		return 0;
-
-	/* Duplicate name; make sure that they don't conflict: */
-
-	if ((ref1->flag & REF_DIR) || (ref2->flag & REF_DIR))
-		/* This is impossible by construction */
-		die("Reference directory conflict: %s", ref1->name);
-
-	if (oidcmp(&ref1->u.value.oid, &ref2->u.value.oid))
-		die("Duplicated ref, and SHA1s don't match: %s", ref1->name);
-
-	warning("Duplicated ref: %s", ref1->name);
-	return 1;
-}
-
-/*
- * Sort the entries in dir non-recursively (if they are not already
- * sorted) and remove any duplicate entries.
- */
-static void sort_ref_dir(struct ref_dir *dir)
-{
-	int i, j;
-	struct ref_entry *last = NULL;
-
-	/*
-	 * This check also prevents passing a zero-length array to qsort(),
-	 * which is a problem on some platforms.
-	 */
-	if (dir->sorted == dir->nr)
-		return;
-
-	QSORT(dir->entries, dir->nr, ref_entry_cmp);
-
-	/* Remove any duplicates: */
-	for (i = 0, j = 0; j < dir->nr; j++) {
-		struct ref_entry *entry = dir->entries[j];
-		if (last && is_dup_ref(last, entry))
-			free_ref_entry(entry);
-		else
-			last = dir->entries[i++] = entry;
-	}
-	dir->sorted = dir->nr = i;
-}
 
 /*
  * Return true if refname, which has the specified oid and flags, can
@@ -532,358 +32,8 @@ static int ref_resolves_to_object(const char *refname,
 	return 1;
 }
 
-/*
- * Return true if the reference described by entry can be resolved to
- * an object in the database; otherwise, emit a warning and return
- * false.
- */
-static int entry_resolves_to_object(struct ref_entry *entry)
-{
-	return ref_resolves_to_object(entry->name,
-				      &entry->u.value.oid, entry->flag);
-}
-
-typedef int each_ref_entry_fn(struct ref_entry *entry, void *cb_data);
-
-/*
- * Call fn for each reference in dir that has index in the range
- * offset <= index < dir->nr.  Recurse into subdirectories that are in
- * that index range, sorting them before iterating.  This function
- * does not sort dir itself; it should be sorted beforehand.  fn is
- * called for all references, including broken ones.
- */
-static int do_for_each_entry_in_dir(struct ref_dir *dir, int offset,
-				    each_ref_entry_fn fn, void *cb_data)
-{
-	int i;
-	assert(dir->sorted == dir->nr);
-	for (i = offset; i < dir->nr; i++) {
-		struct ref_entry *entry = dir->entries[i];
-		int retval;
-		if (entry->flag & REF_DIR) {
-			struct ref_dir *subdir = get_ref_dir(entry);
-			sort_ref_dir(subdir);
-			retval = do_for_each_entry_in_dir(subdir, 0, fn, cb_data);
-		} else {
-			retval = fn(entry, cb_data);
-		}
-		if (retval)
-			return retval;
-	}
-	return 0;
-}
-
-/*
- * Load all of the refs from the dir into our in-memory cache. The hard work
- * of loading loose refs is done by get_ref_dir(), so we just need to recurse
- * through all of the sub-directories. We do not even need to care about
- * sorting, as traversal order does not matter to us.
- */
-static void prime_ref_dir(struct ref_dir *dir)
-{
-	int i;
-	for (i = 0; i < dir->nr; i++) {
-		struct ref_entry *entry = dir->entries[i];
-		if (entry->flag & REF_DIR)
-			prime_ref_dir(get_ref_dir(entry));
-	}
-}
-
-/*
- * A level in the reference hierarchy that is currently being iterated
- * through.
- */
-struct cache_ref_iterator_level {
-	/*
-	 * The ref_dir being iterated over at this level. The ref_dir
-	 * is sorted before being stored here.
-	 */
-	struct ref_dir *dir;
-
-	/*
-	 * The index of the current entry within dir (which might
-	 * itself be a directory). If index == -1, then the iteration
-	 * hasn't yet begun. If index == dir->nr, then the iteration
-	 * through this level is over.
-	 */
-	int index;
-};
-
-/*
- * Represent an iteration through a ref_dir in the memory cache. The
- * iteration recurses through subdirectories.
- */
-struct cache_ref_iterator {
-	struct ref_iterator base;
-
-	/*
-	 * The number of levels currently on the stack. This is always
-	 * at least 1, because when it becomes zero the iteration is
-	 * ended and this struct is freed.
-	 */
-	size_t levels_nr;
-
-	/* The number of levels that have been allocated on the stack */
-	size_t levels_alloc;
-
-	/*
-	 * A stack of levels. levels[0] is the uppermost level that is
-	 * being iterated over in this iteration. (This is not
-	 * necessary the top level in the references hierarchy. If we
-	 * are iterating through a subtree, then levels[0] will hold
-	 * the ref_dir for that subtree, and subsequent levels will go
-	 * on from there.)
-	 */
-	struct cache_ref_iterator_level *levels;
-};
-
-static int cache_ref_iterator_advance(struct ref_iterator *ref_iterator)
-{
-	struct cache_ref_iterator *iter =
-		(struct cache_ref_iterator *)ref_iterator;
-
-	while (1) {
-		struct cache_ref_iterator_level *level =
-			&iter->levels[iter->levels_nr - 1];
-		struct ref_dir *dir = level->dir;
-		struct ref_entry *entry;
-
-		if (level->index == -1)
-			sort_ref_dir(dir);
-
-		if (++level->index == level->dir->nr) {
-			/* This level is exhausted; pop up a level */
-			if (--iter->levels_nr == 0)
-				return ref_iterator_abort(ref_iterator);
-
-			continue;
-		}
-
-		entry = dir->entries[level->index];
-
-		if (entry->flag & REF_DIR) {
-			/* push down a level */
-			ALLOC_GROW(iter->levels, iter->levels_nr + 1,
-				   iter->levels_alloc);
-
-			level = &iter->levels[iter->levels_nr++];
-			level->dir = get_ref_dir(entry);
-			level->index = -1;
-		} else {
-			iter->base.refname = entry->name;
-			iter->base.oid = &entry->u.value.oid;
-			iter->base.flags = entry->flag;
-			return ITER_OK;
-		}
-	}
-}
-
-static enum peel_status peel_entry(struct ref_entry *entry, int repeel);
-
-static int cache_ref_iterator_peel(struct ref_iterator *ref_iterator,
-				   struct object_id *peeled)
-{
-	struct cache_ref_iterator *iter =
-		(struct cache_ref_iterator *)ref_iterator;
-	struct cache_ref_iterator_level *level;
-	struct ref_entry *entry;
-
-	level = &iter->levels[iter->levels_nr - 1];
-
-	if (level->index == -1)
-		die("BUG: peel called before advance for cache iterator");
-
-	entry = level->dir->entries[level->index];
-
-	if (peel_entry(entry, 0))
-		return -1;
-	hashcpy(peeled->hash, entry->u.value.peeled.hash);
-	return 0;
-}
-
-static int cache_ref_iterator_abort(struct ref_iterator *ref_iterator)
-{
-	struct cache_ref_iterator *iter =
-		(struct cache_ref_iterator *)ref_iterator;
-
-	free(iter->levels);
-	base_ref_iterator_free(ref_iterator);
-	return ITER_DONE;
-}
-
-static struct ref_iterator_vtable cache_ref_iterator_vtable = {
-	cache_ref_iterator_advance,
-	cache_ref_iterator_peel,
-	cache_ref_iterator_abort
-};
-
-static struct ref_iterator *cache_ref_iterator_begin(struct ref_dir *dir)
-{
-	struct cache_ref_iterator *iter;
-	struct ref_iterator *ref_iterator;
-	struct cache_ref_iterator_level *level;
-
-	iter = xcalloc(1, sizeof(*iter));
-	ref_iterator = &iter->base;
-	base_ref_iterator_init(ref_iterator, &cache_ref_iterator_vtable);
-	ALLOC_GROW(iter->levels, 10, iter->levels_alloc);
-
-	iter->levels_nr = 1;
-	level = &iter->levels[0];
-	level->index = -1;
-	level->dir = dir;
-
-	return ref_iterator;
-}
-
-struct nonmatching_ref_data {
-	const struct string_list *skip;
-	const char *conflicting_refname;
-};
-
-static int nonmatching_ref_fn(struct ref_entry *entry, void *vdata)
-{
-	struct nonmatching_ref_data *data = vdata;
-
-	if (data->skip && string_list_has_string(data->skip, entry->name))
-		return 0;
-
-	data->conflicting_refname = entry->name;
-	return 1;
-}
-
-/*
- * Return 0 if a reference named refname could be created without
- * conflicting with the name of an existing reference in dir.
- * See verify_refname_available for more information.
- */
-static int verify_refname_available_dir(const char *refname,
-					const struct string_list *extras,
-					const struct string_list *skip,
-					struct ref_dir *dir,
-					struct strbuf *err)
-{
-	const char *slash;
-	const char *extra_refname;
-	int pos;
-	struct strbuf dirname = STRBUF_INIT;
-	int ret = -1;
-
-	/*
-	 * For the sake of comments in this function, suppose that
-	 * refname is "refs/foo/bar".
-	 */
-
-	assert(err);
-
-	strbuf_grow(&dirname, strlen(refname) + 1);
-	for (slash = strchr(refname, '/'); slash; slash = strchr(slash + 1, '/')) {
-		/* Expand dirname to the new prefix, not including the trailing slash: */
-		strbuf_add(&dirname, refname + dirname.len, slash - refname - dirname.len);
-
-		/*
-		 * We are still at a leading dir of the refname (e.g.,
-		 * "refs/foo"; if there is a reference with that name,
-		 * it is a conflict, *unless* it is in skip.
-		 */
-		if (dir) {
-			pos = search_ref_dir(dir, dirname.buf, dirname.len);
-			if (pos >= 0 &&
-			    (!skip || !string_list_has_string(skip, dirname.buf))) {
-				/*
-				 * We found a reference whose name is
-				 * a proper prefix of refname; e.g.,
-				 * "refs/foo", and is not in skip.
-				 */
-				strbuf_addf(err, "'%s' exists; cannot create '%s'",
-					    dirname.buf, refname);
-				goto cleanup;
-			}
-		}
-
-		if (extras && string_list_has_string(extras, dirname.buf) &&
-		    (!skip || !string_list_has_string(skip, dirname.buf))) {
-			strbuf_addf(err, "cannot process '%s' and '%s' at the same time",
-				    refname, dirname.buf);
-			goto cleanup;
-		}
-
-		/*
-		 * Otherwise, we can try to continue our search with
-		 * the next component. So try to look up the
-		 * directory, e.g., "refs/foo/". If we come up empty,
-		 * we know there is nothing under this whole prefix,
-		 * but even in that case we still have to continue the
-		 * search for conflicts with extras.
-		 */
-		strbuf_addch(&dirname, '/');
-		if (dir) {
-			pos = search_ref_dir(dir, dirname.buf, dirname.len);
-			if (pos < 0) {
-				/*
-				 * There was no directory "refs/foo/",
-				 * so there is nothing under this
-				 * whole prefix. So there is no need
-				 * to continue looking for conflicting
-				 * references. But we need to continue
-				 * looking for conflicting extras.
-				 */
-				dir = NULL;
-			} else {
-				dir = get_ref_dir(dir->entries[pos]);
-			}
-		}
-	}
-
-	/*
-	 * We are at the leaf of our refname (e.g., "refs/foo/bar").
-	 * There is no point in searching for a reference with that
-	 * name, because a refname isn't considered to conflict with
-	 * itself. But we still need to check for references whose
-	 * names are in the "refs/foo/bar/" namespace, because they
-	 * *do* conflict.
-	 */
-	strbuf_addstr(&dirname, refname + dirname.len);
-	strbuf_addch(&dirname, '/');
-
-	if (dir) {
-		pos = search_ref_dir(dir, dirname.buf, dirname.len);
-
-		if (pos >= 0) {
-			/*
-			 * We found a directory named "$refname/"
-			 * (e.g., "refs/foo/bar/"). It is a problem
-			 * iff it contains any ref that is not in
-			 * "skip".
-			 */
-			struct nonmatching_ref_data data;
-
-			data.skip = skip;
-			data.conflicting_refname = NULL;
-			dir = get_ref_dir(dir->entries[pos]);
-			sort_ref_dir(dir);
-			if (do_for_each_entry_in_dir(dir, 0, nonmatching_ref_fn, &data)) {
-				strbuf_addf(err, "'%s' exists; cannot create '%s'",
-					    data.conflicting_refname, refname);
-				goto cleanup;
-			}
-		}
-	}
-
-	extra_refname = find_descendant_ref(dirname.buf, extras, skip);
-	if (extra_refname)
-		strbuf_addf(err, "cannot process '%s' and '%s' at the same time",
-			    refname, extra_refname);
-	else
-		ret = 0;
-
-cleanup:
-	strbuf_release(&dirname);
-	return ret;
-}
-
 struct packed_ref_cache {
-	struct ref_entry *root;
+	struct ref_cache *cache;
 
 	/*
 	 * Count of references to the data structure in this instance,
@@ -912,7 +62,13 @@ struct packed_ref_cache {
  */
 struct files_ref_store {
 	struct ref_store base;
-	struct ref_entry *loose;
+	unsigned int store_flags;
+
+	char *gitdir;
+	char *gitcommondir;
+	char *packed_refs_path;
+
+	struct ref_cache *loose;
 	struct packed_ref_cache *packed;
 };
 
@@ -934,7 +90,7 @@ static void acquire_packed_ref_cache(struct packed_ref_cache *packed_refs)
 static int release_packed_ref_cache(struct packed_ref_cache *packed_refs)
 {
 	if (!--packed_refs->referrers) {
-		free_ref_entry(packed_refs->root);
+		free_ref_cache(packed_refs->cache);
 		stat_validity_clear(&packed_refs->validity);
 		free(packed_refs);
 		return 1;
@@ -958,7 +114,7 @@ static void clear_packed_ref_cache(struct files_ref_store *refs)
 static void clear_loose_ref_cache(struct files_ref_store *refs)
 {
 	if (refs->loose) {
-		free_ref_entry(refs->loose);
+		free_ref_cache(refs->loose);
 		refs->loose = NULL;
 	}
 }
@@ -967,34 +123,61 @@ static void clear_loose_ref_cache(struct files_ref_store *refs)
  * Create a new submodule ref cache and add it to the internal
  * set of caches.
  */
-static struct ref_store *files_ref_store_create(const char *submodule)
+static struct ref_store *files_ref_store_create(const char *gitdir,
+						unsigned int flags)
 {
 	struct files_ref_store *refs = xcalloc(1, sizeof(*refs));
 	struct ref_store *ref_store = (struct ref_store *)refs;
+	struct strbuf sb = STRBUF_INIT;
 
-	base_ref_store_init(ref_store, &refs_be_files, submodule);
+	base_ref_store_init(ref_store, &refs_be_files);
+	refs->store_flags = flags;
+
+	refs->gitdir = xstrdup(gitdir);
+	get_common_dir_noenv(&sb, gitdir);
+	refs->gitcommondir = strbuf_detach(&sb, NULL);
+	strbuf_addf(&sb, "%s/packed-refs", refs->gitcommondir);
+	refs->packed_refs_path = strbuf_detach(&sb, NULL);
 
 	return ref_store;
 }
 
 /*
- * Downcast ref_store to files_ref_store. Die if ref_store is not a
- * files_ref_store. If submodule_allowed is not true, then also die if
- * files_ref_store is for a submodule (i.e., not for the main
- * repository). caller is used in any necessary error messages.
+ * Die if refs is not the main ref store. caller is used in any
+ * necessary error messages.
  */
-static struct files_ref_store *files_downcast(
-		struct ref_store *ref_store, int submodule_allowed,
-		const char *caller)
+static void files_assert_main_repository(struct files_ref_store *refs,
+					 const char *caller)
 {
+	if (refs->store_flags & REF_STORE_MAIN)
+		return;
+
+	die("BUG: operation %s only allowed for main ref store", caller);
+}
+
+/*
+ * Downcast ref_store to files_ref_store. Die if ref_store is not a
+ * files_ref_store. required_flags is compared with ref_store's
+ * store_flags to ensure the ref_store has all required capabilities.
+ * "caller" is used in any necessary error messages.
+ */
+static struct files_ref_store *files_downcast(struct ref_store *ref_store,
+					      unsigned int required_flags,
+					      const char *caller)
+{
+	struct files_ref_store *refs;
+
 	if (ref_store->be != &refs_be_files)
 		die("BUG: ref_store is type \"%s\" not \"files\" in %s",
 		    ref_store->be->name, caller);
 
-	if (!submodule_allowed)
-		assert_main_repository(ref_store, caller);
+	refs = (struct files_ref_store *)ref_store;
 
-	return (struct files_ref_store *)ref_store;
+	if ((refs->store_flags & required_flags) != required_flags)
+		die("BUG: operation %s requires abilities 0x%x, but only have 0x%x",
+		    caller, required_flags, refs->store_flags);
+
+	return refs;
 }
 
 /* The length of a peeled reference line in packed-refs, including EOL: */
@@ -1104,7 +287,7 @@ static void read_packed_refs(FILE *f, struct ref_dir *dir)
 			if (peeled == PEELED_FULLY ||
 			    (peeled == PEELED_TAGS && starts_with(refname, "refs/tags/")))
 				last->flag |= REF_KNOWS_PEELED;
-			add_ref(dir, last);
+			add_ref_entry(dir, last);
 			continue;
 		}
 		if (last &&
@@ -1125,19 +308,63 @@ static void read_packed_refs(FILE *f, struct ref_dir *dir)
 	strbuf_release(&line);
 }
 
+static const char *files_packed_refs_path(struct files_ref_store *refs)
+{
+	return refs->packed_refs_path;
+}
+
+static void files_reflog_path(struct files_ref_store *refs,
+			      struct strbuf *sb,
+			      const char *refname)
+{
+	if (!refname) {
+		/*
+		 * FIXME: of course this is wrong in multi worktree
+		 * setting. To be fixed real soon.
+		 */
+		strbuf_addf(sb, "%s/logs", refs->gitcommondir);
+		return;
+	}
+
+	switch (ref_type(refname)) {
+	case REF_TYPE_PER_WORKTREE:
+	case REF_TYPE_PSEUDOREF:
+		strbuf_addf(sb, "%s/logs/%s", refs->gitdir, refname);
+		break;
+	case REF_TYPE_NORMAL:
+		strbuf_addf(sb, "%s/logs/%s", refs->gitcommondir, refname);
+		break;
+	default:
+		die("BUG: unknown ref type %d of ref %s",
+		    ref_type(refname), refname);
+	}
+}
+
+static void files_ref_path(struct files_ref_store *refs,
+			   struct strbuf *sb,
+			   const char *refname)
+{
+	switch (ref_type(refname)) {
+	case REF_TYPE_PER_WORKTREE:
+	case REF_TYPE_PSEUDOREF:
+		strbuf_addf(sb, "%s/%s", refs->gitdir, refname);
+		break;
+	case REF_TYPE_NORMAL:
+		strbuf_addf(sb, "%s/%s", refs->gitcommondir, refname);
+		break;
+	default:
+		die("BUG: unknown ref type %d of ref %s",
+		    ref_type(refname), refname);
+	}
+}
+
 /*
  * Get the packed_ref_cache for the specified files_ref_store,
  * creating it if necessary.
  */
 static struct packed_ref_cache *get_packed_ref_cache(struct files_ref_store *refs)
 {
-	char *packed_refs_file;
-
-	if (*refs->base.submodule)
-		packed_refs_file = git_pathdup_submodule(refs->base.submodule,
-							 "packed-refs");
-	else
-		packed_refs_file = git_pathdup("packed-refs");
+	const char *packed_refs_file = files_packed_refs_path(refs);
 
 	if (refs->packed &&
 	    !stat_validity_check(&refs->packed->validity, packed_refs_file))
@@ -1148,21 +375,21 @@ static struct packed_ref_cache *get_packed_ref_cache(struct files_ref_store *ref
 
 		refs->packed = xcalloc(1, sizeof(*refs->packed));
 		acquire_packed_ref_cache(refs->packed);
-		refs->packed->root = create_dir_entry(refs, "", 0, 0);
+		refs->packed->cache = create_ref_cache(&refs->base, NULL);
+		refs->packed->cache->root->flag &= ~REF_INCOMPLETE;
 		f = fopen(packed_refs_file, "r");
 		if (f) {
 			stat_validity_update(&refs->packed->validity, fileno(f));
-			read_packed_refs(f, get_ref_dir(refs->packed->root));
+			read_packed_refs(f, get_ref_dir(refs->packed->cache->root));
 			fclose(f);
 		}
 	}
-	free(packed_refs_file);
 	return refs->packed;
 }
 
 static struct ref_dir *get_packed_ref_dir(struct packed_ref_cache *packed_ref_cache)
 {
-	return get_ref_dir(packed_ref_cache->root);
+	return get_ref_dir(packed_ref_cache->cache->root);
 }
 
 static struct ref_dir *get_packed_refs(struct files_ref_store *refs)
@@ -1183,8 +410,8 @@ static void add_packed_ref(struct files_ref_store *refs,
 
 	if (!packed_ref_cache->lock)
 		die("internal error: packed refs not locked");
-	add_ref(get_packed_ref_dir(packed_ref_cache),
-		create_ref_entry(refname, sha1, REF_ISPACKED, 1));
+	add_ref_entry(get_packed_ref_dir(packed_ref_cache),
+		      create_ref_entry(refname, sha1, REF_ISPACKED, 1));
 }
 
 /*
@@ -1192,27 +419,20 @@ static void add_packed_ref(struct files_ref_store *refs,
  * (without recursing).  dirname must end with '/'.  dir must be the
  * directory entry corresponding to dirname.
  */
-static void read_loose_refs(const char *dirname, struct ref_dir *dir)
+static void loose_fill_ref_dir(struct ref_store *ref_store,
+			       struct ref_dir *dir, const char *dirname)
 {
-	struct files_ref_store *refs = dir->ref_store;
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_READ, "fill_ref_dir");
 	DIR *d;
 	struct dirent *de;
 	int dirnamelen = strlen(dirname);
 	struct strbuf refname;
 	struct strbuf path = STRBUF_INIT;
 	size_t path_baselen;
-	int err = 0;
 
-	if (*refs->base.submodule)
-		err = strbuf_git_path_submodule(&path, refs->base.submodule, "%s", dirname);
-	else
-		strbuf_git_path(&path, "%s", dirname);
+	files_ref_path(refs, &path, dirname);
 	path_baselen = path.len;
-
-	if (err) {
-		strbuf_release(&path);
-		return;
-	}
 
 	d = opendir(path.buf);
 	if (!d) {
@@ -1239,23 +459,13 @@ static void read_loose_refs(const char *dirname, struct ref_dir *dir)
 		} else if (S_ISDIR(st.st_mode)) {
 			strbuf_addch(&refname, '/');
 			add_entry_to_dir(dir,
-					 create_dir_entry(refs, refname.buf,
+					 create_dir_entry(dir->cache, refname.buf,
 							  refname.len, 1));
 		} else {
-			int read_ok;
-
-			if (*refs->base.submodule) {
-				hashclr(sha1);
-				flag = 0;
-				read_ok = !resolve_gitlink_ref(refs->base.submodule,
-							       refname.buf, sha1);
-			} else {
-				read_ok = !read_ref_full(refname.buf,
-							 RESOLVE_REF_READING,
-							 sha1, &flag);
-			}
-
-			if (!read_ok) {
+			if (!refs_resolve_ref_unsafe(&refs->base,
+						     refname.buf,
+						     RESOLVE_REF_READING,
+						     sha1, &flag)) {
 				hashclr(sha1);
 				flag |= REF_ISBROKEN;
 			} else if (is_null_sha1(sha1)) {
@@ -1286,9 +496,24 @@ static void read_loose_refs(const char *dirname, struct ref_dir *dir)
 	strbuf_release(&refname);
 	strbuf_release(&path);
 	closedir(d);
+
+	/*
+	 * Manually add refs/bisect, which, being per-worktree, might
+	 * not appear in the directory listing for refs/ in the main
+	 * repo.
+	 */
+	if (!strcmp(dirname, "refs/")) {
+		int pos = search_ref_dir(dir, "refs/bisect/", 12);
+
+		if (pos < 0) {
+			struct ref_entry *child_entry = create_dir_entry(
+					dir->cache, "refs/bisect/", 12, 1);
+			add_entry_to_dir(dir, child_entry);
+		}
+	}
 }
 
-static struct ref_dir *get_loose_refs(struct files_ref_store *refs)
+static struct ref_cache *get_loose_ref_cache(struct files_ref_store *refs)
 {
 	if (!refs->loose) {
 		/*
@@ -1296,14 +521,19 @@ static struct ref_dir *get_loose_refs(struct files_ref_store *refs)
 		 * are about to read the only subdirectory that can
 		 * hold references:
 		 */
-		refs->loose = create_dir_entry(refs, "", 0, 0);
+		refs->loose = create_ref_cache(&refs->base, loose_fill_ref_dir);
+
+		/* We're going to fill the top level ourselves: */
+		refs->loose->root->flag &= ~REF_INCOMPLETE;
+
 		/*
-		 * Create an incomplete entry for "refs/":
+		 * Add an incomplete entry for "refs/" (to be filled
+		 * lazily):
 		 */
-		add_entry_to_dir(get_ref_dir(refs->loose),
-				 create_dir_entry(refs, "refs/", 5, 1));
+		add_entry_to_dir(get_ref_dir(refs->loose->root),
+				 create_dir_entry(refs->loose, "refs/", 5, 1));
 	}
-	return get_ref_dir(refs->loose);
+	return refs->loose;
 }
 
 /*
@@ -1313,7 +543,7 @@ static struct ref_dir *get_loose_refs(struct files_ref_store *refs)
 static struct ref_entry *get_packed_ref(struct files_ref_store *refs,
 					const char *refname)
 {
-	return find_ref(get_packed_refs(refs), refname);
+	return find_ref_entry(get_packed_refs(refs), refname);
 }
 
 /*
@@ -1344,7 +574,7 @@ static int files_read_raw_ref(struct ref_store *ref_store,
 			      struct strbuf *referent, unsigned int *type)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 1, "read_raw_ref");
+		files_downcast(ref_store, REF_STORE_READ, "read_raw_ref");
 	struct strbuf sb_contents = STRBUF_INIT;
 	struct strbuf sb_path = STRBUF_INIT;
 	const char *path;
@@ -1358,10 +588,7 @@ static int files_read_raw_ref(struct ref_store *ref_store,
 	*type = 0;
 	strbuf_reset(&sb_path);
 
-	if (*refs->base.submodule)
-		strbuf_git_path_submodule(&sb_path, refs->base.submodule, "%s", refname);
-	else
-		strbuf_git_path(&sb_path, "%s", refname);
+	files_ref_path(refs, &sb_path, refname);
 
 	path = sb_path.buf;
 
@@ -1506,7 +733,7 @@ static void unlock_ref(struct ref_lock *lock)
  *
  * If the reference doesn't already exist, verify that refname doesn't
  * have a D/F conflict with any existing references. extras and skip
- * are passed to verify_refname_available_dir() for this check.
+ * are passed to refs_verify_refname_available() for this check.
  *
  * If mustexist is not set and the reference is not found or is
  * broken, lock the reference anyway but clear sha1.
@@ -1521,7 +748,7 @@ static void unlock_ref(struct ref_lock *lock)
  *
  * but it includes a lot more code to
  * - Deal with possible races with other processes
- * - Avoid calling verify_refname_available_dir() when it can be
+ * - Avoid calling refs_verify_refname_available() when it can be
  *   avoided, namely if we were successfully able to read the ref
  * - Generate informative error messages in the case of failure
  */
@@ -1540,7 +767,7 @@ static int lock_raw_ref(struct files_ref_store *refs,
 	int ret = TRANSACTION_GENERIC_ERROR;
 
 	assert(err);
-	assert_main_repository(&refs->base, "lock_raw_ref");
+	files_assert_main_repository(refs, "lock_raw_ref");
 
 	*type = 0;
 
@@ -1549,7 +776,7 @@ static int lock_raw_ref(struct files_ref_store *refs,
 	*lock_p = lock = xcalloc(1, sizeof(*lock));
 
 	lock->ref_name = xstrdup(refname);
-	strbuf_git_path(&ref_file, "%s", refname);
+	files_ref_path(refs, &ref_file, refname);
 
 retry:
 	switch (safe_create_leading_directories(ref_file.buf)) {
@@ -1564,7 +791,8 @@ retry:
 		 * another reference such as "refs/foo". There is no
 		 * reason to expect this error to be transitory.
 		 */
-		if (verify_refname_available(refname, extras, skip, err)) {
+		if (refs_verify_refname_available(&refs->base, refname,
+						  extras, skip, err)) {
 			if (mustexist) {
 				/*
 				 * To the user the relevant error is
@@ -1577,7 +805,8 @@ retry:
 			} else {
 				/*
 				 * The error message set by
-				 * verify_refname_available_dir() is OK.
+				 * refs_verify_refname_available() is
+				 * OK.
 				 */
 				ret = TRANSACTION_NAME_CONFLICT;
 			}
@@ -1667,10 +896,9 @@ retry:
 				goto error_return;
 			} else if (remove_dir_recursively(&ref_file,
 							  REMOVE_DIR_EMPTY_ONLY)) {
-				if (verify_refname_available_dir(
-						    refname, extras, skip,
-						    get_loose_refs(refs),
-						    err)) {
+				if (refs_verify_refname_available(
+						    &refs->base, refname,
+						    extras, skip, err)) {
 					/*
 					 * The error message set by
 					 * verify_refname_available() is OK.
@@ -1702,16 +930,13 @@ retry:
 
 		/*
 		 * If the ref did not exist and we are creating it,
-		 * make sure there is no existing packed ref whose
-		 * name begins with our refname, nor a packed ref
-		 * whose name is a proper prefix of our refname.
+		 * make sure there is no existing ref that conflicts
+		 * with refname:
 		 */
-		if (verify_refname_available_dir(
-				    refname, extras, skip,
-				    get_packed_refs(refs),
-				    err)) {
+		if (refs_verify_refname_available(
+				    &refs->base, refname,
+				    extras, skip, err))
 			goto error_return;
-		}
 	}
 
 	ret = 0;
@@ -1726,45 +951,12 @@ out:
 	return ret;
 }
 
-/*
- * Peel the entry (if possible) and return its new peel_status.  If
- * repeel is true, re-peel the entry even if there is an old peeled
- * value that is already stored in it.
- *
- * It is OK to call this function with a packed reference entry that
- * might be stale and might even refer to an object that has since
- * been garbage-collected.  In such a case, if the entry has
- * REF_KNOWS_PEELED then leave the status unchanged and return
- * PEEL_PEELED or PEEL_NON_TAG; otherwise, return PEEL_INVALID.
- */
-static enum peel_status peel_entry(struct ref_entry *entry, int repeel)
-{
-	enum peel_status status;
-
-	if (entry->flag & REF_KNOWS_PEELED) {
-		if (repeel) {
-			entry->flag &= ~REF_KNOWS_PEELED;
-			oidclr(&entry->u.value.peeled);
-		} else {
-			return is_null_oid(&entry->u.value.peeled) ?
-				PEEL_NON_TAG : PEEL_PEELED;
-		}
-	}
-	if (entry->flag & REF_ISBROKEN)
-		return PEEL_BROKEN;
-	if (entry->flag & REF_ISSYMREF)
-		return PEEL_IS_SYMREF;
-
-	status = peel_object(entry->u.value.oid.hash, entry->u.value.peeled.hash);
-	if (status == PEEL_PEELED || status == PEEL_NON_TAG)
-		entry->flag |= REF_KNOWS_PEELED;
-	return status;
-}
-
 static int files_peel_ref(struct ref_store *ref_store,
 			  const char *refname, unsigned char *sha1)
 {
-	struct files_ref_store *refs = files_downcast(ref_store, 0, "peel_ref");
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_READ | REF_STORE_ODB,
+			       "peel_ref");
 	int flag;
 	unsigned char base[20];
 
@@ -1777,7 +969,8 @@ static int files_peel_ref(struct ref_store *ref_store,
 		return 0;
 	}
 
-	if (read_ref_full(refname, RESOLVE_REF_READING, base, &flag))
+	if (refs_read_ref_full(ref_store, refname,
+			       RESOLVE_REF_READING, base, &flag))
 		return -1;
 
 	/*
@@ -1872,20 +1065,19 @@ static struct ref_iterator *files_ref_iterator_begin(
 		struct ref_store *ref_store,
 		const char *prefix, unsigned int flags)
 {
-	struct files_ref_store *refs =
-		files_downcast(ref_store, 1, "ref_iterator_begin");
-	struct ref_dir *loose_dir, *packed_dir;
+	struct files_ref_store *refs;
 	struct ref_iterator *loose_iter, *packed_iter;
 	struct files_ref_iterator *iter;
 	struct ref_iterator *ref_iterator;
-
-	if (!refs)
-		return empty_ref_iterator_begin();
 
 	if (ref_paranoia < 0)
 		ref_paranoia = git_env_bool("GIT_REF_PARANOIA", 0);
 	if (ref_paranoia)
 		flags |= DO_FOR_EACH_INCLUDE_BROKEN;
+
+	refs = files_downcast(ref_store,
+			      REF_STORE_READ | (ref_paranoia ? 0 : REF_STORE_ODB),
+			      "ref_iterator_begin");
 
 	iter = xcalloc(1, sizeof(*iter));
 	ref_iterator = &iter->base;
@@ -1897,41 +1089,24 @@ static struct ref_iterator *files_ref_iterator_begin(
 	 * condition if loose refs are migrated to the packed-refs
 	 * file by a simultaneous process, but our in-memory view is
 	 * from before the migration. We ensure this as follows:
-	 * First, we call prime_ref_dir(), which pre-reads the loose
-	 * references for the subtree into the cache. (If they've
-	 * already been read, that's OK; we only need to guarantee
-	 * that they're read before the packed refs, not *how much*
-	 * before.) After that, we call get_packed_ref_cache(), which
-	 * internally checks whether the packed-ref cache is up to
-	 * date with what is on disk, and re-reads it if not.
+	 * First, we call start the loose refs iteration with its
+	 * `prime_ref` argument set to true. This causes the loose
+	 * references in the subtree to be pre-read into the cache.
+	 * (If they've already been read, that's OK; we only need to
+	 * guarantee that they're read before the packed refs, not
+	 * *how much* before.) After that, we call
+	 * get_packed_ref_cache(), which internally checks whether the
+	 * packed-ref cache is up to date with what is on disk, and
+	 * re-reads it if not.
 	 */
 
-	loose_dir = get_loose_refs(refs);
-
-	if (prefix && *prefix)
-		loose_dir = find_containing_dir(loose_dir, prefix, 0);
-
-	if (loose_dir) {
-		prime_ref_dir(loose_dir);
-		loose_iter = cache_ref_iterator_begin(loose_dir);
-	} else {
-		/* There's nothing to iterate over. */
-		loose_iter = empty_ref_iterator_begin();
-	}
+	loose_iter = cache_ref_iterator_begin(get_loose_ref_cache(refs),
+					      prefix, 1);
 
 	iter->packed_ref_cache = get_packed_ref_cache(refs);
 	acquire_packed_ref_cache(iter->packed_ref_cache);
-	packed_dir = get_packed_ref_dir(iter->packed_ref_cache);
-
-	if (prefix && *prefix)
-		packed_dir = find_containing_dir(packed_dir, prefix, 0);
-
-	if (packed_dir) {
-		packed_iter = cache_ref_iterator_begin(packed_dir);
-	} else {
-		/* There's nothing to iterate over. */
-		packed_iter = empty_ref_iterator_begin();
-	}
+	packed_iter = cache_ref_iterator_begin(iter->packed_ref_cache->cache,
+					       prefix, 0);
 
 	iter->iter0 = overlay_ref_iterator_begin(loose_iter, packed_iter);
 	iter->flags = flags;
@@ -1945,15 +1120,15 @@ static struct ref_iterator *files_ref_iterator_begin(
  * on success. On error, write an error message to err, set errno, and
  * return a negative value.
  */
-static int verify_lock(struct ref_lock *lock,
+static int verify_lock(struct ref_store *ref_store, struct ref_lock *lock,
 		       const unsigned char *old_sha1, int mustexist,
 		       struct strbuf *err)
 {
 	assert(err);
 
-	if (read_ref_full(lock->ref_name,
-			  mustexist ? RESOLVE_REF_READING : 0,
-			  lock->old_oid.hash, NULL)) {
+	if (refs_read_ref_full(ref_store, lock->ref_name,
+			       mustexist ? RESOLVE_REF_READING : 0,
+			       lock->old_oid.hash, NULL)) {
 		if (old_sha1) {
 			int save_errno = errno;
 			strbuf_addf(err, "can't verify ref '%s'", lock->ref_name);
@@ -1985,6 +1160,13 @@ static int remove_empty_directories(struct strbuf *path)
 	return remove_dir_recursively(path, REMOVE_DIR_EMPTY_ONLY);
 }
 
+static int create_reflock(const char *path, void *cb)
+{
+	struct lock_file *lk = cb;
+
+	return hold_lock_file_for_update(lk, path, LOCK_NO_DEREF) < 0 ? -1 : 0;
+}
+
 /*
  * Locks a ref returning the lock on success and NULL on failure.
  * On failure errno is set to something meaningful.
@@ -2000,13 +1182,11 @@ static struct ref_lock *lock_ref_sha1_basic(struct files_ref_store *refs,
 	struct strbuf ref_file = STRBUF_INIT;
 	struct ref_lock *lock;
 	int last_errno = 0;
-	int lflags = LOCK_NO_DEREF;
 	int mustexist = (old_sha1 && !is_null_sha1(old_sha1));
 	int resolve_flags = RESOLVE_REF_NO_RECURSE;
-	int attempts_remaining = 3;
 	int resolved;
 
-	assert_main_repository(&refs->base, "lock_ref_sha1_basic");
+	files_assert_main_repository(refs, "lock_ref_sha1_basic");
 	assert(err);
 
 	lock = xcalloc(1, sizeof(struct ref_lock));
@@ -2016,9 +1196,10 @@ static struct ref_lock *lock_ref_sha1_basic(struct files_ref_store *refs,
 	if (flags & REF_DELETING)
 		resolve_flags |= RESOLVE_REF_ALLOW_BAD_NAME;
 
-	strbuf_git_path(&ref_file, "%s", refname);
-	resolved = !!resolve_ref_unsafe(refname, resolve_flags,
-					lock->old_oid.hash, type);
+	files_ref_path(refs, &ref_file, refname);
+	resolved = !!refs_resolve_ref_unsafe(&refs->base,
+					     refname, resolve_flags,
+					     lock->old_oid.hash, type);
 	if (!resolved && errno == EISDIR) {
 		/*
 		 * we are trying to lock foo but we used to
@@ -2028,22 +1209,22 @@ static struct ref_lock *lock_ref_sha1_basic(struct files_ref_store *refs,
 		 */
 		if (remove_empty_directories(&ref_file)) {
 			last_errno = errno;
-			if (!verify_refname_available_dir(
-					    refname, extras, skip,
-					    get_loose_refs(refs), err))
+			if (!refs_verify_refname_available(
+					    &refs->base,
+					    refname, extras, skip, err))
 				strbuf_addf(err, "there are still refs under '%s'",
 					    refname);
 			goto error_return;
 		}
-		resolved = !!resolve_ref_unsafe(refname, resolve_flags,
-						lock->old_oid.hash, type);
+		resolved = !!refs_resolve_ref_unsafe(&refs->base,
+						     refname, resolve_flags,
+						     lock->old_oid.hash, type);
 	}
 	if (!resolved) {
 		last_errno = errno;
 		if (last_errno != ENOTDIR ||
-		    !verify_refname_available_dir(
-				    refname, extras, skip,
-				    get_loose_refs(refs), err))
+		    !refs_verify_refname_available(&refs->base, refname,
+						   extras, skip, err))
 			strbuf_addf(err, "unable to resolve reference '%s': %s",
 				    refname, strerror(last_errno));
 
@@ -2057,9 +1238,8 @@ static struct ref_lock *lock_ref_sha1_basic(struct files_ref_store *refs,
 	 * our refname.
 	 */
 	if (is_null_oid(&lock->old_oid) &&
-	    verify_refname_available_dir(refname, extras, skip,
-					 get_packed_refs(refs),
-					 err)) {
+	    refs_verify_refname_available(&refs->base, refname,
+					  extras, skip, err)) {
 		last_errno = ENOTDIR;
 		goto error_return;
 	}
@@ -2068,36 +1248,13 @@ static struct ref_lock *lock_ref_sha1_basic(struct files_ref_store *refs,
 
 	lock->ref_name = xstrdup(refname);
 
- retry:
-	switch (safe_create_leading_directories_const(ref_file.buf)) {
-	case SCLD_OK:
-		break; /* success */
-	case SCLD_VANISHED:
-		if (--attempts_remaining > 0)
-			goto retry;
-		/* fall through */
-	default:
+	if (raceproof_create_file(ref_file.buf, create_reflock, lock->lk)) {
 		last_errno = errno;
-		strbuf_addf(err, "unable to create directory for '%s'",
-			    ref_file.buf);
+		unable_to_lock_message(ref_file.buf, errno, err);
 		goto error_return;
 	}
 
-	if (hold_lock_file_for_update(lock->lk, ref_file.buf, lflags) < 0) {
-		last_errno = errno;
-		if (errno == ENOENT && --attempts_remaining > 0)
-			/*
-			 * Maybe somebody just deleted one of the
-			 * directories leading to ref_file.  Try
-			 * again:
-			 */
-			goto retry;
-		else {
-			unable_to_lock_message(ref_file.buf, errno, err);
-			goto error_return;
-		}
-	}
-	if (verify_lock(lock, old_sha1, mustexist, err)) {
+	if (verify_lock(&refs->base, lock, old_sha1, mustexist, err)) {
 		last_errno = errno;
 		goto error_return;
 	}
@@ -2117,28 +1274,13 @@ static struct ref_lock *lock_ref_sha1_basic(struct files_ref_store *refs,
  * Write an entry to the packed-refs file for the specified refname.
  * If peeled is non-NULL, write it as the entry's peeled value.
  */
-static void write_packed_entry(FILE *fh, char *refname, unsigned char *sha1,
-			       unsigned char *peeled)
+static void write_packed_entry(FILE *fh, const char *refname,
+			       const unsigned char *sha1,
+			       const unsigned char *peeled)
 {
 	fprintf_or_die(fh, "%s %s\n", sha1_to_hex(sha1), refname);
 	if (peeled)
 		fprintf_or_die(fh, "^%s\n", sha1_to_hex(peeled));
-}
-
-/*
- * An each_ref_entry_fn that writes the entry to a packed-refs file.
- */
-static int write_packed_entry_fn(struct ref_entry *entry, void *cb_data)
-{
-	enum peel_status peel_status = peel_entry(entry, 0);
-
-	if (peel_status != PEEL_PEELED && peel_status != PEEL_NON_TAG)
-		error("internal error: %s is not a valid packed reference!",
-		      entry->name);
-	write_packed_entry(cb_data, entry->name, entry->u.value.oid.hash,
-			   peel_status == PEEL_PEELED ?
-			   entry->u.value.peeled.hash : NULL);
-	return 0;
 }
 
 /*
@@ -2152,7 +1294,7 @@ static int lock_packed_refs(struct files_ref_store *refs, int flags)
 	static int timeout_value = 1000;
 	struct packed_ref_cache *packed_ref_cache;
 
-	assert_main_repository(&refs->base, "lock_packed_refs");
+	files_assert_main_repository(refs, "lock_packed_refs");
 
 	if (!timeout_configured) {
 		git_config_get_int("core.packedrefstimeout", &timeout_value);
@@ -2160,7 +1302,7 @@ static int lock_packed_refs(struct files_ref_store *refs, int flags)
 	}
 
 	if (hold_lock_file_for_update_timeout(
-			    &packlock, git_path("packed-refs"),
+			    &packlock, files_packed_refs_path(refs),
 			    flags, timeout_value) < 0)
 		return -1;
 	/*
@@ -2186,11 +1328,12 @@ static int commit_packed_refs(struct files_ref_store *refs)
 {
 	struct packed_ref_cache *packed_ref_cache =
 		get_packed_ref_cache(refs);
-	int error = 0;
+	int ok, error = 0;
 	int save_errno = 0;
 	FILE *out;
+	struct ref_iterator *iter;
 
-	assert_main_repository(&refs->base, "commit_packed_refs");
+	files_assert_main_repository(refs, "commit_packed_refs");
 
 	if (!packed_ref_cache->lock)
 		die("internal error: packed-refs not locked");
@@ -2200,8 +1343,18 @@ static int commit_packed_refs(struct files_ref_store *refs)
 		die_errno("unable to fdopen packed-refs descriptor");
 
 	fprintf_or_die(out, "%s", PACKED_REFS_HEADER);
-	do_for_each_entry_in_dir(get_packed_ref_dir(packed_ref_cache),
-				 0, write_packed_entry_fn, out);
+
+	iter = cache_ref_iterator_begin(packed_ref_cache->cache, NULL, 0);
+	while ((ok = ref_iterator_advance(iter)) == ITER_OK) {
+		struct object_id peeled;
+		int peel_error = ref_iterator_peel(iter, &peeled);
+
+		write_packed_entry(out, iter->refname, iter->oid->hash,
+				   peel_error ? NULL : peeled.hash);
+	}
+
+	if (ok != ITER_DONE)
+		die("error while iterating over references");
 
 	if (commit_lock_file(packed_ref_cache->lock)) {
 		save_errno = errno;
@@ -2223,7 +1376,7 @@ static void rollback_packed_refs(struct files_ref_store *refs)
 	struct packed_ref_cache *packed_ref_cache =
 		get_packed_ref_cache(refs);
 
-	assert_main_repository(&refs->base, "rollback_packed_refs");
+	files_assert_main_repository(refs, "rollback_packed_refs");
 
 	if (!packed_ref_cache->lock)
 		die("internal error: packed-refs not locked");
@@ -2239,74 +1392,28 @@ struct ref_to_prune {
 	char name[FLEX_ARRAY];
 };
 
-struct pack_refs_cb_data {
-	unsigned int flags;
-	struct ref_dir *packed_refs;
-	struct ref_to_prune *ref_to_prune;
+enum {
+	REMOVE_EMPTY_PARENTS_REF = 0x01,
+	REMOVE_EMPTY_PARENTS_REFLOG = 0x02
 };
 
 /*
- * An each_ref_entry_fn that is run over loose references only.  If
- * the loose reference can be packed, add an entry in the packed ref
- * cache.  If the reference should be pruned, also add it to
- * ref_to_prune in the pack_refs_cb_data.
+ * Remove empty parent directories associated with the specified
+ * reference and/or its reflog, but spare [logs/]refs/ and immediate
+ * subdirs. flags is a combination of REMOVE_EMPTY_PARENTS_REF and/or
+ * REMOVE_EMPTY_PARENTS_REFLOG.
  */
-static int pack_if_possible_fn(struct ref_entry *entry, void *cb_data)
+static void try_remove_empty_parents(struct files_ref_store *refs,
+				     const char *refname,
+				     unsigned int flags)
 {
-	struct pack_refs_cb_data *cb = cb_data;
-	enum peel_status peel_status;
-	struct ref_entry *packed_entry;
-	int is_tag_ref = starts_with(entry->name, "refs/tags/");
-
-	/* Do not pack per-worktree refs: */
-	if (ref_type(entry->name) != REF_TYPE_NORMAL)
-		return 0;
-
-	/* ALWAYS pack tags */
-	if (!(cb->flags & PACK_REFS_ALL) && !is_tag_ref)
-		return 0;
-
-	/* Do not pack symbolic or broken refs: */
-	if ((entry->flag & REF_ISSYMREF) || !entry_resolves_to_object(entry))
-		return 0;
-
-	/* Add a packed ref cache entry equivalent to the loose entry. */
-	peel_status = peel_entry(entry, 1);
-	if (peel_status != PEEL_PEELED && peel_status != PEEL_NON_TAG)
-		die("internal error peeling reference %s (%s)",
-		    entry->name, oid_to_hex(&entry->u.value.oid));
-	packed_entry = find_ref(cb->packed_refs, entry->name);
-	if (packed_entry) {
-		/* Overwrite existing packed entry with info from loose entry */
-		packed_entry->flag = REF_ISPACKED | REF_KNOWS_PEELED;
-		oidcpy(&packed_entry->u.value.oid, &entry->u.value.oid);
-	} else {
-		packed_entry = create_ref_entry(entry->name, entry->u.value.oid.hash,
-						REF_ISPACKED | REF_KNOWS_PEELED, 0);
-		add_ref(cb->packed_refs, packed_entry);
-	}
-	oidcpy(&packed_entry->u.value.peeled, &entry->u.value.peeled);
-
-	/* Schedule the loose reference for pruning if requested. */
-	if ((cb->flags & PACK_REFS_PRUNE)) {
-		struct ref_to_prune *n;
-		FLEX_ALLOC_STR(n, name, entry->name);
-		hashcpy(n->sha1, entry->u.value.oid.hash);
-		n->next = cb->ref_to_prune;
-		cb->ref_to_prune = n;
-	}
-	return 0;
-}
-
-/*
- * Remove empty parents, but spare refs/ and immediate subdirs.
- * Note: munges *name.
- */
-static void try_remove_empty_parents(char *name)
-{
+	struct strbuf buf = STRBUF_INIT;
+	struct strbuf sb = STRBUF_INIT;
 	char *p, *q;
 	int i;
-	p = name;
+
+	strbuf_addstr(&buf, refname);
+	p = buf.buf;
 	for (i = 0; i < 2; i++) { /* refs/{heads,tags,...}/ */
 		while (*p && *p != '/')
 			p++;
@@ -2314,23 +1421,32 @@ static void try_remove_empty_parents(char *name)
 		while (*p == '/')
 			p++;
 	}
-	for (q = p; *q; q++)
-		;
-	while (1) {
+	q = buf.buf + buf.len;
+	while (flags & (REMOVE_EMPTY_PARENTS_REF | REMOVE_EMPTY_PARENTS_REFLOG)) {
 		while (q > p && *q != '/')
 			q--;
 		while (q > p && *(q-1) == '/')
 			q--;
 		if (q == p)
 			break;
-		*q = '\0';
-		if (rmdir(git_path("%s", name)))
-			break;
+		strbuf_setlen(&buf, q - buf.buf);
+
+		strbuf_reset(&sb);
+		files_ref_path(refs, &sb, buf.buf);
+		if ((flags & REMOVE_EMPTY_PARENTS_REF) && rmdir(sb.buf))
+			flags &= ~REMOVE_EMPTY_PARENTS_REF;
+
+		strbuf_reset(&sb);
+		files_reflog_path(refs, &sb, buf.buf);
+		if ((flags & REMOVE_EMPTY_PARENTS_REFLOG) && rmdir(sb.buf))
+			flags &= ~REMOVE_EMPTY_PARENTS_REFLOG;
 	}
+	strbuf_release(&buf);
+	strbuf_release(&sb);
 }
 
 /* make sure nobody touched the ref, and unlink */
-static void prune_ref(struct ref_to_prune *r)
+static void prune_ref(struct files_ref_store *refs, struct ref_to_prune *r)
 {
 	struct ref_transaction *transaction;
 	struct strbuf err = STRBUF_INIT;
@@ -2338,7 +1454,7 @@ static void prune_ref(struct ref_to_prune *r)
 	if (check_refname_format(r->name, 0))
 		return;
 
-	transaction = ref_transaction_begin(&err);
+	transaction = ref_store_transaction_begin(&refs->base, &err);
 	if (!transaction ||
 	    ref_transaction_delete(transaction, r->name, r->sha1,
 				   REF_ISPRUNING | REF_NODEREF, NULL, &err) ||
@@ -2350,13 +1466,12 @@ static void prune_ref(struct ref_to_prune *r)
 	}
 	ref_transaction_free(transaction);
 	strbuf_release(&err);
-	try_remove_empty_parents(r->name);
 }
 
-static void prune_refs(struct ref_to_prune *r)
+static void prune_refs(struct files_ref_store *refs, struct ref_to_prune *r)
 {
 	while (r) {
-		prune_ref(r);
+		prune_ref(refs, r);
 		r = r->next;
 	}
 }
@@ -2364,22 +1479,75 @@ static void prune_refs(struct ref_to_prune *r)
 static int files_pack_refs(struct ref_store *ref_store, unsigned int flags)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "pack_refs");
-	struct pack_refs_cb_data cbdata;
-
-	memset(&cbdata, 0, sizeof(cbdata));
-	cbdata.flags = flags;
+		files_downcast(ref_store, REF_STORE_WRITE | REF_STORE_ODB,
+			       "pack_refs");
+	struct ref_iterator *iter;
+	struct ref_dir *packed_refs;
+	int ok;
+	struct ref_to_prune *refs_to_prune = NULL;
 
 	lock_packed_refs(refs, LOCK_DIE_ON_ERROR);
-	cbdata.packed_refs = get_packed_refs(refs);
+	packed_refs = get_packed_refs(refs);
 
-	do_for_each_entry_in_dir(get_loose_refs(refs), 0,
-				 pack_if_possible_fn, &cbdata);
+	iter = cache_ref_iterator_begin(get_loose_ref_cache(refs), NULL, 0);
+	while ((ok = ref_iterator_advance(iter)) == ITER_OK) {
+		/*
+		 * If the loose reference can be packed, add an entry
+		 * in the packed ref cache. If the reference should be
+		 * pruned, also add it to refs_to_prune.
+		 */
+		struct ref_entry *packed_entry;
+		int is_tag_ref = starts_with(iter->refname, "refs/tags/");
+
+		/* Do not pack per-worktree refs: */
+		if (ref_type(iter->refname) != REF_TYPE_NORMAL)
+			continue;
+
+		/* ALWAYS pack tags */
+		if (!(flags & PACK_REFS_ALL) && !is_tag_ref)
+			continue;
+
+		/* Do not pack symbolic or broken refs: */
+		if (iter->flags & REF_ISSYMREF)
+			continue;
+
+		if (!ref_resolves_to_object(iter->refname, iter->oid, iter->flags))
+			continue;
+
+		/*
+		 * Create an entry in the packed-refs cache equivalent
+		 * to the one from the loose ref cache, except that
+		 * we don't copy the peeled status, because we want it
+		 * to be re-peeled.
+		 */
+		packed_entry = find_ref_entry(packed_refs, iter->refname);
+		if (packed_entry) {
+			/* Overwrite existing packed entry with info from loose entry */
+			packed_entry->flag = REF_ISPACKED;
+			oidcpy(&packed_entry->u.value.oid, iter->oid);
+		} else {
+			packed_entry = create_ref_entry(iter->refname, iter->oid->hash,
+							REF_ISPACKED, 0);
+			add_ref_entry(packed_refs, packed_entry);
+		}
+		oidclr(&packed_entry->u.value.peeled);
+
+		/* Schedule the loose reference for pruning if requested. */
+		if ((flags & PACK_REFS_PRUNE)) {
+			struct ref_to_prune *n;
+			FLEX_ALLOC_STR(n, name, iter->refname);
+			hashcpy(n->sha1, iter->oid->hash);
+			n->next = refs_to_prune;
+			refs_to_prune = n;
+		}
+	}
+	if (ok != ITER_DONE)
+		die("error while iterating over references");
 
 	if (commit_packed_refs(refs))
 		die_errno("unable to overwrite old ref-pack file");
 
-	prune_refs(cbdata.ref_to_prune);
+	prune_refs(refs, refs_to_prune);
 	return 0;
 }
 
@@ -2397,7 +1565,7 @@ static int repack_without_refs(struct files_ref_store *refs,
 	struct string_list_item *refname;
 	int ret, needs_repacking = 0, removed = 0;
 
-	assert_main_repository(&refs->base, "repack_without_refs");
+	files_assert_main_repository(refs, "repack_without_refs");
 	assert(err);
 
 	/* Look for a packed ref */
@@ -2413,14 +1581,14 @@ static int repack_without_refs(struct files_ref_store *refs,
 		return 0; /* no refname exists in packed refs */
 
 	if (lock_packed_refs(refs, 0)) {
-		unable_to_lock_message(git_path("packed-refs"), errno, err);
+		unable_to_lock_message(files_packed_refs_path(refs), errno, err);
 		return -1;
 	}
 	packed = get_packed_refs(refs);
 
 	/* Remove refnames from the cache */
 	for_each_string_list_item(refname, refnames)
-		if (remove_entry(packed, refname->string) != -1)
+		if (remove_entry_from_dir(packed, refname->string) != -1)
 			removed = 1;
 	if (!removed) {
 		/*
@@ -2439,29 +1607,11 @@ static int repack_without_refs(struct files_ref_store *refs,
 	return ret;
 }
 
-static int delete_ref_loose(struct ref_lock *lock, int flag, struct strbuf *err)
-{
-	assert(err);
-
-	if (!(flag & REF_ISPACKED) || flag & REF_ISSYMREF) {
-		/*
-		 * loose.  The loose file name is the same as the
-		 * lockfile name, minus ".lock":
-		 */
-		char *loose_filename = get_locked_file_path(lock->lk);
-		int res = unlink_or_msg(loose_filename, err);
-		free(loose_filename);
-		if (res)
-			return 1;
-	}
-	return 0;
-}
-
 static int files_delete_refs(struct ref_store *ref_store,
 			     struct string_list *refnames, unsigned int flags)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "delete_refs");
+		files_downcast(ref_store, REF_STORE_WRITE, "delete_refs");
 	struct strbuf err = STRBUF_INIT;
 	int i, result = 0;
 
@@ -2489,7 +1639,7 @@ static int files_delete_refs(struct ref_store *ref_store,
 	for (i = 0; i < refnames->nr; i++) {
 		const char *refname = refnames->items[i].string;
 
-		if (delete_ref(refname, NULL, flags))
+		if (refs_delete_ref(&refs->base, NULL, refname, NULL, flags))
 			result |= error(_("could not remove reference %s"), refname);
 	}
 
@@ -2505,78 +1655,57 @@ out:
  * IOW, to avoid cross device rename errors, the temporary renamed log must
  * live into logs/refs.
  */
-#define TMP_RENAMED_LOG  "logs/refs/.tmp-renamed-log"
+#define TMP_RENAMED_LOG  "refs/.tmp-renamed-log"
 
-static int rename_tmp_log(const char *newrefname)
+struct rename_cb {
+	const char *tmp_renamed_log;
+	int true_errno;
+};
+
+static int rename_tmp_log_callback(const char *path, void *cb_data)
 {
-	int attempts_remaining = 4;
-	struct strbuf path = STRBUF_INIT;
-	int ret = -1;
+	struct rename_cb *cb = cb_data;
 
- retry:
-	strbuf_reset(&path);
-	strbuf_git_path(&path, "logs/%s", newrefname);
-	switch (safe_create_leading_directories_const(path.buf)) {
-	case SCLD_OK:
-		break; /* success */
-	case SCLD_VANISHED:
-		if (--attempts_remaining > 0)
-			goto retry;
-		/* fall through */
-	default:
-		error("unable to create directory for %s", newrefname);
-		goto out;
+	if (rename(cb->tmp_renamed_log, path)) {
+		/*
+		 * rename(a, b) when b is an existing directory ought
+		 * to result in ISDIR, but Solaris 5.8 gives ENOTDIR.
+		 * Sheesh. Record the true errno for error reporting,
+		 * but report EISDIR to raceproof_create_file() so
+		 * that it knows to retry.
+		 */
+		cb->true_errno = errno;
+		if (errno == ENOTDIR)
+			errno = EISDIR;
+		return -1;
+	} else {
+		return 0;
 	}
-
-	if (rename(git_path(TMP_RENAMED_LOG), path.buf)) {
-		if ((errno==EISDIR || errno==ENOTDIR) && --attempts_remaining > 0) {
-			/*
-			 * rename(a, b) when b is an existing
-			 * directory ought to result in ISDIR, but
-			 * Solaris 5.8 gives ENOTDIR.  Sheesh.
-			 */
-			if (remove_empty_directories(&path)) {
-				error("Directory not empty: logs/%s", newrefname);
-				goto out;
-			}
-			goto retry;
-		} else if (errno == ENOENT && --attempts_remaining > 0) {
-			/*
-			 * Maybe another process just deleted one of
-			 * the directories in the path to newrefname.
-			 * Try again from the beginning.
-			 */
-			goto retry;
-		} else {
-			error("unable to move logfile "TMP_RENAMED_LOG" to logs/%s: %s",
-				newrefname, strerror(errno));
-			goto out;
-		}
-	}
-	ret = 0;
-out:
-	strbuf_release(&path);
-	return ret;
 }
 
-static int files_verify_refname_available(struct ref_store *ref_store,
-					  const char *newname,
-					  const struct string_list *extras,
-					  const struct string_list *skip,
-					  struct strbuf *err)
+static int rename_tmp_log(struct files_ref_store *refs, const char *newrefname)
 {
-	struct files_ref_store *refs =
-		files_downcast(ref_store, 1, "verify_refname_available");
-	struct ref_dir *packed_refs = get_packed_refs(refs);
-	struct ref_dir *loose_refs = get_loose_refs(refs);
+	struct strbuf path = STRBUF_INIT;
+	struct strbuf tmp = STRBUF_INIT;
+	struct rename_cb cb;
+	int ret;
 
-	if (verify_refname_available_dir(newname, extras, skip,
-					 packed_refs, err) ||
-	    verify_refname_available_dir(newname, extras, skip,
-					 loose_refs, err))
-		return -1;
+	files_reflog_path(refs, &path, newrefname);
+	files_reflog_path(refs, &tmp, TMP_RENAMED_LOG);
+	cb.tmp_renamed_log = tmp.buf;
+	ret = raceproof_create_file(path.buf, rename_tmp_log_callback, &cb);
+	if (ret) {
+		if (errno == EISDIR)
+			error("directory not empty: %s", path.buf);
+		else
+			error("unable to move logfile %s to %s: %s",
+			      tmp.buf, path.buf,
+			      strerror(cb.true_errno));
+	}
 
-	return 0;
+	strbuf_release(&path);
+	strbuf_release(&tmp);
+	return ret;
 }
 
 static int write_ref_to_lockfile(struct ref_lock *lock,
@@ -2591,32 +1720,52 @@ static int files_rename_ref(struct ref_store *ref_store,
 			    const char *logmsg)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "rename_ref");
+		files_downcast(ref_store, REF_STORE_WRITE, "rename_ref");
 	unsigned char sha1[20], orig_sha1[20];
 	int flag = 0, logmoved = 0;
 	struct ref_lock *lock;
 	struct stat loginfo;
-	int log = !lstat(git_path("logs/%s", oldrefname), &loginfo);
+	struct strbuf sb_oldref = STRBUF_INIT;
+	struct strbuf sb_newref = STRBUF_INIT;
+	struct strbuf tmp_renamed_log = STRBUF_INIT;
+	int log, ret;
 	struct strbuf err = STRBUF_INIT;
 
-	if (log && S_ISLNK(loginfo.st_mode))
-		return error("reflog for %s is a symlink", oldrefname);
+	files_reflog_path(refs, &sb_oldref, oldrefname);
+	files_reflog_path(refs, &sb_newref, newrefname);
+	files_reflog_path(refs, &tmp_renamed_log, TMP_RENAMED_LOG);
 
-	if (!resolve_ref_unsafe(oldrefname, RESOLVE_REF_READING | RESOLVE_REF_NO_RECURSE,
-				orig_sha1, &flag))
-		return error("refname %s not found", oldrefname);
+	log = !lstat(sb_oldref.buf, &loginfo);
+	if (log && S_ISLNK(loginfo.st_mode)) {
+		ret = error("reflog for %s is a symlink", oldrefname);
+		goto out;
+	}
 
-	if (flag & REF_ISSYMREF)
-		return error("refname %s is a symbolic ref, renaming it is not supported",
-			oldrefname);
-	if (!rename_ref_available(oldrefname, newrefname))
-		return 1;
+	if (!refs_resolve_ref_unsafe(&refs->base, oldrefname,
+				     RESOLVE_REF_READING | RESOLVE_REF_NO_RECURSE,
+				orig_sha1, &flag)) {
+		ret = error("refname %s not found", oldrefname);
+		goto out;
+	}
 
-	if (log && rename(git_path("logs/%s", oldrefname), git_path(TMP_RENAMED_LOG)))
-		return error("unable to move logfile logs/%s to "TMP_RENAMED_LOG": %s",
-			oldrefname, strerror(errno));
+	if (flag & REF_ISSYMREF) {
+		ret = error("refname %s is a symbolic ref, renaming it is not supported",
+			    oldrefname);
+		goto out;
+	}
+	if (!refs_rename_ref_available(&refs->base, oldrefname, newrefname)) {
+		ret = 1;
+		goto out;
+	}
 
-	if (delete_ref(oldrefname, orig_sha1, REF_NODEREF)) {
+	if (log && rename(sb_oldref.buf, tmp_renamed_log.buf)) {
+		ret = error("unable to move logfile logs/%s to logs/"TMP_RENAMED_LOG": %s",
+			    oldrefname, strerror(errno));
+		goto out;
+	}
+
+	if (refs_delete_ref(&refs->base, logmsg, oldrefname,
+			    orig_sha1, REF_NODEREF)) {
 		error("unable to delete old %s", oldrefname);
 		goto rollback;
 	}
@@ -2628,14 +1777,16 @@ static int files_rename_ref(struct ref_store *ref_store,
 	 * the safety anyway; we want to delete the reference whatever
 	 * its current value.
 	 */
-	if (!read_ref_full(newrefname, RESOLVE_REF_READING | RESOLVE_REF_NO_RECURSE,
-			   sha1, NULL) &&
-	    delete_ref(newrefname, NULL, REF_NODEREF)) {
-		if (errno==EISDIR) {
+	if (!refs_read_ref_full(&refs->base, newrefname,
+				RESOLVE_REF_READING | RESOLVE_REF_NO_RECURSE,
+				sha1, NULL) &&
+	    refs_delete_ref(&refs->base, NULL, newrefname,
+			    NULL, REF_NODEREF)) {
+		if (errno == EISDIR) {
 			struct strbuf path = STRBUF_INIT;
 			int result;
 
-			strbuf_git_path(&path, "%s", newrefname);
+			files_ref_path(refs, &path, newrefname);
 			result = remove_empty_directories(&path);
 			strbuf_release(&path);
 
@@ -2649,7 +1800,7 @@ static int files_rename_ref(struct ref_store *ref_store,
 		}
 	}
 
-	if (log && rename_tmp_log(newrefname))
+	if (log && rename_tmp_log(refs, newrefname))
 		goto rollback;
 
 	logmoved = log;
@@ -2670,7 +1821,8 @@ static int files_rename_ref(struct ref_store *ref_store,
 		goto rollback;
 	}
 
-	return 0;
+	ret = 0;
+	goto out;
 
  rollback:
 	lock = lock_ref_sha1_basic(refs, oldrefname, NULL, NULL, NULL,
@@ -2682,7 +1834,7 @@ static int files_rename_ref(struct ref_store *ref_store,
 	}
 
 	flag = log_all_ref_updates;
-	log_all_ref_updates = 0;
+	log_all_ref_updates = LOG_REFS_NONE;
 	if (write_ref_to_lockfile(lock, orig_sha1, &err) ||
 	    commit_ref_update(refs, lock, orig_sha1, NULL, &err)) {
 		error("unable to write current sha1 into %s: %s", oldrefname, err.buf);
@@ -2691,15 +1843,20 @@ static int files_rename_ref(struct ref_store *ref_store,
 	log_all_ref_updates = flag;
 
  rollbacklog:
-	if (logmoved && rename(git_path("logs/%s", newrefname), git_path("logs/%s", oldrefname)))
+	if (logmoved && rename(sb_newref.buf, sb_oldref.buf))
 		error("unable to restore logfile %s from %s: %s",
 			oldrefname, newrefname, strerror(errno));
 	if (!logmoved && log &&
-	    rename(git_path(TMP_RENAMED_LOG), git_path("logs/%s", oldrefname)))
-		error("unable to restore logfile %s from "TMP_RENAMED_LOG": %s",
+	    rename(tmp_renamed_log.buf, sb_oldref.buf))
+		error("unable to restore logfile %s from logs/"TMP_RENAMED_LOG": %s",
 			oldrefname, strerror(errno));
+	ret = 1;
+ out:
+	strbuf_release(&sb_newref);
+	strbuf_release(&sb_oldref);
+	strbuf_release(&tmp_renamed_log);
 
-	return 1;
+	return ret;
 }
 
 static int close_ref(struct ref_lock *lock)
@@ -2740,66 +1897,93 @@ static int commit_ref(struct ref_lock *lock)
 	return 0;
 }
 
-/*
- * Create a reflog for a ref.  If force_create = 0, the reflog will
- * only be created for certain refs (those for which
- * should_autocreate_reflog returns non-zero.  Otherwise, create it
- * regardless of the ref name.  Fill in *err and return -1 on failure.
- */
-static int log_ref_setup(const char *refname, struct strbuf *logfile, struct strbuf *err, int force_create)
+static int open_or_create_logfile(const char *path, void *cb)
 {
-	int logfd, oflags = O_APPEND | O_WRONLY;
+	int *fd = cb;
 
-	strbuf_git_path(logfile, "logs/%s", refname);
-	if (force_create || should_autocreate_reflog(refname)) {
-		if (safe_create_leading_directories(logfile->buf) < 0) {
-			strbuf_addf(err, "unable to create directory for '%s': "
-				    "%s", logfile->buf, strerror(errno));
-			return -1;
-		}
-		oflags |= O_CREAT;
-	}
-
-	logfd = open(logfile->buf, oflags, 0666);
-	if (logfd < 0) {
-		if (!(oflags & O_CREAT) && (errno == ENOENT || errno == EISDIR))
-			return 0;
-
-		if (errno == EISDIR) {
-			if (remove_empty_directories(logfile)) {
-				strbuf_addf(err, "there are still logs under "
-					    "'%s'", logfile->buf);
-				return -1;
-			}
-			logfd = open(logfile->buf, oflags, 0666);
-		}
-
-		if (logfd < 0) {
-			strbuf_addf(err, "unable to append to '%s': %s",
-				    logfile->buf, strerror(errno));
-			return -1;
-		}
-	}
-
-	adjust_shared_perm(logfile->buf);
-	close(logfd);
-	return 0;
+	*fd = open(path, O_APPEND | O_WRONLY | O_CREAT, 0666);
+	return (*fd < 0) ? -1 : 0;
 }
 
+/*
+ * Create a reflog for a ref. If force_create = 0, only create the
+ * reflog for certain refs (those for which should_autocreate_reflog
+ * returns non-zero). Otherwise, create it regardless of the reference
+ * name. If the logfile already existed or was created, return 0 and
+ * set *logfd to the file descriptor opened for appending to the file.
+ * If no logfile exists and we decided not to create one, return 0 and
+ * set *logfd to -1. On failure, fill in *err, set *logfd to -1, and
+ * return -1.
+ */
+static int log_ref_setup(struct files_ref_store *refs,
+			 const char *refname, int force_create,
+			 int *logfd, struct strbuf *err)
+{
+	struct strbuf logfile_sb = STRBUF_INIT;
+	char *logfile;
+
+	files_reflog_path(refs, &logfile_sb, refname);
+	logfile = strbuf_detach(&logfile_sb, NULL);
+
+	if (force_create || should_autocreate_reflog(refname)) {
+		if (raceproof_create_file(logfile, open_or_create_logfile, logfd)) {
+			if (errno == ENOENT)
+				strbuf_addf(err, "unable to create directory for '%s': "
+					    "%s", logfile, strerror(errno));
+			else if (errno == EISDIR)
+				strbuf_addf(err, "there are still logs under '%s'",
+					    logfile);
+			else
+				strbuf_addf(err, "unable to append to '%s': %s",
+					    logfile, strerror(errno));
+
+			goto error;
+		}
+	} else {
+		*logfd = open(logfile, O_APPEND | O_WRONLY, 0666);
+		if (*logfd < 0) {
+			if (errno == ENOENT || errno == EISDIR) {
+				/*
+				 * The logfile doesn't already exist,
+				 * but that is not an error; it only
+				 * means that we won't write log
+				 * entries to it.
+				 */
+				;
+			} else {
+				strbuf_addf(err, "unable to append to '%s': %s",
+					    logfile, strerror(errno));
+				goto error;
+			}
+		}
+	}
+
+	if (*logfd >= 0)
+		adjust_shared_perm(logfile);
+
+	free(logfile);
+	return 0;
+
+error:
+	free(logfile);
+	return -1;
+}
 
 static int files_create_reflog(struct ref_store *ref_store,
 			       const char *refname, int force_create,
 			       struct strbuf *err)
 {
-	int ret;
-	struct strbuf sb = STRBUF_INIT;
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_WRITE, "create_reflog");
+	int fd;
 
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "create_reflog");
+	if (log_ref_setup(refs, refname, force_create, &fd, err))
+		return -1;
 
-	ret = log_ref_setup(refname, &sb, err, force_create);
-	strbuf_release(&sb);
-	return ret;
+	if (fd >= 0)
+		close(fd);
+
+	return 0;
 }
 
 static int log_ref_write_fd(int fd, const unsigned char *old_sha1,
@@ -2828,57 +2012,49 @@ static int log_ref_write_fd(int fd, const unsigned char *old_sha1,
 	return 0;
 }
 
-static int log_ref_write_1(const char *refname, const unsigned char *old_sha1,
-			   const unsigned char *new_sha1, const char *msg,
-			   struct strbuf *logfile, int flags,
-			   struct strbuf *err)
+static int files_log_ref_write(struct files_ref_store *refs,
+			       const char *refname, const unsigned char *old_sha1,
+			       const unsigned char *new_sha1, const char *msg,
+			       int flags, struct strbuf *err)
 {
-	int logfd, result, oflags = O_APPEND | O_WRONLY;
+	int logfd, result;
 
-	if (log_all_ref_updates < 0)
-		log_all_ref_updates = !is_bare_repository();
+	if (log_all_ref_updates == LOG_REFS_UNSET)
+		log_all_ref_updates = is_bare_repository() ? LOG_REFS_NONE : LOG_REFS_NORMAL;
 
-	result = log_ref_setup(refname, logfile, err, flags & REF_FORCE_CREATE_REFLOG);
+	result = log_ref_setup(refs, refname,
+			       flags & REF_FORCE_CREATE_REFLOG,
+			       &logfd, err);
 
 	if (result)
 		return result;
 
-	logfd = open(logfile->buf, oflags);
 	if (logfd < 0)
 		return 0;
 	result = log_ref_write_fd(logfd, old_sha1, new_sha1,
 				  git_committer_info(0), msg);
 	if (result) {
-		strbuf_addf(err, "unable to append to '%s': %s", logfile->buf,
-			    strerror(errno));
+		struct strbuf sb = STRBUF_INIT;
+		int save_errno = errno;
+
+		files_reflog_path(refs, &sb, refname);
+		strbuf_addf(err, "unable to append to '%s': %s",
+			    sb.buf, strerror(save_errno));
+		strbuf_release(&sb);
 		close(logfd);
 		return -1;
 	}
 	if (close(logfd)) {
-		strbuf_addf(err, "unable to append to '%s': %s", logfile->buf,
-			    strerror(errno));
+		struct strbuf sb = STRBUF_INIT;
+		int save_errno = errno;
+
+		files_reflog_path(refs, &sb, refname);
+		strbuf_addf(err, "unable to append to '%s': %s",
+			    sb.buf, strerror(save_errno));
+		strbuf_release(&sb);
 		return -1;
 	}
 	return 0;
-}
-
-static int log_ref_write(const char *refname, const unsigned char *old_sha1,
-			 const unsigned char *new_sha1, const char *msg,
-			 int flags, struct strbuf *err)
-{
-	return files_log_ref_write(refname, old_sha1, new_sha1, msg, flags,
-				   err);
-}
-
-int files_log_ref_write(const char *refname, const unsigned char *old_sha1,
-			const unsigned char *new_sha1, const char *msg,
-			int flags, struct strbuf *err)
-{
-	struct strbuf sb = STRBUF_INIT;
-	int ret = log_ref_write_1(refname, old_sha1, new_sha1, msg, &sb, flags,
-				  err);
-	strbuf_release(&sb);
-	return ret;
 }
 
 /*
@@ -2930,10 +2106,12 @@ static int commit_ref_update(struct files_ref_store *refs,
 			     const unsigned char *sha1, const char *logmsg,
 			     struct strbuf *err)
 {
-	assert_main_repository(&refs->base, "commit_ref_update");
+	files_assert_main_repository(refs, "commit_ref_update");
 
 	clear_loose_ref_cache(refs);
-	if (log_ref_write(lock->ref_name, lock->old_oid.hash, sha1, logmsg, 0, err)) {
+	if (files_log_ref_write(refs, lock->ref_name,
+				lock->old_oid.hash, sha1,
+				logmsg, 0, err)) {
 		char *old_msg = strbuf_detach(err, NULL);
 		strbuf_addf(err, "cannot update the ref '%s': %s",
 			    lock->ref_name, old_msg);
@@ -2959,13 +2137,15 @@ static int commit_ref_update(struct files_ref_store *refs,
 		int head_flag;
 		const char *head_ref;
 
-		head_ref = resolve_ref_unsafe("HEAD", RESOLVE_REF_READING,
-					      head_sha1, &head_flag);
+		head_ref = refs_resolve_ref_unsafe(&refs->base, "HEAD",
+						   RESOLVE_REF_READING,
+						   head_sha1, &head_flag);
 		if (head_ref && (head_flag & REF_ISSYMREF) &&
 		    !strcmp(head_ref, lock->ref_name)) {
 			struct strbuf log_err = STRBUF_INIT;
-			if (log_ref_write("HEAD", lock->old_oid.hash, sha1,
-					  logmsg, 0, &log_err)) {
+			if (files_log_ref_write(refs, "HEAD",
+						lock->old_oid.hash, sha1,
+						logmsg, 0, &log_err)) {
 				error("%s", log_err.buf);
 				strbuf_release(&log_err);
 			}
@@ -2997,23 +2177,28 @@ static int create_ref_symlink(struct ref_lock *lock, const char *target)
 	return ret;
 }
 
-static void update_symref_reflog(struct ref_lock *lock, const char *refname,
+static void update_symref_reflog(struct files_ref_store *refs,
+				 struct ref_lock *lock, const char *refname,
 				 const char *target, const char *logmsg)
 {
 	struct strbuf err = STRBUF_INIT;
 	unsigned char new_sha1[20];
-	if (logmsg && !read_ref(target, new_sha1) &&
-	    log_ref_write(refname, lock->old_oid.hash, new_sha1, logmsg, 0, &err)) {
+	if (logmsg &&
+	    !refs_read_ref_full(&refs->base, target,
+				RESOLVE_REF_READING, new_sha1, NULL) &&
+	    files_log_ref_write(refs, refname, lock->old_oid.hash,
+				new_sha1, logmsg, 0, &err)) {
 		error("%s", err.buf);
 		strbuf_release(&err);
 	}
 }
 
-static int create_symref_locked(struct ref_lock *lock, const char *refname,
+static int create_symref_locked(struct files_ref_store *refs,
+				struct ref_lock *lock, const char *refname,
 				const char *target, const char *logmsg)
 {
 	if (prefer_symlink_refs && !create_ref_symlink(lock, target)) {
-		update_symref_reflog(lock, refname, target, logmsg);
+		update_symref_reflog(refs, lock, refname, target, logmsg);
 		return 0;
 	}
 
@@ -3021,7 +2206,7 @@ static int create_symref_locked(struct ref_lock *lock, const char *refname,
 		return error("unable to fdopen %s: %s",
 			     lock->lk->tempfile.filename.buf, strerror(errno));
 
-	update_symref_reflog(lock, refname, target, logmsg);
+	update_symref_reflog(refs, lock, refname, target, logmsg);
 
 	/* no error check; commit_ref will check ferror */
 	fprintf(lock->lk->tempfile.fp, "ref: %s\n", target);
@@ -3036,7 +2221,7 @@ static int files_create_symref(struct ref_store *ref_store,
 			       const char *logmsg)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "create_symref");
+		files_downcast(ref_store, REF_STORE_WRITE, "create_symref");
 	struct strbuf err = STRBUF_INIT;
 	struct ref_lock *lock;
 	int ret;
@@ -3050,13 +2235,22 @@ static int files_create_symref(struct ref_store *ref_store,
 		return -1;
 	}
 
-	ret = create_symref_locked(lock, refname, target, logmsg);
+	ret = create_symref_locked(refs, lock, refname, target, logmsg);
 	unlock_ref(lock);
 	return ret;
 }
 
-int set_worktree_head_symref(const char *gitdir, const char *target)
+int set_worktree_head_symref(const char *gitdir, const char *target, const char *logmsg)
 {
+	/*
+	 * FIXME: this obviously will not work well for future refs
+	 * backends. This function needs to die.
+	 */
+	struct files_ref_store *refs =
+		files_downcast(get_main_ref_store(),
+			       REF_STORE_WRITE,
+			       "set_head_symref");
+
 	static struct lock_file head_lock;
 	struct ref_lock *lock;
 	struct strbuf head_path = STRBUF_INIT;
@@ -3083,7 +2277,7 @@ int set_worktree_head_symref(const char *gitdir, const char *target)
 	lock->lk = &head_lock;
 	lock->ref_name = xstrdup(head_rel);
 
-	ret = create_symref_locked(lock, head_rel, target, NULL);
+	ret = create_symref_locked(refs, lock, head_rel, target, logmsg);
 
 	unlock_ref(lock); /* will free lock */
 	strbuf_release(&head_path);
@@ -3093,36 +2287,45 @@ int set_worktree_head_symref(const char *gitdir, const char *target)
 static int files_reflog_exists(struct ref_store *ref_store,
 			       const char *refname)
 {
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_READ, "reflog_exists");
+	struct strbuf sb = STRBUF_INIT;
 	struct stat st;
+	int ret;
 
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "reflog_exists");
-
-	return !lstat(git_path("logs/%s", refname), &st) &&
-		S_ISREG(st.st_mode);
+	files_reflog_path(refs, &sb, refname);
+	ret = !lstat(sb.buf, &st) && S_ISREG(st.st_mode);
+	strbuf_release(&sb);
+	return ret;
 }
 
 static int files_delete_reflog(struct ref_store *ref_store,
 			       const char *refname)
 {
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "delete_reflog");
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_WRITE, "delete_reflog");
+	struct strbuf sb = STRBUF_INIT;
+	int ret;
 
-	return remove_path(git_path("logs/%s", refname));
+	files_reflog_path(refs, &sb, refname);
+	ret = remove_path(sb.buf);
+	strbuf_release(&sb);
+	return ret;
 }
 
 static int show_one_reflog_ent(struct strbuf *sb, each_reflog_ent_fn fn, void *cb_data)
 {
-	unsigned char osha1[20], nsha1[20];
+	struct object_id ooid, noid;
 	char *email_end, *message;
 	unsigned long timestamp;
 	int tz;
+	const char *p = sb->buf;
 
 	/* old SP new SP name <email> SP time TAB msg LF */
-	if (sb->len < 83 || sb->buf[sb->len - 1] != '\n' ||
-	    get_sha1_hex(sb->buf, osha1) || sb->buf[40] != ' ' ||
-	    get_sha1_hex(sb->buf + 41, nsha1) || sb->buf[81] != ' ' ||
-	    !(email_end = strchr(sb->buf + 82, '>')) ||
+	if (!sb->len || sb->buf[sb->len - 1] != '\n' ||
+	    parse_oid_hex(p, &ooid, &p) || *p++ != ' ' ||
+	    parse_oid_hex(p, &noid, &p) || *p++ != ' ' ||
+	    !(email_end = strchr(p, '>')) ||
 	    email_end[1] != ' ' ||
 	    !(timestamp = strtoul(email_end + 2, &message, 10)) ||
 	    !message || message[0] != ' ' ||
@@ -3136,7 +2339,7 @@ static int show_one_reflog_ent(struct strbuf *sb, each_reflog_ent_fn fn, void *c
 		message += 6;
 	else
 		message += 7;
-	return fn(osha1, nsha1, sb->buf + 82, timestamp, tz, message, cb_data);
+	return fn(&ooid, &noid, p, timestamp, tz, message, cb_data);
 }
 
 static char *find_beginning_of_line(char *bob, char *scan)
@@ -3155,22 +2358,24 @@ static int files_for_each_reflog_ent_reverse(struct ref_store *ref_store,
 					     each_reflog_ent_fn fn,
 					     void *cb_data)
 {
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_READ,
+			       "for_each_reflog_ent_reverse");
 	struct strbuf sb = STRBUF_INIT;
 	FILE *logfp;
 	long pos;
 	int ret = 0, at_tail = 1;
 
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "for_each_reflog_ent_reverse");
-
-	logfp = fopen(git_path("logs/%s", refname), "r");
+	files_reflog_path(refs, &sb, refname);
+	logfp = fopen(sb.buf, "r");
+	strbuf_release(&sb);
 	if (!logfp)
 		return -1;
 
 	/* Jump to the end */
 	if (fseek(logfp, 0, SEEK_END) < 0)
-		return error("cannot seek back reflog for %s: %s",
-			     refname, strerror(errno));
+		ret = error("cannot seek back reflog for %s: %s",
+			    refname, strerror(errno));
 	pos = ftell(logfp);
 	while (!ret && 0 < pos) {
 		int cnt;
@@ -3180,13 +2385,17 @@ static int files_for_each_reflog_ent_reverse(struct ref_store *ref_store,
 
 		/* Fill next block from the end */
 		cnt = (sizeof(buf) < pos) ? sizeof(buf) : pos;
-		if (fseek(logfp, pos - cnt, SEEK_SET))
-			return error("cannot seek back reflog for %s: %s",
-				     refname, strerror(errno));
+		if (fseek(logfp, pos - cnt, SEEK_SET)) {
+			ret = error("cannot seek back reflog for %s: %s",
+				    refname, strerror(errno));
+			break;
+		}
 		nread = fread(buf, cnt, 1, logfp);
-		if (nread != 1)
-			return error("cannot read %d bytes from reflog for %s: %s",
-				     cnt, refname, strerror(errno));
+		if (nread != 1) {
+			ret = error("cannot read %d bytes from reflog for %s: %s",
+				    cnt, refname, strerror(errno));
+			break;
+		}
 		pos -= cnt;
 
 		scanp = endp = buf + cnt;
@@ -3262,14 +2471,16 @@ static int files_for_each_reflog_ent(struct ref_store *ref_store,
 				     const char *refname,
 				     each_reflog_ent_fn fn, void *cb_data)
 {
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_READ,
+			       "for_each_reflog_ent");
 	FILE *logfp;
 	struct strbuf sb = STRBUF_INIT;
 	int ret = 0;
 
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "for_each_reflog_ent");
-
-	logfp = fopen(git_path("logs/%s", refname), "r");
+	files_reflog_path(refs, &sb, refname);
+	logfp = fopen(sb.buf, "r");
+	strbuf_release(&sb);
 	if (!logfp)
 		return -1;
 
@@ -3283,6 +2494,7 @@ static int files_for_each_reflog_ent(struct ref_store *ref_store,
 struct files_reflog_iterator {
 	struct ref_iterator base;
 
+	struct ref_store *ref_store;
 	struct dir_iterator *dir_iterator;
 	struct object_id oid;
 };
@@ -3304,8 +2516,9 @@ static int files_reflog_iterator_advance(struct ref_iterator *ref_iterator)
 		if (ends_with(diter->basename, ".lock"))
 			continue;
 
-		if (read_ref_full(diter->relative_path, 0,
-				  iter->oid.hash, &flags)) {
+		if (refs_read_ref_full(iter->ref_store,
+				       diter->relative_path, 0,
+				       iter->oid.hash, &flags)) {
 			error("bad ref for %s", diter->path.buf);
 			continue;
 		}
@@ -3349,14 +2562,18 @@ static struct ref_iterator_vtable files_reflog_iterator_vtable = {
 
 static struct ref_iterator *files_reflog_iterator_begin(struct ref_store *ref_store)
 {
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_READ,
+			       "reflog_iterator_begin");
 	struct files_reflog_iterator *iter = xcalloc(1, sizeof(*iter));
 	struct ref_iterator *ref_iterator = &iter->base;
-
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "reflog_iterator_begin");
+	struct strbuf sb = STRBUF_INIT;
 
 	base_ref_iterator_init(ref_iterator, &files_reflog_iterator_vtable);
-	iter->dir_iterator = dir_iterator_begin(git_path("logs"));
+	files_reflog_path(refs, &sb, NULL);
+	iter->dir_iterator = dir_iterator_begin(sb.buf);
+	iter->ref_store = ref_store;
+	strbuf_release(&sb);
 	return ref_iterator;
 }
 
@@ -3560,7 +2777,7 @@ static int lock_ref_for_update(struct files_ref_store *refs,
 	int ret;
 	struct ref_lock *lock;
 
-	assert_main_repository(&refs->base, "lock_ref_for_update");
+	files_assert_main_repository(refs, "lock_ref_for_update");
 
 	if ((update->flags & REF_HAVE_NEW) && is_null_sha1(update->new_sha1))
 		update->flags |= REF_DELETING;
@@ -3595,8 +2812,9 @@ static int lock_ref_for_update(struct files_ref_store *refs,
 			 * the transaction, so we have to read it here
 			 * to record and possibly check old_sha1:
 			 */
-			if (read_ref_full(referent.buf, 0,
-					  lock->old_oid.hash, NULL)) {
+			if (refs_read_ref_full(&refs->base,
+					       referent.buf, 0,
+					       lock->old_oid.hash, NULL)) {
 				if (update->flags & REF_HAVE_OLD) {
 					strbuf_addf(err, "cannot lock ref '%s': "
 						    "error reading reference",
@@ -3686,7 +2904,8 @@ static int files_transaction_commit(struct ref_store *ref_store,
 				    struct strbuf *err)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "ref_transaction_commit");
+		files_downcast(ref_store, REF_STORE_WRITE,
+			       "ref_transaction_commit");
 	int ret = 0, i;
 	struct string_list refs_to_delete = STRING_LIST_INIT_NODUP;
 	struct string_list_item *ref_to_delete;
@@ -3694,6 +2913,7 @@ static int files_transaction_commit(struct ref_store *ref_store,
 	char *head_ref = NULL;
 	int head_type;
 	struct object_id head_oid;
+	struct strbuf sb = STRBUF_INIT;
 
 	assert(err);
 
@@ -3748,8 +2968,9 @@ static int files_transaction_commit(struct ref_store *ref_store,
 	 * head_ref within the transaction, then split_head_update()
 	 * arranges for the reflog of HEAD to be updated, too.
 	 */
-	head_ref = resolve_refdup("HEAD", RESOLVE_REF_NO_RECURSE,
-				  head_oid.hash, &head_type);
+	head_ref = refs_resolve_refdup(ref_store, "HEAD",
+				       RESOLVE_REF_NO_RECURSE,
+				       head_oid.hash, &head_type);
 
 	if (head_ref && !(head_type & REF_ISSYMREF)) {
 		free(head_ref);
@@ -3778,9 +2999,12 @@ static int files_transaction_commit(struct ref_store *ref_store,
 
 		if (update->flags & REF_NEEDS_COMMIT ||
 		    update->flags & REF_LOG_ONLY) {
-			if (log_ref_write(lock->ref_name, lock->old_oid.hash,
-					  update->new_sha1,
-					  update->msg, update->flags, err)) {
+			if (files_log_ref_write(refs,
+						lock->ref_name,
+						lock->old_oid.hash,
+						update->new_sha1,
+						update->msg, update->flags,
+						err)) {
 				char *old_msg = strbuf_detach(err, NULL);
 
 				strbuf_addf(err, "cannot update the ref '%s': %s",
@@ -3810,9 +3034,16 @@ static int files_transaction_commit(struct ref_store *ref_store,
 
 		if (update->flags & REF_DELETING &&
 		    !(update->flags & REF_LOG_ONLY)) {
-			if (delete_ref_loose(lock, update->type, err)) {
-				ret = TRANSACTION_GENERIC_ERROR;
-				goto cleanup;
+			if (!(update->type & REF_ISPACKED) ||
+			    update->type & REF_ISSYMREF) {
+				/* It is a loose reference. */
+				strbuf_reset(&sb);
+				files_ref_path(refs, &sb, lock->ref_name);
+				if (unlink_or_msg(sb.buf, err)) {
+					ret = TRANSACTION_GENERIC_ERROR;
+					goto cleanup;
+				}
+				update->flags |= REF_DELETED_LOOSE;
 			}
 
 			if (!(update->flags & REF_ISPRUNING))
@@ -3825,16 +3056,41 @@ static int files_transaction_commit(struct ref_store *ref_store,
 		ret = TRANSACTION_GENERIC_ERROR;
 		goto cleanup;
 	}
-	for_each_string_list_item(ref_to_delete, &refs_to_delete)
-		unlink_or_warn(git_path("logs/%s", ref_to_delete->string));
+
+	/* Delete the reflogs of any references that were deleted: */
+	for_each_string_list_item(ref_to_delete, &refs_to_delete) {
+		strbuf_reset(&sb);
+		files_reflog_path(refs, &sb, ref_to_delete->string);
+		if (!unlink_or_warn(sb.buf))
+			try_remove_empty_parents(refs, ref_to_delete->string,
+						 REMOVE_EMPTY_PARENTS_REFLOG);
+	}
+
 	clear_loose_ref_cache(refs);
 
 cleanup:
+	strbuf_release(&sb);
 	transaction->state = REF_TRANSACTION_CLOSED;
 
-	for (i = 0; i < transaction->nr; i++)
-		if (transaction->updates[i]->backend_data)
-			unlock_ref(transaction->updates[i]->backend_data);
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+		struct ref_lock *lock = update->backend_data;
+
+		if (lock)
+			unlock_ref(lock);
+
+		if (update->flags & REF_DELETED_LOOSE) {
+			/*
+			 * The loose reference was deleted. Delete any
+			 * empty parent directories. (Note that this
+			 * can only work because we have already
+			 * removed the lockfile.)
+			 */
+			try_remove_empty_parents(refs, update->refname,
+						 REMOVE_EMPTY_PARENTS_REF);
+		}
+	}
+
 	string_list_clear(&refs_to_delete, 0);
 	free(head_ref);
 	string_list_clear(&affected_refnames, 0);
@@ -3855,7 +3111,8 @@ static int files_initial_transaction_commit(struct ref_store *ref_store,
 					    struct strbuf *err)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "initial_ref_transaction_commit");
+		files_downcast(ref_store, REF_STORE_WRITE,
+			       "initial_ref_transaction_commit");
 	int ret = 0, i;
 	struct string_list affected_refnames = STRING_LIST_INIT_NODUP;
 
@@ -3886,7 +3143,8 @@ static int files_initial_transaction_commit(struct ref_store *ref_store,
 	 * so here we really only check that none of the references
 	 * that we are creating already exists.
 	 */
-	if (for_each_rawref(ref_present, &affected_refnames))
+	if (refs_for_each_rawref(&refs->base, ref_present,
+				 &affected_refnames))
 		die("BUG: initial ref transaction called with existing refs");
 
 	for (i = 0; i < transaction->nr; i++) {
@@ -3895,9 +3153,9 @@ static int files_initial_transaction_commit(struct ref_store *ref_store,
 		if ((update->flags & REF_HAVE_OLD) &&
 		    !is_null_sha1(update->old_sha1))
 			die("BUG: initial ref transaction with old_sha1 set");
-		if (verify_refname_available(update->refname,
-					     &affected_refnames, NULL,
-					     err)) {
+		if (refs_verify_refname_available(&refs->base, update->refname,
+						  &affected_refnames, NULL,
+						  err)) {
 			ret = TRANSACTION_NAME_CONFLICT;
 			goto cleanup;
 		}
@@ -3936,10 +3194,10 @@ struct expire_reflog_cb {
 	reflog_expiry_should_prune_fn *should_prune_fn;
 	void *policy_cb;
 	FILE *newlog;
-	unsigned char last_kept_sha1[20];
+	struct object_id last_kept_oid;
 };
 
-static int expire_reflog_ent(unsigned char *osha1, unsigned char *nsha1,
+static int expire_reflog_ent(struct object_id *ooid, struct object_id *noid,
 			     const char *email, unsigned long timestamp, int tz,
 			     const char *message, void *cb_data)
 {
@@ -3947,9 +3205,9 @@ static int expire_reflog_ent(unsigned char *osha1, unsigned char *nsha1,
 	struct expire_reflog_policy_cb *policy_cb = cb->policy_cb;
 
 	if (cb->flags & EXPIRE_REFLOGS_REWRITE)
-		osha1 = cb->last_kept_sha1;
+		ooid = &cb->last_kept_oid;
 
-	if ((*cb->should_prune_fn)(osha1, nsha1, email, timestamp, tz,
+	if ((*cb->should_prune_fn)(ooid->hash, noid->hash, email, timestamp, tz,
 				   message, policy_cb)) {
 		if (!cb->newlog)
 			printf("would prune %s", message);
@@ -3958,9 +3216,9 @@ static int expire_reflog_ent(unsigned char *osha1, unsigned char *nsha1,
 	} else {
 		if (cb->newlog) {
 			fprintf(cb->newlog, "%s %s %s %lu %+05d\t%s",
-				sha1_to_hex(osha1), sha1_to_hex(nsha1),
+				oid_to_hex(ooid), oid_to_hex(noid),
 				email, timestamp, tz, message);
-			hashcpy(cb->last_kept_sha1, nsha1);
+			oidcpy(&cb->last_kept_oid, noid);
 		}
 		if (cb->flags & EXPIRE_REFLOGS_VERBOSE)
 			printf("keep %s", message);
@@ -3977,10 +3235,11 @@ static int files_reflog_expire(struct ref_store *ref_store,
 			       void *policy_cb_data)
 {
 	struct files_ref_store *refs =
-		files_downcast(ref_store, 0, "reflog_expire");
+		files_downcast(ref_store, REF_STORE_WRITE, "reflog_expire");
 	static struct lock_file reflog_lock;
 	struct expire_reflog_cb cb;
 	struct ref_lock *lock;
+	struct strbuf log_file_sb = STRBUF_INIT;
 	char *log_file;
 	int status = 0;
 	int type;
@@ -4004,12 +3263,13 @@ static int files_reflog_expire(struct ref_store *ref_store,
 		strbuf_release(&err);
 		return -1;
 	}
-	if (!reflog_exists(refname)) {
+	if (!refs_reflog_exists(ref_store, refname)) {
 		unlock_ref(lock);
 		return 0;
 	}
 
-	log_file = git_pathdup("logs/%s", refname);
+	files_reflog_path(refs, &log_file_sb, refname);
+	log_file = strbuf_detach(&log_file_sb, NULL);
 	if (!(flags & EXPIRE_REFLOGS_DRY_RUN)) {
 		/*
 		 * Even though holding $GIT_DIR/logs/$reflog.lock has
@@ -4034,7 +3294,7 @@ static int files_reflog_expire(struct ref_store *ref_store,
 	}
 
 	(*prepare_fn)(refname, sha1, cb.policy_cb);
-	for_each_reflog_ent(refname, expire_reflog_ent, &cb);
+	refs_for_each_reflog_ent(ref_store, refname, expire_reflog_ent, &cb);
 	(*cleanup_fn)(cb.policy_cb);
 
 	if (!(flags & EXPIRE_REFLOGS_DRY_RUN)) {
@@ -4047,14 +3307,14 @@ static int files_reflog_expire(struct ref_store *ref_store,
 		 */
 		int update = (flags & EXPIRE_REFLOGS_UPDATE_REF) &&
 			!(type & REF_ISSYMREF) &&
-			!is_null_sha1(cb.last_kept_sha1);
+			!is_null_oid(&cb.last_kept_oid);
 
 		if (close_lock_file(&reflog_lock)) {
 			status |= error("couldn't write %s: %s", log_file,
 					strerror(errno));
 		} else if (update &&
 			   (write_in_full(get_lock_file_fd(lock->lk),
-				sha1_to_hex(cb.last_kept_sha1), 40) != 40 ||
+				oid_to_hex(&cb.last_kept_oid), GIT_SHA1_HEXSZ) != GIT_SHA1_HEXSZ ||
 			    write_str_in_full(get_lock_file_fd(lock->lk), "\n") != 1 ||
 			    close_ref(lock) < 0)) {
 			status |= error("couldn't write %s",
@@ -4080,18 +3340,21 @@ static int files_reflog_expire(struct ref_store *ref_store,
 
 static int files_init_db(struct ref_store *ref_store, struct strbuf *err)
 {
-	/* Check validity (but we don't need the result): */
-	files_downcast(ref_store, 0, "init_db");
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_WRITE, "init_db");
+	struct strbuf sb = STRBUF_INIT;
 
 	/*
 	 * Create .git/refs/{heads,tags}
 	 */
-	safe_create_dir(git_path("refs/heads"), 1);
-	safe_create_dir(git_path("refs/tags"), 1);
-	if (get_shared_repository()) {
-		adjust_shared_perm(git_path("refs/heads"));
-		adjust_shared_perm(git_path("refs/tags"));
-	}
+	files_ref_path(refs, &sb, "refs/heads");
+	safe_create_dir(sb.buf, 1);
+
+	strbuf_reset(&sb);
+	files_ref_path(refs, &sb, "refs/tags");
+	safe_create_dir(sb.buf, 1);
+
+	strbuf_release(&sb);
 	return 0;
 }
 
@@ -4111,7 +3374,6 @@ struct ref_storage_be refs_be_files = {
 
 	files_ref_iterator_begin,
 	files_read_raw_ref,
-	files_verify_refname_available,
 
 	files_reflog_iterator_begin,
 	files_for_each_reflog_ent,

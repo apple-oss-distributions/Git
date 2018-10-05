@@ -16,50 +16,6 @@ const char git_more_info_string[] =
 	   "to read about a specific subcommand or concept.");
 
 static int use_pager = -1;
-static char *orig_cwd;
-static const char *env_names[] = {
-	GIT_DIR_ENVIRONMENT,
-	GIT_WORK_TREE_ENVIRONMENT,
-	GIT_IMPLICIT_WORK_TREE_ENVIRONMENT,
-	GIT_PREFIX_ENVIRONMENT
-};
-static char *orig_env[4];
-static int save_restore_env_balance;
-
-static void save_env_before_alias(void)
-{
-	int i;
-
-	assert(save_restore_env_balance == 0);
-	save_restore_env_balance = 1;
-	orig_cwd = xgetcwd();
-	for (i = 0; i < ARRAY_SIZE(env_names); i++) {
-		orig_env[i] = getenv(env_names[i]);
-		orig_env[i] = xstrdup_or_null(orig_env[i]);
-	}
-}
-
-static void restore_env(int external_alias)
-{
-	int i;
-
-	assert(save_restore_env_balance == 1);
-	save_restore_env_balance = 0;
-	if (!external_alias && orig_cwd && chdir(orig_cwd))
-		die_errno("could not move to %s", orig_cwd);
-	free(orig_cwd);
-	for (i = 0; i < ARRAY_SIZE(env_names); i++) {
-		if (external_alias &&
-		    !strcmp(env_names[i], GIT_PREFIX_ENVIRONMENT))
-			continue;
-		if (orig_env[i]) {
-			setenv(env_names[i], orig_env[i], 1);
-			free(orig_env[i]);
-		} else {
-			unsetenv(env_names[i]);
-		}
-	}
-}
 
 static void commit_pager_choice(void) {
 	switch (use_pager) {
@@ -250,19 +206,18 @@ static int handle_alias(int *argcp, const char ***argv)
 	const char **new_argv;
 	const char *alias_command;
 	char *alias_string;
-	int unused_nongit;
-
-	save_env_before_alias();
-	setup_git_directory_gently(&unused_nongit);
 
 	alias_command = (*argv)[0];
 	alias_string = alias_lookup(alias_command);
 	if (alias_string) {
 		if (alias_string[0] == '!') {
 			struct child_process child = CHILD_PROCESS_INIT;
+			int nongit_ok;
+
+			/* Aliases expect GIT_PREFIX, GIT_DIR etc to be set */
+			setup_git_directory_gently(&nongit_ok);
 
 			commit_pager_choice();
-			restore_env(1);
 
 			child.use_shell = 1;
 			argv_array_push(&child.args, alias_string + 1);
@@ -307,8 +262,6 @@ static int handle_alias(int *argcp, const char ***argv)
 
 		ret = 1;
 	}
-
-	restore_env(0);
 
 	errno = saved_errno;
 
@@ -361,8 +314,6 @@ static int run_builtin(struct cmd_struct *p, int argc, const char **argv)
 	if (!help && get_super_prefix()) {
 		if (!(p->option & SUPPORT_SUPER_PREFIX))
 			die("%s doesn't support --super-prefix", p->cmd);
-		if (prefix)
-			die("can't use --super-prefix from a subdirectory");
 	}
 
 	if (!help && p->option & NEED_WORK_TREE)
@@ -424,6 +375,7 @@ static struct cmd_struct commands[] = {
 	{ "diff-files", cmd_diff_files, RUN_SETUP | NEED_WORK_TREE },
 	{ "diff-index", cmd_diff_index, RUN_SETUP },
 	{ "diff-tree", cmd_diff_tree, RUN_SETUP },
+	{ "difftool", cmd_difftool, RUN_SETUP | NEED_WORK_TREE },
 	{ "fast-export", cmd_fast_export, RUN_SETUP },
 	{ "fetch", cmd_fetch, RUN_SETUP },
 	{ "fetch-pack", cmd_fetch_pack, RUN_SETUP },
@@ -434,7 +386,7 @@ static struct cmd_struct commands[] = {
 	{ "fsck-objects", cmd_fsck, RUN_SETUP },
 	{ "gc", cmd_gc, RUN_SETUP },
 	{ "get-tar-commit-id", cmd_get_tar_commit_id },
-	{ "grep", cmd_grep, RUN_SETUP_GENTLY },
+	{ "grep", cmd_grep, RUN_SETUP_GENTLY | SUPPORT_SUPER_PREFIX },
 	{ "hash-object", cmd_hash_object },
 	{ "help", cmd_help },
 	{ "index-pack", cmd_index_pack, RUN_SETUP_GENTLY },
@@ -471,7 +423,8 @@ static struct cmd_struct commands[] = {
 	{ "prune-packed", cmd_prune_packed, RUN_SETUP },
 	{ "pull", cmd_pull, RUN_SETUP | NEED_WORK_TREE },
 	{ "push", cmd_push, RUN_SETUP },
-	{ "read-tree", cmd_read_tree, RUN_SETUP },
+	{ "read-tree", cmd_read_tree, RUN_SETUP | SUPPORT_SUPER_PREFIX},
+	{ "rebase--helper", cmd_rebase__helper, RUN_SETUP | NEED_WORK_TREE },
 	{ "receive-pack", cmd_receive_pack },
 	{ "reflog", cmd_reflog, RUN_SETUP },
 	{ "remote", cmd_remote, RUN_SETUP },
@@ -493,7 +446,7 @@ static struct cmd_struct commands[] = {
 	{ "stage", cmd_add, RUN_SETUP | NEED_WORK_TREE },
 	{ "status", cmd_status, RUN_SETUP | NEED_WORK_TREE },
 	{ "stripspace", cmd_stripspace },
-	{ "submodule--helper", cmd_submodule__helper, RUN_SETUP },
+	{ "submodule--helper", cmd_submodule__helper, RUN_SETUP | SUPPORT_SUPER_PREFIX},
 	{ "symbolic-ref", cmd_symbolic_ref, RUN_SETUP },
 	{ "tag", cmd_tag, RUN_SETUP },
 	{ "unpack-file", cmd_unpack_file, RUN_SETUP },
@@ -575,8 +528,7 @@ static void handle_builtin(int argc, const char **argv)
 
 static void execv_dashed_external(const char **argv)
 {
-	struct strbuf cmd = STRBUF_INIT;
-	const char *tmp;
+	struct child_process cmd = CHILD_PROCESS_INIT;
 	int status;
 
 	if (get_super_prefix())
@@ -586,30 +538,25 @@ static void execv_dashed_external(const char **argv)
 		use_pager = check_pager_config(argv[0]);
 	commit_pager_choice();
 
-	strbuf_addf(&cmd, "git-%s", argv[0]);
+	argv_array_pushf(&cmd.args, "git-%s", argv[0]);
+	argv_array_pushv(&cmd.args, argv + 1);
+	cmd.clean_on_exit = 1;
+	cmd.wait_after_clean = 1;
+	cmd.silent_exec_failure = 1;
+
+	trace_argv_printf(cmd.args.argv, "trace: exec:");
 
 	/*
-	 * argv[0] must be the git command, but the argv array
-	 * belongs to the caller, and may be reused in
-	 * subsequent loop iterations. Save argv[0] and
-	 * restore it on error.
+	 * If we fail because the command is not found, it is
+	 * OK to return. Otherwise, we just pass along the status code,
+	 * or our usual generic code if we were not even able to exec
+	 * the program.
 	 */
-	tmp = argv[0];
-	argv[0] = cmd.buf;
-
-	trace_argv_printf(argv, "trace: exec:");
-
-	/*
-	 * if we fail because the command is not found, it is
-	 * OK to return. Otherwise, we just pass along the status code.
-	 */
-	status = run_command_v_opt(argv, RUN_SILENT_EXEC_FAILURE | RUN_CLEAN_ON_EXIT);
-	if (status >= 0 || errno != ENOENT)
+	status = run_command(&cmd);
+	if (status >= 0)
 		exit(status);
-
-	argv[0] = tmp;
-
-	strbuf_release(&cmd);
+	else if (errno != ENOENT)
+		exit(128);
 }
 
 static int run_argv(int *argcp, const char ***argv)

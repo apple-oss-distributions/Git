@@ -2,12 +2,12 @@
 .\"     Title: git-checkout
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 11/29/2016
+.\"      Date: 05/09/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.11.0
+.\"    Source: Git 2.13.0
 .\"  Language: English
 .\"
-.TH "GIT\-CHECKOUT" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
+.TH "GIT\-CHECKOUT" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -286,6 +286,13 @@ mode\&.
 .RS 4
 \fBgit checkout\fR
 refuses when the wanted ref is already checked out by another worktree\&. This option makes it check the ref out anyway\&. In other words, the ref can be held by more than one worktree\&.
+.RE
+.PP
+\-\-[no\-]recurse\-submodules
+.RS 4
+Using \-\-recurse\-submodules will update the content of all initialized submodules according to the commit recorded in the superproject\&. If local modifications in a submodule would be overwritten the checkout will fail unless
+\fB\-f\fR
+is used\&. If nothing (or \-\-no\-recurse\-submodules) is used, the work trees of submodules will not be updated\&.
 .RE
 .PP
 <branch>

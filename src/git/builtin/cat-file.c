@@ -61,7 +61,8 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
 	if (unknown_type)
 		flags |= LOOKUP_UNKNOWN_OBJECT;
 
-	if (get_sha1_with_context(obj_name, 0, oid.hash, &obj_context))
+	if (get_sha1_with_context(obj_name, GET_SHA1_RECORD_PATH,
+				  oid.hash, &obj_context))
 		die("Not a valid object name %s", obj_name);
 
 	if (!path)
@@ -165,6 +166,8 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
 		die("git cat-file %s: bad file", obj_name);
 
 	write_or_die(1, buf, size);
+	free(buf);
+	free(obj_context.path);
 	return 0;
 }
 
@@ -401,28 +404,28 @@ struct object_cb_data {
 	struct expand_data *expand;
 };
 
-static int batch_object_cb(const unsigned char sha1[20], void *vdata)
+static int batch_object_cb(const struct object_id *oid, void *vdata)
 {
 	struct object_cb_data *data = vdata;
-	hashcpy(data->expand->oid.hash, sha1);
+	oidcpy(&data->expand->oid, oid);
 	batch_object_write(NULL, data->opt, data->expand);
 	return 0;
 }
 
-static int batch_loose_object(const unsigned char *sha1,
+static int batch_loose_object(const struct object_id *oid,
 			      const char *path,
 			      void *data)
 {
-	sha1_array_append(data, sha1);
+	oid_array_append(data, oid);
 	return 0;
 }
 
-static int batch_packed_object(const unsigned char *sha1,
+static int batch_packed_object(const struct object_id *oid,
 			       struct packed_git *pack,
 			       uint32_t pos,
 			       void *data)
 {
-	sha1_array_append(data, sha1);
+	oid_array_append(data, oid);
 	return 0;
 }
 
@@ -462,7 +465,7 @@ static int batch_objects(struct batch_options *opt)
 		data.info.typep = &data.type;
 
 	if (opt->all_objects) {
-		struct sha1_array sa = SHA1_ARRAY_INIT;
+		struct oid_array sa = OID_ARRAY_INIT;
 		struct object_cb_data cb;
 
 		for_each_loose_object(batch_loose_object, &sa, 0);
@@ -470,9 +473,9 @@ static int batch_objects(struct batch_options *opt)
 
 		cb.opt = opt;
 		cb.expand = &data;
-		sha1_array_for_each_unique(&sa, batch_object_cb, &cb);
+		oid_array_for_each_unique(&sa, batch_object_cb, &cb);
 
-		sha1_array_clear(&sa);
+		oid_array_clear(&sa);
 		return 0;
 	}
 

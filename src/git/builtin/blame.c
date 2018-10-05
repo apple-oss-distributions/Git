@@ -658,8 +658,11 @@ static struct origin *find_rename(struct scoreboard *sb,
 /*
  * Append a new blame entry to a given output queue.
  */
-static void add_blame_entry(struct blame_entry ***queue, struct blame_entry *e)
+static void add_blame_entry(struct blame_entry ***queue,
+			    const struct blame_entry *src)
 {
+	struct blame_entry *e = xmalloc(sizeof(*e));
+	memcpy(e, src, sizeof(*e));
 	origin_incref(e->suspect);
 
 	e->next = **queue;
@@ -760,21 +763,15 @@ static void split_blame(struct blame_entry ***blamed,
 			struct blame_entry *split,
 			struct blame_entry *e)
 {
-	struct blame_entry *new_entry;
-
 	if (split[0].suspect && split[2].suspect) {
 		/* The first part (reuse storage for the existing entry e) */
 		dup_entry(unblamed, e, &split[0]);
 
 		/* The last part -- me */
-		new_entry = xmalloc(sizeof(*new_entry));
-		memcpy(new_entry, &(split[2]), sizeof(struct blame_entry));
-		add_blame_entry(unblamed, new_entry);
+		add_blame_entry(unblamed, &split[2]);
 
 		/* ... and the middle part -- parent */
-		new_entry = xmalloc(sizeof(*new_entry));
-		memcpy(new_entry, &(split[1]), sizeof(struct blame_entry));
-		add_blame_entry(blamed, new_entry);
+		add_blame_entry(blamed, &split[1]);
 	}
 	else if (!split[0].suspect && !split[2].suspect)
 		/*
@@ -785,18 +782,12 @@ static void split_blame(struct blame_entry ***blamed,
 	else if (split[0].suspect) {
 		/* me and then parent */
 		dup_entry(unblamed, e, &split[0]);
-
-		new_entry = xmalloc(sizeof(*new_entry));
-		memcpy(new_entry, &(split[1]), sizeof(struct blame_entry));
-		add_blame_entry(blamed, new_entry);
+		add_blame_entry(blamed, &split[1]);
 	}
 	else {
 		/* parent and then me */
 		dup_entry(blamed, e, &split[1]);
-
-		new_entry = xmalloc(sizeof(*new_entry));
-		memcpy(new_entry, &(split[2]), sizeof(struct blame_entry));
-		add_blame_entry(unblamed, new_entry);
+		add_blame_entry(unblamed, &split[2]);
 	}
 }
 
@@ -1700,13 +1691,23 @@ static void get_commit_info(struct commit *commit,
 }
 
 /*
+ * Write out any suspect information which depends on the path. This must be
+ * handled separately from emit_one_suspect_detail(), because a given commit
+ * may have changes in multiple paths. So this needs to appear each time
+ * we mention a new group.
+ *
  * To allow LF and other nonportable characters in pathnames,
  * they are c-style quoted as needed.
  */
-static void write_filename_info(const char *path)
+static void write_filename_info(struct origin *suspect)
 {
+	if (suspect->previous) {
+		struct origin *prev = suspect->previous;
+		printf("previous %s ", oid_to_hex(&prev->commit->object.oid));
+		write_name_quoted(prev->path, stdout, '\n');
+	}
 	printf("filename ");
-	write_name_quoted(path, stdout, '\n');
+	write_name_quoted(suspect->path, stdout, '\n');
 }
 
 /*
@@ -1735,11 +1736,6 @@ static int emit_one_suspect_detail(struct origin *suspect, int repeat)
 	printf("summary %s\n", ci.summary.buf);
 	if (suspect->commit->object.flags & UNINTERESTING)
 		printf("boundary\n");
-	if (suspect->previous) {
-		struct origin *prev = suspect->previous;
-		printf("previous %s ", oid_to_hex(&prev->commit->object.oid));
-		write_name_quoted(prev->path, stdout, '\n');
-	}
 
 	commit_info_destroy(&ci);
 
@@ -1760,7 +1756,7 @@ static void found_guilty_entry(struct blame_entry *ent,
 		       oid_to_hex(&suspect->commit->object.oid),
 		       ent->s_lno + 1, ent->lno + 1, ent->num_lines);
 		emit_one_suspect_detail(suspect, 0);
-		write_filename_info(suspect->path);
+		write_filename_info(suspect);
 		maybe_flush_or_die(stdout, "stdout");
 	}
 	pi->blamed_lines += ent->num_lines;
@@ -1884,7 +1880,7 @@ static void emit_porcelain_details(struct origin *suspect, int repeat)
 {
 	if (emit_one_suspect_detail(suspect, repeat) ||
 	    (suspect->commit->object.flags & MORE_THAN_ONE_PATH))
-		write_filename_info(suspect->path);
+		write_filename_info(suspect);
 }
 
 static void emit_porcelain(struct scoreboard *sb, struct blame_entry *ent,
@@ -1894,9 +1890,9 @@ static void emit_porcelain(struct scoreboard *sb, struct blame_entry *ent,
 	int cnt;
 	const char *cp;
 	struct origin *suspect = ent->suspect;
-	char hex[GIT_SHA1_HEXSZ + 1];
+	char hex[GIT_MAX_HEXSZ + 1];
 
-	sha1_to_hex_r(hex, suspect->commit->object.oid.hash);
+	oid_to_hex_r(hex, &suspect->commit->object.oid);
 	printf("%s %d %d %d\n",
 	       hex,
 	       ent->s_lno + 1,
@@ -1932,11 +1928,11 @@ static void emit_other(struct scoreboard *sb, struct blame_entry *ent, int opt)
 	const char *cp;
 	struct origin *suspect = ent->suspect;
 	struct commit_info ci;
-	char hex[GIT_SHA1_HEXSZ + 1];
+	char hex[GIT_MAX_HEXSZ + 1];
 	int show_raw_time = !!(opt & OUTPUT_RAW_TIMESTAMP);
 
 	get_commit_info(suspect->commit, &ci, 1);
-	sha1_to_hex_r(hex, suspect->commit->object.oid.hash);
+	oid_to_hex_r(hex, &suspect->commit->object.oid);
 
 	cp = nth_line(sb, ent->lno);
 	for (cnt = 0; cnt < ent->num_lines; cnt++) {
@@ -2596,8 +2592,7 @@ int cmd_blame(int argc, const char **argv, const char *prefix)
 		 * and are only included here to get included in the "-h"
 		 * output:
 		 */
-		{ OPTION_LOWLEVEL_CALLBACK, 0, "indent-heuristic", NULL, NULL, N_("Use an experimental indent-based heuristic to improve diffs"), PARSE_OPT_NOARG, parse_opt_unknown_cb },
-		{ OPTION_LOWLEVEL_CALLBACK, 0, "compaction-heuristic", NULL, NULL, N_("Use an experimental blank-line-based heuristic to improve diffs"), PARSE_OPT_NOARG, parse_opt_unknown_cb },
+		{ OPTION_LOWLEVEL_CALLBACK, 0, "indent-heuristic", NULL, NULL, N_("Use an experimental heuristic to improve diffs"), PARSE_OPT_NOARG, parse_opt_unknown_cb },
 
 		OPT_BIT(0, "minimal", &xdl_opts, N_("Spend extra cycles to find better match"), XDF_NEED_MINIMAL),
 		OPT_STRING('S', NULL, &revs_file, N_("file"), N_("Use revisions from <file> instead of calling git-rev-list")),
@@ -2645,7 +2640,7 @@ int cmd_blame(int argc, const char **argv, const char *prefix)
 	}
 parse_done:
 	no_whole_file_rename = !DIFF_OPT_TST(&revs.diffopt, FOLLOW_RENAMES);
-	xdl_opts |= revs.diffopt.xdl_opts & (XDF_COMPACTION_HEURISTIC | XDF_INDENT_HEURISTIC);
+	xdl_opts |= revs.diffopt.xdl_opts & XDF_INDENT_HEURISTIC;
 	DIFF_OPT_CLR(&revs.diffopt, FOLLOW_RENAMES);
 	argc = parse_options_end(&ctx);
 
@@ -2656,9 +2651,11 @@ parse_done:
 	} else if (show_progress < 0)
 		show_progress = isatty(2);
 
-	if (0 < abbrev)
+	if (0 < abbrev && abbrev < GIT_SHA1_HEXSZ)
 		/* one more abbrev length is needed for the boundary commit */
 		abbrev++;
+	else if (!abbrev)
+		abbrev = GIT_SHA1_HEXSZ;
 
 	if (revs_file && read_ancestry(revs_file))
 		die_errno("reading graft file '%s' failed", revs_file);
@@ -2691,12 +2688,15 @@ parse_done:
 		blame_date_width = sizeof("2006-10-19");
 		break;
 	case DATE_RELATIVE:
-		/* TRANSLATORS: This string is used to tell us the maximum
-		   display width for a relative timestamp in "git blame"
-		   output.  For C locale, "4 years, 11 months ago", which
-		   takes 22 places, is the longest among various forms of
-		   relative timestamps, but your language may need more or
-		   fewer display columns. */
+		/*
+		 * TRANSLATORS: This string is used to tell us the
+		 * maximum display width for a relative timestamp in
+		 * "git blame" output.  For C locale, "4 years, 11
+		 * months ago", which takes 22 places, is the longest
+		 * among various forms of relative timestamps, but
+		 * your language may need more or fewer display
+		 * columns.
+		 */
 		blame_date_width = utf8_strwidth(_("4 years, 11 months ago")) + 1; /* add the null */
 		break;
 	case DATE_NORMAL:
