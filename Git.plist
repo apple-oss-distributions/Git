@@ -4,13 +4,13 @@
 <array>
 	<dict>
 		<key>OpenSourceImportDate</key>
-		<string>2017-12-01</string>
+		<string>2018-05-31</string>
 		<key>OpenSourceLicense</key>
 		<string>GPL</string>
 		<key>OpenSourceProject</key>
 		<string>git</string>
 		<key>OpenSourceVersion</key>
-		<string>2.15.1</string>
+		<string>2.15.2</string>
 		<key>OpenSourceWebsiteURL</key>
 		<string>http://git-scm.com</string>
 	</dict>
