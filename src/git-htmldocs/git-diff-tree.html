@@ -1365,7 +1365,7 @@ another file.</p></div>
         the diff between the preimage and <code>/dev/null</code>. The resulting patch
         is not meant to be applied with <code>patch</code> or <code>git apply</code>; this is
         solely for people who want to just concentrate on reviewing the
-        text after the change. In addition, the output obviously lack
+        text after the change. In addition, the output obviously lacks
         enough information to apply such a patch in reverse, even manually,
         hence the name of the option.
 </p>
@@ -2440,11 +2440,12 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%C(&#8230;)</em>: color specification, as described under Values in the
   "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>;
-  adding <code>auto,</code> at the beginning will emit color only when colors are
-  enabled for log output (by <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and
-  respecting the <code>auto</code> settings of the former if we are going to a
-  terminal). <code>auto</code> alone (i.e. <code>%C(auto)</code>) will turn on auto coloring
-  on the next placeholders until the color is switched again.
+  adding <code>auto,</code> at the beginning (e.g. <code>%C(auto,red)</code>) will emit
+  color only when colors are enabled for log output (by <code>color.diff</code>,
+  <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code> settings of the
+  former if we are going to a terminal). <code>auto</code> alone (i.e.
+  <code>%C(auto)</code>) will turn on auto coloring on the next placeholders
+  until the color is switched again.
 </p>
 </li>
 <li>
@@ -2505,7 +2506,11 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%&gt;&lt;(&lt;N&gt;)</em>, <em>%&gt;&lt;|(&lt;N&gt;)</em>: similar to <em>% &lt;(&lt;N&gt;)</em>, <em>%&lt;|(&lt;N&gt;)</em>
   respectively, but padding both sides (i.e. the text is centered)
--%(trailers): display the trailers of the body as interpreted by
+</p>
+</li>
+<li>
+<p>
+%(trailers): display the trailers of the body as interpreted by
   <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
 </p>
 </li>
@@ -2528,8 +2533,8 @@ line.</td>
 <div class="paragraph"><p>If you add a <code>+</code> (plus sign) after <em>%</em> of a placeholder, a line-feed
 is inserted immediately before the expansion if and only if the
 placeholder expands to a non-empty string.</p></div>
-<div class="paragraph"><p>If you add a <code>-</code> (minus sign) after <em>%</em> of a placeholder, line-feeds that
-immediately precede the expansion are deleted if and only if the
+<div class="paragraph"><p>If you add a <code>-</code> (minus sign) after <em>%</em> of a placeholder, all consecutive
+line-feeds immediately preceding the expansion are deleted if and only if the
 placeholder expands to an empty string.</p></div>
 <div class="paragraph"><p>If you add a ` ` (space) after <em>%</em> of a placeholder, a space
 is inserted immediately before the expansion if and only if the
@@ -3190,7 +3195,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-07-14 06:58:50 JST
+Last updated 2016-07-13 14:58:50 PDT
 </div>
 </div>
 </body>

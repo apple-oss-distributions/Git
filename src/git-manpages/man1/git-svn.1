@@ -2,12 +2,12 @@
 .\"     Title: git-svn
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 05/09/2017
+.\"      Date: 08/04/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.13.0
+.\"    Source: Git 2.14.0
 .\"  Language: English
 .\"
-.TH "GIT\-SVN" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
+.TH "GIT\-SVN" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -122,6 +122,18 @@ may not work if your Perl\(cqs Getopt::Long is < v2\&.37)\&.
 .RE
 .RE
 .PP
+\-\-ignore\-refs=<regex>
+.RS 4
+When passed to
+\fIinit\fR
+or
+\fIclone\fR
+this regular expression will be preserved as a config key\&. See
+\fIfetch\fR
+for a description of
+\fB\-\-ignore\-refs\fR\&.
+.RE
+.PP
 \-\-ignore\-paths=<regex>
 .RS 4
 When passed to
@@ -176,6 +188,25 @@ This doesn\(cqt interfere with interoperating with the Subversion repository you
 \-\-parent
 .RS 4
 Fetch only from the SVN parent of the current HEAD\&.
+.RE
+.PP
+\-\-ignore\-refs=<regex>
+.RS 4
+Ignore refs for branches or tags matching the Perl regular expression\&. A "negative look\-ahead assertion" like
+\fB^refs/remotes/origin/(?!tags/wanted\-tag|wanted\-branch)\&.*$\fR
+can be used to allow only certain refs\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+config key: svn\-remote\&.<name>\&.ignore\-refs
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+If the ignore\-refs configuration key is set, and the command\-line option is also given, both regular expressions will be used\&.
 .RE
 .PP
 \-\-ignore\-paths=<regex>
@@ -597,6 +628,30 @@ Commits the diff of two tree\-ish arguments from the command\-line\&. This comma
 \fIgit svn\fR\-aware repository (that has been
 \fBinit\fR\-ed with
 \fIgit svn\fR)\&. The \-r<revision> option is required for this\&.
+.sp
+The commit message is supplied either directly with the
+\fB\-m\fR
+or
+\fB\-F\fR
+option, or indirectly from the tag or commit when the second tree\-ish denotes such an object, or it is requested by invoking an editor (see
+\fB\-\-edit\fR
+option below)\&.
+.PP
+\-m <msg>, \-\-message=<msg>
+.RS 4
+Use the given
+\fBmsg\fR
+as the commit message\&. This option disables the
+\fB\-\-edit\fR
+option\&.
+.RE
+.PP
+\-F <filename>, \-\-file=<filename>
+.RS 4
+Take the commit message from the given file\&. This option disables the
+\fB\-\-edit\fR
+option\&.
+.RE
 .RE
 .PP
 \fIinfo\fR

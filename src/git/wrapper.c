@@ -2,6 +2,7 @@
  * Various trivial helper wrappers around standard functions
  */
 #include "cache.h"
+#include "config.h"
 
 static void do_nothing(size_t size)
 {
@@ -418,6 +419,32 @@ FILE *fopen_for_writing(const char *path)
 	return ret;
 }
 
+static void warn_on_inaccessible(const char *path)
+{
+	warning_errno(_("unable to access '%s'"), path);
+}
+
+int warn_on_fopen_errors(const char *path)
+{
+	if (errno != ENOENT && errno != ENOTDIR) {
+		warn_on_inaccessible(path);
+		return -1;
+	}
+
+	return 0;
+}
+
+FILE *fopen_or_warn(const char *path, const char *mode)
+{
+	FILE *fp = fopen(path, mode);
+
+	if (fp)
+		return fp;
+
+	warn_on_fopen_errors(path);
+	return NULL;
+}
+
 int xmkstemp(char *template)
 {
 	int fd;
@@ -576,15 +603,10 @@ int remove_or_warn(unsigned int mode, const char *file)
 	return S_ISGITLINK(mode) ? rmdir_or_warn(file) : unlink_or_warn(file);
 }
 
-void warn_on_inaccessible(const char *path)
-{
-	warning_errno(_("unable to access '%s'"), path);
-}
-
 static int access_error_is_ok(int err, unsigned flag)
 {
-	return err == ENOENT || err == ENOTDIR ||
-		((flag & ACCESS_EACCES_OK) && err == EACCES);
+	return (is_missing_file_error(err) ||
+		((flag & ACCESS_EACCES_OK) && err == EACCES));
 }
 
 int access_or_warn(const char *path, int mode, unsigned flag)
@@ -630,7 +652,7 @@ int xsnprintf(char *dst, size_t max, const char *fmt, ...)
 void write_file_buf(const char *path, const char *buf, size_t len)
 {
 	int fd = xopen(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-	if (write_in_full(fd, buf, len) != len)
+	if (write_in_full(fd, buf, len) < 0)
 		die_errno(_("could not write to %s"), path);
 	if (close(fd))
 		die_errno(_("could not close %s"), path);

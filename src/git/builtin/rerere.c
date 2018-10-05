@@ -1,5 +1,6 @@
 #include "builtin.h"
 #include "cache.h"
+#include "config.h"
 #include "dir.h"
 #include "parse-options.h"
 #include "string-list.h"
@@ -17,7 +18,7 @@ static int outf(void *dummy, mmbuffer_t *ptr, int nbuf)
 {
 	int i;
 	for (i = 0; i < nbuf; i++)
-		if (write_in_full(1, ptr[i].ptr, ptr[i].size) != ptr[i].size)
+		if (write_in_full(1, ptr[i].ptr, ptr[i].size) < 0)
 			return -1;
 	return 0;
 }

@@ -3071,6 +3071,8 @@ sub git_get_projects_list {
 				return if (m!^[/.]$!);
 				# only directories can be git repositories
 				return unless (-d $_);
+				# need search permission
+				return unless (-x $_);
 				# don't traverse too deep (Find is super slow on os x)
 				# $project_maxdepth excludes depth of $projectroot
 				if (($File::Find::name =~ tr!/!!) - $pfxdepth > $project_maxdepth) {
@@ -3125,7 +3127,7 @@ sub git_get_projects_list {
 	return @list;
 }
 
-# written with help of Tree::Trie module (Perl Artistic License, GPL compatibile)
+# written with help of Tree::Trie module (Perl Artistic License, GPL compatible)
 # as side effects it sets 'forks' field to list of forks for forked projects
 sub filter_forks_from_projects_list {
 	my $projects = shift;
@@ -4376,7 +4378,7 @@ sub git_print_page_nav {
 	      "</div>\n";
 }
 
-# returns a submenu for the nagivation of the refs views (tags, heads,
+# returns a submenu for the navigation of the refs views (tags, heads,
 # remotes) with the current view disabled and the remotes view only
 # available if the feature is enabled
 sub format_ref_views {

@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "config.h"
 #include "commit.h"
 #include "diff.h"
 #include "revision.h"
@@ -10,6 +11,7 @@
 #include "graph.h"
 #include "bisect.h"
 #include "progress.h"
+#include "reflog-walk.h"
 
 static const char rev_list_usage[] =
 "git rev-list [OPTION] <commit-id>... [ -- paths... ]\n"
@@ -80,7 +82,7 @@ static void show_commit(struct commit *commit, void *data)
 	}
 
 	if (info->show_timestamp)
-		printf("%lu ", commit->date);
+		printf("%"PRItime" ", commit->date);
 	if (info->header_prefix)
 		fputs(info->header_prefix, stdout);
 
@@ -121,6 +123,7 @@ static void show_commit(struct commit *commit, void *data)
 		ctx.date_mode_explicit = revs->date_mode_explicit;
 		ctx.fmt = revs->commit_format;
 		ctx.output_encoding = get_log_output_encoding();
+		ctx.color = revs->diffopt.use_color;
 		pretty_print_commit(&ctx, commit, &buf);
 		if (buf.len) {
 			if (revs->commit_format != CMIT_FMT_ONELINE)
@@ -181,7 +184,7 @@ static void finish_object(struct object *obj, const char *name, void *cb_data)
 	if (obj->type == OBJ_BLOB && !has_object_file(&obj->oid))
 		die("missing blob object '%s'", oid_to_hex(&obj->oid));
 	if (info->revs->verify_objects && !obj->parsed && obj->type != OBJ_COMMIT)
-		parse_object(obj->oid.hash);
+		parse_object(&obj->oid);
 }
 
 static void show_object(struct object *obj, const char *name, void *cb_data)
@@ -277,6 +280,9 @@ int cmd_rev_list(int argc, const char **argv, const char *prefix)
 	int use_bitmap_index = 0;
 	const char *show_progress = NULL;
 
+	if (argc == 2 && !strcmp(argv[1], "-h"))
+		usage(rev_list_usage);
+
 	git_config(git_default_config, NULL);
 	init_revisions(&revs, prefix);
 	revs.abbrev = DEFAULT_ABBREV;
@@ -344,9 +350,10 @@ int cmd_rev_list(int argc, const char **argv, const char *prefix)
 		/* Only --header was specified */
 		revs.commit_format = CMIT_FMT_RAW;
 
-	if ((!revs.commits &&
+	if ((!revs.commits && reflog_walk_empty(revs.reflog_info) &&
 	     (!(revs.tag_objects || revs.tree_objects || revs.blob_objects) &&
-	      !revs.pending.nr)) ||
+	      !revs.pending.nr) &&
+	     !revs.rev_input_given) ||
 	    revs.diff)
 		usage(rev_list_usage);
 

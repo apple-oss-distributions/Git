@@ -161,8 +161,11 @@ OPTIONS
 
 -P::
 --perl-regexp::
-	Use Perl-compatible regexp for patterns. Requires libpcre to be
-	compiled in.
+	Use Perl-compatible regular expressions for patterns.
++
+Support for these types of regular expressions is an optional
+compile-time dependency. If Git wasn't compiled with support for them
+providing this option will cause it to die.
 
 -F::
 --fixed-strings::
@@ -293,6 +296,9 @@ OPTIONS
 <pathspec>...::
 	If given, limit the search to paths matching at least one pattern.
 	Both leading paths match and glob(7) patterns are supported.
++
+For more details about the <pathspec> syntax, see the 'pathspec' entry
+in linkgit:gitglossary[7].
 
 Examples
 --------
@@ -308,6 +314,9 @@ Examples
 `git grep --all-match -e NODE -e Unexpected`::
 	Looks for a line that has `NODE` or `Unexpected` in
 	files that have lines that match both.
+
+`git grep solution -- :^Documentation`::
+	Looks for `solution`, excluding files in `Documentation`.
 
 GIT
 ---

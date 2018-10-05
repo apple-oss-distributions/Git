@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "config.h"
 #include "commit.h"
 #include "utf8.h"
 #include "diff.h"
@@ -405,11 +406,11 @@ static void add_rfc2047(struct strbuf *sb, const char *line, size_t len,
 const char *show_ident_date(const struct ident_split *ident,
 			    const struct date_mode *mode)
 {
-	unsigned long date = 0;
+	timestamp_t date = 0;
 	long tz = 0;
 
 	if (ident->date_begin && ident->date_end)
-		date = strtoul(ident->date_begin, NULL, 10);
+		date = parse_timestamp(ident->date_begin, NULL, 10);
 	if (date_overflows(date))
 		date = 0;
 	else {
@@ -946,6 +947,7 @@ static size_t parse_color(struct strbuf *sb, /* in UTF-8 */
 			  struct format_commit_context *c)
 {
 	const char *rest = placeholder;
+	const char *basic_color = NULL;
 
 	if (placeholder[1] == '(') {
 		const char *begin = placeholder + 2;
@@ -954,23 +956,41 @@ static size_t parse_color(struct strbuf *sb, /* in UTF-8 */
 
 		if (!end)
 			return 0;
+
 		if (skip_prefix(begin, "auto,", &begin)) {
 			if (!want_color(c->pretty_ctx->color))
 				return end - placeholder + 1;
+		} else if (skip_prefix(begin, "always,", &begin)) {
+			/* nothing to do; we do not respect want_color at all */
+		} else {
+			/* the default is the same as "auto" */
+			if (!want_color(c->pretty_ctx->color))
+				return end - placeholder + 1;
 		}
+
 		if (color_parse_mem(begin, end - begin, color) < 0)
 			die(_("unable to parse --pretty format"));
 		strbuf_addstr(sb, color);
 		return end - placeholder + 1;
 	}
+
+	/*
+	 * We handle things like "%C(red)" above; for historical reasons, there
+	 * are a few colors that can be specified without parentheses (and
+	 * they cannot support things like "auto" or "always" at all).
+	 */
 	if (skip_prefix(placeholder + 1, "red", &rest))
-		strbuf_addstr(sb, GIT_COLOR_RED);
+		basic_color = GIT_COLOR_RED;
 	else if (skip_prefix(placeholder + 1, "green", &rest))
-		strbuf_addstr(sb, GIT_COLOR_GREEN);
+		basic_color = GIT_COLOR_GREEN;
 	else if (skip_prefix(placeholder + 1, "blue", &rest))
-		strbuf_addstr(sb, GIT_COLOR_BLUE);
+		basic_color = GIT_COLOR_BLUE;
 	else if (skip_prefix(placeholder + 1, "reset", &rest))
-		strbuf_addstr(sb, GIT_COLOR_RESET);
+		basic_color = GIT_COLOR_RESET;
+
+	if (basic_color && want_color(c->pretty_ctx->color))
+		strbuf_addstr(sb, basic_color);
+
 	return rest - placeholder;
 }
 
@@ -1117,7 +1137,7 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 
 	/* these depend on the commit */
 	if (!commit->object.parsed)
-		parse_object(commit->object.oid.hash);
+		parse_object(&commit->object.oid);
 
 	switch (placeholder[0]) {
 	case 'H':		/* commit hash */

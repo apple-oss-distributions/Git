@@ -452,7 +452,7 @@ static char **prep_childenv(const char *const *deltaenv)
 	}
 
 	/* Create an array of 'char *' to be used as the childenv */
-	childenv = xmalloc((env.nr + 1) * sizeof(char *));
+	ALLOC_ARRAY(childenv, env.nr + 1);
 	for (i = 0; i < env.nr; i++)
 		childenv[i] = env.items[i].util;
 	childenv[env.nr] = NULL;
@@ -1533,7 +1533,7 @@ static int pp_start_one(struct parallel_processes *pp)
 	if (start_command(&pp->children[i].process)) {
 		code = pp->start_failure(&pp->children[i].err,
 					 pp->data,
-					 &pp->children[i].data);
+					 pp->children[i].data);
 		strbuf_addbuf(&pp->buffered_output, &pp->children[i].err);
 		strbuf_reset(&pp->children[i].err);
 		if (code)
@@ -1601,7 +1601,7 @@ static int pp_collect_finished(struct parallel_processes *pp)
 
 		code = pp->task_finished(code,
 					 &pp->children[i].err, pp->data,
-					 &pp->children[i].data);
+					 pp->children[i].data);
 
 		if (code)
 			result = code;

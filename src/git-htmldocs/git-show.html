@@ -1348,11 +1348,12 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%C(&#8230;)</em>: color specification, as described under Values in the
   "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>;
-  adding <code>auto,</code> at the beginning will emit color only when colors are
-  enabled for log output (by <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and
-  respecting the <code>auto</code> settings of the former if we are going to a
-  terminal). <code>auto</code> alone (i.e. <code>%C(auto)</code>) will turn on auto coloring
-  on the next placeholders until the color is switched again.
+  adding <code>auto,</code> at the beginning (e.g. <code>%C(auto,red)</code>) will emit
+  color only when colors are enabled for log output (by <code>color.diff</code>,
+  <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code> settings of the
+  former if we are going to a terminal). <code>auto</code> alone (i.e.
+  <code>%C(auto)</code>) will turn on auto coloring on the next placeholders
+  until the color is switched again.
 </p>
 </li>
 <li>
@@ -1413,7 +1414,11 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%&gt;&lt;(&lt;N&gt;)</em>, <em>%&gt;&lt;|(&lt;N&gt;)</em>: similar to <em>% &lt;(&lt;N&gt;)</em>, <em>%&lt;|(&lt;N&gt;)</em>
   respectively, but padding both sides (i.e. the text is centered)
--%(trailers): display the trailers of the body as interpreted by
+</p>
+</li>
+<li>
+<p>
+%(trailers): display the trailers of the body as interpreted by
   <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
 </p>
 </li>
@@ -1436,8 +1441,8 @@ line.</td>
 <div class="paragraph"><p>If you add a <code>+</code> (plus sign) after <em>%</em> of a placeholder, a line-feed
 is inserted immediately before the expansion if and only if the
 placeholder expands to a non-empty string.</p></div>
-<div class="paragraph"><p>If you add a <code>-</code> (minus sign) after <em>%</em> of a placeholder, line-feeds that
-immediately precede the expansion are deleted if and only if the
+<div class="paragraph"><p>If you add a <code>-</code> (minus sign) after <em>%</em> of a placeholder, all consecutive
+line-feeds immediately preceding the expansion are deleted if and only if the
 placeholder expands to an empty string.</p></div>
 <div class="paragraph"><p>If you add a ` ` (space) after <em>%</em> of a placeholder, a space
 is inserted immediately before the expansion if and only if the
@@ -2085,7 +2090,7 @@ another file.</p></div>
         the diff between the preimage and <code>/dev/null</code>. The resulting patch
         is not meant to be applied with <code>patch</code> or <code>git apply</code>; this is
         solely for people who want to just concentrate on reviewing the
-        text after the change. In addition, the output obviously lack
+        text after the change. In addition, the output obviously lacks
         enough information to apply such a patch in reverse, even manually,
         hence the name of the option.
 </p>
@@ -2756,10 +2761,10 @@ mind.</p></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>[i18n]
-        commitencoding = ISO-8859-1</code></pre>
+        commitEncoding = ISO-8859-1</code></pre>
 </div></div>
 <div class="paragraph"><p>Commit objects created with the above setting record the value
-of <code>i18n.commitencoding</code> in its <code>encoding</code> header.  This is to
+of <code>i18n.commitEncoding</code> in its <code>encoding</code> header.  This is to
 help other people who look at them later.  Lack of this header
 implies that the commit log message is encoded in UTF-8.</p></div>
 </li>
@@ -2769,15 +2774,15 @@ implies that the commit log message is encoded in UTF-8.</p></div>
   <code>encoding</code> header of a commit object, and try to re-code the
   log message into UTF-8 unless otherwise specified.  You can
   specify the desired output encoding with
-  <code>i18n.logoutputencoding</code> in <code>.git/config</code> file, like this:
+  <code>i18n.logOutputEncoding</code> in <code>.git/config</code> file, like this:
 </p>
 <div class="listingblock">
 <div class="content">
 <pre><code>[i18n]
-        logoutputencoding = ISO-8859-1</code></pre>
+        logOutputEncoding = ISO-8859-1</code></pre>
 </div></div>
 <div class="paragraph"><p>If you do not have this configuration variable, the value of
-<code>i18n.commitencoding</code> is used instead.</p></div>
+<code>i18n.commitEncoding</code> is used instead.</p></div>
 </li>
 </ol></div>
 <div class="paragraph"><p>Note that we deliberately chose not to re-code the commit log
@@ -2796,7 +2801,7 @@ reversible operation.</p></div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2015-05-23 05:47:07 JST
+Last updated 2015-05-22 13:47:07 PDT
 </div>
 </div>
 </body>

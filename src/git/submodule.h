@@ -1,6 +1,7 @@
 #ifndef SUBMODULE_H
 #define SUBMODULE_H
 
+struct repository;
 struct diff_options;
 struct argv_array;
 struct oid_array;
@@ -39,9 +40,16 @@ extern void stage_updated_gitmodules(void);
 extern void set_diffopt_flags_from_submodule_config(struct diff_options *,
 		const char *path);
 extern int submodule_config(const char *var, const char *value, void *cb);
+extern int git_default_submodule_config(const char *var, const char *value, void *cb);
+
+struct option;
+int option_parse_recurse_submodules_worktree_updater(const struct option *opt,
+						     const char *arg, int unset);
+void load_submodule_cache(void);
 extern void gitmodules_config(void);
+extern void repo_read_gitmodules(struct repository *repo);
 extern void gitmodules_config_sha1(const unsigned char *commit_sha1);
-extern int is_submodule_initialized(const char *path);
+extern int is_submodule_active(struct repository *repo, const char *path);
 /*
  * Determine if a submodule has been populated at a given 'path' by checking if
  * the <path>/.git resolves to a valid git repository.
@@ -49,6 +57,10 @@ extern int is_submodule_initialized(const char *path);
  * Otherwise the return error code is the same as of resolve_gitdir_gently.
  */
 extern int is_submodule_populated_gently(const char *path, int *return_error_code);
+extern void die_in_unpopulated_submodule(const struct index_state *istate,
+					 const char *prefix);
+extern void die_path_inside_submodule(const struct index_state *istate,
+				      const struct pathspec *ps);
 extern int parse_submodule_update_strategy(const char *value,
 		struct submodule_update_strategy *dst);
 extern const char *submodule_strategy_to_string(const struct submodule_update_strategy *s);
@@ -65,7 +77,6 @@ extern void show_submodule_inline_diff(FILE *f, const char *path,
 		const char *del, const char *add, const char *reset,
 		const struct diff_options *opt);
 extern void set_config_fetch_recurse_submodules(int value);
-extern void set_config_update_recurse_submodules(int value);
 /* Check if we want to update any submodule.*/
 extern int should_update_submodules(void);
 /*
@@ -84,10 +95,14 @@ extern int submodule_uses_gitfile(const char *path);
 #define SUBMODULE_REMOVAL_IGNORE_UNTRACKED (1<<1)
 #define SUBMODULE_REMOVAL_IGNORE_IGNORED_UNTRACKED (1<<2)
 extern int bad_to_remove_submodule(const char *path, unsigned flags);
-extern int merge_submodule(unsigned char result[20], const char *path,
-			   const unsigned char base[20],
-			   const unsigned char a[20],
-			   const unsigned char b[20], int search);
+extern int merge_submodule(struct object_id *result, const char *path,
+			   const struct object_id *base,
+			   const struct object_id *a,
+			   const struct object_id *b, int search);
+
+/* Checks if there are submodule changes in a..b. */
+extern int submodule_touches_in_range(struct object_id *a,
+				      struct object_id *b);
 extern int find_unpushed_submodules(struct oid_array *commits,
 				    const char *remotes_name,
 				    struct string_list *needs_pushing);
@@ -114,7 +129,7 @@ extern int submodule_move_head(const char *path,
 
 /*
  * Prepare the "env_array" parameter of a "struct child_process" for executing
- * a submodule by clearing any repo-specific envirionment variables, but
+ * a submodule by clearing any repo-specific environment variables, but
  * retaining any config in the environment.
  */
 extern void prepare_submodule_repo_env(struct argv_array *out);

@@ -43,9 +43,16 @@ no_changes () {
 }
 
 untracked_files () {
+	if test "$1" = "-z"
+	then
+		shift
+		z=-z
+	else
+		z=
+	fi
 	excl_opt=--exclude-standard
 	test "$untracked" = "all" && excl_opt=
-	git ls-files -o -z $excl_opt -- "$@"
+	git ls-files -o $z $excl_opt -- "$@"
 }
 
 clear_stash () {
@@ -114,7 +121,7 @@ create_stash () {
 		# Untracked files are stored by themselves in a parentless commit, for
 		# ease of unpacking later.
 		u_commit=$(
-			untracked_files "$@" | (
+			untracked_files -z "$@" | (
 				GIT_INDEX_FILE="$TMPindex" &&
 				export GIT_INDEX_FILE &&
 				rm -f "$TMPindex" &&
@@ -484,7 +491,7 @@ parse_flags_and_rev()
 
 	case $# in
 		0)
-			have_stash || die "$(gettext "No stash found.")"
+			have_stash || die "$(gettext "No stash entries found.")"
 			set -- ${ref_stash}@{0}
 		;;
 		1)
@@ -573,10 +580,10 @@ apply_stash () {
 
 	if test -n "$u_tree"
 	then
-		GIT_INDEX_FILE="$TMPindex" git-read-tree "$u_tree" &&
+		GIT_INDEX_FILE="$TMPindex" git read-tree "$u_tree" &&
 		GIT_INDEX_FILE="$TMPindex" git checkout-index --all &&
 		rm -f "$TMPindex" ||
-		die "$(gettext "Could not restore untracked files from stash")"
+		die "$(gettext "Could not restore untracked files from stash entry")"
 	fi
 
 	eval "
@@ -630,7 +637,7 @@ pop_stash() {
 		drop_stash "$@"
 	else
 		status=$?
-		say "$(gettext "The stash is kept in case you need it again.")"
+		say "$(gettext "The stash entry is kept in case you need it again.")"
 		exit $status
 	fi
 }

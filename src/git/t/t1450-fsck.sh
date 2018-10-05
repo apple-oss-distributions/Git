@@ -222,6 +222,28 @@ test_expect_success 'unparseable tree object' '
 	test_i18ngrep ! "fatal: empty filename in tree entry" out
 '
 
+hex2oct() {
+	perl -ne 'printf "\\%03o", hex for /../g'
+}
+
+test_expect_success 'tree entry with type mismatch' '
+	test_when_finished "remove_object \$blob" &&
+	test_when_finished "remove_object \$tree" &&
+	test_when_finished "remove_object \$commit" &&
+	test_when_finished "git update-ref -d refs/heads/type_mismatch" &&
+	blob=$(echo blob | git hash-object -w --stdin) &&
+	blob_bin=$(echo $blob | hex2oct) &&
+	tree=$(
+		printf "40000 dir\0${blob_bin}100644 file\0${blob_bin}" |
+		git hash-object -t tree --stdin -w --literally
+	) &&
+	commit=$(git commit-tree $tree) &&
+	git update-ref refs/heads/type_mismatch $commit &&
+	test_must_fail git fsck >out 2>&1 &&
+	test_i18ngrep "is a blob, not a tree" out &&
+	test_i18ngrep ! "dangling blob" out
+'
+
 test_expect_success 'tag pointing to nonexistent' '
 	cat >invalid-tag <<-\EOF &&
 	object ffffffffffffffffffffffffffffffffffffffff
@@ -606,6 +628,22 @@ test_expect_success 'fsck errors in packed objects' '
 	grep "error in commit $one.* - bad name" out &&
 	grep "error in commit $two.* - bad name" out &&
 	! grep corrupt out
+'
+
+test_expect_success 'fsck fails on corrupt packfile' '
+	hsh=$(git commit-tree -m mycommit HEAD^{tree}) &&
+	pack=$(echo $hsh | git pack-objects .git/objects/pack/pack) &&
+
+	# Corrupt the first byte of the first object. (It contains 3 type bits,
+	# at least one of which is not zero, so setting the first byte to 0 is
+	# sufficient.)
+	chmod a+w .git/objects/pack/pack-$pack.pack &&
+	printf '\0' | dd of=.git/objects/pack/pack-$pack.pack bs=1 conv=notrunc seek=12 &&
+
+	test_when_finished "rm -f .git/objects/pack/pack-$pack.*" &&
+	remove_object $hsh &&
+	test_must_fail git fsck 2>out &&
+	test_i18ngrep "checksum mismatch" out
 '
 
 test_expect_success 'fsck finds problems in duplicate loose objects' '

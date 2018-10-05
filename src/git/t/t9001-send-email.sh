@@ -148,6 +148,8 @@ cat >expected-cc <<\EOF
 !two@example.com!
 !three@example.com!
 !four@example.com!
+!five@example.com!
+!six@example.com!
 EOF
 "
 
@@ -161,6 +163,8 @@ test_expect_success $PREREQ 'cc trailer with various syntax' '
 	Cc: <two@example.com> # trailing comments are ignored
 	Cc: <three@example.com>, <not.four@example.com> one address per line
 	Cc: "Some # Body" <four@example.com> [ <also.a.comment> ]
+	Cc: five@example.com # not.six@example.com
+	Cc: six@example.com, not.seven@example.com
 	EOF
 	clean_fake_sendmail &&
 	git send-email -1 --to=recipient@example.com \
@@ -1911,6 +1915,54 @@ test_expect_success $PREREQ 'leading and trailing whitespaces are removed' '
 	0001-add-master.patch | replace_variable_fields \
 	>actual-list &&
 	test_cmp expected-list actual-list
+'
+
+test_expect_success $PREREQ 'invoke hook' '
+	mkdir -p .git/hooks &&
+
+	write_script .git/hooks/sendemail-validate <<-\EOF &&
+	# test that we have the correct environment variable, pwd, and
+	# argument
+	case "$GIT_DIR" in
+	*.git)
+		true
+		;;
+	*)
+		false
+		;;
+	esac &&
+	test -f 0001-add-master.patch &&
+	grep "add master" "$1"
+	EOF
+
+	mkdir subdir &&
+	(
+		# Test that it works even if we are not at the root of the
+		# working tree
+		cd subdir &&
+		git send-email \
+			--from="Example <nobody@example.com>" \
+			--to=nobody@example.com \
+			--smtp-server="$(pwd)/../fake.sendmail" \
+			../0001-add-master.patch &&
+
+		# Verify error message when a patch is rejected by the hook
+		sed -e "s/add master/x/" ../0001-add-master.patch >../another.patch &&
+		git send-email \
+			--from="Example <nobody@example.com>" \
+			--to=nobody@example.com \
+			--smtp-server="$(pwd)/../fake.sendmail" \
+			../another.patch 2>err
+		test_i18ngrep "rejected by sendemail-validate hook" err
+	)
+'
+
+test_expect_success $PREREQ 'test that send-email works outside a repo' '
+	nongit git send-email \
+		--from="Example <nobody@example.com>" \
+		--to=nobody@example.com \
+		--smtp-server="$(pwd)/fake.sendmail" \
+		"$(pwd)/0001-add-master.patch"
 '
 
 test_done

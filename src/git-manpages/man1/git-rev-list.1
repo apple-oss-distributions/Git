@@ -2,12 +2,12 @@
 .\"     Title: git-rev-list
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 05/09/2017
+.\"      Date: 08/04/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.13.0
+.\"    Source: Git 2.14.0
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-LIST" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
+.TH "GIT\-REV\-LIST" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -224,9 +224,11 @@ Consider the limiting patterns to be extended regular expressions instead of the
 Consider the limiting patterns to be fixed strings (don\(cqt interpret pattern as a regular expression)\&.
 .RE
 .PP
-\-\-perl\-regexp
+\-P, \-\-perl\-regexp
 .RS 4
-Consider the limiting patterns to be Perl\-compatible regular expressions\&. Requires libpcre to be compiled in\&.
+Consider the limiting patterns to be Perl\-compatible regular expressions\&.
+.sp
+Support for these types of regular expressions is an optional compile\-time dependency\&. If Git wasn\(cqt compiled with support for them providing this option will cause it to die\&.
 .RE
 .PP
 \-\-remove\-empty
@@ -1459,7 +1461,7 @@ has no effect\&.
 feeds the format
 \fB\&.\&.\&.\fR
 to your system
-\fBstrftime\fR\&. Use
+\fBstrftime\fR, except for %z and %Z, which are handled internally\&. Use
 \fB\-\-date=format:%c\fR
 to show the date in your system locale\(cqs preferred format\&. See the
 \fBstrftime\fR
@@ -2444,7 +2446,8 @@ or
 \fI%C(\&...)\fR: color specification, as described under Values in the "CONFIGURATION FILE" section of
 \fBgit-config\fR(1); adding
 \fBauto,\fR
-at the beginning will emit color only when colors are enabled for log output (by
+at the beginning (e\&.g\&.
+\fB%C(auto,red)\fR) will emit color only when colors are enabled for log output (by
 \fBcolor\&.diff\fR,
 \fBcolor\&.ui\fR, or
 \fB\-\-color\fR, and respecting the
@@ -2576,7 +2579,18 @@ respectively, except that if the next placeholder takes more spaces than given a
 \fI%><|(<N>)\fR: similar to
 \fI% <(<N>)\fR,
 \fI%<|(<N>)\fR
-respectively, but padding both sides (i\&.e\&. the text is centered) \-%(trailers): display the trailers of the body as interpreted by
+respectively, but padding both sides (i\&.e\&. the text is centered)
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+%(trailers): display the trailers of the body as interpreted by
 \fBgit-interpret-trailers\fR(1)
 .RE
 .RE
@@ -2599,7 +2613,7 @@ Some placeholders may depend on other options given to the revision traversal en
 .sp
 If you add a \fB+\fR (plus sign) after \fI%\fR of a placeholder, a line\-feed is inserted immediately before the expansion if and only if the placeholder expands to a non\-empty string\&.
 .sp
-If you add a \fB\-\fR (minus sign) after \fI%\fR of a placeholder, line\-feeds that immediately precede the expansion are deleted if and only if the placeholder expands to an empty string\&.
+If you add a \fB\-\fR (minus sign) after \fI%\fR of a placeholder, all consecutive line\-feeds immediately preceding the expansion are deleted if and only if the placeholder expands to an empty string\&.
 .sp
 If you add a ` ` (space) after \fI%\fR of a placeholder, a space is inserted immediately before the expansion if and only if the placeholder expands to a non\-empty string\&.
 .sp

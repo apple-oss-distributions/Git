@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "config.h"
 #include "refs.h"
 #include "pkt-line.h"
 #include "object.h"
@@ -90,7 +91,7 @@ static void hdr_int(struct strbuf *hdr, const char *name, uintmax_t value)
 	strbuf_addf(hdr, "%s: %" PRIuMAX "\r\n", name, value);
 }
 
-static void hdr_date(struct strbuf *hdr, const char *name, unsigned long when)
+static void hdr_date(struct strbuf *hdr, const char *name, timestamp_t when)
 {
 	const char *value = show_date(when, 0, DATE_MODE(RFC2822));
 	hdr_str(hdr, name, value);
@@ -105,7 +106,7 @@ static void hdr_nocache(struct strbuf *hdr)
 
 static void hdr_cache_forever(struct strbuf *hdr)
 {
-	unsigned long now = time(NULL);
+	timestamp_t now = time(NULL);
 	hdr_date(hdr, "Date", now);
 	hdr_date(hdr, "Expires", now + 31536000);
 	hdr_str(hdr, "Cache-Control", "public, max-age=31536000");
@@ -356,7 +357,7 @@ static void inflate_request(const char *prog_name, int out, int buffer_input)
 				die("zlib error inflating request, result %d", ret);
 
 			n = stream.total_out - cnt;
-			if (write_in_full(out, out_buf, n) != n)
+			if (write_in_full(out, out_buf, n) < 0)
 				die("%s aborted reading request", prog_name);
 			cnt += n;
 
@@ -377,7 +378,7 @@ static void copy_request(const char *prog_name, int out)
 	ssize_t n = read_request(0, &buf);
 	if (n < 0)
 		die_errno("error reading request body");
-	if (write_in_full(out, buf, n) != n)
+	if (write_in_full(out, buf, n) < 0)
 		die("%s aborted reading request", prog_name);
 	close(out);
 	free(buf);
@@ -431,7 +432,7 @@ static int show_text_ref(const char *name, const struct object_id *oid,
 {
 	const char *name_nons = strip_namespace(name);
 	struct strbuf *buf = cb_data;
-	struct object *o = parse_object(oid->hash);
+	struct object *o = parse_object(oid);
 	if (!o)
 		return 0;
 

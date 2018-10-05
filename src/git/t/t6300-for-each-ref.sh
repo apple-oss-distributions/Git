@@ -7,6 +7,7 @@ test_description='for-each-ref test'
 
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-gpg.sh
+. "$TEST_DIRECTORY"/lib-terminal.sh
 
 # Mon Jul 3 23:18:43 2006 +0000
 datestamp=1151968723
@@ -50,6 +51,7 @@ test_atom() {
 }
 
 test_atom head refname refs/heads/master
+test_atom head refname: refs/heads/master
 test_atom head refname:short master
 test_atom head refname:lstrip=1 heads/master
 test_atom head refname:lstrip=2 master
@@ -412,21 +414,37 @@ test_expect_success 'Check for invalid refname format' '
 	test_must_fail git for-each-ref --format="%(refname:INVALID)"
 '
 
-get_color ()
-{
-	git config --get-color no.such.slot "$1"
-}
+test_expect_success 'set up color tests' '
+	cat >expected.color <<-EOF &&
+	$(git rev-parse --short refs/heads/master) <GREEN>master<RESET>
+	$(git rev-parse --short refs/remotes/origin/master) <GREEN>origin/master<RESET>
+	$(git rev-parse --short refs/tags/testtag) <GREEN>testtag<RESET>
+	$(git rev-parse --short refs/tags/two) <GREEN>two<RESET>
+	EOF
+	sed "s/<[^>]*>//g" <expected.color >expected.bare &&
+	color_format="%(objectname:short) %(color:green)%(refname:short)"
+'
 
-cat >expected <<EOF
-$(git rev-parse --short refs/heads/master) $(get_color green)master$(get_color reset)
-$(git rev-parse --short refs/remotes/origin/master) $(get_color green)origin/master$(get_color reset)
-$(git rev-parse --short refs/tags/testtag) $(get_color green)testtag$(get_color reset)
-$(git rev-parse --short refs/tags/two) $(get_color green)two$(get_color reset)
-EOF
+test_expect_success TTY '%(color) shows color with a tty' '
+	test_terminal git for-each-ref --format="$color_format" >actual.raw &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp expected.color actual
+'
 
-test_expect_success 'Check %(color:...) ' '
-	git for-each-ref --format="%(objectname:short) %(color:green)%(refname:short)" >actual &&
-	test_cmp expected actual
+test_expect_success '%(color) does not show color without tty' '
+	TERM=vt100 git for-each-ref --format="$color_format" >actual &&
+	test_cmp expected.bare actual
+'
+
+test_expect_success '--color can override tty check' '
+	git for-each-ref --color --format="$color_format" >actual.raw &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp expected.color actual
+'
+
+test_expect_success 'color.ui=always does not override tty check' '
+	git -c color.ui=always for-each-ref --format="$color_format" >actual &&
+	test_cmp expected.bare actual
 '
 
 cat >expected <<\EOF

@@ -6,6 +6,7 @@
  */
 
 #include "cache.h"
+#include "config.h"
 #include "color.h"
 #include "refs.h"
 #include "commit.h"
@@ -124,7 +125,7 @@ static int branch_merged(int kind, const char *name,
 		    (reference_name = reference_name_to_free =
 		     resolve_refdup(upstream, RESOLVE_REF_READING,
 				    oid.hash, NULL)) != NULL)
-			reference_rev = lookup_commit_reference(oid.hash);
+			reference_rev = lookup_commit_reference(&oid);
 	}
 	if (!reference_rev)
 		reference_rev = head_rev;
@@ -157,7 +158,7 @@ static int check_branch_commit(const char *branchname, const char *refname,
 			       const struct object_id *oid, struct commit *head_rev,
 			       int kinds, int force)
 {
-	struct commit *rev = lookup_commit_reference(oid->hash);
+	struct commit *rev = lookup_commit_reference(oid);
 	if (!rev) {
 		error(_("Couldn't look up commit object for '%s'"), refname);
 		return -1;
@@ -211,11 +212,11 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
 	}
 
 	if (!force) {
-		head_rev = lookup_commit_reference(head_oid.hash);
+		head_rev = lookup_commit_reference(&head_oid);
 		if (!head_rev)
 			die(_("Couldn't look up commit object for HEAD"));
 	}
-	for (i = 0; i < argc; i++, strbuf_release(&bname)) {
+	for (i = 0; i < argc; i++, strbuf_reset(&bname)) {
 		char *target = NULL;
 		int flags = 0;
 
@@ -280,8 +281,9 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
 	}
 
 	free(name);
+	strbuf_release(&bname);
 
-	return(ret);
+	return ret;
 }
 
 static int calc_maxwidth(struct ref_array *refs, int remote_bonus)
@@ -382,7 +384,7 @@ static char *build_format(struct ref_filter *filter, int maxwidth, const char *r
 	return strbuf_detach(&fmt, NULL);
 }
 
-static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sorting, const char *format)
+static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sorting, struct ref_format *format)
 {
 	int i;
 	struct ref_array array;
@@ -406,14 +408,17 @@ static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sortin
 	if (filter->verbose)
 		maxwidth = calc_maxwidth(&array, strlen(remote_prefix));
 
-	if (!format)
-		format = to_free = build_format(filter, maxwidth, remote_prefix);
-	verify_ref_format(format);
+	if (!format->format)
+		format->format = to_free = build_format(filter, maxwidth, remote_prefix);
+	format->use_color = branch_use_color;
+
+	if (verify_ref_format(format))
+		die(_("unable to parse format string"));
 
 	ref_array_sort(sorting, &array);
 
 	for (i = 0; i < array.nr; i++) {
-		format_ref_array_item(array.items[i], format, 0, &out);
+		format_ref_array_item(array.items[i], format, &out);
 		if (column_active(colopts)) {
 			assert(!filter->verbose && "--column and --verbose are incompatible");
 			 /* format to a string_list to let print_columns() do its job */
@@ -548,7 +553,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 	struct ref_filter filter;
 	int icase = 0;
 	static struct ref_sorting *sorting = NULL, **sorting_tail = &sorting;
-	const char *format = NULL;
+	struct ref_format format = REF_FORMAT_INIT;
 
 	struct option options[] = {
 		OPT_GROUP(N_("Generic options")),
@@ -592,7 +597,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 			N_("print only branches of the object"), 0, parse_opt_object_name
 		},
 		OPT_BOOL('i', "ignore-case", &icase, N_("sorting and filtering are case insensitive")),
-		OPT_STRING(  0 , "format", &format, N_("format"), N_("format to use for the output")),
+		OPT_STRING(  0 , "format", &format.format, N_("format"), N_("format to use for the output")),
 		OPT_END(),
 	};
 
@@ -666,7 +671,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		if (!sorting)
 			sorting = ref_default_sorting();
 		sorting->ignore_case = icase;
-		print_ref_list(&filter, sorting, format);
+		print_ref_list(&filter, sorting, &format);
 		print_columns(&output, colopts, NULL);
 		string_list_clear(&output, 0);
 		return 0;

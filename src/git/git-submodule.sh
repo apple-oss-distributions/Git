@@ -213,7 +213,8 @@ cmd_add()
 		die "$(eval_gettext "'\$sm_path' already exists in the index and is not a submodule")"
 	fi
 
-	if test -z "$force" && ! git add --dry-run --ignore-missing "$sm_path" > /dev/null 2>&1
+	if test -z "$force" &&
+		! git add --dry-run --ignore-missing --no-warn-embedded-repo "$sm_path" > /dev/null 2>&1
 	then
 		eval_gettextln "The following path is ignored by one of your .gitignore files:
 \$sm_path
@@ -267,7 +268,7 @@ or you are unsure what this means choose another name with the '--name' option."
 	fi
 	git config submodule."$sm_name".url "$realrepo"
 
-	git add $force "$sm_path" ||
+	git add --no-warn-embedded-repo $force "$sm_path" ||
 	die "$(eval_gettext "Failed to add submodule '\$sm_path'")"
 
 	git config -f .gitmodules submodule."$sm_name".path "$sm_path" &&
@@ -610,7 +611,6 @@ cmd_update()
 		die_if_unmatched "$mode" "$sha1"
 
 		name=$(git submodule--helper name "$sm_path") || exit
-		url=$(git config submodule."$name".url)
 		if ! test -z "$update"
 		then
 			update_module=$update
@@ -863,7 +863,7 @@ cmd_summary() {
 				test $status != A && test $ignore_config = all && continue
 			fi
 			# Also show added or modified modules which are checked out
-			GIT_DIR="$sm_path/.git" git-rev-parse --git-dir >/dev/null 2>&1 &&
+			GIT_DIR="$sm_path/.git" git rev-parse --git-dir >/dev/null 2>&1 &&
 			printf '%s\n' "$sm_path"
 		done
 	)
@@ -897,11 +897,11 @@ cmd_summary() {
 		missing_dst=
 
 		test $mod_src = 160000 &&
-		! GIT_DIR="$name/.git" git-rev-parse -q --verify $sha1_src^0 >/dev/null &&
+		! GIT_DIR="$name/.git" git rev-parse -q --verify $sha1_src^0 >/dev/null &&
 		missing_src=t
 
 		test $mod_dst = 160000 &&
-		! GIT_DIR="$name/.git" git-rev-parse -q --verify $sha1_dst^0 >/dev/null &&
+		! GIT_DIR="$name/.git" git rev-parse -q --verify $sha1_dst^0 >/dev/null &&
 		missing_dst=t
 
 		display_name=$(git submodule--helper relative-path "$name" "$wt_prefix")

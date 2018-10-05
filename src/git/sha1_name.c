@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "config.h"
 #include "tag.h"
 #include "commit.h"
 #include "tree.h"
@@ -77,10 +78,19 @@ static void update_candidates(struct disambiguate_state *ds, const struct object
 	/* otherwise, current can be discarded and candidate is still good */
 }
 
+static int append_loose_object(const struct object_id *oid, const char *path,
+			       void *data)
+{
+	oid_array_append(data, oid);
+	return 0;
+}
+
+static int match_sha(unsigned, const unsigned char *, const unsigned char *);
+
 static void find_short_object_filename(struct disambiguate_state *ds)
 {
+	int subdir_nr = ds->bin_pfx.hash[0];
 	struct alternate_object_database *alt;
-	char hex[GIT_MAX_HEXSZ];
 	static struct alternate_object_database *fakeent;
 
 	if (!fakeent) {
@@ -95,29 +105,29 @@ static void find_short_object_filename(struct disambiguate_state *ds)
 	}
 	fakeent->next = alt_odb_list;
 
-	xsnprintf(hex, sizeof(hex), "%.2s", ds->hex_pfx);
 	for (alt = fakeent; alt && !ds->ambiguous; alt = alt->next) {
-		struct strbuf *buf = alt_scratch_buf(alt);
-		struct dirent *de;
-		DIR *dir;
+		int pos;
 
-		strbuf_addf(buf, "%.2s/", ds->hex_pfx);
-		dir = opendir(buf->buf);
-		if (!dir)
-			continue;
-
-		while (!ds->ambiguous && (de = readdir(dir)) != NULL) {
-			struct object_id oid;
-
-			if (strlen(de->d_name) != GIT_SHA1_HEXSZ - 2)
-				continue;
-			if (memcmp(de->d_name, ds->hex_pfx + 2, ds->len - 2))
-				continue;
-			memcpy(hex + 2, de->d_name, GIT_SHA1_HEXSZ - 2);
-			if (!get_oid_hex(hex, &oid))
-				update_candidates(ds, &oid);
+		if (!alt->loose_objects_subdir_seen[subdir_nr]) {
+			struct strbuf *buf = alt_scratch_buf(alt);
+			for_each_file_in_obj_subdir(subdir_nr, buf,
+						    append_loose_object,
+						    NULL, NULL,
+						    &alt->loose_objects_cache);
+			alt->loose_objects_subdir_seen[subdir_nr] = 1;
 		}
-		closedir(dir);
+
+		pos = oid_array_lookup(&alt->loose_objects_cache, &ds->bin_pfx);
+		if (pos < 0)
+			pos = -1 - pos;
+		while (!ds->ambiguous && pos < alt->loose_objects_cache.nr) {
+			const struct object_id *oid;
+			oid = alt->loose_objects_cache.oid + pos;
+			if (!match_sha(ds->len, ds->bin_pfx.hash, oid->hash))
+				break;
+			update_candidates(ds, oid);
+			pos++;
+		}
 	}
 }
 
@@ -241,7 +251,7 @@ static int disambiguate_committish_only(const struct object_id *oid, void *cb_da
 		return 0;
 
 	/* We need to do this the hard way... */
-	obj = deref_tag(parse_object(oid->hash), NULL, 0);
+	obj = deref_tag(parse_object(oid), NULL, 0);
 	if (obj && obj->type == OBJ_COMMIT)
 		return 1;
 	return 0;
@@ -265,7 +275,7 @@ static int disambiguate_treeish_only(const struct object_id *oid, void *cb_data_
 		return 0;
 
 	/* We need to do this the hard way... */
-	obj = deref_tag(parse_object(oid->hash), NULL, 0);
+	obj = deref_tag(parse_object(oid), NULL, 0);
 	if (obj && (obj->type == OBJ_TREE || obj->type == OBJ_COMMIT))
 		return 1;
 	return 0;
@@ -354,14 +364,14 @@ static int show_ambiguous_object(const struct object_id *oid, void *data)
 
 	type = sha1_object_info(oid->hash, NULL);
 	if (type == OBJ_COMMIT) {
-		struct commit *commit = lookup_commit(oid->hash);
+		struct commit *commit = lookup_commit(oid);
 		if (commit) {
 			struct pretty_print_context pp = {0};
 			pp.date_mode.type = DATE_SHORT;
 			format_commit_message(commit, " %ad - %s", &desc, &pp);
 		}
 	} else if (type == OBJ_TAG) {
-		struct tag *tag = lookup_tag(oid->hash);
+		struct tag *tag = lookup_tag(oid);
 		if (!parse_tag(tag) && tag->tag)
 			strbuf_addf(&desc, " %s", tag->tag);
 	}
@@ -479,10 +489,9 @@ int find_unique_abbrev_r(char *hex, const unsigned char *sha1, int len)
 		 * We now know we have on the order of 2^len objects, which
 		 * expects a collision at 2^(len/2). But we also care about hex
 		 * chars, not bits, and there are 4 bits per hex. So all
-		 * together we need to divide by 2; but we also want to round
-		 * odd numbers up, hence adding one before dividing.
+		 * together we need to divide by 2 and round up.
 		 */
-		len = (len + 1) / 2;
+		len = DIV_ROUND_UP(len, 2);
 		/*
 		 * For very small repos, we stick with our regular fallback.
 		 */
@@ -660,8 +669,8 @@ static int get_sha1_basic(const char *str, int len, unsigned char *sha1,
 
 	if (reflog_len) {
 		int nth, i;
-		unsigned long at_time;
-		unsigned long co_time;
+		timestamp_t at_time;
+		timestamp_t co_time;
 		int co_tz, co_cnt;
 
 		/* Is it asking for N-th entry, or approxidate? */
@@ -722,14 +731,14 @@ static int get_sha1_basic(const char *str, int len, unsigned char *sha1,
 static int get_parent(const char *name, int len,
 		      unsigned char *result, int idx)
 {
-	unsigned char sha1[20];
-	int ret = get_sha1_1(name, len, sha1, GET_SHA1_COMMITTISH);
+	struct object_id oid;
+	int ret = get_sha1_1(name, len, oid.hash, GET_SHA1_COMMITTISH);
 	struct commit *commit;
 	struct commit_list *p;
 
 	if (ret)
 		return ret;
-	commit = lookup_commit_reference(sha1);
+	commit = lookup_commit_reference(&oid);
 	if (parse_commit(commit))
 		return -1;
 	if (!idx) {
@@ -750,14 +759,14 @@ static int get_parent(const char *name, int len,
 static int get_nth_ancestor(const char *name, int len,
 			    unsigned char *result, int generation)
 {
-	unsigned char sha1[20];
+	struct object_id oid;
 	struct commit *commit;
 	int ret;
 
-	ret = get_sha1_1(name, len, sha1, GET_SHA1_COMMITTISH);
+	ret = get_sha1_1(name, len, oid.hash, GET_SHA1_COMMITTISH);
 	if (ret)
 		return ret;
-	commit = lookup_commit_reference(sha1);
+	commit = lookup_commit_reference(&oid);
 	if (!commit)
 		return -1;
 
@@ -776,7 +785,7 @@ struct object *peel_to_type(const char *name, int namelen,
 	if (name && !namelen)
 		namelen = strlen(name);
 	while (1) {
-		if (!o || (!o->parsed && !parse_object(o->oid.hash)))
+		if (!o || (!o->parsed && !parse_object(&o->oid)))
 			return NULL;
 		if (expected_type == OBJ_ANY || o->type == expected_type)
 			return o;
@@ -798,7 +807,7 @@ struct object *peel_to_type(const char *name, int namelen,
 static int peel_onion(const char *name, int len, unsigned char *sha1,
 		      unsigned lookup_flags)
 {
-	unsigned char outer[20];
+	struct object_id outer;
 	const char *sp;
 	unsigned int expected_type = 0;
 	struct object *o;
@@ -846,15 +855,15 @@ static int peel_onion(const char *name, int len, unsigned char *sha1,
 	else if (expected_type == OBJ_TREE)
 		lookup_flags |= GET_SHA1_TREEISH;
 
-	if (get_sha1_1(name, sp - name - 2, outer, lookup_flags))
+	if (get_sha1_1(name, sp - name - 2, outer.hash, lookup_flags))
 		return -1;
 
-	o = parse_object(outer);
+	o = parse_object(&outer);
 	if (!o)
 		return -1;
 	if (!expected_type) {
 		o = deref_tag(o, name, sp - name - 2);
-		if (!o || (!o->parsed && !parse_object(o->oid.hash)))
+		if (!o || (!o->parsed && !parse_object(&o->oid)))
 			return -1;
 		hashcpy(sha1, o->oid.hash);
 		return 0;
@@ -981,7 +990,7 @@ static int handle_one_ref(const char *path, const struct object_id *oid,
 			  int flag, void *cb_data)
 {
 	struct commit_list **list = cb_data;
-	struct object *object = parse_object(oid->hash);
+	struct object *object = parse_object(oid);
 	if (!object)
 		return 0;
 	if (object->type == OBJ_TAG) {
@@ -1027,7 +1036,7 @@ static int get_sha1_oneline(const char *prefix, unsigned char *sha1,
 		int matches;
 
 		commit = pop_most_recent_commit(&list, ONELINE_SEEN);
-		if (!parse_object(commit->object.oid.hash))
+		if (!parse_object(&commit->object.oid))
 			continue;
 		buf = get_commit_buffer(commit, NULL);
 		p = strstr(buf, "\n\n");
@@ -1054,7 +1063,7 @@ struct grab_nth_branch_switch_cbdata {
 };
 
 static int grab_nth_branch_switch(struct object_id *ooid, struct object_id *noid,
-				  const char *email, unsigned long timestamp, int tz,
+				  const char *email, timestamp_t timestamp, int tz,
 				  const char *message, void *cb_data)
 {
 	struct grab_nth_branch_switch_cbdata *cb = cb_data;
@@ -1136,13 +1145,13 @@ int get_oid_mb(const char *name, struct object_id *oid)
 	}
 	if (st)
 		return st;
-	one = lookup_commit_reference_gently(oid_tmp.hash, 0);
+	one = lookup_commit_reference_gently(&oid_tmp, 0);
 	if (!one)
 		return -1;
 
 	if (get_sha1_committish(dots[3] ? (dots + 3) : "HEAD", oid_tmp.hash))
 		return -1;
-	two = lookup_commit_reference_gently(oid_tmp.hash, 0);
+	two = lookup_commit_reference_gently(&oid_tmp, 0);
 	if (!two)
 		return -1;
 	mbs = get_merge_bases(one, two);
@@ -1408,7 +1417,7 @@ static void diagnose_invalid_sha1_path(const char *prefix,
 	if (file_exists(filename))
 		die("Path '%s' exists on disk, but not in '%.*s'.",
 		    filename, object_name_len, object_name);
-	if (errno == ENOENT || errno == ENOTDIR) {
+	if (is_missing_file_error(errno)) {
 		char *fullname = xstrfmt("%s%s", prefix, filename);
 
 		if (!get_tree_entry(tree_sha1, fullname,
@@ -1473,7 +1482,7 @@ static void diagnose_invalid_index_path(int stage,
 
 	if (file_exists(filename))
 		die("Path '%s' exists on disk, but not in the index.", filename);
-	if (errno == ENOENT || errno == ENOTDIR)
+	if (is_missing_file_error(errno))
 		die("Path '%s' does not exist (neither on disk nor in the index).",
 		    filename);
 

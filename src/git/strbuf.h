@@ -82,8 +82,12 @@ extern char strbuf_slopbuf[];
 extern void strbuf_init(struct strbuf *, size_t);
 
 /**
- * Release a string buffer and the memory it used. You should not use the
- * string buffer after using this function, unless you initialize it again.
+ * Release a string buffer and the memory it used. After this call, the
+ * strbuf points to an empty string that does not need to be free()ed, as
+ * if it had been set to `STRBUF_INIT` and never modified.
+ *
+ * To clear a strbuf in preparation for further use without the overhead
+ * of free()ing and malloc()ing again, use strbuf_reset() instead.
  */
 extern void strbuf_release(struct strbuf *);
 
@@ -91,6 +95,9 @@ extern void strbuf_release(struct strbuf *);
  * Detach the string from the strbuf and returns it; you now own the
  * storage the string occupies and it is your responsibility from then on
  * to release it with `free(3)` when you are done with it.
+ *
+ * The strbuf that previously held the string is reset to `STRBUF_INIT` so
+ * it can be reused after calling this function.
  */
 extern char *strbuf_detach(struct strbuf *, size_t *);
 
@@ -147,7 +154,10 @@ static inline void strbuf_setlen(struct strbuf *sb, size_t len)
 	if (len > (sb->alloc ? sb->alloc - 1 : 0))
 		die("BUG: strbuf_setlen() beyond buffer");
 	sb->len = len;
-	sb->buf[len] = '\0';
+	if (sb->buf != strbuf_slopbuf)
+		sb->buf[len] = '\0';
+	else
+		assert(!strbuf_slopbuf[0]);
 }
 
 /**
@@ -334,8 +344,15 @@ extern void strbuf_vaddf(struct strbuf *sb, const char *fmt, va_list ap);
 
 /**
  * Add the time specified by `tm`, as formatted by `strftime`.
+ * `tz_offset` is in decimal hhmm format, e.g. -600 means six hours west
+ * of Greenwich, and it's used to expand %z internally.  However, tokens
+ * with modifiers (e.g. %Ez) are passed to `strftime`.
+ * `suppress_tz_name`, when set, expands %Z internally to the empty
+ * string rather than passing it to `strftime`.
  */
-extern void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm);
+extern void strbuf_addftime(struct strbuf *sb, const char *fmt,
+			    const struct tm *tm, int tz_offset,
+			    int suppress_tz_name);
 
 /**
  * Read a given size of data from a FILE* pointer to the buffer.

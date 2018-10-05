@@ -5,6 +5,7 @@
  */
 #define NO_THE_INDEX_COMPATIBILITY_MACROS
 #include "cache.h"
+#include "config.h"
 #include "tempfile.h"
 #include "lockfile.h"
 #include "cache-tree.h"
@@ -514,9 +515,8 @@ int remove_index_entry_at(struct index_state *istate, int pos)
 	istate->cache_nr--;
 	if (pos >= istate->cache_nr)
 		return 0;
-	memmove(istate->cache + pos,
-		istate->cache + pos + 1,
-		(istate->cache_nr - pos) * sizeof(struct cache_entry *));
+	MOVE_ARRAY(istate->cache + pos, istate->cache + pos + 1,
+		   istate->cache_nr - pos);
 	return 1;
 }
 
@@ -1894,8 +1894,7 @@ int discard_index(struct index_state *istate)
 	free_name_hash(istate);
 	cache_tree_free(&(istate->cache_tree));
 	istate->initialized = 0;
-	free(istate->cache);
-	istate->cache = NULL;
+	FREE_AND_NULL(istate->cache);
 	istate->cache_alloc = 0;
 	discard_split_index(istate);
 	free_untracked_cache(istate->untracked);
@@ -1922,7 +1921,7 @@ static int ce_write_flush(git_SHA_CTX *context, int fd)
 	unsigned int buffered = write_buffer_len;
 	if (buffered) {
 		git_SHA1_Update(context, write_buffer, buffered);
-		if (write_in_full(fd, write_buffer, buffered) != buffered)
+		if (write_in_full(fd, write_buffer, buffered) < 0)
 			return -1;
 		write_buffer_len = 0;
 	}
@@ -1971,7 +1970,7 @@ static int ce_flush(git_SHA_CTX *context, int fd, unsigned char *sha1)
 
 	/* Flush first if not enough space for SHA1 signature */
 	if (left + 20 > WRITE_BUFFER_SIZE) {
-		if (write_in_full(fd, write_buffer, left) != left)
+		if (write_in_full(fd, write_buffer, left) < 0)
 			return -1;
 		left = 0;
 	}
@@ -1980,7 +1979,7 @@ static int ce_flush(git_SHA_CTX *context, int fd, unsigned char *sha1)
 	git_SHA1_Final(write_buffer + left, context);
 	hashcpy(sha1, write_buffer + left);
 	left += 20;
-	return (write_in_full(fd, write_buffer, left) != left) ? -1 : 0;
+	return (write_in_full(fd, write_buffer, left) < 0) ? -1 : 0;
 }
 
 static void ce_smudge_racily_clean_entry(struct cache_entry *ce)
@@ -2198,6 +2197,7 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 	int entries = istate->cache_nr;
 	struct stat st;
 	struct strbuf previous_name_buf = STRBUF_INIT, *previous_name;
+	int drop_cache_tree = 0;
 
 	for (i = removed = extended = 0; i < entries; i++) {
 		if (cache[i]->ce_flags & CE_REMOVE)
@@ -2248,6 +2248,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 				warning(msg, ce->name);
 			else
 				return error(msg, ce->name);
+
+			drop_cache_tree = 1;
 		}
 		if (ce_write_entry(&c, newfd, ce, previous_name) < 0)
 			return -1;
@@ -2266,7 +2268,7 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 		if (err)
 			return -1;
 	}
-	if (!strip_extensions && istate->cache_tree) {
+	if (!strip_extensions && !drop_cache_tree && istate->cache_tree) {
 		struct strbuf sb = STRBUF_INIT;
 
 		cache_tree_write(&sb, istate->cache_tree);
@@ -2614,8 +2616,7 @@ void *read_blob_data_from_index(const struct index_state *istate,
 
 void stat_validity_clear(struct stat_validity *sv)
 {
-	free(sv->sd);
-	sv->sd = NULL;
+	FREE_AND_NULL(sv->sd);
 }
 
 int stat_validity_check(struct stat_validity *sv, const char *path)
@@ -2640,4 +2641,10 @@ void stat_validity_update(struct stat_validity *sv, int fd)
 			sv->sd = xcalloc(1, sizeof(struct stat_data));
 		fill_stat_data(sv->sd, &st);
 	}
+}
+
+void move_index_extensions(struct index_state *dst, struct index_state *src)
+{
+	dst->untracked = src->untracked;
+	src->untracked = NULL;
 }

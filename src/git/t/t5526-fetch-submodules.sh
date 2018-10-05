@@ -71,6 +71,16 @@ test_expect_success "fetch --recurse-submodules recurses into submodules" '
 	test_i18ncmp expect.err actual.err
 '
 
+test_expect_success "submodule.recurse option triggers recursive fetch" '
+	add_upstream_commit &&
+	(
+		cd downstream &&
+		git -c submodule.recurse fetch >../actual.out 2>../actual.err
+	) &&
+	test_must_be_empty actual.out &&
+	test_i18ncmp expect.err actual.err
+'
+
 test_expect_success "fetch --recurse-submodules -j2 has the same output behaviour" '
 	add_upstream_commit &&
 	(
@@ -183,7 +193,7 @@ test_expect_success "recurseSubmodules=true propagates into submodules" '
 	add_upstream_commit &&
 	(
 		cd downstream &&
-		git config fetch.recurseSubmodules true
+		git config fetch.recurseSubmodules true &&
 		git fetch >../actual.out 2>../actual.err
 	) &&
 	test_must_be_empty actual.out &&
@@ -208,7 +218,7 @@ test_expect_success "--no-recurse-submodules overrides config setting" '
 	add_upstream_commit &&
 	(
 		cd downstream &&
-		git config fetch.recurseSubmodules true
+		git config fetch.recurseSubmodules true &&
 		git fetch --no-recurse-submodules >../actual.out 2>../actual.err
 	) &&
 	! test -s actual.out &&
@@ -222,7 +232,7 @@ test_expect_success "Recursion doesn't happen when no new commits are fetched in
 			cd submodule &&
 			git config --unset fetch.recurseSubmodules
 		) &&
-		git config --unset fetch.recurseSubmodules
+		git config --unset fetch.recurseSubmodules &&
 		git fetch >../actual.out 2>../actual.err
 	) &&
 	! test -s actual.out &&
@@ -302,7 +312,7 @@ test_expect_success "Recursion picks up all submodules when necessary" '
 		) &&
 		head1=$(git rev-parse --short HEAD^) &&
 		git add subdir/deepsubmodule &&
-		git commit -m "new deepsubmodule"
+		git commit -m "new deepsubmodule" &&
 		head2=$(git rev-parse --short HEAD) &&
 		echo "Fetching submodule submodule" > ../expect.err.sub &&
 		echo "From $pwd/submodule" >> ../expect.err.sub &&

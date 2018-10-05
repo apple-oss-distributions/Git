@@ -9,6 +9,7 @@ Tests for operations with tags.'
 
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-gpg.sh
+. "$TEST_DIRECTORY"/lib-terminal.sh
 
 # creating and listing lightweight tags:
 
@@ -1887,7 +1888,7 @@ EOF"
 	run_with_limited_stack git tag --contains HEAD >actual &&
 	test_cmp expect actual &&
 	run_with_limited_stack git tag --no-contains HEAD >actual &&
-	test_line_count ">" 10 actual
+	test_line_count "-gt" 10 actual
 '
 
 test_expect_success '--format should list tags as per format given' '
@@ -1898,6 +1899,36 @@ test_expect_success '--format should list tags as per format given' '
 	EOF
 	git tag -l --format="refname : %(refname)" "v1*" >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success "set up color tests" '
+	echo "<RED>v1.0<RESET>" >expect.color &&
+	echo "v1.0" >expect.bare &&
+	color_args="--format=%(color:red)%(refname:short) --list v1.0"
+'
+
+test_expect_success '%(color) omitted without tty' '
+	TERM=vt100 git tag $color_args >actual.raw &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp expect.bare actual
+'
+
+test_expect_success TTY '%(color) present with tty' '
+	test_terminal git tag $color_args >actual.raw &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp expect.color actual
+'
+
+test_expect_success '--color overrides auto-color' '
+	git tag --color $color_args >actual.raw &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp expect.color actual
+'
+
+test_expect_success 'color.ui=always overrides auto-color' '
+	git -c color.ui=always tag $color_args >actual.raw &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp expect.color actual
 '
 
 test_expect_success 'setup --merged test tags' '

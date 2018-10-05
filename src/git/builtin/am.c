@@ -4,6 +4,7 @@
  * Based on git-am.sh by Junio C Hamano.
  */
 #include "cache.h"
+#include "config.h"
 #include "builtin.h"
 #include "exec_cmd.h"
 #include "parse-options.h"
@@ -430,6 +431,14 @@ static void am_load(struct am_state *state)
 	read_state_file(&sb, state, "utf8", 1);
 	state->utf8 = !strcmp(sb.buf, "t");
 
+	if (file_exists(am_path(state, "rerere-autoupdate"))) {
+		read_state_file(&sb, state, "rerere-autoupdate", 1);
+		state->allow_rerere_autoupdate = strcmp(sb.buf, "t") ?
+			RERERE_NOAUTOUPDATE : RERERE_AUTOUPDATE;
+	} else {
+		state->allow_rerere_autoupdate = 0;
+	}
+
 	read_state_file(&sb, state, "keep", 1);
 	if (!strcmp(sb.buf, "t"))
 		state->keep = KEEP_TRUE;
@@ -483,8 +492,7 @@ static int run_applypatch_msg_hook(struct am_state *state)
 	ret = run_hook_le(NULL, "applypatch-msg", am_path(state, "final-commit"), NULL);
 
 	if (!ret) {
-		free(state->msg);
-		state->msg = NULL;
+		FREE_AND_NULL(state->msg);
 		if (read_commit_msg(state) < 0)
 			die(_("'%s' was deleted by the applypatch-msg hook"),
 				am_path(state, "final-commit"));
@@ -563,7 +571,7 @@ static int copy_notes_for_rebase(const struct am_state *state)
 			goto finish;
 		}
 
-		if (copy_note_for_rewrite(c, from_obj.hash, to_obj.hash))
+		if (copy_note_for_rewrite(c, &from_obj, &to_obj))
 			ret = error(_("Failed to copy notes from '%s' to '%s'"),
 					oid_to_hex(&from_obj), oid_to_hex(&to_obj));
 	}
@@ -879,12 +887,12 @@ static int hg_patch_to_mail(FILE *out, FILE *in, int keep_cr)
 		if (skip_prefix(sb.buf, "# User ", &str))
 			fprintf(out, "From: %s\n", str);
 		else if (skip_prefix(sb.buf, "# Date ", &str)) {
-			unsigned long timestamp;
+			timestamp_t timestamp;
 			long tz, tz2;
 			char *end;
 
 			errno = 0;
-			timestamp = strtoul(str, &end, 10);
+			timestamp = parse_timestamp(str, &end, 10);
 			if (errno)
 				return error(_("invalid timestamp"));
 
@@ -1003,6 +1011,10 @@ static void am_setup(struct am_state *state, enum patch_format patch_format,
 	write_state_bool(state, "sign", state->signoff);
 	write_state_bool(state, "utf8", state->utf8);
 
+	if (state->allow_rerere_autoupdate)
+		write_state_bool(state, "rerere-autoupdate",
+			 state->allow_rerere_autoupdate == RERERE_AUTOUPDATE);
+
 	switch (state->keep) {
 	case KEEP_FALSE:
 		str = "f";
@@ -1073,17 +1085,10 @@ static void am_next(struct am_state *state)
 {
 	struct object_id head;
 
-	free(state->author_name);
-	state->author_name = NULL;
-
-	free(state->author_email);
-	state->author_email = NULL;
-
-	free(state->author_date);
-	state->author_date = NULL;
-
-	free(state->msg);
-	state->msg = NULL;
+	FREE_AND_NULL(state->author_name);
+	FREE_AND_NULL(state->author_email);
+	FREE_AND_NULL(state->author_date);
+	FREE_AND_NULL(state->msg);
 	state->msg_len = 0;
 
 	unlink(am_path(state, "author-script"));
@@ -1145,7 +1150,7 @@ static int index_has_changes(struct strbuf *sb)
 		DIFF_OPT_SET(&opt, EXIT_WITH_STATUS);
 		if (!sb)
 			DIFF_OPT_SET(&opt, QUICK);
-		do_diff_cache(head.hash, &opt);
+		do_diff_cache(&head, &opt);
 		diffcore_std(&opt);
 		for (i = 0; sb && i < diff_queued_diff.nr; i++) {
 			if (i)
@@ -1188,34 +1193,10 @@ static void NORETURN die_user_resolve(const struct am_state *state)
  */
 static void am_append_signoff(struct am_state *state)
 {
-	char *cp;
-	struct strbuf mine = STRBUF_INIT;
 	struct strbuf sb = STRBUF_INIT;
 
 	strbuf_attach(&sb, state->msg, state->msg_len, state->msg_len);
-
-	/* our sign-off */
-	strbuf_addf(&mine, "\n%s%s\n",
-		    sign_off_header,
-		    fmt_name(getenv("GIT_COMMITTER_NAME"),
-			     getenv("GIT_COMMITTER_EMAIL")));
-
-	/* Does sb end with it already? */
-	if (mine.len < sb.len &&
-	    !strcmp(mine.buf, sb.buf + sb.len - mine.len))
-		goto exit; /* no need to duplicate */
-
-	/* Does it have any Signed-off-by: in the text */
-	for (cp = sb.buf;
-	     cp && *cp && (cp = strstr(cp, sign_off_header)) != NULL;
-	     cp = strchr(cp, '\n')) {
-		if (sb.buf == cp || cp[-1] == '\n')
-			break;
-	}
-
-	strbuf_addstr(&sb, mine.buf + !!cp);
-exit:
-	strbuf_release(&mine);
+	append_signoff(&sb, 0, 0);
 	state->msg = strbuf_detach(&sb, &state->msg_len);
 }
 
@@ -1275,12 +1256,8 @@ static int parse_mail(struct am_state *state, const char *mail)
 		die("BUG: invalid value for state->scissors");
 	}
 
-	mi.input = fopen(mail, "r");
-	if (!mi.input)
-		die("could not open input");
-	mi.output = fopen(am_path(state, "info"), "w");
-	if (!mi.output)
-		die("could not open output 'info'");
+	mi.input = xfopen(mail, "r");
+	mi.output = xfopen(am_path(state, "info"), "w");
 	if (mailinfo(&mi, am_path(state, "msg"), am_path(state, "patch")))
 		die("could not parse patch");
 
@@ -1444,9 +1421,9 @@ static void write_index_patch(const struct am_state *state)
 	FILE *fp;
 
 	if (!get_sha1_tree("HEAD", head.hash))
-		tree = lookup_tree(head.hash);
+		tree = lookup_tree(&head);
 	else
-		tree = lookup_tree(EMPTY_TREE_SHA1_BIN);
+		tree = lookup_tree(&empty_tree_oid);
 
 	fp = xfopen(am_path(state, "patch"), "w");
 	init_revisions(&rev_info, NULL);
@@ -1479,7 +1456,7 @@ static int parse_mail_rebase(struct am_state *state, const char *mail)
 	if (get_mail_commit_oid(&commit_oid, mail) < 0)
 		die(_("could not parse %s"), mail);
 
-	commit = lookup_commit_or_die(commit_oid.hash, mail);
+	commit = lookup_commit_or_die(&commit_oid, mail);
 
 	get_commit_info(state, commit);
 
@@ -1609,7 +1586,7 @@ static int fall_back_threeway(const struct am_state *state, const char *index_pa
 		init_revisions(&rev_info, NULL);
 		rev_info.diffopt.output_format = DIFF_FORMAT_NAME_STATUS;
 		diff_opt_parse(&rev_info.diffopt, &diff_filter_str, 1, rev_info.prefix);
-		add_pending_sha1(&rev_info, "HEAD", our_tree.hash, 0);
+		add_pending_oid(&rev_info, "HEAD", &our_tree, 0);
 		diff_setup_done(&rev_info.diffopt);
 		run_diff_index(&rev_info, 1);
 	}
@@ -1674,7 +1651,7 @@ static void do_commit(const struct am_state *state)
 
 	if (!get_sha1_commit("HEAD", parent.hash)) {
 		old_oid = &parent;
-		commit_list_insert(lookup_commit(parent.hash), &parents);
+		commit_list_insert(lookup_commit(&parent), &parents);
 	} else {
 		old_oid = NULL;
 		say(state, stderr, _("applying to an empty history"));
@@ -2037,11 +2014,11 @@ static int clean_index(const struct object_id *head, const struct object_id *rem
 	struct tree *head_tree, *remote_tree, *index_tree;
 	struct object_id index;
 
-	head_tree = parse_tree_indirect(head->hash);
+	head_tree = parse_tree_indirect(head);
 	if (!head_tree)
 		return error(_("Could not parse object '%s'."), oid_to_hex(head));
 
-	remote_tree = parse_tree_indirect(remote->hash);
+	remote_tree = parse_tree_indirect(remote);
 	if (!remote_tree)
 		return error(_("Could not parse object '%s'."), oid_to_hex(remote));
 
@@ -2053,7 +2030,7 @@ static int clean_index(const struct object_id *head, const struct object_id *rem
 	if (write_cache_as_tree(index.hash, 0, NULL))
 		return -1;
 
-	index_tree = parse_tree_indirect(index.hash);
+	index_tree = parse_tree_indirect(&index);
 	if (!index_tree)
 		return error(_("Could not parse object '%s'."), oid_to_hex(&index));
 

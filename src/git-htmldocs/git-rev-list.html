@@ -1020,13 +1020,19 @@ ordering and formatting options, such as <code>--reverse</code>.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+-P
+</dt>
+<dt class="hdlist1">
 --perl-regexp
 </dt>
 <dd>
 <p>
-        Consider the limiting patterns to be Perl-compatible regular expressions.
-        Requires libpcre to be compiled in.
+        Consider the limiting patterns to be Perl-compatible regular
+        expressions.
 </p>
+<div class="paragraph"><p>Support for these types of regular expressions is an optional
+compile-time dependency. If Git wasn&#8217;t compiled with support for them
+providing this option will cause it to die.</p></div>
 </dd>
 <dt class="hdlist1">
 --remove-empty
@@ -2102,7 +2108,8 @@ timezone value.</p></div>
 <div class="paragraph"><p><code>--date=unix</code> shows the date as a Unix epoch timestamp (seconds since
 1970).  As with <code>--raw</code>, this is always in UTC and therefore <code>-local</code>
 has no effect.</p></div>
-<div class="paragraph"><p><code>--date=format:...</code> feeds the format <code>...</code> to your system <code>strftime</code>.
+<div class="paragraph"><p><code>--date=format:...</code> feeds the format <code>...</code> to your system <code>strftime</code>,
+except for %z and %Z, which are handled internally.
 Use <code>--date=format:%c</code> to show the date in your system locale&#8217;s
 preferred format.  See the <code>strftime</code> manual for a complete list of
 format placeholders. When using <code>-local</code>, the correct syntax is
@@ -2646,11 +2653,12 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%C(&#8230;)</em>: color specification, as described under Values in the
   "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>;
-  adding <code>auto,</code> at the beginning will emit color only when colors are
-  enabled for log output (by <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and
-  respecting the <code>auto</code> settings of the former if we are going to a
-  terminal). <code>auto</code> alone (i.e. <code>%C(auto)</code>) will turn on auto coloring
-  on the next placeholders until the color is switched again.
+  adding <code>auto,</code> at the beginning (e.g. <code>%C(auto,red)</code>) will emit
+  color only when colors are enabled for log output (by <code>color.diff</code>,
+  <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code> settings of the
+  former if we are going to a terminal). <code>auto</code> alone (i.e.
+  <code>%C(auto)</code>) will turn on auto coloring on the next placeholders
+  until the color is switched again.
 </p>
 </li>
 <li>
@@ -2711,7 +2719,11 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 <p>
 <em>%&gt;&lt;(&lt;N&gt;)</em>, <em>%&gt;&lt;|(&lt;N&gt;)</em>: similar to <em>% &lt;(&lt;N&gt;)</em>, <em>%&lt;|(&lt;N&gt;)</em>
   respectively, but padding both sides (i.e. the text is centered)
--%(trailers): display the trailers of the body as interpreted by
+</p>
+</li>
+<li>
+<p>
+%(trailers): display the trailers of the body as interpreted by
   <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>
 </p>
 </li>
@@ -2734,8 +2746,8 @@ line.</td>
 <div class="paragraph"><p>If you add a <code>+</code> (plus sign) after <em>%</em> of a placeholder, a line-feed
 is inserted immediately before the expansion if and only if the
 placeholder expands to a non-empty string.</p></div>
-<div class="paragraph"><p>If you add a <code>-</code> (minus sign) after <em>%</em> of a placeholder, line-feeds that
-immediately precede the expansion are deleted if and only if the
+<div class="paragraph"><p>If you add a <code>-</code> (minus sign) after <em>%</em> of a placeholder, all consecutive
+line-feeds immediately preceding the expansion are deleted if and only if the
 placeholder expands to an empty string.</p></div>
 <div class="paragraph"><p>If you add a ` ` (space) after <em>%</em> of a placeholder, a space
 is inserted immediately before the expansion if and only if the
@@ -2786,7 +2798,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2015-10-06 05:38:43 JST
+Last updated 2015-10-05 13:38:43 PDT
 </div>
 </div>
 </body>

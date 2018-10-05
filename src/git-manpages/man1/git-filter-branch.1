@@ -2,12 +2,12 @@
 .\"     Title: git-filter-branch
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 05/09/2017
+.\"      Date: 08/04/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.13.0
+.\"    Source: Git 2.14.0
 .\"  Language: English
 .\"
-.TH "GIT\-FILTER\-BRANCH" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
+.TH "GIT\-FILTER\-BRANCH" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,11 +32,11 @@ git-filter-branch \- Rewrite branches
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit filter\-branch\fR [\-\-env\-filter <command>] [\-\-tree\-filter <command>]
-        [\-\-index\-filter <command>] [\-\-parent\-filter <command>]
-        [\-\-msg\-filter <command>] [\-\-commit\-filter <command>]
-        [\-\-tag\-name\-filter <command>] [\-\-subdirectory\-filter <directory>]
-        [\-\-prune\-empty]
+\fIgit filter\-branch\fR [\-\-setup <command>] [\-\-env\-filter <command>]
+        [\-\-tree\-filter <command>] [\-\-index\-filter <command>]
+        [\-\-parent\-filter <command>] [\-\-msg\-filter <command>]
+        [\-\-commit\-filter <command>] [\-\-tag\-name\-filter <command>]
+        [\-\-subdirectory\-filter <directory>] [\-\-prune\-empty]
         [\-\-original <namespace>] [\-d <directory>] [\-f | \-\-force]
         [\-\-] [<rev\-list options>\&...]
 .fi
@@ -63,11 +63,16 @@ If any evaluation of <command> returns a non\-zero exit status, the whole operat
 A \fImap\fR function is available that takes an "original sha1 id" argument and outputs a "rewritten sha1 id" if the commit has been already rewritten, and "original sha1 id" otherwise; the \fImap\fR function can return several ids on separate lines if your commit filter emitted multiple commits\&.
 .SH "OPTIONS"
 .PP
+\-\-setup <command>
+.RS 4
+This is not a real filter executed for each commit but a one time setup just before the loop\&. Therefore no commit\-specific variables are defined yet\&. Functions or variables defined here can be used or modified in the following filter steps except the commit filter, for technical reasons\&.
+.RE
+.PP
 \-\-env\-filter <command>
 .RS 4
 This filter may be used if you only need to modify the environment in which the commit will be performed\&. Specifically, you might want to rewrite the author/committer name/email/time environment variables (see
 \fBgit-commit-tree\fR(1)
-for details)\&. Do not forget to re\-export the variables\&.
+for details)\&.
 .RE
 .PP
 \-\-tree\-filter <command>
@@ -348,12 +353,10 @@ git filter\-branch \-\-env\-filter \(aq
         if test "$GIT_AUTHOR_EMAIL" = "root@localhost"
         then
                 GIT_AUTHOR_EMAIL=john@example\&.com
-                export GIT_AUTHOR_EMAIL
         fi
         if test "$GIT_COMMITTER_EMAIL" = "root@localhost"
         then
                 GIT_COMMITTER_EMAIL=john@example\&.com
-                export GIT_COMMITTER_EMAIL
         fi
 \(aq \-\- \-\-all
 .fi

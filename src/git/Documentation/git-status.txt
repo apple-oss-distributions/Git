@@ -32,6 +32,9 @@ OPTIONS
 --branch::
 	Show the branch and tracking info even in short-format.
 
+--show-stash::
+	Show the number of entries currently stashed away.
+
 --porcelain[=<version>]::
 	Give the output in an easy-to-parse format for scripts.
 	This is similar to the short output, but will remain stable
@@ -108,6 +111,8 @@ configuration variable documented in linkgit:git-config[1].
 	without options are equivalent to 'always' and 'never'
 	respectively.
 
+<pathspec>...::
+	See the 'pathspec' entry in linkgit:gitglossary[7].
 
 OUTPUT
 ------

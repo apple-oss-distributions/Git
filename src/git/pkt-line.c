@@ -94,9 +94,9 @@ void packet_flush(int fd)
 int packet_flush_gently(int fd)
 {
 	packet_trace("0000", 4, 1);
-	if (write_in_full(fd, "0000", 4) == 4)
-		return 0;
-	return error("flush packet write failed");
+	if (write_in_full(fd, "0000", 4) < 0)
+		return error("flush packet write failed");
+	return 0;
 }
 
 void packet_buf_flush(struct strbuf *buf)
@@ -136,19 +136,19 @@ static void format_packet(struct strbuf *out, const char *fmt, va_list args)
 static int packet_write_fmt_1(int fd, int gently,
 			      const char *fmt, va_list args)
 {
-	struct strbuf buf = STRBUF_INIT;
-	ssize_t count;
+	static struct strbuf buf = STRBUF_INIT;
 
+	strbuf_reset(&buf);
 	format_packet(&buf, fmt, args);
-	count = write_in_full(fd, buf.buf, buf.len);
-	if (count == buf.len)
-		return 0;
-
-	if (!gently) {
-		check_pipe(errno);
-		die_errno("packet write with format failed");
+	if (write_in_full(fd, buf.buf, buf.len) < 0) {
+		if (!gently) {
+			check_pipe(errno);
+			die_errno("packet write with format failed");
+		}
+		return error("packet write with format failed");
 	}
-	return error("packet write with format failed");
+
+	return 0;
 }
 
 void packet_write_fmt(int fd, const char *fmt, ...)
@@ -183,9 +183,9 @@ static int packet_write_gently(const int fd_out, const char *buf, size_t size)
 	packet_size = size + 4;
 	set_packet_header(packet_write_buffer, packet_size);
 	memcpy(packet_write_buffer + 4, buf, size);
-	if (write_in_full(fd_out, packet_write_buffer, packet_size) == packet_size)
-		return 0;
-	return error("packet write failed");
+	if (write_in_full(fd_out, packet_write_buffer, packet_size) < 0)
+		return error("packet write failed");
+	return 0;
 }
 
 void packet_buf_write(struct strbuf *buf, const char *fmt, ...)
@@ -315,12 +315,24 @@ static char *packet_read_line_generic(int fd,
 			      PACKET_READ_CHOMP_NEWLINE);
 	if (dst_len)
 		*dst_len = len;
-	return len ? packet_buffer : NULL;
+	return (len > 0) ? packet_buffer : NULL;
 }
 
 char *packet_read_line(int fd, int *len_p)
 {
 	return packet_read_line_generic(fd, NULL, NULL, len_p);
+}
+
+int packet_read_line_gently(int fd, int *dst_len, char **dst_line)
+{
+	int len = packet_read(fd, NULL, NULL,
+			      packet_buffer, sizeof(packet_buffer),
+			      PACKET_READ_CHOMP_NEWLINE|PACKET_READ_GENTLE_ON_EOF);
+	if (dst_len)
+		*dst_len = len;
+	if (dst_line)
+		*dst_line = (len > 0) ? packet_buffer : NULL;
+	return len;
 }
 
 char *packet_read_line_buf(char **src, size_t *src_len, int *dst_len)

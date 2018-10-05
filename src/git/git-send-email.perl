@@ -25,8 +25,9 @@ use Getopt::Long;
 use Text::ParseWords;
 use Term::ANSIColor;
 use File::Temp qw/ tempdir tempfile /;
-use File::Spec::Functions qw(catfile);
+use File::Spec::Functions qw(catdir catfile);
 use Error qw(:try);
+use Cwd qw(abs_path cwd);
 use Git;
 use Git::I18N;
 
@@ -80,6 +81,10 @@ git send-email --dump-aliases
     --smtp-auth             <str>  * Space-separated list of allowed AUTH mechanisms.
                                      This setting forces to use one of the listed mechanisms.
     --smtp-debug            <0|1>  * Disable, enable Net::SMTP debug.
+
+    --batch-size            <int>  * send max <int> message per connection.
+    --relogin-delay         <int>  * delay <int> seconds between two successive login.
+                                     This option can only be used with --batch-size
 
   Automating:
     --identity              <str>  * Use the sendemail.<id> options.
@@ -150,9 +155,9 @@ sub format_2822_time {
 }
 
 my $have_email_valid = eval { require Email::Valid; 1 };
-my $have_mail_address = eval { require Mail::Address; 1 };
 my $smtp;
 my $auth;
+my $num_sent = 0;
 
 # Regexes for RFC 2047 productions.
 my $re_token = qr/[^][()<>@,;:\\"\/?.= \000-\037\177-\377]+/;
@@ -216,6 +221,7 @@ my ($cover_cc, $cover_to);
 my ($to_cmd, $cc_cmd);
 my ($smtp_server, $smtp_server_port, @smtp_server_options);
 my ($smtp_authuser, $smtp_encryption, $smtp_ssl_cert_path);
+my ($batch_size, $relogin_delay);
 my ($identity, $aliasfiletype, @alias_files, $smtp_domain, $smtp_auth);
 my ($validate, $confirm);
 my (@suppress_cc);
@@ -247,6 +253,8 @@ my %config_settings = (
     "smtppass" => \$smtp_authpass,
     "smtpdomain" => \$smtp_domain,
     "smtpauth" => \$smtp_auth,
+    "smtpbatchsize" => \$batch_size,
+    "smtprelogindelay" => \$relogin_delay,
     "to" => \@initial_to,
     "tocmd" => \$to_cmd,
     "cc" => \@initial_cc,
@@ -358,6 +366,8 @@ $rc = GetOptions(
 		    "force" => \$force,
 		    "xmailer!" => \$use_xmailer,
 		    "no-xmailer" => sub {$use_xmailer = 0},
+		    "batch-size=i" => \$batch_size,
+		    "relogin-delay=i" => \$relogin_delay,
 	 );
 
 usage() if $help;
@@ -479,11 +489,7 @@ my ($repoauthor, $repocommitter);
 ($repocommitter) = Git::ident_person(@repo, 'committer');
 
 sub parse_address_line {
-	if ($have_mail_address) {
-		return map { $_->format } Mail::Address->parse($_[0]);
-	} else {
-		return Git::parse_mailboxes($_[0]);
-	}
+	return Git::parse_mailboxes($_[0]);
 }
 
 sub split_addrs {
@@ -1078,6 +1084,26 @@ sub sanitize_address {
 
 }
 
+sub strip_garbage_one_address {
+	my ($addr) = @_;
+	chomp $addr;
+	if ($addr =~ /^(("[^"]*"|[^"<]*)? *<[^>]*>).*/) {
+		# "Foo Bar" <foobar@example.com> [possibly garbage here]
+		# Foo Bar <foobar@example.com> [possibly garbage here]
+		return $1;
+	}
+	if ($addr =~ /^(<[^>]*>).*/) {
+		# <foo@example.com> [possibly garbage here]
+		# if garbage contains other addresses, they are ignored.
+		return $1;
+	}
+	if ($addr =~ /^([^"#,\s]*)/) {
+		# address without quoting: remove anything after the address
+		return $1;
+	}
+	return $addr;
+}
+
 sub sanitize_address_list {
 	return (map { sanitize_address($_) } @_);
 }
@@ -1579,10 +1605,12 @@ foreach my $t (@files) {
 	# Now parse the message body
 	while(<$fh>) {
 		$message .=  $_;
-		if (/^(Signed-off-by|Cc): ([^>]*>?)/i) {
+		if (/^(Signed-off-by|Cc): (.*)/i) {
 			chomp;
 			my ($what, $c) = ($1, $2);
-			chomp $c;
+			# strip garbage for the address we'll use:
+			$c = strip_garbage_one_address($c);
+			# sanitize a bit more to decide whether to suppress the address:
 			my $sc = sanitize_address($c);
 			if ($sc eq $sender) {
 				next if ($suppress_cc{'self'});
@@ -1680,6 +1708,14 @@ foreach my $t (@files) {
 		}
 	}
 	$message_id = undef;
+	$num_sent++;
+	if (defined $batch_size && $num_sent == $batch_size) {
+		$num_sent = 0;
+		$smtp->quit if defined $smtp;
+		undef $smtp;
+		undef $auth;
+		sleep($relogin_delay) if defined $relogin_delay;
+	}
 }
 
 # Execute a command (e.g. $to_cmd) to get a list of email addresses
@@ -1753,6 +1789,25 @@ sub unique_email_list {
 
 sub validate_patch {
 	my $fn = shift;
+
+	if ($repo) {
+		my $validate_hook = catfile(catdir($repo->repo_path(), 'hooks'),
+					    'sendemail-validate');
+		my $hook_error;
+		if (-x $validate_hook) {
+			my $target = abs_path($fn);
+			# The hook needs a correct cwd and GIT_DIR.
+			my $cwd_save = cwd();
+			chdir($repo->wc_path() or $repo->repo_path())
+				or die("chdir: $!");
+			local $ENV{"GIT_DIR"} = $repo->repo_path();
+			$hook_error = "rejected by sendemail-validate hook"
+				if system($validate_hook, $target);
+			chdir($cwd_save) or die("chdir: $!");
+		}
+		return $hook_error if $hook_error;
+	}
+
 	open(my $fh, '<', $fn)
 		or die sprintf(__("unable to open %s: %s\n"), $fn, $!);
 	while (my $line = <$fh>) {

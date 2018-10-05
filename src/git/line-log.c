@@ -34,9 +34,8 @@ void range_set_init(struct range_set *rs, size_t prealloc)
 
 void range_set_release(struct range_set *rs)
 {
-	free(rs->ranges);
+	FREE_AND_NULL(rs->ranges);
 	rs->alloc = rs->nr = 0;
-	rs->ranges = NULL;
 }
 
 /* dst must be uninitialized! */
@@ -91,7 +90,7 @@ static int range_cmp(const void *_r, const void *_s)
  */
 static void range_set_check_invariants(struct range_set *rs)
 {
-	int i;
+	unsigned int i;
 
 	if (!rs)
 		return;
@@ -111,8 +110,8 @@ static void range_set_check_invariants(struct range_set *rs)
  */
 void sort_and_merge_range_set(struct range_set *rs)
 {
-	int i;
-	int o = 0; /* output cursor */
+	unsigned int i;
+	unsigned int o = 0; /* output cursor */
 
 	QSORT(rs->ranges, rs->nr, range_cmp);
 
@@ -145,7 +144,7 @@ void sort_and_merge_range_set(struct range_set *rs)
 static void range_set_union(struct range_set *out,
 			     struct range_set *a, struct range_set *b)
 {
-	int i = 0, j = 0;
+	unsigned int i = 0, j = 0;
 	struct range *ra = a->ranges;
 	struct range *rb = b->ranges;
 	/* cannot make an alias of out->ranges: it may change during grow */
@@ -187,7 +186,7 @@ static void range_set_union(struct range_set *out,
 static void range_set_difference(struct range_set *out,
 				  struct range_set *a, struct range_set *b)
 {
-	int i, j =  0;
+	unsigned int i, j =  0;
 	for (i = 0; i < a->nr; i++) {
 		long start = a->ranges[i].start;
 		long end = a->ranges[i].end;
@@ -398,7 +397,7 @@ static void diff_ranges_filter_touched(struct diff_ranges *out,
 				       struct diff_ranges *diff,
 				       struct range_set *rs)
 {
-	int i, j = 0;
+	unsigned int i, j = 0;
 
 	assert(out->target.nr == 0);
 
@@ -427,7 +426,7 @@ static void range_set_shift_diff(struct range_set *out,
 				 struct range_set *rs,
 				 struct diff_ranges *diff)
 {
-	int i, j = 0;
+	unsigned int i, j = 0;
 	long offset = 0;
 	struct range *src = rs->ranges;
 	struct range *target = diff->target.ranges;
@@ -500,12 +499,12 @@ static struct commit *check_single_commit(struct rev_info *revs)
 static void fill_blob_sha1(struct commit *commit, struct diff_filespec *spec)
 {
 	unsigned mode;
-	unsigned char sha1[20];
+	struct object_id oid;
 
 	if (get_tree_entry(commit->object.oid.hash, spec->path,
-			   sha1, &mode))
+			   oid.hash, &mode))
 		die("There is no path %s in the commit", spec->path);
-	fill_filespec(spec, sha1, 1, mode);
+	fill_filespec(spec, &oid, 1, mode);
 
 	return;
 }
@@ -610,8 +609,7 @@ parse_lines(struct commit *commit, const char *prefix, struct string_list *args)
 		line_log_data_insert(&ranges, full_name, begin, end);
 
 		free_filespec(spec);
-		free(ends);
-		ends = NULL;
+		FREE_AND_NULL(ends);
 	}
 
 	for (p = ranges; p; p = p->next)
@@ -819,8 +817,8 @@ static void queue_diffs(struct line_log_data *range,
 	assert(commit);
 
 	DIFF_QUEUE_CLEAR(&diff_queued_diff);
-	diff_tree_sha1(parent ? parent->tree->object.oid.hash : NULL,
-			commit->tree->object.oid.hash, "", opt);
+	diff_tree_oid(parent ? &parent->tree->object.oid : NULL,
+		      &commit->tree->object.oid, "", opt);
 	if (opt->detect_rename) {
 		filter_diffs_for_paths(range, 1);
 		if (diff_might_be_rename())
@@ -875,7 +873,7 @@ static char *output_prefix(struct diff_options *opt)
 
 static void dump_diff_hacky_one(struct rev_info *rev, struct line_log_data *range)
 {
-	int i, j = 0;
+	unsigned int i, j = 0;
 	long p_lines, t_lines;
 	unsigned long *p_ends = NULL, *t_ends = NULL;
 	struct diff_filepair *pair = range->pair;
@@ -908,7 +906,7 @@ static void dump_diff_hacky_one(struct rev_info *rev, struct line_log_data *rang
 		long t_start = range->ranges.ranges[i].start;
 		long t_end = range->ranges.ranges[i].end;
 		long t_cur = t_start;
-		int j_last;
+		unsigned int j_last;
 
 		while (j < diff->target.nr && diff->target.ranges[j].end < t_start)
 			j++;

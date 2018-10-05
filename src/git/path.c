@@ -2,11 +2,13 @@
  * Utilities for paths and pathnames
  */
 #include "cache.h"
+#include "repository.h"
 #include "strbuf.h"
 #include "string-list.h"
 #include "dir.h"
 #include "worktree.h"
 #include "submodule-config.h"
+#include "path.h"
 
 static int get_st_mode_bits(const char *path, int *mode)
 {
@@ -31,11 +33,10 @@ static struct strbuf *get_pathname(void)
 	return sb;
 }
 
-static char *cleanup_path(char *path)
+static const char *cleanup_path(const char *path)
 {
 	/* Clean it up */
-	if (!memcmp(path, "./", 2)) {
-		path += 2;
+	if (skip_prefix(path, "./", &path)) {
 		while (*path == '/')
 			path++;
 	}
@@ -44,7 +45,7 @@ static char *cleanup_path(char *path)
 
 static void strbuf_cleanup_path(struct strbuf *sb)
 {
-	char *path = cleanup_path(sb->buf);
+	const char *path = cleanup_path(sb->buf);
 	if (path > sb->buf)
 		strbuf_remove(sb, 0, path - sb->buf);
 }
@@ -61,7 +62,7 @@ char *mksnpath(char *buf, size_t n, const char *fmt, ...)
 		strlcpy(buf, bad_path, n);
 		return buf;
 	}
-	return cleanup_path(buf);
+	return (char *)cleanup_path(buf);
 }
 
 static int dir_prefix(const char *buf, const char *dir)
@@ -343,8 +344,6 @@ static void update_common_dir(struct strbuf *buf, int git_dir_len,
 {
 	char *base = buf->buf + git_dir_len;
 	init_common_trie();
-	if (!common_dir)
-		common_dir = get_git_common_dir();
 	if (trie_find(&common_trie, base, check_common, NULL) > 0)
 		replace_dir(buf, git_dir_len, common_dir);
 }
@@ -355,7 +354,7 @@ void report_linked_checkout_garbage(void)
 	const struct common_dir *p;
 	int len;
 
-	if (!git_common_dir_env)
+	if (!the_repository->different_commondir)
 		return;
 	strbuf_addf(&sb, "%s/", get_git_dir());
 	len = sb.len;
@@ -371,34 +370,70 @@ void report_linked_checkout_garbage(void)
 	strbuf_release(&sb);
 }
 
-static void adjust_git_path(struct strbuf *buf, int git_dir_len)
+static void adjust_git_path(const struct repository *repo,
+			    struct strbuf *buf, int git_dir_len)
 {
 	const char *base = buf->buf + git_dir_len;
-	if (git_graft_env && is_dir_file(base, "info", "grafts"))
+	if (is_dir_file(base, "info", "grafts"))
 		strbuf_splice(buf, 0, buf->len,
-			      get_graft_file(), strlen(get_graft_file()));
-	else if (git_index_env && !strcmp(base, "index"))
+			      repo->graft_file, strlen(repo->graft_file));
+	else if (!strcmp(base, "index"))
 		strbuf_splice(buf, 0, buf->len,
-			      get_index_file(), strlen(get_index_file()));
-	else if (git_db_env && dir_prefix(base, "objects"))
-		replace_dir(buf, git_dir_len + 7, get_object_directory());
+			      repo->index_file, strlen(repo->index_file));
+	else if (dir_prefix(base, "objects"))
+		replace_dir(buf, git_dir_len + 7, repo->objectdir);
 	else if (git_hooks_path && dir_prefix(base, "hooks"))
 		replace_dir(buf, git_dir_len + 5, git_hooks_path);
-	else if (git_common_dir_env)
-		update_common_dir(buf, git_dir_len, NULL);
+	else if (repo->different_commondir)
+		update_common_dir(buf, git_dir_len, repo->commondir);
 }
 
-static void do_git_path(const struct worktree *wt, struct strbuf *buf,
+static void strbuf_worktree_gitdir(struct strbuf *buf,
+				   const struct repository *repo,
+				   const struct worktree *wt)
+{
+	if (!wt)
+		strbuf_addstr(buf, repo->gitdir);
+	else if (!wt->id)
+		strbuf_addstr(buf, repo->commondir);
+	else
+		strbuf_git_common_path(buf, repo, "worktrees/%s", wt->id);
+}
+
+static void do_git_path(const struct repository *repo,
+			const struct worktree *wt, struct strbuf *buf,
 			const char *fmt, va_list args)
 {
 	int gitdir_len;
-	strbuf_addstr(buf, get_worktree_git_dir(wt));
+	strbuf_worktree_gitdir(buf, repo, wt);
 	if (buf->len && !is_dir_sep(buf->buf[buf->len - 1]))
 		strbuf_addch(buf, '/');
 	gitdir_len = buf->len;
 	strbuf_vaddf(buf, fmt, args);
-	adjust_git_path(buf, gitdir_len);
+	if (!wt)
+		adjust_git_path(repo, buf, gitdir_len);
 	strbuf_cleanup_path(buf);
+}
+
+char *repo_git_path(const struct repository *repo,
+		    const char *fmt, ...)
+{
+	struct strbuf path = STRBUF_INIT;
+	va_list args;
+	va_start(args, fmt);
+	do_git_path(repo, NULL, &path, fmt, args);
+	va_end(args);
+	return strbuf_detach(&path, NULL);
+}
+
+void strbuf_repo_git_path(struct strbuf *sb,
+			  const struct repository *repo,
+			  const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	do_git_path(repo, NULL, sb, fmt, args);
+	va_end(args);
 }
 
 char *git_path_buf(struct strbuf *buf, const char *fmt, ...)
@@ -406,7 +441,7 @@ char *git_path_buf(struct strbuf *buf, const char *fmt, ...)
 	va_list args;
 	strbuf_reset(buf);
 	va_start(args, fmt);
-	do_git_path(NULL, buf, fmt, args);
+	do_git_path(the_repository, NULL, buf, fmt, args);
 	va_end(args);
 	return buf->buf;
 }
@@ -415,7 +450,7 @@ void strbuf_git_path(struct strbuf *sb, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
-	do_git_path(NULL, sb, fmt, args);
+	do_git_path(the_repository, NULL, sb, fmt, args);
 	va_end(args);
 }
 
@@ -424,7 +459,7 @@ const char *git_path(const char *fmt, ...)
 	struct strbuf *pathname = get_pathname();
 	va_list args;
 	va_start(args, fmt);
-	do_git_path(NULL, pathname, fmt, args);
+	do_git_path(the_repository, NULL, pathname, fmt, args);
 	va_end(args);
 	return pathname->buf;
 }
@@ -434,7 +469,7 @@ char *git_pathdup(const char *fmt, ...)
 	struct strbuf path = STRBUF_INIT;
 	va_list args;
 	va_start(args, fmt);
-	do_git_path(NULL, &path, fmt, args);
+	do_git_path(the_repository, NULL, &path, fmt, args);
 	va_end(args);
 	return strbuf_detach(&path, NULL);
 }
@@ -465,9 +500,50 @@ const char *worktree_git_path(const struct worktree *wt, const char *fmt, ...)
 	struct strbuf *pathname = get_pathname();
 	va_list args;
 	va_start(args, fmt);
-	do_git_path(wt, pathname, fmt, args);
+	do_git_path(the_repository, wt, pathname, fmt, args);
 	va_end(args);
 	return pathname->buf;
+}
+
+static void do_worktree_path(const struct repository *repo,
+			     struct strbuf *buf,
+			     const char *fmt, va_list args)
+{
+	strbuf_addstr(buf, repo->worktree);
+	if(buf->len && !is_dir_sep(buf->buf[buf->len - 1]))
+		strbuf_addch(buf, '/');
+
+	strbuf_vaddf(buf, fmt, args);
+	strbuf_cleanup_path(buf);
+}
+
+char *repo_worktree_path(const struct repository *repo, const char *fmt, ...)
+{
+	struct strbuf path = STRBUF_INIT;
+	va_list args;
+
+	if (!repo->worktree)
+		return NULL;
+
+	va_start(args, fmt);
+	do_worktree_path(repo, &path, fmt, args);
+	va_end(args);
+
+	return strbuf_detach(&path, NULL);
+}
+
+void strbuf_repo_worktree_path(struct strbuf *sb,
+			       const struct repository *repo,
+			       const char *fmt, ...)
+{
+	va_list args;
+
+	if (!repo->worktree)
+		return;
+
+	va_start(args, fmt);
+	do_worktree_path(repo, sb, fmt, args);
+	va_end(args);
 }
 
 /* Returns 0 on success, negative on failure. */
@@ -524,11 +600,12 @@ int strbuf_git_path_submodule(struct strbuf *buf, const char *path,
 	return err;
 }
 
-static void do_git_common_path(struct strbuf *buf,
+static void do_git_common_path(const struct repository *repo,
+			       struct strbuf *buf,
 			       const char *fmt,
 			       va_list args)
 {
-	strbuf_addstr(buf, get_git_common_dir());
+	strbuf_addstr(buf, repo->commondir);
 	if (buf->len && !is_dir_sep(buf->buf[buf->len - 1]))
 		strbuf_addch(buf, '/');
 	strbuf_vaddf(buf, fmt, args);
@@ -540,24 +617,27 @@ const char *git_common_path(const char *fmt, ...)
 	struct strbuf *pathname = get_pathname();
 	va_list args;
 	va_start(args, fmt);
-	do_git_common_path(pathname, fmt, args);
+	do_git_common_path(the_repository, pathname, fmt, args);
 	va_end(args);
 	return pathname->buf;
 }
 
-void strbuf_git_common_path(struct strbuf *sb, const char *fmt, ...)
+void strbuf_git_common_path(struct strbuf *sb,
+			    const struct repository *repo,
+			    const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
-	do_git_common_path(sb, fmt, args);
+	do_git_common_path(repo, sb, fmt, args);
 	va_end(args);
 }
 
 int validate_headref(const char *path)
 {
 	struct stat st;
-	char *buf, buffer[256];
-	unsigned char sha1[20];
+	char buffer[256];
+	const char *refname;
+	struct object_id oid;
 	int fd;
 	ssize_t len;
 
@@ -581,24 +661,24 @@ int validate_headref(const char *path)
 	len = read_in_full(fd, buffer, sizeof(buffer)-1);
 	close(fd);
 
+	if (len < 0)
+		return -1;
+	buffer[len] = '\0';
+
 	/*
 	 * Is it a symbolic ref?
 	 */
-	if (len < 4)
-		return -1;
-	if (!memcmp("ref:", buffer, 4)) {
-		buf = buffer + 4;
-		len -= 4;
-		while (len && isspace(*buf))
-			buf++, len--;
-		if (len >= 5 && !memcmp("refs/", buf, 5))
+	if (skip_prefix(buffer, "ref:", &refname)) {
+		while (isspace(*refname))
+			refname++;
+		if (starts_with(refname, "refs/"))
 			return 0;
 	}
 
 	/*
 	 * Is this a detached HEAD?
 	 */
-	if (!get_sha1_hex(buffer, sha1))
+	if (!get_oid_hex(buffer, &oid))
 		return 0;
 
 	return -1;

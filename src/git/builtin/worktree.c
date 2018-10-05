@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "config.h"
 #include "builtin.h"
 #include "dir.h"
 #include "parse-options.h"
@@ -31,7 +32,7 @@ struct add_opts {
 
 static int show_only;
 static int verbose;
-static unsigned long expire;
+static timestamp_t expire;
 
 static int prune_worktree(const char *id, struct strbuf *reason)
 {
@@ -131,7 +132,7 @@ static int prune(int ac, const char **av, const char *prefix)
 		OPT_END()
 	};
 
-	expire = ULONG_MAX;
+	expire = TIME_MAX;
 	ac = parse_options(ac, av, prefix, options, worktree_usage, 0);
 	if (ac)
 		usage_with_options(worktree_usage, options);
@@ -299,10 +300,8 @@ static int add_worktree(const char *path, const char *refname,
 	}
 
 	is_junk = 0;
-	free(junk_work_tree);
-	free(junk_git_dir);
-	junk_work_tree = NULL;
-	junk_git_dir = NULL;
+	FREE_AND_NULL(junk_work_tree);
+	FREE_AND_NULL(junk_git_dir);
 
 done:
 	if (ret || !opts->keep_locked) {

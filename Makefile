@@ -66,6 +66,7 @@ submakevars := -j`sysctl -n hw.activecpu` prefix=$(PREFIX) \
   ETC_GITATTRIBUTES=/etc/gitattributes \
   PYTHON_PATH='MACOSX_DEPLOYMENT_TARGET="" /usr/bin/python' \
   PYTHON_PATH_SQ='/usr/bin/python' \
+  NO_LIBPCRE1_JIT=YesPlease \
   NO_GETTEXT=YesPlease NO_INSTALL_HARDLINKS=YesPlease \
   NO_FINK=YesPlease NO_DARWIN_PORTS=YesPlease \
   RUNTIME_PREFIX=YesPlease USE_LIBPCRE=YesPlease \

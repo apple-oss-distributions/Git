@@ -137,6 +137,7 @@ void wt_status_prepare(struct wt_status *s)
 	s->untracked.strdup_strings = 1;
 	s->ignored.strdup_strings = 1;
 	s->show_branch = -1;  /* unspecified */
+	s->show_stash = 0;
 	s->display_comment_prefix = 0;
 }
 
@@ -665,7 +666,7 @@ static void wt_status_collect_untracked(struct wt_status *s)
 		dir.untracked = the_index.untracked;
 	setup_standard_excludes(&dir);
 
-	fill_directory(&dir, &s->pathspec);
+	fill_directory(&dir, &the_index, &s->pathspec);
 
 	for (i = 0; i < dir.nr; i++) {
 		struct dir_entry *ent = dir.entries[i];
@@ -799,6 +800,27 @@ static void wt_longstatus_print_changed(struct wt_status *s)
 		wt_longstatus_print_change_data(s, WT_STATUS_CHANGED, it);
 	}
 	wt_longstatus_print_trailer(s);
+}
+
+static int stash_count_refs(struct object_id *ooid, struct object_id *noid,
+			    const char *email, timestamp_t timestamp, int tz,
+			    const char *message, void *cb_data)
+{
+	int *c = cb_data;
+	(*c)++;
+	return 0;
+}
+
+static void wt_longstatus_print_stash_summary(struct wt_status *s)
+{
+	int stash_count = 0;
+
+	for_each_reflog_ent("refs/stash", stash_count_refs, &stash_count);
+	if (stash_count > 0)
+		status_printf_ln(s, GIT_COLOR_NORMAL,
+				 Q_("Your stash currently has %d entry",
+				    "Your stash currently has %d entries", stash_count),
+				 stash_count);
 }
 
 static void wt_longstatus_print_submodule_summary(struct wt_status *s, int uncommitted)
@@ -1003,7 +1025,7 @@ static void wt_longstatus_print_tracking(struct wt_status *s)
 		color_fprintf_ln(s->fp, color(WT_STATUS_HEADER, s), "%c",
 				 comment_line_char);
 	else
-		fputs("", s->fp);
+		fputs("\n", s->fp);
 }
 
 static int has_unmerged(struct wt_status *s)
@@ -1066,7 +1088,8 @@ static void show_am_in_progress(struct wt_status *s,
 static char *read_line_from_git_path(const char *filename)
 {
 	struct strbuf buf = STRBUF_INIT;
-	FILE *fp = fopen(git_path("%s", filename), "r");
+	FILE *fp = fopen_or_warn(git_path("%s", filename), "r");
+
 	if (!fp) {
 		strbuf_release(&buf);
 		return NULL;
@@ -1389,7 +1412,7 @@ struct grab_1st_switch_cbdata {
 };
 
 static int grab_1st_switch(struct object_id *ooid, struct object_id *noid,
-			   const char *email, unsigned long timestamp, int tz,
+			   const char *email, timestamp_t timestamp, int tz,
 			   const char *message, void *cb_data)
 {
 	struct grab_1st_switch_cbdata *cb = cb_data;
@@ -1430,7 +1453,7 @@ static void wt_status_get_detached_from(struct wt_status_state *state)
 	    /* sha1 is a commit? match without further lookup */
 	    (!oidcmp(&cb.noid, &oid) ||
 	     /* perhaps sha1 is a tag, try to dereference to a commit */
-	     ((commit = lookup_commit_reference_gently(oid.hash, 1)) != NULL &&
+	     ((commit = lookup_commit_reference_gently(&oid, 1)) != NULL &&
 	      !oidcmp(&cb.noid, &commit->object.oid)))) {
 		const char *from = ref;
 		if (!skip_prefix(from, "refs/tags/", &from))
@@ -1578,7 +1601,10 @@ static void wt_longstatus_print(struct wt_status *s)
 
 	if (s->is_initial) {
 		status_printf_ln(s, color(WT_STATUS_HEADER, s), "%s", "");
-		status_printf_ln(s, color(WT_STATUS_HEADER, s), _("Initial commit"));
+		status_printf_ln(s, color(WT_STATUS_HEADER, s),
+				 s->commit_template
+				 ? _("Initial commit")
+				 : _("No commits yet"));
 		status_printf_ln(s, color(WT_STATUS_HEADER, s), "%s", "");
 	}
 
@@ -1641,6 +1667,8 @@ static void wt_longstatus_print(struct wt_status *s)
 		} else
 			printf(_("nothing to commit, working tree clean\n"));
 	}
+	if(s->show_stash)
+		wt_longstatus_print_stash_summary(s);
 }
 
 static void wt_shortstatus_unmerged(struct string_list_item *it,
@@ -1735,6 +1763,7 @@ static void wt_shortstatus_print_tracking(struct wt_status *s)
 	const char *branch_color_remote = color(WT_STATUS_REMOTE_BRANCH, s);
 
 	const char *base;
+	char *short_base;
 	const char *branch_name;
 	int num_ours, num_theirs;
 	int upstream_is_gone = 0;
@@ -1748,7 +1777,7 @@ static void wt_shortstatus_print_tracking(struct wt_status *s)
 #define LABEL(string) (s->no_gettext ? (string) : _(string))
 
 	if (s->is_initial)
-		color_fprintf(s->fp, header_color, LABEL(N_("Initial commit on ")));
+		color_fprintf(s->fp, header_color, LABEL(N_("No commits yet on ")));
 
 	if (!strcmp(s->branch, "HEAD")) {
 		color_fprintf(s->fp, color(WT_STATUS_NOBRANCH, s), "%s",
@@ -1769,10 +1798,10 @@ static void wt_shortstatus_print_tracking(struct wt_status *s)
 		upstream_is_gone = 1;
 	}
 
-	base = shorten_unambiguous_ref(base, 0);
+	short_base = shorten_unambiguous_ref(base, 0);
 	color_fprintf(s->fp, header_color, "...");
-	color_fprintf(s->fp, branch_color_remote, "%s", base);
-	free((char *)base);
+	color_fprintf(s->fp, branch_color_remote, "%s", short_base);
+	free(short_base);
 
 	if (!upstream_is_gone && !num_ours && !num_theirs)
 		goto conclude;

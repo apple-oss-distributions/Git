@@ -1,5 +1,6 @@
 #include "builtin.h"
 #include "cache.h"
+#include "config.h"
 #include "commit.h"
 #include "tag.h"
 #include "refs.h"
@@ -10,20 +11,20 @@
 
 typedef struct rev_name {
 	const char *tip_name;
-	unsigned long taggerdate;
+	timestamp_t taggerdate;
 	int generation;
 	int distance;
 	int from_tag;
 } rev_name;
 
-static long cutoff = LONG_MAX;
+static timestamp_t cutoff = TIME_MAX;
 
 /* How many generations are maximally preferred over _one_ merge traversal? */
 #define MERGE_TRAVERSAL_WEIGHT 65535
 
 static int is_better_name(struct rev_name *name,
 			  const char *tip_name,
-			  unsigned long taggerdate,
+			  timestamp_t taggerdate,
 			  int generation,
 			  int distance,
 			  int from_tag)
@@ -60,7 +61,7 @@ static int is_better_name(struct rev_name *name,
 }
 
 static void name_rev(struct commit *commit,
-		const char *tip_name, unsigned long taggerdate,
+		const char *tip_name, timestamp_t taggerdate,
 		int generation, int distance, int from_tag,
 		int deref)
 {
@@ -129,7 +130,7 @@ static int subpath_matches(const char *path, const char *filter)
 	const char *subpath = path;
 
 	while (subpath) {
-		if (!wildmatch(filter, subpath, 0, NULL))
+		if (!wildmatch(filter, subpath, 0))
 			return subpath - path;
 		subpath = strchr(subpath, '/');
 		if (subpath)
@@ -158,7 +159,7 @@ struct name_ref_data {
 
 static struct tip_table {
 	struct tip_table_entry {
-		unsigned char sha1[20];
+		struct object_id oid;
 		const char *refname;
 	} *table;
 	int nr;
@@ -166,13 +167,13 @@ static struct tip_table {
 	int sorted;
 } tip_table;
 
-static void add_to_tip_table(const unsigned char *sha1, const char *refname,
+static void add_to_tip_table(const struct object_id *oid, const char *refname,
 			     int shorten_unambiguous)
 {
 	refname = name_ref_abbrev(refname, shorten_unambiguous);
 
 	ALLOC_GROW(tip_table.table, tip_table.nr + 1, tip_table.alloc);
-	hashcpy(tip_table.table[tip_table.nr].sha1, sha1);
+	oidcpy(&tip_table.table[tip_table.nr].oid, oid);
 	tip_table.table[tip_table.nr].refname = xstrdup(refname);
 	tip_table.nr++;
 	tip_table.sorted = 0;
@@ -181,16 +182,16 @@ static void add_to_tip_table(const unsigned char *sha1, const char *refname,
 static int tipcmp(const void *a_, const void *b_)
 {
 	const struct tip_table_entry *a = a_, *b = b_;
-	return hashcmp(a->sha1, b->sha1);
+	return oidcmp(&a->oid, &b->oid);
 }
 
 static int name_ref(const char *path, const struct object_id *oid, int flags, void *cb_data)
 {
-	struct object *o = parse_object(oid->hash);
+	struct object *o = parse_object(oid);
 	struct name_ref_data *data = cb_data;
 	int can_abbreviate_output = data->tags_only && data->name_only;
 	int deref = 0;
-	unsigned long taggerdate = ULONG_MAX;
+	timestamp_t taggerdate = TIME_MAX;
 
 	if (data->tags_only && !starts_with(path, "refs/tags/"))
 		return 0;
@@ -238,13 +239,13 @@ static int name_ref(const char *path, const struct object_id *oid, int flags, vo
 			return 0;
 	}
 
-	add_to_tip_table(oid->hash, path, can_abbreviate_output);
+	add_to_tip_table(oid, path, can_abbreviate_output);
 
 	while (o && o->type == OBJ_TAG) {
 		struct tag *t = (struct tag *) o;
 		if (!t->tagged)
 			break; /* broken repository */
-		o = parse_object(t->tagged->oid.hash);
+		o = parse_object(&t->tagged->oid);
 		deref = 1;
 		taggerdate = t->date;
 	}
@@ -252,7 +253,7 @@ static int name_ref(const char *path, const struct object_id *oid, int flags, vo
 		struct commit *commit = (struct commit *)o;
 		int from_tag = starts_with(path, "refs/tags/");
 
-		if (taggerdate == ULONG_MAX)
+		if (taggerdate == TIME_MAX)
 			taggerdate = ((struct commit *)o)->date;
 		path = name_ref_abbrev(path, can_abbreviate_output);
 		name_rev(commit, xstrdup(path), taggerdate, 0, 0,
@@ -264,7 +265,7 @@ static int name_ref(const char *path, const struct object_id *oid, int flags, vo
 static const unsigned char *nth_tip_table_ent(size_t ix, void *table_)
 {
 	struct tip_table_entry *table = table_;
-	return table[ix].sha1;
+	return table[ix].oid.hash;
 }
 
 static const char *get_exact_ref_match(const struct object *o)
@@ -349,9 +350,9 @@ static void name_rev_line(char *p, struct name_ref_data *data)
 #define ishex(x) (isdigit((x)) || ((x) >= 'a' && (x) <= 'f'))
 		if (!ishex(*p))
 			forty = 0;
-		else if (++forty == 40 &&
+		else if (++forty == GIT_SHA1_HEXSZ &&
 			 !ishex(*(p+1))) {
-			unsigned char sha1[40];
+			struct object_id oid;
 			const char *name = NULL;
 			char c = *(p+1);
 			int p_len = p - p_start + 1;
@@ -359,9 +360,9 @@ static void name_rev_line(char *p, struct name_ref_data *data)
 			forty = 0;
 
 			*(p+1) = 0;
-			if (!get_sha1(p - 39, sha1)) {
+			if (!get_oid(p - (GIT_SHA1_HEXSZ - 1), &oid)) {
 				struct object *o =
-					lookup_object(sha1);
+					lookup_object(oid.hash);
 				if (o)
 					name = get_rev_name(o, &buf);
 			}
@@ -371,7 +372,7 @@ static void name_rev_line(char *p, struct name_ref_data *data)
 				continue;
 
 			if (data->name_only)
-				printf("%.*s%s", p_len - 40, p_start, name);
+				printf("%.*s%s", p_len - GIT_SHA1_HEXSZ, p_start, name);
 			else
 				printf("%.*s (%s)", p_len, p_start, name);
 			p_start = p + 1;
@@ -422,18 +423,18 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
 		cutoff = 0;
 
 	for (; argc; argc--, argv++) {
-		unsigned char sha1[20];
+		struct object_id oid;
 		struct object *object;
 		struct commit *commit;
 
-		if (get_sha1(*argv, sha1)) {
+		if (get_oid(*argv, &oid)) {
 			fprintf(stderr, "Could not get sha1 for %s. Skipping.\n",
 					*argv);
 			continue;
 		}
 
 		commit = NULL;
-		object = parse_object(sha1);
+		object = parse_object(&oid);
 		if (object) {
 			struct object *peeled = deref_tag(object, *argv, 0);
 			if (peeled && peeled->type == OBJ_COMMIT)

@@ -2,12 +2,12 @@
 .\"     Title: git-pull
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 05/09/2017
+.\"      Date: 08/04/2017
 .\"    Manual: Git Manual
-.\"    Source: Git 2.13.0
+.\"    Source: Git 2.14.0
 .\"  Language: English
 .\"
-.TH "GIT\-PULL" "1" "05/09/2017" "Git 2\&.13\&.0" "Git Manual"
+.TH "GIT\-PULL" "1" "08/04/2017" "Git 2\&.14\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -96,10 +96,14 @@ Pass \-\-verbose to git\-fetch and git\-merge\&.
 .PP
 \-\-[no\-]recurse\-submodules[=yes|on\-demand|no]
 .RS 4
-This option controls if new commits of all populated submodules should be fetched too (see
+This option controls if new commits of all populated submodules should be fetched and updated, too (see
 \fBgit-config\fR(1)
 and
-\fBgitmodules\fR(5))\&. That might be necessary to get the data needed for merging submodule commits, a feature Git learned in 1\&.7\&.3\&. Notice that the result of a merge will not be checked out in the submodule, "git submodule update" has to be called afterwards to bring the work tree up to date with the merge result\&.
+\fBgitmodules\fR(5))\&.
+.sp
+If the checkout is done via rebase, local submodule commits are rebased as well\&.
+.sp
+If the update is done via merge, the submodule conflicts are resolved and checked out\&.
 .RE
 .SS "Options related to merging"
 .PP
@@ -258,7 +262,7 @@ Override earlier \-\-rebase\&.
 \-\-autostash, \-\-no\-autostash
 .RS 4
 Before starting rebase, stash local modifications away (see
-\fBgit-stash\fR(1)) if needed, and apply the stash when done\&.
+\fBgit-stash\fR(1)) if needed, and apply the stash entry when done\&.
 \fB\-\-no\-autostash\fR
 is useful to override the
 \fBrebase\&.autoStash\fR
@@ -950,9 +954,9 @@ With the strategies that use 3\-way merge (including the default, \fIrecursive\f
 .sp
 Often people use \fBgit pull\fR without giving any parameter\&. Traditionally, this has been equivalent to saying \fBgit pull origin\fR\&. However, when configuration \fBbranch\&.<name>\&.remote\fR is present while on branch \fB<name>\fR, that value is used instead of \fBorigin\fR\&.
 .sp
-In order to determine what URL to use to fetch from, the value of the configuration \fBremote\&.<origin>\&.url\fR is consulted and if there is not any such variable, the value on \fBURL: ` line in `$GIT_DIR/remotes/<origin>\fR file is used\&.
+In order to determine what URL to use to fetch from, the value of the configuration \fBremote\&.<origin>\&.url\fR is consulted and if there is not any such variable, the value on the \fBURL:\fR line in \fB$GIT_DIR/remotes/<origin>\fR is used\&.
 .sp
-In order to determine what remote branches to fetch (and optionally store in the remote\-tracking branches) when the command is run without any refspec parameters on the command line, values of the configuration variable \fBremote\&.<origin>\&.fetch\fR are consulted, and if there aren\(cqt any, \fB$GIT_DIR/remotes/<origin>\fR file is consulted and its `Pull: ` lines are used\&. In addition to the refspec formats described in the OPTIONS section, you can have a globbing refspec that looks like this:
+In order to determine what remote branches to fetch (and optionally store in the remote\-tracking branches) when the command is run without any refspec parameters on the command line, values of the configuration variable \fBremote\&.<origin>\&.fetch\fR are consulted, and if there aren\(cqt any, \fB$GIT_DIR/remotes/<origin>\fR is consulted and its \fBPull:\fR lines are used\&. In addition to the refspec formats described in the OPTIONS section, you can have a globbing refspec that looks like this:
 .sp
 .if n \{\
 .RS 4

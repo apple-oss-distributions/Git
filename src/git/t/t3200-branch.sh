@@ -162,14 +162,26 @@ test_expect_success 'git branch -M baz bam should add entries to .git/logs/HEAD'
 	grep "^0\{40\}.*$msg$" .git/logs/HEAD
 '
 
+test_expect_success 'git branch -M should leave orphaned HEAD alone' '
+	git init orphan &&
+	(
+		cd orphan &&
+		test_commit initial &&
+		git checkout --orphan lonely &&
+		grep lonely .git/HEAD &&
+		test_path_is_missing .git/refs/head/lonely &&
+		git branch -M master mistress &&
+		grep lonely .git/HEAD
+	)
+'
+
 test_expect_success 'resulting reflog can be shown by log -g' '
 	oid=$(git rev-parse HEAD) &&
 	cat >expect <<-EOF &&
 	HEAD@{0} $oid $msg
-	HEAD@{1} $oid $msg
 	HEAD@{2} $oid checkout: moving from foo to baz
 	EOF
-	git log -g --format="%gd %H %gs" -3 HEAD >actual &&
+	git log -g --format="%gd %H %gs" -2 HEAD >actual &&
 	test_cmp expect actual
 '
 

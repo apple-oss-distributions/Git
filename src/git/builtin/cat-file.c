@@ -4,7 +4,9 @@
  * Copyright (C) Linus Torvalds, 2005
  */
 #include "cache.h"
+#include "config.h"
 #include "builtin.h"
+#include "diff.h"
 #include "parse-options.h"
 #include "userdiff.h"
 #include "streaming.h"
@@ -55,11 +57,11 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
 	struct object_context obj_context;
 	struct object_info oi = OBJECT_INFO_INIT;
 	struct strbuf sb = STRBUF_INIT;
-	unsigned flags = LOOKUP_REPLACE_OBJECT;
+	unsigned flags = OBJECT_INFO_LOOKUP_REPLACE;
 	const char *path = force_path;
 
 	if (unknown_type)
-		flags |= LOOKUP_UNKNOWN_OBJECT;
+		flags |= OBJECT_INFO_ALLOW_UNKNOWN_TYPE;
 
 	if (get_sha1_with_context(obj_name, GET_SHA1_RECORD_PATH,
 				  oid.hash, &obj_context))
@@ -94,7 +96,7 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
 		return !has_object_file(&oid);
 
 	case 'w':
-		if (!path[0])
+		if (!path)
 			die("git cat-file --filters %s: <object> must be "
 			    "<sha1:path>", obj_name);
 
@@ -104,7 +106,7 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
 		break;
 
 	case 'c':
-		if (!path[0])
+		if (!path)
 			die("git cat-file --textconv %s: <object> must be <sha1:path>",
 			    obj_name);
 
@@ -336,7 +338,8 @@ static void batch_object_write(const char *obj_name, struct batch_options *opt,
 	struct strbuf buf = STRBUF_INIT;
 
 	if (!data->skip_object_info &&
-	    sha1_object_info_extended(data->oid.hash, &data->info, LOOKUP_REPLACE_OBJECT) < 0) {
+	    sha1_object_info_extended(data->oid.hash, &data->info,
+				      OBJECT_INFO_LOOKUP_REPLACE) < 0) {
 		printf("%s missing\n",
 		       obj_name ? obj_name : oid_to_hex(&data->oid));
 		fflush(stdout);

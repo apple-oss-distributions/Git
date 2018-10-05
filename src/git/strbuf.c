@@ -476,6 +476,7 @@ int strbuf_getwholeline(struct strbuf *sb, FILE *fp, int term)
 	/* Translate slopbuf to NULL, as we cannot call realloc on it */
 	if (!sb->alloc)
 		sb->buf = NULL;
+	errno = 0;
 	r = getdelim(&sb->buf, &sb->alloc, term, fp);
 
 	if (r > 0) {
@@ -778,13 +779,46 @@ char *xstrfmt(const char *fmt, ...)
 	return ret;
 }
 
-void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm)
+void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm,
+		     int tz_offset, int suppress_tz_name)
 {
+	struct strbuf munged_fmt = STRBUF_INIT;
 	size_t hint = 128;
 	size_t len;
 
 	if (!*fmt)
 		return;
+
+	/*
+	 * There is no portable way to pass timezone information to
+	 * strftime, so we handle %z and %Z here.
+	 */
+	for (;;) {
+		const char *percent = strchrnul(fmt, '%');
+		strbuf_add(&munged_fmt, fmt, percent - fmt);
+		if (!*percent)
+			break;
+		fmt = percent + 1;
+		switch (*fmt) {
+		case '%':
+			strbuf_addstr(&munged_fmt, "%%");
+			fmt++;
+			break;
+		case 'z':
+			strbuf_addf(&munged_fmt, "%+05d", tz_offset);
+			fmt++;
+			break;
+		case 'Z':
+			if (suppress_tz_name) {
+				fmt++;
+				break;
+			}
+			/* FALLTHROUGH */
+		default:
+			strbuf_addch(&munged_fmt, '%');
+		}
+	}
+	fmt = munged_fmt.buf;
 
 	strbuf_grow(sb, hint);
 	len = strftime(sb->buf + sb->len, sb->alloc - sb->len, fmt, tm);
@@ -797,17 +831,16 @@ void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm)
 		 * output contains at least one character, and then drop the extra
 		 * character before returning.
 		 */
-		struct strbuf munged_fmt = STRBUF_INIT;
-		strbuf_addf(&munged_fmt, "%s ", fmt);
+		strbuf_addch(&munged_fmt, ' ');
 		while (!len) {
 			hint *= 2;
 			strbuf_grow(sb, hint);
 			len = strftime(sb->buf + sb->len, sb->alloc - sb->len,
 				       munged_fmt.buf, tm);
 		}
-		strbuf_release(&munged_fmt);
 		len--; /* drop munged space */
 	}
+	strbuf_release(&munged_fmt);
 	strbuf_setlen(sb, sb->len + len);
 }
 

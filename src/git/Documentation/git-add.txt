@@ -61,6 +61,9 @@ OPTIONS
 	the working tree.  Note that older versions of Git used
 	to ignore removed files; use `--no-all` option if you want
 	to add modified or new files but ignore removed	ones.
++
+For more details about the <pathspec> syntax, see the 'pathspec' entry
+in linkgit:gitglossary[7].
 
 -n::
 --dry-run::
@@ -164,6 +167,13 @@ for "git add --no-all <pathspec>...", i.e. ignored removed files.
 	this option the user can check if any of the given files would
 	be ignored, no matter if they are already present in the work
 	tree or not.
+
+--no-warn-embedded-repo::
+	By default, `git add` will warn when adding an embedded
+	repository to the index without using `git submodule add` to
+	create an entry in `.gitmodules`. This option will suppress the
+	warning (e.g., if you are manually performing operations on
+	submodules).
 
 --chmod=(+|-)x::
 	Override the executable bit of the added files.  The executable

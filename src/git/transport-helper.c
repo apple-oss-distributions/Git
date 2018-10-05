@@ -44,8 +44,7 @@ static void sendline(struct helper_data *helper, struct strbuf *buffer)
 {
 	if (debug)
 		fprintf(stderr, "Debug: Remote helper: -> %s", buffer->buf);
-	if (write_in_full(helper->helper->in, buffer->buf, buffer->len)
-		!= buffer->len)
+	if (write_in_full(helper->helper->in, buffer->buf, buffer->len) < 0)
 		die_errno("Full write to remote helper failed");
 }
 
@@ -74,7 +73,7 @@ static void write_constant(int fd, const char *str)
 {
 	if (debug)
 		fprintf(stderr, "Debug: Remote helper: -> %s", str);
-	if (write_in_full(fd, str, strlen(str)) != strlen(str))
+	if (write_in_full(fd, str, strlen(str)) < 0)
 		die_errno("Full write to remote helper failed");
 }
 
@@ -242,8 +241,7 @@ static int disconnect_helper(struct transport *transport)
 		close(data->helper->out);
 		fclose(data->out);
 		res = finish_command(data->helper);
-		free(data->helper);
-		data->helper = NULL;
+		FREE_AND_NULL(data->helper);
 	}
 	return res;
 }
@@ -711,43 +709,35 @@ static int push_update_ref_status(struct strbuf *buf,
 
 		if (!strcmp(msg, "no match")) {
 			status = REF_STATUS_NONE;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "up to date")) {
 			status = REF_STATUS_UPTODATE;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "non-fast forward")) {
 			status = REF_STATUS_REJECT_NONFASTFORWARD;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "already exists")) {
 			status = REF_STATUS_REJECT_ALREADY_EXISTS;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "fetch first")) {
 			status = REF_STATUS_REJECT_FETCH_FIRST;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "needs force")) {
 			status = REF_STATUS_REJECT_NEEDS_FORCE;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "stale info")) {
 			status = REF_STATUS_REJECT_STALE;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 		else if (!strcmp(msg, "forced update")) {
 			forced = 1;
-			free(msg);
-			msg = NULL;
+			FREE_AND_NULL(msg);
 		}
 	}
 
@@ -1126,6 +1116,13 @@ int transport_helper_init(struct transport *transport, const char *name)
 __attribute__((format (printf, 1, 2)))
 static void transfer_debug(const char *fmt, ...)
 {
+	/*
+	 * NEEDSWORK: This function is sometimes used from multiple threads, and
+	 * we end up using debug_enabled racily. That "should not matter" since
+	 * we always write the same value, but it's still wrong. This function
+	 * is listed in .tsan-suppressions for the time being.
+	 */
+
 	va_list args;
 	char msgbuf[PBUFFERSIZE];
 	static int debug_enabled = -1;

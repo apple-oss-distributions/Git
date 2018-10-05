@@ -13,21 +13,14 @@
 #endif
 
 static const char *argv_exec_path;
+
+#ifdef RUNTIME_PREFIX
 static const char *argv0_path;
 
-char *system_path(const char *path)
+static const char *system_prefix(void)
 {
-#ifdef RUNTIME_PREFIX
 	static const char *prefix;
-#else
-	static const char *prefix = PREFIX;
-#endif
-	struct strbuf d = STRBUF_INIT;
 
-	if (is_absolute_path(path))
-		return xstrdup(path);
-
-#ifdef RUNTIME_PREFIX
 #ifdef __APPLE__
 	/* I found out we can get into this state during tests because of our
 	 * system_path() call to find the Xcode-bundled xcconfig because the
@@ -59,10 +52,7 @@ char *system_path(const char *path)
 				"but prefix computation failed.  "
 				"Using static fallback '%s'.\n", prefix);
 	}
-#endif
-
-	strbuf_addf(&d, "%s/%s", prefix, path);
-	return strbuf_detach(&d, NULL);
+	return prefix;
 }
 
 void git_extract_argv0_path(const char *argv0)
@@ -117,6 +107,30 @@ void git_extract_argv0_path(const char *argv0)
 		}
 #endif
 	}
+}
+
+#else
+
+static const char *system_prefix(void)
+{
+	return PREFIX;
+}
+
+void git_extract_argv0_path(const char *argv0)
+{
+}
+
+#endif /* RUNTIME_PREFIX */
+
+char *system_path(const char *path)
+{
+	struct strbuf d = STRBUF_INIT;
+
+	if (is_absolute_path(path))
+		return xstrdup(path);
+
+	strbuf_addf(&d, "%s/%s", system_prefix(), path);
+	return strbuf_detach(&d, NULL);
 }
 
 void git_set_argv_exec_path(const char *exec_path)

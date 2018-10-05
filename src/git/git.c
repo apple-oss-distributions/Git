@@ -1,4 +1,5 @@
 #include "builtin.h"
+#include "config.h"
 #include "exec_cmd.h"
 #include "help.h"
 #include "run-command.h"
@@ -17,6 +18,8 @@ const char git_more_info_string[] =
 
 static int use_pager = -1;
 
+static void list_builtins(void);
+
 static void commit_pager_choice(void) {
 	switch (use_pager) {
 	case 0:
@@ -28,6 +31,16 @@ static void commit_pager_choice(void) {
 	default:
 		break;
 	}
+}
+
+void setup_auto_pager(const char *cmd, int def)
+{
+	if (use_pager != -1 || pager_in_use())
+		return;
+	use_pager = check_pager_config(cmd);
+	if (use_pager == -1)
+		use_pager = def;
+	commit_pager_choice();
 }
 
 static int handle_options(const char ***argv, int *argc, int *envchanged)
@@ -188,6 +201,9 @@ static int handle_options(const char ***argv, int *argc, int *envchanged)
 			}
 			(*argv)++;
 			(*argc)--;
+		} else if (!strcmp(cmd, "--list-builtins")) {
+			list_builtins();
+			exit(0);
 		} else {
 			fprintf(stderr, "Unknown option: %s\n", cmd);
 			usage(git_usage_string);
@@ -277,6 +293,7 @@ static int handle_alias(int *argcp, const char ***argv)
  */
 #define NEED_WORK_TREE		(1<<3)
 #define SUPPORT_SUPER_PREFIX	(1<<4)
+#define DELAY_PAGER_CONFIG	(1<<5)
 
 struct cmd_struct {
 	const char *cmd;
@@ -300,7 +317,8 @@ static int run_builtin(struct cmd_struct *p, int argc, const char **argv)
 			prefix = setup_git_directory_gently(&nongit_ok);
 		}
 
-		if (use_pager == -1 && p->option & (RUN_SETUP | RUN_SETUP_GENTLY))
+		if (use_pager == -1 && p->option & (RUN_SETUP | RUN_SETUP_GENTLY) &&
+		    !(p->option & DELAY_PAGER_CONFIG))
 			use_pager = check_pager_config(p->cmd);
 		if (use_pager == -1 && p->option & USE_PAGER)
 			use_pager = 1;
@@ -394,7 +412,7 @@ static struct cmd_struct commands[] = {
 	{ "init-db", cmd_init_db },
 	{ "interpret-trailers", cmd_interpret_trailers, RUN_SETUP_GENTLY },
 	{ "log", cmd_log, RUN_SETUP },
-	{ "ls-files", cmd_ls_files, RUN_SETUP | SUPPORT_SUPER_PREFIX },
+	{ "ls-files", cmd_ls_files, RUN_SETUP },
 	{ "ls-remote", cmd_ls_remote, RUN_SETUP_GENTLY },
 	{ "ls-tree", cmd_ls_tree, RUN_SETUP },
 	{ "mailinfo", cmd_mailinfo, RUN_SETUP_GENTLY },
@@ -448,7 +466,7 @@ static struct cmd_struct commands[] = {
 	{ "stripspace", cmd_stripspace },
 	{ "submodule--helper", cmd_submodule__helper, RUN_SETUP | SUPPORT_SUPER_PREFIX},
 	{ "symbolic-ref", cmd_symbolic_ref, RUN_SETUP },
-	{ "tag", cmd_tag, RUN_SETUP },
+	{ "tag", cmd_tag, RUN_SETUP | DELAY_PAGER_CONFIG },
 	{ "unpack-file", cmd_unpack_file, RUN_SETUP },
 	{ "unpack-objects", cmd_unpack_objects, RUN_SETUP },
 	{ "update-index", cmd_update_index, RUN_SETUP },
@@ -480,6 +498,13 @@ static struct cmd_struct *get_builtin(const char *s)
 int is_builtin(const char *s)
 {
 	return !!get_builtin(s);
+}
+
+static void list_builtins(void)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(commands); i++)
+		printf("%s\n", commands[i].cmd);
 }
 
 #ifdef STRIP_EXTENSION
@@ -534,7 +559,7 @@ static void execv_dashed_external(const char **argv)
 	if (get_super_prefix())
 		die("%s doesn't support --super-prefix", argv[0]);
 
-	if (use_pager == -1)
+	if (use_pager == -1 && !is_builtin(argv[0]))
 		use_pager = check_pager_config(argv[0]);
 	commit_pager_choice();
 

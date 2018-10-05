@@ -1,5 +1,7 @@
 #include "builtin.h"
+#include "repository.h"
 #include "cache.h"
+#include "config.h"
 #include "parse-options.h"
 #include "quote.h"
 #include "pathspec.h"
@@ -232,8 +234,7 @@ static int module_list_compute(int argc, const char **argv,
 	int i, result = 0;
 	char *ps_matched = NULL;
 	parse_pathspec(pathspec, 0,
-		       PATHSPEC_PREFER_FULL |
-		       PATHSPEC_STRIP_SUBMODULE_SLASH_CHEAP,
+		       PATHSPEC_PREFER_FULL,
 		       prefix, argv);
 
 	if (pathspec->nr)
@@ -279,7 +280,7 @@ static void module_list_active(struct module_list *list)
 	for (i = 0; i < list->nr; i++) {
 		const struct cache_entry *ce = list->entries[i];
 
-		if (!is_submodule_initialized(ce->name))
+		if (!is_submodule_active(the_repository, ce->name))
 			continue;
 
 		ALLOC_GROW(active_modules.entries,
@@ -361,7 +362,7 @@ static void init_submodule(const char *path, const char *prefix, int quiet)
 	 *
 	 * Set active flag for the submodule being initialized
 	 */
-	if (!is_submodule_initialized(path)) {
+	if (!is_submodule_active(the_repository, path)) {
 		strbuf_reset(&sb);
 		strbuf_addf(&sb, "submodule.%s.active", sub->name);
 		git_config_set_gently(sb.buf, "true");
@@ -816,7 +817,7 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
 	}
 
 	/* Check if the submodule has been initialized. */
-	if (!is_submodule_initialized(ce->name)) {
+	if (!is_submodule_active(the_repository, ce->name)) {
 		next_submodule_warn_missing(suc, out, displaypath);
 		goto cleanup;
 	}
@@ -929,7 +930,7 @@ static int update_clone_task_finished(int result,
 	const struct cache_entry *ce;
 	struct submodule_update_clone *suc = suc_cb;
 
-	int *idxP = *(int**)idx_task_cb;
+	int *idxP = idx_task_cb;
 	int idx = *idxP;
 	free(idxP);
 
@@ -1107,9 +1108,28 @@ static int resolve_remote_submodule_branch(int argc, const char **argv,
 static int push_check(int argc, const char **argv, const char *prefix)
 {
 	struct remote *remote;
+	const char *superproject_head;
+	char *head;
+	int detached_head = 0;
+	struct object_id head_oid;
 
-	if (argc < 2)
-		die("submodule--helper push-check requires at least 1 argument");
+	if (argc < 3)
+		die("submodule--helper push-check requires at least 2 arguments");
+
+	/*
+	 * superproject's resolved head ref.
+	 * if HEAD then the superproject is in a detached head state, otherwise
+	 * it will be the resolved head ref.
+	 */
+	superproject_head = argv[1];
+	argv++;
+	argc--;
+	/* Get the submodule's head ref and determine if it is detached */
+	head = resolve_refdup("HEAD", 0, head_oid.hash, NULL);
+	if (!head)
+		die(_("Failed to resolve HEAD as a valid ref."));
+	if (!strcmp(head, "HEAD"))
+		detached_head = 1;
 
 	/*
 	 * The remote must be configured.
@@ -1132,18 +1152,30 @@ static int push_check(int argc, const char **argv, const char *prefix)
 			if (rs->pattern || rs->matching)
 				continue;
 
-			/*
-			 * LHS must match a single ref
-			 * NEEDSWORK: add logic to special case 'HEAD' once
-			 * working with submodules in a detached head state
-			 * ceases to be the norm.
-			 */
-			if (count_refspec_match(rs->src, local_refs, NULL) != 1)
+			/* LHS must match a single ref */
+			switch (count_refspec_match(rs->src, local_refs, NULL)) {
+			case 1:
+				break;
+			case 0:
+				/*
+				 * If LHS matches 'HEAD' then we need to ensure
+				 * that it matches the same named branch
+				 * checked out in the superproject.
+				 */
+				if (!strcmp(rs->src, "HEAD")) {
+					if (!detached_head &&
+					    !strcmp(head, superproject_head))
+						break;
+					die("HEAD does not match the named branch in the superproject");
+				}
+			default:
 				die("src refspec '%s' must name a ref",
 				    rs->src);
+			}
 		}
 		free_refspec(refspec_nr, refspec);
 	}
+	free(head);
 
 	return 0;
 }
@@ -1192,7 +1224,7 @@ static int is_active(int argc, const char **argv, const char *prefix)
 
 	gitmodules_config();
 
-	return !is_submodule_initialized(argv[1]);
+	return !is_submodule_active(the_repository, argv[1]);
 }
 
 #define SUPPORT_SUPER_PREFIX (1<<0)
@@ -1221,9 +1253,8 @@ static struct cmd_struct commands[] = {
 int cmd_submodule__helper(int argc, const char **argv, const char *prefix)
 {
 	int i;
-	if (argc < 2)
-		die(_("submodule--helper subcommand must be "
-		      "called with a subcommand"));
+	if (argc < 2 || !strcmp(argv[1], "-h"))
+		usage("git submodule--helper <command>");
 
 	for (i = 0; i < ARRAY_SIZE(commands); i++) {
 		if (!strcmp(argv[1], commands[i].cmd)) {

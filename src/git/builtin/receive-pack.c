@@ -1,4 +1,5 @@
 #include "builtin.h"
+#include "config.h"
 #include "lockfile.h"
 #include "pack.h"
 #include "refs.h"
@@ -78,7 +79,7 @@ static const char *NONCE_OK = "OK";
 static const char *NONCE_SLOP = "SLOP";
 static const char *nonce_status;
 static long nonce_stamp_slop;
-static unsigned long nonce_stamp_slop_limit;
+static timestamp_t nonce_stamp_slop_limit;
 static struct ref_transaction *transaction;
 
 static enum {
@@ -454,17 +455,17 @@ static void hmac_sha1(unsigned char *out,
 	git_SHA1_Final(out, &ctx);
 }
 
-static char *prepare_push_cert_nonce(const char *path, unsigned long stamp)
+static char *prepare_push_cert_nonce(const char *path, timestamp_t stamp)
 {
 	struct strbuf buf = STRBUF_INIT;
 	unsigned char sha1[20];
 
-	strbuf_addf(&buf, "%s:%lu", path, stamp);
+	strbuf_addf(&buf, "%s:%"PRItime, path, stamp);
 	hmac_sha1(sha1, buf.buf, buf.len, cert_nonce_seed, strlen(cert_nonce_seed));;
 	strbuf_release(&buf);
 
 	/* RFC 2104 5. HMAC-SHA1-80 */
-	strbuf_addf(&buf, "%lu-%.*s", stamp, 20, sha1_to_hex(sha1));
+	strbuf_addf(&buf, "%"PRItime"-%.*s", stamp, 20, sha1_to_hex(sha1));
 	return strbuf_detach(&buf, NULL);
 }
 
@@ -499,7 +500,7 @@ static char *find_header(const char *msg, size_t len, const char *key,
 static const char *check_nonce(const char *buf, size_t len)
 {
 	char *nonce = find_header(buf, len, "nonce", NULL);
-	unsigned long stamp, ostamp;
+	timestamp_t stamp, ostamp;
 	char *bohmac, *expect = NULL;
 	const char *retval = NONCE_BAD;
 
@@ -537,7 +538,7 @@ static const char *check_nonce(const char *buf, size_t len)
 		retval = NONCE_BAD;
 		goto leave;
 	}
-	stamp = strtoul(nonce, &bohmac, 10);
+	stamp = parse_timestamp(nonce, &bohmac, 10);
 	if (bohmac == nonce || bohmac[0] != '-') {
 		retval = NONCE_BAD;
 		goto leave;
@@ -555,7 +556,7 @@ static const char *check_nonce(const char *buf, size_t len)
 	 * would mean it was issued by another server with its clock
 	 * skewed in the future.
 	 */
-	ostamp = strtoul(push_cert_nonce, NULL, 10);
+	ostamp = parse_timestamp(push_cert_nonce, NULL, 10);
 	nonce_stamp_slop = (long)ostamp - (long)stamp;
 
 	if (nonce_stamp_slop_limit &&
@@ -741,7 +742,7 @@ static int run_and_feed_hook(const char *hook_name, feed_fn feed,
 		size_t n;
 		if (feed(feed_state, &buf, &n))
 			break;
-		if (write_in_full(proc.in, buf, n) != n)
+		if (write_in_full(proc.in, buf, n) < 0)
 			break;
 	}
 	close(proc.in);
@@ -900,7 +901,7 @@ static int update_shallow_ref(struct command *cmd, struct shallow_info *si)
 	 * not lose these new roots..
 	 */
 	for (i = 0; i < extra.nr; i++)
-		register_shallow(extra.oid[i].hash);
+		register_shallow(&extra.oid[i]);
 
 	si->shallow_ref[cmd->index] = 0;
 	oid_array_clear(&extra);
@@ -1102,8 +1103,8 @@ static const char *update(struct command *cmd, struct shallow_info *si)
 		struct object *old_object, *new_object;
 		struct commit *old_commit, *new_commit;
 
-		old_object = parse_object(old_oid->hash);
-		new_object = parse_object(new_oid->hash);
+		old_object = parse_object(old_oid);
+		new_object = parse_object(new_oid);
 
 		if (!old_object || !new_object ||
 		    old_object->type != OBJ_COMMIT ||
@@ -1126,7 +1127,7 @@ static const char *update(struct command *cmd, struct shallow_info *si)
 
 	if (is_null_oid(new_oid)) {
 		struct strbuf err = STRBUF_INIT;
-		if (!parse_object(old_oid->hash)) {
+		if (!parse_object(old_oid)) {
 			old_oid = NULL;
 			if (ref_exists(name)) {
 				rp_warning("Allowing deletion of corrupt ref.");
@@ -1805,7 +1806,7 @@ static const char *unpack_with_sideband(struct shallow_info *si)
 static void prepare_shallow_update(struct command *commands,
 				   struct shallow_info *si)
 {
-	int i, j, k, bitmap_size = (si->ref->nr + 31) / 32;
+	int i, j, k, bitmap_size = DIV_ROUND_UP(si->ref->nr, 32);
 
 	ALLOC_ARRAY(si->used_shallow, si->shallow->nr);
 	assign_shallow_commits_to_refs(si, si->used_shallow, NULL);
