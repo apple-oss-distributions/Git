@@ -66,6 +66,8 @@ int ref_exists(const char *refname);
 
 int is_branch(const char *refname);
 
+extern int refs_init_db(struct strbuf *err);
+
 /*
  * If refname is a non-symbolic reference that refers to a tag object,
  * and the tag can be (recursively) dereferenced to a non-tag object,
@@ -77,11 +79,12 @@ int is_branch(const char *refname);
 int peel_ref(const char *refname, unsigned char *sha1);
 
 /**
- * Resolve refname in the nested "gitlink" repository that is located
- * at path.  If the resolution is successful, return 0 and set sha1 to
- * the name of the object; otherwise, return a non-zero value.
+ * Resolve refname in the nested "gitlink" repository in the specified
+ * submodule (which must be non-NULL). If the resolution is
+ * successful, return 0 and set sha1 to the name of the object;
+ * otherwise, return a non-zero value.
  */
-int resolve_gitlink_ref(const char *path, const char *refname,
+int resolve_gitlink_ref(const char *submodule, const char *refname,
 			unsigned char *sha1);
 
 /*
@@ -91,6 +94,7 @@ int resolve_gitlink_ref(const char *path, const char *refname,
  */
 int refname_match(const char *abbrev_name, const char *full_name);
 
+int expand_ref(const char *str, int len, unsigned char *sha1, char **ref);
 int dwim_ref(const char *str, int len, unsigned char *sha1, char **ref);
 int dwim_log(const char *str, int len, unsigned char *sha1, char **ref);
 
@@ -477,6 +481,9 @@ void ref_transaction_free(struct ref_transaction *transaction);
 int update_ref(const char *msg, const char *refname,
 	       const unsigned char *new_sha1, const unsigned char *old_sha1,
 	       unsigned int flags, enum action_on_err onerr);
+int update_ref_oid(const char *msg, const char *refname,
+	       const struct object_id *new_oid, const struct object_id *old_oid,
+	       unsigned int flags, enum action_on_err onerr);
 
 int parse_hide_refs_config(const char *var, const char *value, const char *);
 
@@ -543,5 +550,7 @@ int reflog_expire(const char *refname, const unsigned char *sha1,
 		  reflog_expiry_should_prune_fn should_prune_fn,
 		  reflog_expiry_cleanup_fn cleanup_fn,
 		  void *policy_cb_data);
+
+int ref_storage_backend_exists(const char *name);
 
 #endif /* REFS_H */

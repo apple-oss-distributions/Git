@@ -364,7 +364,7 @@ void parse_pathspec(struct pathspec *pathspec,
 {
 	struct pathspec_item *item;
 	const char *entry = argv ? *argv : NULL;
-	int i, n, prefixlen, nr_exclude = 0;
+	int i, n, prefixlen, warn_empty_string, nr_exclude = 0;
 
 	memset(pathspec, 0, sizeof(*pathspec));
 
@@ -402,8 +402,15 @@ void parse_pathspec(struct pathspec *pathspec,
 	}
 
 	n = 0;
-	while (argv[n])
+	warn_empty_string = 1;
+	while (argv[n]) {
+		if (*argv[n] == '\0' && warn_empty_string) {
+			warning(_("empty strings as pathspecs will be made invalid in upcoming releases. "
+				  "please use . instead if you meant to match all paths"));
+			warn_empty_string = 0;
+		}
 		n++;
+	}
 
 	pathspec->nr = n;
 	ALLOC_ARRAY(pathspec->items, n);
@@ -446,8 +453,7 @@ void parse_pathspec(struct pathspec *pathspec,
 	if (pathspec->magic & PATHSPEC_MAXDEPTH) {
 		if (flags & PATHSPEC_KEEP_ORDER)
 			die("BUG: PATHSPEC_MAXDEPTH_VALID and PATHSPEC_KEEP_ORDER are incompatible");
-		qsort(pathspec->items, pathspec->nr,
-		      sizeof(struct pathspec_item), pathspec_item_cmp);
+		QSORT(pathspec->items, pathspec->nr, pathspec_item_cmp);
 	}
 }
 
@@ -485,8 +491,7 @@ void copy_pathspec(struct pathspec *dst, const struct pathspec *src)
 {
 	*dst = *src;
 	ALLOC_ARRAY(dst->items, dst->nr);
-	memcpy(dst->items, src->items,
-	       sizeof(struct pathspec_item) * dst->nr);
+	COPY_ARRAY(dst->items, src->items, dst->nr);
 }
 
 void clear_pathspec(struct pathspec *pathspec)

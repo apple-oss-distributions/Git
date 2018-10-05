@@ -953,7 +953,8 @@ color.branch::
 	A boolean to enable/disable color in the output of
 	linkgit:git-branch[1]. May be set to `always`,
 	`false` (or `never`) or `auto` (or `true`), in which case colors are used
-	only when the output is to a terminal. Defaults to false.
+	only when the output is to a terminal. If unset, then the
+	value of `color.ui` is used (`auto` by default).
 
 color.branch.<slot>::
 	Use customized color for branch coloration. `<slot>` is one of
@@ -968,7 +969,8 @@ color.diff::
 	linkgit:git-log[1], and linkgit:git-show[1] will use color
 	for all patches.  If it is set to `true` or `auto`, those
 	commands will only use color when output is to the terminal.
-	Defaults to false.
+	If unset, then the value of `color.ui` is used (`auto` by
+	default).
 +
 This does not affect linkgit:git-format-patch[1] or the
 'git-diff-{asterisk}' plumbing commands.  Can be overridden on the
@@ -991,7 +993,8 @@ color.decorate.<slot>::
 color.grep::
 	When set to `always`, always highlight matches.  When `false` (or
 	`never`), never.  When set to `true` or `auto`, use color only
-	when the output is written to the terminal.  Defaults to `false`.
+	when the output is written to the terminal.  If unset, then the
+	value of `color.ui` is used (`auto` by default).
 
 color.grep.<slot>::
 	Use customized color for grep colorization.  `<slot>` specifies which
@@ -1024,7 +1027,8 @@ color.interactive::
 	and displays (such as those used by "git-add --interactive" and
 	"git-clean --interactive"). When false (or `never`), never.
 	When set to `true` or `auto`, use colors only when the output is
-	to the terminal. Defaults to false.
+	to the terminal. If unset, then the value of `color.ui` is
+	used (`auto` by default).
 
 color.interactive.<slot>::
 	Use customized color for 'git add --interactive' and 'git clean
@@ -1040,13 +1044,15 @@ color.showBranch::
 	A boolean to enable/disable color in the output of
 	linkgit:git-show-branch[1]. May be set to `always`,
 	`false` (or `never`) or `auto` (or `true`), in which case colors are used
-	only when the output is to a terminal. Defaults to false.
+	only when the output is to a terminal. If unset, then the
+	value of `color.ui` is used (`auto` by default).
 
 color.status::
 	A boolean to enable/disable color in the output of
 	linkgit:git-status[1]. May be set to `always`,
 	`false` (or `never`) or `auto` (or `true`), in which case colors are used
-	only when the output is to a terminal. Defaults to false.
+	only when the output is to a terminal. If unset, then the
+	value of `color.ui` is used (`auto` by default).
 
 color.status.<slot>::
 	Use customized color for status colorization. `<slot>` is
@@ -1366,7 +1372,7 @@ fsck.skipList::
 gc.aggressiveDepth::
 	The depth parameter used in the delta compression
 	algorithm used by 'git gc --aggressive'.  This defaults
-	to 250.
+	to 50.
 
 gc.aggressiveWindow::
 	The window size parameter used in the delta compression
@@ -1729,6 +1735,20 @@ http.emptyAuth::
 	can be used to attempt GSS-Negotiate authentication without specifying
 	a username in the URL, as libcurl normally requires a username for
 	authentication.
+
+http.delegation::
+	Control GSSAPI credential delegation. The delegation is disabled
+	by default in libcurl since version 7.21.7. Set parameter to tell
+	the server what it is allowed to delegate when it comes to user
+	credentials. Used with GSS/kerberos. Possible values are:
++
+--
+* `none` - Don't allow any delegation.
+* `policy` - Delegates if and only if the OK-AS-DELEGATE flag is set in the
+  Kerberos service ticket, which is a matter of realm policy.
+* `always` - Unconditionally allow the server to delegate.
+--
+
 
 http.extraHeader::
 	Pass an additional HTTP header when communicating with a server.  If
@@ -2430,7 +2450,7 @@ rebase.missingCommitsCheck::
 	command in the todo-list.
 	Defaults to "ignore".
 
-rebase.instructionFormat
+rebase.instructionFormat::
 	A format string, as specified in linkgit:git-log[1], to be used for
 	the instruction list during an interactive rebase.  The format will automatically
 	have the long commit hash prepended to the format.
@@ -2516,6 +2536,12 @@ receive.unpackLimit::
 	pack from a push can make the push operation complete faster,
 	especially on slow filesystems.  If not set, the value of
 	`transfer.unpackLimit` is used instead.
+
+receive.maxInputSize::
+	If the size of the incoming pack stream is larger than this
+	limit, then git-receive-pack will error out, instead of
+	accepting the pack file. If not set or set to 0, then the size
+	is unlimited.
 
 receive.denyDeletes::
 	If set to true, git-receive-pack will deny a ref update that deletes
@@ -2799,12 +2825,13 @@ stash.showStat::
 	option will show diffstat of the stash.  Defaults to true.
 	See description of 'show' command in linkgit:git-stash[1].
 
-submodule.<name>.path::
 submodule.<name>.url::
-	The path within this project and URL for a submodule. These
-	variables are initially populated by 'git submodule init'. See
-	linkgit:git-submodule[1] and linkgit:gitmodules[5] for
-	details.
+	The URL for a submodule. This variable is copied from the .gitmodules
+	file to the git config via 'git submodule init'. The user can change
+	the configured URL before obtaining the submodule via 'git submodule
+	update'. After obtaining the submodule, the presence of this variable
+	is used as a sign whether the submodule is of interest to git commands.
+	See linkgit:git-submodule[1] and linkgit:gitmodules[5] for details.
 
 submodule.<name>.update::
 	The default update procedure for a submodule. This variable
@@ -2846,6 +2873,18 @@ submodule.fetchJobs::
 	A positive integer allows up to that number of submodules fetched
 	in parallel. A value of 0 will give some reasonable default.
 	If unset, it defaults to 1.
+
+submodule.alternateLocation::
+	Specifies how the submodules obtain alternates when submodules are
+	cloned. Possible values are `no`, `superproject`.
+	By default `no` is assumed, which doesn't add references. When the
+	value is set to `superproject` the submodule to be cloned computes
+	its alternates location relative to the superprojects alternate.
+
+submodule.alternateErrorStrategy
+	Specifies how to treat errors with the alternates for a submodule
+	as computed via `submodule.alternateLocation`. Possible values are
+	`ignore`, `info`, `die`. Default is `die`.
 
 tag.forceSignAnnotated::
 	A boolean to specify whether annotated tags created should be GPG signed.

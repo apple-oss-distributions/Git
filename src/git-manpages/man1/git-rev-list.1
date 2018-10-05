@@ -2,12 +2,12 @@
 .\"     Title: git-rev-list
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 09/02/2016
+.\"      Date: 11/29/2016
 .\"    Manual: Git Manual
-.\"    Source: Git 2.10.0
+.\"    Source: Git 2.11.0
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-LIST" "1" "09/02/2016" "Git 2\&.10\&.0" "Git Manual"
+.TH "GIT\-REV\-LIST" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -438,7 +438,7 @@ option)\&. However, it shows the commits that were cherry\-picked from the other
 .PP
 \-\-left\-only, \-\-right\-only
 .RS 4
-List only commits on the respective side of a symmetric range, i\&.e\&. only those which would be marked
+List only commits on the respective side of a symmetric difference, i\&.e\&. only those which would be marked
 \fB<\fR
 resp\&.
 \fB>\fR
@@ -1211,7 +1211,7 @@ With
 .PP
 \-\-reverse
 .RS 4
-Output the commits in reverse order\&. Cannot be combined with
+Output the commits chosen to be shown (see Commit Limiting section above) in reverse order\&. Cannot be combined with
 \fB\-\-walk\-reflogs\fR\&.
 .RE
 .SS "Object Traversal"
@@ -1520,7 +1520,7 @@ Print the raw commit timestamp\&.
 .PP
 \-\-left\-right
 .RS 4
-Mark which side of a symmetric diff a commit is reachable from\&. Commits from the left side are prefixed with
+Mark which side of a symmetric difference a commit is reachable from\&. Commits from the left side are prefixed with
 \fB<\fR
 and those from the right with
 \fB>\fR\&. If combined with
@@ -2267,7 +2267,7 @@ or
 .sp -1
 .IP \(bu 2.3
 .\}
-\fI%G?\fR: show "G" for a good (valid) signature, "B" for a bad signature, "U" for a good signature with unknown validity and "N" for no signature
+\fI%G?\fR: show "G" for a good (valid) signature, "B" for a bad signature, "U" for a good signature with unknown validity, "X" for a good signature that has expired, "Y" for a good signature made by an expired key, "R" for a good signature made by a revoked key, "E" if the signature cannot be checked (e\&.g\&. missing key) and "N" for no signature
 .RE
 .sp
 .RS 4
@@ -2441,7 +2441,8 @@ or
 .sp -1
 .IP \(bu 2.3
 .\}
-\fI%C(\&...)\fR: color specification, as described in color\&.branch\&.* config option; adding
+\fI%C(\&...)\fR: color specification, as described under Values in the "CONFIGURATION FILE" section of
+\fBgit-config\fR(1); adding
 \fBauto,\fR
 at the beginning will emit color only when colors are enabled for log output (by
 \fBcolor\&.diff\fR,
@@ -2462,7 +2463,7 @@ alone (i\&.e\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fI%m\fR: left, right or boundary mark
+\fI%m\fR: left (\fB<\fR), right (\fB>\fR) or boundary (\fB\-\fR) mark
 .RE
 .sp
 .RS 4

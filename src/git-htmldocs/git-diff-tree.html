@@ -825,6 +825,12 @@ git-diff-tree(1) Manual Page
 </p>
 </dd>
 <dt class="hdlist1">
+--indent-heuristic
+</dt>
+<dt class="hdlist1">
+--no-indent-heuristic
+</dt>
+<dt class="hdlist1">
 --compaction-heuristic
 </dt>
 <dt class="hdlist1">
@@ -832,10 +838,9 @@ git-diff-tree(1) Manual Page
 </dt>
 <dd>
 <p>
-        These are to help debugging and tuning an experimental
-        heuristic (which is off by default) that shifts the hunk
-        boundary in an attempt to make the resulting patch easier
-        to read.
+        These are to help debugging and tuning experimental heuristics
+        (which are off by default) that shift diff hunk boundaries to
+        make patches easier to read.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1089,13 +1094,16 @@ any of those replacements occurred.</p></div>
 </dt>
 <dd>
 <p>
-        Specify how differences in submodules are shown.  When <code>--submodule</code>
-        or <code>--submodule=log</code> is given, the <em>log</em> format is used.  This format lists
-        the commits in the range like <a href="git-submodule.html">git-submodule(1)</a> <code>summary</code> does.
-        Omitting the <code>--submodule</code> option or specifying <code>--submodule=short</code>,
-        uses the <em>short</em> format. This format just shows the names of the commits
-        at the beginning and end of the range.  Can be tweaked via the
-        <code>diff.submodule</code> configuration variable.
+        Specify how differences in submodules are shown.  When specifying
+        <code>--submodule=short</code> the <em>short</em> format is used.  This format just
+        shows the names of the commits at the beginning and end of the range.
+        When <code>--submodule</code> or <code>--submodule=log</code> is specified, the <em>log</em>
+        format is used.  This format lists the commits in the range like
+        <a href="git-submodule.html">git-submodule(1)</a> <code>summary</code> does.  When <code>--submodule=diff</code>
+        is specified, the <em>diff</em> format is used.  This format shows an
+        inline diff of the changes in the submodule contents between the
+        commit range.  Defaults to <code>diff.submodule</code> or the <em>short</em> format
+        if the config option is unset.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1242,6 +1250,8 @@ override configuration settings.</p></div>
         lines are highlighted.  E.g. <code>--ws-error-highlight=new,old</code>
         highlights whitespace errors on both deleted and added lines.
         <code>all</code> can be used as a short-hand for <code>old,new,context</code>.
+        The <code>diff.wsErrorHighlight</code> configuration variable can be
+        used to specify the default behaviour.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1658,6 +1668,27 @@ information.</p></div>
 <dd>
 <p>
         Do not show any source or destination prefix.
+</p>
+</dd>
+<dt class="hdlist1">
+--line-prefix=&lt;prefix&gt;
+</dt>
+<dd>
+<p>
+        Prepend an additional prefix to every line of output.
+</p>
+</dd>
+<dt class="hdlist1">
+--ita-invisible-in-index
+</dt>
+<dd>
+<p>
+        By default entries added by "git add -N" appear as an existing
+        empty file in "git diff" and a new file in "git diff --cached".
+        This option makes the entry appear as a new file in "git diff"
+        and non-existent in "git diff --cached". This option could be
+        reverted with <code>--ita-visible-in-index</code>. Both options are
+        experimental and could be removed in future.
 </p>
 </dd>
 </dl></div>
@@ -2288,8 +2319,14 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
-<em>%G?</em>: show "G" for a good (valid) signature, "B" for a bad signature,
-  "U" for a good signature with unknown validity and "N" for no signature
+<em>%G?</em>: show "G" for a good (valid) signature,
+  "B" for a bad signature,
+  "U" for a good signature with unknown validity,
+  "X" for a good signature that has expired,
+  "Y" for a good signature made by an expired key,
+  "R" for a good signature made by a revoked key,
+  "E" if the signature cannot be checked (e.g. missing key)
+  and "N" for no signature
 </p>
 </li>
 <li>
@@ -2367,7 +2404,8 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
-<em>%C(&#8230;)</em>: color specification, as described in color.branch.* config option;
+<em>%C(&#8230;)</em>: color specification, as described under Values in the
+  "CONFIGURATION FILE" section of <a href="git-config.html">git-config(1)</a>;
   adding <code>auto,</code> at the beginning will emit color only when colors are
   enabled for log output (by <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and
   respecting the <code>auto</code> settings of the former if we are going to a
@@ -2377,7 +2415,7 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
-<em>%m</em>: left, right or boundary mark
+<em>%m</em>: left (<code>&lt;</code>), right (<code>&gt;</code>) or boundary (<code>-</code>) mark
 </p>
 </li>
 <li>

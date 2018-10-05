@@ -2730,7 +2730,8 @@ color.branch
         A boolean to enable/disable color in the output of
         <a href="git-branch.html">git-branch(1)</a>. May be set to <code>always</code>,
         <code>false</code> (or <code>never</code>) or <code>auto</code> (or <code>true</code>), in which case colors are used
-        only when the output is to a terminal. Defaults to false.
+        only when the output is to a terminal. If unset, then the
+        value of <code>color.ui</code> is used (<code>auto</code> by default).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2755,7 +2756,8 @@ color.diff
         <a href="git-log.html">git-log(1)</a>, and <a href="git-show.html">git-show(1)</a> will use color
         for all patches.  If it is set to <code>true</code> or <code>auto</code>, those
         commands will only use color when output is to the terminal.
-        Defaults to false.
+        If unset, then the value of <code>color.ui</code> is used (<code>auto</code> by
+        default).
 </p>
 <div class="paragraph"><p>This does not affect <a href="git-format-patch.html">git-format-patch(1)</a> or the
 <em>git-diff-&#42;</em> plumbing commands.  Can be overridden on the
@@ -2792,7 +2794,8 @@ color.grep
 <p>
         When set to <code>always</code>, always highlight matches.  When <code>false</code> (or
         <code>never</code>), never.  When set to <code>true</code> or <code>auto</code>, use color only
-        when the output is written to the terminal.  Defaults to <code>false</code>.
+        when the output is written to the terminal.  If unset, then the
+        value of <code>color.ui</code> is used (<code>auto</code> by default).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2891,7 +2894,8 @@ color.interactive
         and displays (such as those used by "git-add --interactive" and
         "git-clean --interactive"). When false (or <code>never</code>), never.
         When set to <code>true</code> or <code>auto</code>, use colors only when the output is
-        to the terminal. Defaults to false.
+        to the terminal. If unset, then the value of <code>color.ui</code> is
+        used (<code>auto</code> by default).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2922,7 +2926,8 @@ color.showBranch
         A boolean to enable/disable color in the output of
         <a href="git-show-branch.html">git-show-branch(1)</a>. May be set to <code>always</code>,
         <code>false</code> (or <code>never</code>) or <code>auto</code> (or <code>true</code>), in which case colors are used
-        only when the output is to a terminal. Defaults to false.
+        only when the output is to a terminal. If unset, then the
+        value of <code>color.ui</code> is used (<code>auto</code> by default).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2933,7 +2938,8 @@ color.status
         A boolean to enable/disable color in the output of
         <a href="git-status.html">git-status(1)</a>. May be set to <code>always</code>,
         <code>false</code> (or <code>never</code>) or <code>auto</code> (or <code>true</code>), in which case colors are used
-        only when the output is to a terminal. Defaults to false.
+        only when the output is to a terminal. If unset, then the
+        value of <code>color.ui</code> is used (<code>auto</code> by default).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3458,10 +3464,11 @@ diff.submodule
 <dd>
 <p>
         Specify the format in which differences in submodules are
-        shown.  The "log" format lists the commits in the range like
-        <a href="git-submodule.html">git-submodule(1)</a> <code>summary</code> does.  The "short" format
-        format just shows the names of the commits at the beginning
-        and end of the range.  Defaults to short.
+        shown.  The "short" format just shows the names of the commits
+        at the beginning and end of the range. The "log" format lists
+        the commits in the range like <a href="git-submodule.html">git-submodule(1)</a> <code>summary</code>
+        does. The "diff" format shows an inline diff of the changed
+        contents of the submodule. Defaults to "short".
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3668,13 +3675,16 @@ xxdiff
 </ul></div>
 </dd>
 <dt class="hdlist1">
+diff.indentHeuristic
+</dt>
+<dt class="hdlist1">
 diff.compactionHeuristic
 </dt>
 <dd>
 <p>
-        Set this option to <code>true</code> to enable an experimental heuristic that
-        shifts the hunk boundary in an attempt to make the resulting
-        patch easier to read.
+        Set one of these options to <code>true</code> to enable one of two
+        experimental heuristics that shift diff hunk boundaries to
+        make patches easier to read.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3723,6 +3733,17 @@ diff.algorithm
 </dd>
 </dl></div>
 </div></div>
+</dd>
+<dt class="hdlist1">
+diff.wsErrorHighlight
+</dt>
+<dd>
+<p>
+        A comma separated list of <code>old</code>, <code>new</code>, <code>context</code>, that
+        specifies how whitespace errors on lines are highlighted
+        with <code>color.diff.whitespace</code>.  Can be overridden by the
+        command line option <code>--ws-error-highlight=&lt;kind&gt;</code>
+</p>
 </dd>
 <dt class="hdlist1">
 difftool.&lt;tool&gt;.path
@@ -4048,7 +4069,7 @@ gc.aggressiveDepth
 <p>
         The depth parameter used in the delta compression
         algorithm used by <em>git gc --aggressive</em>.  This defaults
-        to 250.
+        to 50.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -4746,6 +4767,38 @@ http.emptyAuth
         a username in the URL, as libcurl normally requires a username for
         authentication.
 </p>
+</dd>
+<dt class="hdlist1">
+http.delegation
+</dt>
+<dd>
+<p>
+        Control GSSAPI credential delegation. The delegation is disabled
+        by default in libcurl since version 7.21.7. Set parameter to tell
+        the server what it is allowed to delegate when it comes to user
+        credentials. Used with GSS/kerberos. Possible values are:
+</p>
+<div class="openblock">
+<div class="content">
+<div class="ulist"><ul>
+<li>
+<p>
+<code>none</code> - Don&#8217;t allow any delegation.
+</p>
+</li>
+<li>
+<p>
+<code>policy</code> - Delegates if and only if the OK-AS-DELEGATE flag is set in the
+  Kerberos service ticket, which is a matter of realm policy.
+</p>
+</li>
+<li>
+<p>
+<code>always</code> - Unconditionally allow the server to delegate.
+</p>
+</li>
+</ul></div>
+</div></div>
 </dd>
 <dt class="hdlist1">
 http.extraHeader
@@ -6177,12 +6230,16 @@ rebase.missingCommitsCheck
         Defaults to "ignore".
 </p>
 </dd>
-</dl></div>
-<div class="paragraph"><p>rebase.instructionFormat
+<dt class="hdlist1">
+rebase.instructionFormat
+</dt>
+<dd>
+<p>
         A format string, as specified in <a href="git-log.html">git-log(1)</a>, to be used for
         the instruction list during an interactive rebase.  The format will automatically
-        have the long commit hash prepended to the format.</p></div>
-<div class="dlist"><dl>
+        have the long commit hash prepended to the format.
+</p>
+</dd>
 <dt class="hdlist1">
 receive.advertiseAtomic
 </dt>
@@ -6312,6 +6369,17 @@ receive.unpackLimit
         pack from a push can make the push operation complete faster,
         especially on slow filesystems.  If not set, the value of
         <code>transfer.unpackLimit</code> is used instead.
+</p>
+</dd>
+<dt class="hdlist1">
+receive.maxInputSize
+</dt>
+<dd>
+<p>
+        If the size of the incoming pack stream is larger than this
+        limit, then git-receive-pack will error out, instead of
+        accepting the pack file. If not set or set to 0, then the size
+        is unlimited.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -6876,17 +6944,16 @@ stash.showStat
 </p>
 </dd>
 <dt class="hdlist1">
-submodule.&lt;name&gt;.path
-</dt>
-<dt class="hdlist1">
 submodule.&lt;name&gt;.url
 </dt>
 <dd>
 <p>
-        The path within this project and URL for a submodule. These
-        variables are initially populated by <em>git submodule init</em>. See
-        <a href="git-submodule.html">git-submodule(1)</a> and <a href="gitmodules.html">gitmodules(5)</a> for
-        details.
+        The URL for a submodule. This variable is copied from the .gitmodules
+        file to the git config via <em>git submodule init</em>. The user can change
+        the configured URL before obtaining the submodule via <em>git submodule
+        update</em>. After obtaining the submodule, the presence of this variable
+        is used as a sign whether the submodule is of interest to git commands.
+        See <a href="git-submodule.html">git-submodule(1)</a> and <a href="gitmodules.html">gitmodules(5)</a> for details.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -6955,6 +7022,24 @@ submodule.fetchJobs
         If unset, it defaults to 1.
 </p>
 </dd>
+<dt class="hdlist1">
+submodule.alternateLocation
+</dt>
+<dd>
+<p>
+        Specifies how the submodules obtain alternates when submodules are
+        cloned. Possible values are <code>no</code>, <code>superproject</code>.
+        By default <code>no</code> is assumed, which doesn&#8217;t add references. When the
+        value is set to <code>superproject</code> the submodule to be cloned computes
+        its alternates location relative to the superprojects alternate.
+</p>
+</dd>
+</dl></div>
+<div class="paragraph"><p>submodule.alternateErrorStrategy
+        Specifies how to treat errors with the alternates for a submodule
+        as computed via <code>submodule.alternateLocation</code>. Possible values are
+        <code>ignore</code>, <code>info</code>, <code>die</code>. Default is <code>die</code>.</p></div>
+<div class="dlist"><dl>
 <dt class="hdlist1">
 tag.forceSignAnnotated
 </dt>

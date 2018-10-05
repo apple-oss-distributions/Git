@@ -65,12 +65,12 @@ char *system_path(const char *path)
 	return strbuf_detach(&d, NULL);
 }
 
-const char *git_extract_argv0_path(const char *argv0)
+void git_extract_argv0_path(const char *argv0)
 {
 	const char *slash;
 
 	if (!argv0 || !*argv0)
-		return NULL;
+		return;
 
 	slash = find_last_dir_sep(argv0);
 
@@ -100,12 +100,9 @@ const char *git_extract_argv0_path(const char *argv0)
 
 			*s = '\0';
 			argv0_path = path_buf;
-
-			return s + 1;
 		}
 #endif
 		argv0_path = xstrndup(argv0, slash - argv0);
-		return slash + 1;
 #ifdef __APPLE__
 	} else {
 		char new_argv0[PATH_MAX];
@@ -113,15 +110,13 @@ const char *git_extract_argv0_path(const char *argv0)
 		if(_NSGetExecutablePath(new_argv0, &new_argv0_s) == 0) {
 			slash = new_argv0 + strlen(new_argv0);
 			while (new_argv0 <= slash && !is_dir_sep(*slash))
-		                slash--;
+				slash--;
 
 			if (slash >= new_argv0)
 				argv0_path = xstrndup(new_argv0, slash - new_argv0);
 		}
 #endif
 	}
-
-	return argv0;
 }
 
 void git_set_argv_exec_path(const char *exec_path)

@@ -155,7 +155,8 @@ int run_diff_files(struct rev_info *revs, unsigned int option)
 				if (2 <= stage) {
 					int mode = nce->ce_mode;
 					num_compare_stages++;
-					hashcpy(dpath->parent[stage-2].oid.hash, nce->sha1);
+					oidcpy(&dpath->parent[stage - 2].oid,
+					       &nce->oid);
 					dpath->parent[stage-2].mode = ce_mode_from_stat(nce, mode);
 					dpath->parent[stage-2].status =
 						DIFF_STATUS_MODIFIED;
@@ -209,7 +210,14 @@ int run_diff_files(struct rev_info *revs, unsigned int option)
 					continue;
 				}
 				diff_addremove(&revs->diffopt, '-', ce->ce_mode,
-					       ce->sha1, !is_null_sha1(ce->sha1),
+					       ce->oid.hash,
+					       !is_null_oid(&ce->oid),
+					       ce->name, 0);
+				continue;
+			} else if (revs->diffopt.ita_invisible_in_index &&
+				   ce_intent_to_add(ce)) {
+				diff_addremove(&revs->diffopt, '+', ce->ce_mode,
+					       EMPTY_BLOB_SHA1_BIN, 0,
 					       ce->name, 0);
 				continue;
 			}
@@ -225,8 +233,8 @@ int run_diff_files(struct rev_info *revs, unsigned int option)
 				continue;
 		}
 		oldmode = ce->ce_mode;
-		old_sha1 = ce->sha1;
-		new_sha1 = changed ? null_sha1 : ce->sha1;
+		old_sha1 = ce->oid.hash;
+		new_sha1 = changed ? null_sha1 : ce->oid.hash;
 		diff_change(&revs->diffopt, oldmode, newmode,
 			    old_sha1, new_sha1,
 			    !is_null_sha1(old_sha1),
@@ -261,7 +269,7 @@ static int get_stat_data(const struct cache_entry *ce,
 			 int cached, int match_missing,
 			 unsigned *dirty_submodule, struct diff_options *diffopt)
 {
-	const unsigned char *sha1 = ce->sha1;
+	const unsigned char *sha1 = ce->oid.hash;
 	unsigned int mode = ce->ce_mode;
 
 	if (!cached && !ce_uptodate(ce)) {
@@ -324,12 +332,13 @@ static int show_modified(struct rev_info *revs,
 			  &dirty_submodule, &revs->diffopt) < 0) {
 		if (report_missing)
 			diff_index_show_file(revs, "-", old,
-					     old->sha1, 1, old->ce_mode, 0);
+					     old->oid.hash, 1, old->ce_mode,
+					     0);
 		return -1;
 	}
 
 	if (revs->combine_merges && !cached &&
-	    (hashcmp(sha1, old->sha1) || hashcmp(old->sha1, new->sha1))) {
+	    (hashcmp(sha1, old->oid.hash) || oidcmp(&old->oid, &new->oid))) {
 		struct combine_diff_path *p;
 		int pathlen = ce_namelen(new);
 
@@ -343,22 +352,22 @@ static int show_modified(struct rev_info *revs,
 		memset(p->parent, 0, 2 * sizeof(struct combine_diff_parent));
 		p->parent[0].status = DIFF_STATUS_MODIFIED;
 		p->parent[0].mode = new->ce_mode;
-		hashcpy(p->parent[0].oid.hash, new->sha1);
+		oidcpy(&p->parent[0].oid, &new->oid);
 		p->parent[1].status = DIFF_STATUS_MODIFIED;
 		p->parent[1].mode = old->ce_mode;
-		hashcpy(p->parent[1].oid.hash, old->sha1);
+		oidcpy(&p->parent[1].oid, &old->oid);
 		show_combined_diff(p, 2, revs->dense_combined_merges, revs);
 		free(p);
 		return 0;
 	}
 
 	oldmode = old->ce_mode;
-	if (mode == oldmode && !hashcmp(sha1, old->sha1) && !dirty_submodule &&
+	if (mode == oldmode && !hashcmp(sha1, old->oid.hash) && !dirty_submodule &&
 	    !DIFF_OPT_TST(&revs->diffopt, FIND_COPIES_HARDER))
 		return 0;
 
 	diff_change(&revs->diffopt, oldmode, mode,
-		    old->sha1, sha1, 1, !is_null_sha1(sha1),
+		    old->oid.hash, sha1, 1, !is_null_sha1(sha1),
 		    old->name, 0, dirty_submodule);
 	return 0;
 }
@@ -376,6 +385,14 @@ static void do_oneway_diff(struct unpack_trees_options *o,
 	struct rev_info *revs = o->unpack_data;
 	int match_missing, cached;
 
+	/* i-t-a entries do not actually exist in the index */
+	if (revs->diffopt.ita_invisible_in_index &&
+	    idx && ce_intent_to_add(idx)) {
+		idx = NULL;
+		if (!tree)
+			return;	/* nothing to diff.. */
+	}
+
 	/* if the entry is not checked out, don't examine work tree */
 	cached = o->index_only ||
 		(idx && ((idx->ce_flags & CE_VALID) || ce_skip_worktree(idx)));
@@ -392,7 +409,8 @@ static void do_oneway_diff(struct unpack_trees_options *o,
 		struct diff_filepair *pair;
 		pair = diff_unmerge(&revs->diffopt, idx->name);
 		if (tree)
-			fill_filespec(pair->one, tree->sha1, 1, tree->ce_mode);
+			fill_filespec(pair->one, tree->oid.hash, 1,
+				      tree->ce_mode);
 		return;
 	}
 
@@ -408,7 +426,8 @@ static void do_oneway_diff(struct unpack_trees_options *o,
 	 * Something removed from the tree?
 	 */
 	if (!idx) {
-		diff_index_show_file(revs, "-", tree, tree->sha1, 1, tree->ce_mode, 0);
+		diff_index_show_file(revs, "-", tree, tree->oid.hash, 1,
+				     tree->ce_mode, 0);
 		return;
 	}
 
@@ -516,7 +535,8 @@ int do_diff_cache(const unsigned char *tree_sha1, struct diff_options *opt)
 	return 0;
 }
 
-int index_differs_from(const char *def, int diff_flags)
+int index_differs_from(const char *def, int diff_flags,
+		       int ita_invisible_in_index)
 {
 	struct rev_info rev;
 	struct setup_revision_opt opt;
@@ -528,6 +548,7 @@ int index_differs_from(const char *def, int diff_flags)
 	DIFF_OPT_SET(&rev.diffopt, QUICK);
 	DIFF_OPT_SET(&rev.diffopt, EXIT_WITH_STATUS);
 	rev.diffopt.flags |= diff_flags;
+	rev.diffopt.ita_invisible_in_index = ita_invisible_in_index;
 	run_diff_index(&rev, 1);
 	if (rev.pending.alloc)
 		free(rev.pending.objects);

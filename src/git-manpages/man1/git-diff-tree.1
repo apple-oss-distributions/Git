@@ -2,12 +2,12 @@
 .\"     Title: git-diff-tree
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 09/02/2016
+.\"      Date: 11/29/2016
 .\"    Manual: Git Manual
-.\"    Source: Git 2.10.0
+.\"    Source: Git 2.11.0
 .\"  Language: English
 .\"
-.TH "GIT\-DIFF\-TREE" "1" "09/02/2016" "Git 2\&.10\&.0" "Git Manual"
+.TH "GIT\-DIFF\-TREE" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -76,9 +76,9 @@ Synonym for
 \fB\-p \-\-raw\fR\&.
 .RE
 .PP
-\-\-compaction\-heuristic, \-\-no\-compaction\-heuristic
+\-\-indent\-heuristic, \-\-no\-indent\-heuristic, \-\-compaction\-heuristic, \-\-no\-compaction\-heuristic
 .RS 4
-These are to help debugging and tuning an experimental heuristic (which is off by default) that shifts the hunk boundary in an attempt to make the resulting patch easier to read\&.
+These are to help debugging and tuning experimental heuristics (which are off by default) that shift diff hunk boundaries to make patches easier to read\&.
 .RE
 .PP
 \-\-minimal
@@ -256,22 +256,27 @@ option on what the status letters mean\&.
 .PP
 \-\-submodule[=<format>]
 .RS 4
-Specify how differences in submodules are shown\&. When
+Specify how differences in submodules are shown\&. When specifying
+\fB\-\-submodule=short\fR
+the
+\fIshort\fR
+format is used\&. This format just shows the names of the commits at the beginning and end of the range\&. When
 \fB\-\-submodule\fR
 or
 \fB\-\-submodule=log\fR
-is given, the
+is specified, the
 \fIlog\fR
 format is used\&. This format lists the commits in the range like
 \fBgit-submodule\fR(1)\fBsummary\fR
-does\&. Omitting the
-\fB\-\-submodule\fR
-option or specifying
-\fB\-\-submodule=short\fR, uses the
-\fIshort\fR
-format\&. This format just shows the names of the commits at the beginning and end of the range\&. Can be tweaked via the
+does\&. When
+\fB\-\-submodule=diff\fR
+is specified, the
+\fIdiff\fR
+format is used\&. This format shows an inline diff of the changes in the submodule contents between the commit range\&. Defaults to
 \fBdiff\&.submodule\fR
-configuration variable\&.
+or the
+\fIshort\fR
+format if the config option is unset\&.
 .RE
 .PP
 \-\-color[=<when>]
@@ -384,7 +389,9 @@ lines are highlighted\&. E\&.g\&.
 highlights whitespace errors on both deleted and added lines\&.
 \fBall\fR
 can be used as a short\-hand for
-\fBold,new,context\fR\&.
+\fBold,new,context\fR\&. The
+\fBdiff\&.wsErrorHighlight\fR
+configuration variable can be used to specify the default behaviour\&.
 .RE
 .PP
 \-\-full\-index
@@ -664,6 +671,17 @@ Show the given destination prefix instead of "b/"\&.
 \-\-no\-prefix
 .RS 4
 Do not show any source or destination prefix\&.
+.RE
+.PP
+\-\-line\-prefix=<prefix>
+.RS 4
+Prepend an additional prefix to every line of output\&.
+.RE
+.PP
+\-\-ita\-invisible\-in\-index
+.RS 4
+By default entries added by "git add \-N" appear as an existing empty file in "git diff" and a new file in "git diff \-\-cached"\&. This option makes the entry appear as a new file in "git diff" and non\-existent in "git diff \-\-cached"\&. This option could be reverted with
+\fB\-\-ita\-visible\-in\-index\fR\&. Both options are experimental and could be removed in future\&.
 .RE
 .sp
 For more detailed explanation on these common options, see also \fBgitdiffcore\fR(7)\&.
@@ -1581,7 +1599,7 @@ or
 .sp -1
 .IP \(bu 2.3
 .\}
-\fI%G?\fR: show "G" for a good (valid) signature, "B" for a bad signature, "U" for a good signature with unknown validity and "N" for no signature
+\fI%G?\fR: show "G" for a good (valid) signature, "B" for a bad signature, "U" for a good signature with unknown validity, "X" for a good signature that has expired, "Y" for a good signature made by an expired key, "R" for a good signature made by a revoked key, "E" if the signature cannot be checked (e\&.g\&. missing key) and "N" for no signature
 .RE
 .sp
 .RS 4
@@ -1755,7 +1773,8 @@ or
 .sp -1
 .IP \(bu 2.3
 .\}
-\fI%C(\&...)\fR: color specification, as described in color\&.branch\&.* config option; adding
+\fI%C(\&...)\fR: color specification, as described under Values in the "CONFIGURATION FILE" section of
+\fBgit-config\fR(1); adding
 \fBauto,\fR
 at the beginning will emit color only when colors are enabled for log output (by
 \fBcolor\&.diff\fR,
@@ -1776,7 +1795,7 @@ alone (i\&.e\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fI%m\fR: left, right or boundary mark
+\fI%m\fR: left (\fB<\fR), right (\fB>\fR) or boundary (\fB\-\fR) mark
 .RE
 .sp
 .RS 4

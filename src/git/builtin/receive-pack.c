@@ -20,6 +20,7 @@
 #include "gpg-interface.h"
 #include "sigchain.h"
 #include "fsck.h"
+#include "tmp-objdir.h"
 
 static const char * const receive_pack_usage[] = {
 	N_("git receive-pack <git-dir>"),
@@ -46,6 +47,7 @@ static int transfer_unpack_limit = -1;
 static int advertise_atomic_push = 1;
 static int advertise_push_options;
 static int unpack_limit = 100;
+static off_t max_input_size;
 static int report_status;
 static int use_sideband;
 static int use_atomic;
@@ -84,6 +86,8 @@ static enum {
 	KEEPALIVE_ALWAYS
 } use_keepalive;
 static int keepalive_in_sec = 5;
+
+static struct tmp_objdir *tmp_objdir;
 
 static enum deny_action parse_deny_action(const char *var, const char *value)
 {
@@ -212,13 +216,18 @@ static int receive_pack_config(const char *var, const char *value, void *cb)
 		return 0;
 	}
 
+	if (strcmp(var, "receive.maxinputsize") == 0) {
+		max_input_size = git_config_int64(var, value);
+		return 0;
+	}
+
 	return git_default_config(var, value, cb);
 }
 
 static void show_ref(const char *path, const unsigned char *sha1)
 {
 	if (sent_capabilities) {
-		packet_write(1, "%s %s\n", sha1_to_hex(sha1), path);
+		packet_write_fmt(1, "%s %s\n", sha1_to_hex(sha1), path);
 	} else {
 		struct strbuf cap = STRBUF_INIT;
 
@@ -233,7 +242,7 @@ static void show_ref(const char *path, const unsigned char *sha1)
 		if (advertise_push_options)
 			strbuf_addstr(&cap, " push-options");
 		strbuf_addf(&cap, " agent=%s", git_user_agent_sanitized());
-		packet_write(1, "%s %s%c%s\n",
+		packet_write_fmt(1, "%s %s%c%s\n",
 			     sha1_to_hex(sha1), path, 0, cap.buf);
 		strbuf_release(&cap);
 		sent_capabilities = 1;
@@ -262,9 +271,10 @@ static int show_ref_cb(const char *path_full, const struct object_id *oid,
 	return 0;
 }
 
-static void show_one_alternate_sha1(const unsigned char sha1[20], void *unused)
+static int show_one_alternate_sha1(const unsigned char sha1[20], void *unused)
 {
 	show_ref(".have", sha1);
+	return 0;
 }
 
 static void collect_one_alternate_ref(const struct ref *ref, void *data)
@@ -657,6 +667,9 @@ static int run_and_feed_hook(const char *hook_name, feed_fn feed,
 	} else
 		argv_array_pushf(&proc.env_array, "GIT_PUSH_OPTION_COUNT");
 
+	if (tmp_objdir)
+		argv_array_pushv(&proc.env_array, tmp_objdir_env(tmp_objdir));
+
 	if (use_sideband) {
 		memset(&muxer, 0, sizeof(muxer));
 		muxer.proc = copy_to_sideband;
@@ -756,6 +769,7 @@ static int run_update_hook(struct command *cmd)
 	proc.stdout_to_stderr = 1;
 	proc.err = use_sideband ? -1 : 0;
 	proc.argv = argv;
+	proc.env = tmp_objdir_env(tmp_objdir);
 
 	code = start_command(&proc);
 	if (code)
@@ -775,47 +789,39 @@ static int is_ref_checked_out(const char *ref)
 	return !strcmp(head_name, ref);
 }
 
-static char *refuse_unconfigured_deny_msg[] = {
-	"By default, updating the current branch in a non-bare repository",
-	"is denied, because it will make the index and work tree inconsistent",
-	"with what you pushed, and will require 'git reset --hard' to match",
-	"the work tree to HEAD.",
-	"",
-	"You can set 'receive.denyCurrentBranch' configuration variable to",
-	"'ignore' or 'warn' in the remote repository to allow pushing into",
-	"its current branch; however, this is not recommended unless you",
-	"arranged to update its work tree to match what you pushed in some",
-	"other way.",
-	"",
-	"To squelch this message and still keep the default behaviour, set",
-	"'receive.denyCurrentBranch' configuration variable to 'refuse'."
-};
+static char *refuse_unconfigured_deny_msg =
+	N_("By default, updating the current branch in a non-bare repository\n"
+	   "is denied, because it will make the index and work tree inconsistent\n"
+	   "with what you pushed, and will require 'git reset --hard' to match\n"
+	   "the work tree to HEAD.\n"
+	   "\n"
+	   "You can set 'receive.denyCurrentBranch' configuration variable to\n"
+	   "'ignore' or 'warn' in the remote repository to allow pushing into\n"
+	   "its current branch; however, this is not recommended unless you\n"
+	   "arranged to update its work tree to match what you pushed in some\n"
+	   "other way.\n"
+	   "\n"
+	   "To squelch this message and still keep the default behaviour, set\n"
+	   "'receive.denyCurrentBranch' configuration variable to 'refuse'.");
 
 static void refuse_unconfigured_deny(void)
 {
-	int i;
-	for (i = 0; i < ARRAY_SIZE(refuse_unconfigured_deny_msg); i++)
-		rp_error("%s", refuse_unconfigured_deny_msg[i]);
+	rp_error("%s", _(refuse_unconfigured_deny_msg));
 }
 
-static char *refuse_unconfigured_deny_delete_current_msg[] = {
-	"By default, deleting the current branch is denied, because the next",
-	"'git clone' won't result in any file checked out, causing confusion.",
-	"",
-	"You can set 'receive.denyDeleteCurrent' configuration variable to",
-	"'warn' or 'ignore' in the remote repository to allow deleting the",
-	"current branch, with or without a warning message.",
-	"",
-	"To squelch this message, you can set it to 'refuse'."
-};
+static char *refuse_unconfigured_deny_delete_current_msg =
+	N_("By default, deleting the current branch is denied, because the next\n"
+	   "'git clone' won't result in any file checked out, causing confusion.\n"
+	   "\n"
+	   "You can set 'receive.denyDeleteCurrent' configuration variable to\n"
+	   "'warn' or 'ignore' in the remote repository to allow deleting the\n"
+	   "current branch, with or without a warning message.\n"
+	   "\n"
+	   "To squelch this message, you can set it to 'refuse'.");
 
 static void refuse_unconfigured_deny_delete_current(void)
 {
-	int i;
-	for (i = 0;
-	     i < ARRAY_SIZE(refuse_unconfigured_deny_delete_current_msg);
-	     i++)
-		rp_error("%s", refuse_unconfigured_deny_delete_current_msg[i]);
+	rp_error("%s", _(refuse_unconfigured_deny_delete_current_msg));
 }
 
 static int command_singleton_iterator(void *cb_data, unsigned char sha1[20]);
@@ -835,6 +841,7 @@ static int update_shallow_ref(struct command *cmd, struct shallow_info *si)
 		    !delayed_reachability_test(si, i))
 			sha1_array_append(&extra, si->shallow->sha1[i]);
 
+	opt.env = tmp_objdir_env(tmp_objdir);
 	setup_alternate_shallow(&shallow_lock, &opt.shallow_file, &extra);
 	if (check_connected(command_singleton_iterator, cmd, &opt)) {
 		rollback_lock_file(&shallow_lock);
@@ -1156,10 +1163,6 @@ static void check_aliased_update(struct command *cmd, struct string_list *list)
 	struct string_list_item *item;
 	struct command *dst_cmd;
 	unsigned char sha1[GIT_SHA1_RAWSZ];
-	char cmd_oldh[GIT_SHA1_HEXSZ + 1],
-	     cmd_newh[GIT_SHA1_HEXSZ + 1],
-	     dst_oldh[GIT_SHA1_HEXSZ + 1],
-	     dst_newh[GIT_SHA1_HEXSZ + 1];
 	int flag;
 
 	strbuf_addf(&buf, "%s%s", get_git_namespace(), cmd->ref_name);
@@ -1190,14 +1193,14 @@ static void check_aliased_update(struct command *cmd, struct string_list *list)
 
 	dst_cmd->skip_update = 1;
 
-	find_unique_abbrev_r(cmd_oldh, cmd->old_sha1, DEFAULT_ABBREV);
-	find_unique_abbrev_r(cmd_newh, cmd->new_sha1, DEFAULT_ABBREV);
-	find_unique_abbrev_r(dst_oldh, dst_cmd->old_sha1, DEFAULT_ABBREV);
-	find_unique_abbrev_r(dst_newh, dst_cmd->new_sha1, DEFAULT_ABBREV);
 	rp_error("refusing inconsistent update between symref '%s' (%s..%s) and"
 		 " its target '%s' (%s..%s)",
-		 cmd->ref_name, cmd_oldh, cmd_newh,
-		 dst_cmd->ref_name, dst_oldh, dst_newh);
+		 cmd->ref_name,
+		 find_unique_abbrev(cmd->old_sha1, DEFAULT_ABBREV),
+		 find_unique_abbrev(cmd->new_sha1, DEFAULT_ABBREV),
+		 dst_cmd->ref_name,
+		 find_unique_abbrev(dst_cmd->old_sha1, DEFAULT_ABBREV),
+		 find_unique_abbrev(dst_cmd->new_sha1, DEFAULT_ABBREV));
 
 	cmd->error_string = dst_cmd->error_string =
 		"inconsistent aliased update";
@@ -1242,12 +1245,17 @@ static void set_connectivity_errors(struct command *commands,
 
 	for (cmd = commands; cmd; cmd = cmd->next) {
 		struct command *singleton = cmd;
+		struct check_connected_options opt = CHECK_CONNECTED_INIT;
+
 		if (shallow_update && si->shallow_ref[cmd->index])
 			/* to be checked in update_shallow_ref() */
 			continue;
+
+		opt.env = tmp_objdir_env(tmp_objdir);
 		if (!check_connected(command_singleton_iterator, &singleton,
-				     NULL))
+				     &opt))
 			continue;
+
 		cmd->error_string = "missing necessary objects";
 	}
 }
@@ -1430,6 +1438,7 @@ static void execute_commands(struct command *commands,
 	data.si = si;
 	opt.err_fd = err_fd;
 	opt.progress = err_fd && !quiet;
+	opt.env = tmp_objdir_env(tmp_objdir);
 	if (check_connected(iterate_receive_command_list, &data, &opt))
 		set_connectivity_errors(commands, si);
 
@@ -1445,6 +1454,19 @@ static void execute_commands(struct command *commands,
 		}
 		return;
 	}
+
+	/*
+	 * Now we'll start writing out refs, which means the objects need
+	 * to be in their final positions so that other processes can see them.
+	 */
+	if (tmp_objdir_migrate(tmp_objdir) < 0) {
+		for (cmd = commands; cmd; cmd = cmd->next) {
+			if (!cmd->error_string)
+				cmd->error_string = "unable to migrate objects to permanent storage";
+		}
+		return;
+	}
+	tmp_objdir = NULL;
 
 	check_aliased_updates(commands);
 
@@ -1641,6 +1663,18 @@ static const char *unpack(int err_fd, struct shallow_info *si)
 		argv_array_push(&child.args, alt_shallow_file);
 	}
 
+	tmp_objdir = tmp_objdir_create();
+	if (!tmp_objdir)
+		return "unable to create temporary object directory";
+	child.env = tmp_objdir_env(tmp_objdir);
+
+	/*
+	 * Normally we just pass the tmp_objdir environment to the child
+	 * processes that do the heavy lifting, but we may need to see these
+	 * objects ourselves to set up shallow information.
+	 */
+	tmp_objdir_add_as_alternate(tmp_objdir);
+
 	if (ntohl(hdr.hdr_entries) < unpack_limit) {
 		argv_array_pushl(&child.args, "unpack-objects", hdr_arg, NULL);
 		if (quiet)
@@ -1648,6 +1682,9 @@ static const char *unpack(int err_fd, struct shallow_info *si)
 		if (fsck_objects)
 			argv_array_pushf(&child.args, "--strict%s",
 				fsck_msg_types.buf);
+		if (max_input_size)
+			argv_array_pushf(&child.args, "--max-input-size=%"PRIuMAX,
+				(uintmax_t)max_input_size);
 		child.no_stdout = 1;
 		child.err = err_fd;
 		child.git_cmd = 1;
@@ -1676,6 +1713,9 @@ static const char *unpack(int err_fd, struct shallow_info *si)
 				fsck_msg_types.buf);
 		if (!reject_thin)
 			argv_array_push(&child.args, "--fix-thin");
+		if (max_input_size)
+			argv_array_pushf(&child.args, "--max-input-size=%"PRIuMAX,
+				(uintmax_t)max_input_size);
 		child.out = -1;
 		child.err = err_fd;
 		child.git_cmd = 1;

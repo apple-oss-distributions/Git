@@ -528,16 +528,6 @@ AC_CHECK_LIB([curl], [curl_global_init],
 [NO_CURL=],
 [NO_CURL=YesPlease])
 
-if test -z "${NO_CURL}" && test -z "${NO_OPENSSL}"; then
-
-AC_CHECK_LIB([curl], [Curl_ssl_init],
-[NEEDS_SSL_WITH_CURL=YesPlease],
-[NEEDS_SSL_WITH_CURL=])
-
-GIT_CONF_SUBST([NEEDS_SSL_WITH_CURL])
-
-fi
-
 GIT_UNSTASH_FLAGS($CURLDIR)
 
 GIT_CONF_SUBST([NO_CURL])
@@ -550,6 +540,17 @@ AC_CHECK_PROG([CURL_CONFIG], [curl-config],
 
 if test $CURL_CONFIG != no; then
     GIT_CONF_SUBST([CURL_CONFIG])
+    if test -z "${NO_OPENSSL}"; then
+      AC_MSG_CHECKING([if Curl supports SSL])
+      if test $(curl-config --features|grep SSL) = SSL; then
+         NEEDS_SSL_WITH_CURL=YesPlease
+         AC_MSG_RESULT([yes])
+      else
+         NEEDS_SSL_WITH_CURL=
+         AC_MSG_RESULT([no])
+      fi
+      GIT_CONF_SUBST([NEEDS_SSL_WITH_CURL])
+    fi
 fi
 
 fi
@@ -835,9 +836,10 @@ AC_CHECK_TYPE([struct addrinfo],[
 ])
 GIT_CONF_SUBST([NO_IPV6])
 #
-# Define NO_REGEX if you have no or inferior regex support in your C library.
-AC_CACHE_CHECK([whether the platform regex can handle null bytes],
- [ac_cv_c_excellent_regex], [
+# Define NO_REGEX if your C library lacks regex support with REG_STARTEND
+# feature.
+AC_CACHE_CHECK([whether the platform regex supports REG_STARTEND],
+ [ac_cv_c_regex_with_reg_startend], [
 AC_EGREP_CPP(yippeeyeswehaveit,
 	AC_LANG_PROGRAM([AC_INCLUDES_DEFAULT
 #include <regex.h>
@@ -846,10 +848,10 @@ AC_EGREP_CPP(yippeeyeswehaveit,
 yippeeyeswehaveit
 #endif
 ]),
-	[ac_cv_c_excellent_regex=yes],
-	[ac_cv_c_excellent_regex=no])
+	[ac_cv_c_regex_with_reg_startend=yes],
+	[ac_cv_c_regex_with_reg_startend=no])
 ])
-if test $ac_cv_c_excellent_regex = yes; then
+if test $ac_cv_c_regex_with_reg_startend = yes; then
 	NO_REGEX=
 else
 	NO_REGEX=YesPlease

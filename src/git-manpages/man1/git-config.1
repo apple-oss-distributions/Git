@@ -2,12 +2,12 @@
 .\"     Title: git-config
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 09/02/2016
+.\"      Date: 11/29/2016
 .\"    Manual: Git Manual
-.\"    Source: Git 2.10.0
+.\"    Source: Git 2.11.0
 .\"  Language: English
 .\"
-.TH "GIT\-CONFIG" "1" "09/02/2016" "Git 2\&.10\&.0" "Git Manual"
+.TH "GIT\-CONFIG" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -1897,7 +1897,10 @@ A boolean to enable/disable color in the output of
 \fBnever\fR) or
 \fBauto\fR
 (or
-\fBtrue\fR), in which case colors are used only when the output is to a terminal\&. Defaults to false\&.
+\fBtrue\fR), in which case colors are used only when the output is to a terminal\&. If unset, then the value of
+\fBcolor\&.ui\fR
+is used (\fBauto\fR
+by default)\&.
 .RE
 .PP
 color\&.branch\&.<slot>
@@ -1927,7 +1930,10 @@ Whether to use ANSI escape sequences to add color to patches\&. If this is set t
 will use color for all patches\&. If it is set to
 \fBtrue\fR
 or
-\fBauto\fR, those commands will only use color when output is to the terminal\&. Defaults to false\&.
+\fBauto\fR, those commands will only use color when output is to the terminal\&. If unset, then the value of
+\fBcolor\&.ui\fR
+is used (\fBauto\fR
+by default)\&.
 .sp
 This does not affect
 \fBgit-format-patch\fR(1)
@@ -1988,8 +1994,10 @@ When set to
 \fBnever\fR), never\&. When set to
 \fBtrue\fR
 or
-\fBauto\fR, use color only when the output is written to the terminal\&. Defaults to
-\fBfalse\fR\&.
+\fBauto\fR, use color only when the output is written to the terminal\&. If unset, then the value of
+\fBcolor\&.ui\fR
+is used (\fBauto\fR
+by default)\&.
 .RE
 .PP
 color\&.grep\&.<slot>
@@ -2062,7 +2070,10 @@ When set to
 \fBnever\fR), never\&. When set to
 \fBtrue\fR
 or
-\fBauto\fR, use colors only when the output is to the terminal\&. Defaults to false\&.
+\fBauto\fR, use colors only when the output is to the terminal\&. If unset, then the value of
+\fBcolor\&.ui\fR
+is used (\fBauto\fR
+by default)\&.
 .RE
 .PP
 color\&.interactive\&.<slot>
@@ -2096,7 +2107,10 @@ A boolean to enable/disable color in the output of
 \fBnever\fR) or
 \fBauto\fR
 (or
-\fBtrue\fR), in which case colors are used only when the output is to a terminal\&. Defaults to false\&.
+\fBtrue\fR), in which case colors are used only when the output is to a terminal\&. If unset, then the value of
+\fBcolor\&.ui\fR
+is used (\fBauto\fR
+by default)\&.
 .RE
 .PP
 color\&.status
@@ -2109,7 +2123,10 @@ A boolean to enable/disable color in the output of
 \fBnever\fR) or
 \fBauto\fR
 (or
-\fBtrue\fR), in which case colors are used only when the output is to a terminal\&. Defaults to false\&.
+\fBtrue\fR), in which case colors are used only when the output is to a terminal\&. If unset, then the value of
+\fBcolor\&.ui\fR
+is used (\fBauto\fR
+by default)\&.
 .RE
 .PP
 color\&.status\&.<slot>
@@ -2504,9 +2521,9 @@ A boolean to inhibit the standard behavior of printing a space before each empty
 .PP
 diff\&.submodule
 .RS 4
-Specify the format in which differences in submodules are shown\&. The "log" format lists the commits in the range like
+Specify the format in which differences in submodules are shown\&. The "short" format just shows the names of the commits at the beginning and end of the range\&. The "log" format lists the commits in the range like
 \fBgit-submodule\fR(1)\fBsummary\fR
-does\&. The "short" format format just shows the names of the commits at the beginning and end of the range\&. Defaults to short\&.
+does\&. The "diff" format shows an inline diff of the changed contents of the submodule\&. Defaults to "short"\&.
 .RE
 .PP
 diff\&.wordRegex
@@ -2829,11 +2846,11 @@ xxdiff
 .RE
 .RE
 .PP
-diff\&.compactionHeuristic
+diff\&.indentHeuristic, diff\&.compactionHeuristic
 .RS 4
-Set this option to
+Set one of these options to
 \fBtrue\fR
-to enable an experimental heuristic that shifts the hunk boundary in an attempt to make the resulting patch easier to read\&.
+to enable one of two experimental heuristics that shift diff hunk boundaries to make patches easier to read\&.
 .RE
 .PP
 diff\&.algorithm
@@ -2859,6 +2876,16 @@ Use "patience diff" algorithm when generating patches\&.
 .RS 4
 This algorithm extends the patience algorithm to "support low\-occurrence common elements"\&.
 .RE
+.RE
+.PP
+diff\&.wsErrorHighlight
+.RS 4
+A comma separated list of
+\fBold\fR,
+\fBnew\fR,
+\fBcontext\fR, that specifies how whitespace errors on lines are highlighted with
+\fBcolor\&.diff\&.whitespace\fR\&. Can be overridden by the command line option
+\fB\-\-ws\-error\-highlight=<kind>\fR
 .RE
 .PP
 difftool\&.<tool>\&.path
@@ -3072,7 +3099,7 @@ The path to a sorted list of object names (i\&.e\&. one SHA\-1 per line) that ar
 gc\&.aggressiveDepth
 .RS 4
 The depth parameter used in the delta compression algorithm used by
-\fIgit gc \-\-aggressive\fR\&. This defaults to 250\&.
+\fIgit gc \-\-aggressive\fR\&. This defaults to 50\&.
 .RE
 .PP
 gc\&.aggressiveWindow
@@ -3608,6 +3635,47 @@ environment variable\&. Possible values are:
 http\&.emptyAuth
 .RS 4
 Attempt authentication without seeking a username or password\&. This can be used to attempt GSS\-Negotiate authentication without specifying a username in the URL, as libcurl normally requires a username for authentication\&.
+.RE
+.PP
+http\&.delegation
+.RS 4
+Control GSSAPI credential delegation\&. The delegation is disabled by default in libcurl since version 7\&.21\&.7\&. Set parameter to tell the server what it is allowed to delegate when it comes to user credentials\&. Used with GSS/kerberos\&. Possible values are:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBnone\fR
+\- Don\(cqt allow any delegation\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBpolicy\fR
+\- Delegates if and only if the OK\-AS\-DELEGATE flag is set in the Kerberos service ticket, which is a matter of realm policy\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBalways\fR
+\- Unconditionally allow the server to delegate\&.
+.RE
 .RE
 .PP
 http\&.extraHeader
@@ -4945,8 +5013,12 @@ can then be used to correct the error\&. If set to "ignore", no checking is done
 \fBdrop\fR
 command in the todo\-list\&. Defaults to "ignore"\&.
 .RE
-.sp
-rebase\&.instructionFormat A format string, as specified in \fBgit-log\fR(1), to be used for the instruction list during an interactive rebase\&. The format will automatically have the long commit hash prepended to the format\&.
+.PP
+rebase\&.instructionFormat
+.RS 4
+A format string, as specified in
+\fBgit-log\fR(1), to be used for the instruction list during an interactive rebase\&. The format will automatically have the long commit hash prepended to the format\&.
+.RE
 .PP
 receive\&.advertiseAtomic
 .RS 4
@@ -5040,6 +5112,11 @@ receive\&.unpackLimit
 If the number of objects received in a push is below this limit then the objects will be unpacked into loose object files\&. However if the number of received objects equals or exceeds this limit then the received pack will be stored as a pack, after adding any missing delta bases\&. Storing the pack from a push can make the push operation complete faster, especially on slow filesystems\&. If not set, the value of
 \fBtransfer\&.unpackLimit\fR
 is used instead\&.
+.RE
+.PP
+receive\&.maxInputSize
+.RS 4
+If the size of the incoming pack stream is larger than this limit, then git\-receive\-pack will error out, instead of accepting the pack file\&. If not set or set to 0, then the size is unlimited\&.
 .RE
 .PP
 receive\&.denyDeletes
@@ -5429,10 +5506,11 @@ command in
 \fBgit-stash\fR(1)\&.
 .RE
 .PP
-submodule\&.<name>\&.path, submodule\&.<name>\&.url
+submodule\&.<name>\&.url
 .RS 4
-The path within this project and URL for a submodule\&. These variables are initially populated by
-\fIgit submodule init\fR\&. See
+The URL for a submodule\&. This variable is copied from the \&.gitmodules file to the git config via
+\fIgit submodule init\fR\&. The user can change the configured URL before obtaining the submodule via
+\fIgit submodule update\fR\&. After obtaining the submodule, the presence of this variable is used as a sign whether the submodule is of interest to git commands\&. See
 \fBgit-submodule\fR(1)
 and
 \fBgitmodules\fR(5)
@@ -5481,6 +5559,19 @@ submodule\&.fetchJobs
 .RS 4
 Specifies how many submodules are fetched/cloned at the same time\&. A positive integer allows up to that number of submodules fetched in parallel\&. A value of 0 will give some reasonable default\&. If unset, it defaults to 1\&.
 .RE
+.PP
+submodule\&.alternateLocation
+.RS 4
+Specifies how the submodules obtain alternates when submodules are cloned\&. Possible values are
+\fBno\fR,
+\fBsuperproject\fR\&. By default
+\fBno\fR
+is assumed, which doesn\(cqt add references\&. When the value is set to
+\fBsuperproject\fR
+the submodule to be cloned computes its alternates location relative to the superprojects alternate\&.
+.RE
+.sp
+submodule\&.alternateErrorStrategy Specifies how to treat errors with the alternates for a submodule as computed via \fBsubmodule\&.alternateLocation\fR\&. Possible values are \fBignore\fR, \fBinfo\fR, \fBdie\fR\&. Default is \fBdie\fR\&.
 .PP
 tag\&.forceSignAnnotated
 .RS 4

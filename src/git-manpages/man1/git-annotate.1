@@ -2,12 +2,12 @@
 .\"     Title: git-annotate
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 09/02/2016
+.\"      Date: 11/29/2016
 .\"    Manual: Git Manual
-.\"    Source: Git 2.10.0
+.\"    Source: Git 2.11.0
 .\"  Language: English
 .\"
-.TH "GIT\-ANNOTATE" "1" "09/02/2016" "Git 2\&.10\&.0" "Git Manual"
+.TH "GIT\-ANNOTATE" "1" "11/29/2016" "Git 2\&.11\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -131,9 +131,13 @@ Use revisions from revs\-file instead of calling
 \fBgit-rev-list\fR(1)\&.
 .RE
 .PP
-\-\-reverse
+\-\-reverse <rev>\&.\&.<rev>
 .RS 4
 Walk history forward instead of backward\&. Instead of showing the revision in which a line appeared, this shows the last revision in which a line has existed\&. This requires a range of revision like START\&.\&.END where the path to blame exists in START\&.
+\fBgit blame \-\-reverse START\fR
+is taken as
+\fBgit blame \-\-reverse START\&.\&.HEAD\fR
+for convenience\&.
 .RE
 .PP
 \-p, \-\-porcelain
@@ -207,6 +211,11 @@ will take effect\&.
 \-h
 .RS 4
 Show help message\&.
+.RE
+.PP
+\-\-indent\-heuristic, \-\-no\-indent\-heuristic, \-\-compaction\-heuristic, \-\-no\-compaction\-heuristic
+.RS 4
+These are to help debugging and tuning experimental heuristics (which are off by default) that shift diff hunk boundaries to make patches easier to read\&.
 .RE
 .SH "SEE ALSO"
 .sp
