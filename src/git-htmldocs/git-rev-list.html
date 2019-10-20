@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-rev-list(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -1966,6 +1967,10 @@ to omit blobs that would not be not required for a sparse checkout on
 the requested refs.</p></div>
 <div class="paragraph"><p>The form <em>--filter=sparse:path=&lt;path&gt;</em> similarly uses a sparse-checkout
 specification contained in &lt;path&gt;.</p></div>
+<div class="paragraph"><p>The form <em>--filter=tree:&lt;depth&gt;</em> omits all blobs and trees whose depth
+from the root tree is &gt;= &lt;depth&gt; (minimum depth if an object is located
+at multiple depths in the commits traversed). Currently, only &lt;depth&gt;=0
+is supported, which omits all blobs and trees.</p></div>
 </dd>
 <dt class="hdlist1">
 --no-filter
@@ -2682,6 +2687,17 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
+<em>%GF</em>: show the fingerprint of the key used to sign a signed commit
+</p>
+</li>
+<li>
+<p>
+<em>%GP</em>: show the fingerprint of the primary key whose subkey was used
+  to sign a signed commit
+</p>
+</li>
+<li>
+<p>
 <em>%gD</em>: reflog selector, e.g., <code>refs/stash@{1}</code> or
   <code>refs/stash@{2 minutes ago</code>}; the format follows the rules described
   for the <code>-g</code> option. The portion before the <code>@</code> is the refname as
@@ -2902,7 +2918,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-01-27 08:11:04 JST
 </div>
 </div>
 </body>

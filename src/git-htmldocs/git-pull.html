@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-pull(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -748,7 +749,7 @@ git-pull(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git pull</em> [options] [&lt;repository&gt; [&lt;refspec&gt;&#8230;]]</pre>
+<pre class="content"><em>git pull</em> [&lt;options&gt;] [&lt;repository&gt; [&lt;refspec&gt;&#8230;]]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1070,7 +1071,7 @@ option can be used to override --squash.</p></div>
 -r
 </dt>
 <dt class="hdlist1">
---rebase[=false|true|preserve|interactive]
+--rebase[=false|true|merges|preserve|interactive]
 </dt>
 <dd>
 <p>
@@ -1080,6 +1081,9 @@ option can be used to override --squash.</p></div>
         was rebased since last fetched, the rebase uses that information
         to avoid rebasing non-local changes.
 </p>
+<div class="paragraph"><p>When set to <code>merges</code>, rebase using <code>git rebase --rebase-merges</code> so that
+the local merge commits are included in the rebase (see
+<a href="git-rebase.html">git-rebase(1)</a> for details).</p></div>
 <div class="paragraph"><p>When set to preserve, rebase with the <code>--preserve-merges</code> option passed
 to <code>git rebase</code> so that locally created merge commits will not be flattened.</p></div>
 <div class="paragraph"><p>When false, merge the current branch into the upstream branch.</p></div>
@@ -1213,6 +1217,27 @@ the current repository has the same history as the source repository.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--negotiation-tip=&lt;commit|glob&gt;
+</dt>
+<dd>
+<p>
+        By default, Git will report, to the server, commits reachable
+        from all local refs to find common commits in an attempt to
+        reduce the size of the to-be-received packfile. If specified,
+        Git will only report commits reachable from the given tips.
+        This is useful to speed up fetches when the user knows which
+        local ref is likely to have commits in common with the
+        upstream ref being fetched.
+</p>
+<div class="paragraph"><p>This option may be specified more than once; if so, Git will report
+commits reachable from any of the given commits.</p></div>
+<div class="paragraph"><p>The argument to this option may be a glob on ref names, a ref, or the (possibly
+abbreviated) SHA-1 of a commit. Specifying a glob is equivalent to specifying
+this option multiple times, one for each matching ref name.</p></div>
+<div class="paragraph"><p>See also the <code>fetch.negotiationAlgorithm</code> configuration variable
+documented in <a href="git-config.html">git-config(1)</a>.</p></div>
+</dd>
+<dt class="hdlist1">
 -f
 </dt>
 <dt class="hdlist1">
@@ -1220,11 +1245,11 @@ the current repository has the same history as the source repository.</p></div>
 </dt>
 <dd>
 <p>
-        When <em>git fetch</em> is used with <code>&lt;rbranch&gt;:&lt;lbranch&gt;</code>
-        refspec, it refuses to update the local branch
-        <code>&lt;lbranch&gt;</code> unless the remote branch <code>&lt;rbranch&gt;</code> it
-        fetches is a descendant of <code>&lt;lbranch&gt;</code>.  This option
-        overrides that check.
+        When <em>git fetch</em> is used with <code>&lt;src&gt;:&lt;dst&gt;</code> refspec it may
+        refuse to update the local branch as discussed
+        in the <code>&lt;refspec&gt;</code> part of the <a href="git-fetch.html">git-fetch(1)</a>
+        documentation.
+        This option overrides that check.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1289,6 +1314,21 @@ the current repository has the same history as the source repository.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+-o &lt;option&gt;
+</dt>
+<dt class="hdlist1">
+--server-option=&lt;option&gt;
+</dt>
+<dd>
+<p>
+        Transmit the given string to the server when communicating using
+        protocol version 2.  The given string must not contain a NUL or LF
+        character.
+        When multiple <code>--server-option=&lt;option&gt;</code> are given, they are all
+        sent to the other side in the order listed on the command line.
+</p>
+</dd>
+<dt class="hdlist1">
 -4
 </dt>
 <dt class="hdlist1">
@@ -1340,11 +1380,35 @@ name.</p></div>
 <div class="paragraph"><p><code>tag &lt;tag&gt;</code> means the same as <code>refs/tags/&lt;tag&gt;:refs/tags/&lt;tag&gt;</code>;
 it requests fetching everything up to the given tag.</p></div>
 <div class="paragraph"><p>The remote ref that matches &lt;src&gt;
-is fetched, and if &lt;dst&gt; is not empty string, the local
-ref that matches it is fast-forwarded using &lt;src&gt;.
-If the optional plus <code>+</code> is used, the local ref
-is updated even if it does not result in a fast-forward
-update.</p></div>
+is fetched, and if &lt;dst&gt; is not an empty string, an attempt
+is made to update the local ref that matches it.</p></div>
+<div class="paragraph"><p>Whether that update is allowed without <code>--force</code> depends on the ref
+namespace it&#8217;s being fetched to, the type of object being fetched, and
+whether the update is considered to be a fast-forward. Generally, the
+same rules apply for fetching as when pushing, see the <code>&lt;refspec&gt;...</code>
+section of <a href="git-push.html">git-push(1)</a> for what those are. Exceptions to those
+rules particular to <em>git fetch</em> are noted below.</p></div>
+<div class="paragraph"><p>Until Git version 2.20, and unlike when pushing with
+<a href="git-push.html">git-push(1)</a>, any updates to <code>refs/tags/*</code> would be accepted
+without <code>+</code> in the refspec (or <code>--force</code>). When fetching, we promiscuously
+considered all tag updates from a remote to be forced fetches.  Since
+Git version 2.20, fetching to update <code>refs/tags/*</code> works the same way
+as when pushing. I.e. any updates will be rejected without <code>+</code> in the
+refspec (or <code>--force</code>).</p></div>
+<div class="paragraph"><p>Unlike when pushing with <a href="git-push.html">git-push(1)</a>, any updates outside of
+<code>refs/{tags,heads}/*</code> will be accepted without <code>+</code> in the refspec (or
+<code>--force</code>), whether that&#8217;s swapping e.g. a tree object for a blob, or
+a commit for another commit that&#8217;s doesn&#8217;t have the previous commit as
+an ancestor etc.</p></div>
+<div class="paragraph"><p>Unlike when pushing with <a href="git-push.html">git-push(1)</a>, there is no
+configuration which&#8217;ll amend these rules, and nothing like a
+<code>pre-fetch</code> hook analogous to the <code>pre-receive</code> hook.</p></div>
+<div class="paragraph"><p>As with pushing with <a href="git-push.html">git-push(1)</a>, all of the rules described
+above about what&#8217;s not allowed as an update can be overridden by
+adding an the optional leading <code>+</code> to a refspec (or using <code>--force</code>
+command line option). The only exception to this is that no amount of
+forcing will make the <code>refs/heads/*</code> namespace accept a non-commit
+object.</p></div>
 <div class="admonitionblock">
 <table><tr>
 <td class="icon">
@@ -1649,8 +1713,9 @@ recursive
         causing mismerges by tests done on actual merge commits
         taken from Linux 2.6 kernel development history.
         Additionally this can detect and handle merges involving
-        renames.  This is the default merge strategy when
-        pulling or merging one branch.
+        renames, but currently cannot make use of detected
+        copies.  This is the default merge strategy when pulling
+        or merging one branch.
 </p>
 <div class="paragraph"><p>The <em>recursive</em> strategy can take the following options:</p></div>
 <div class="dlist"><dl>
@@ -1767,7 +1832,8 @@ no-renames
 </dt>
 <dd>
 <p>
-        Turn off rename detection.
+        Turn off rename detection. This overrides the <code>merge.renames</code>
+        configuration variable.
         See also <a href="git-diff.html">git-diff(1)</a> <code>--no-renames</code>.
 </p>
 </dd>
@@ -1777,7 +1843,8 @@ find-renames[=&lt;n&gt;]
 <dd>
 <p>
         Turn on rename detection, optionally setting the similarity
-        threshold.  This is the default.
+        threshold.  This is the default. This overrides the
+        <em>merge.renames</em> configuration variable.
         See also <a href="git-diff.html">git-diff(1)</a> <code>--find-renames</code>.
 </p>
 </dd>
@@ -2018,7 +2085,7 @@ version.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-06-01 16:13:01 JST
 </div>
 </div>
 </body>

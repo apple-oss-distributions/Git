@@ -76,7 +76,7 @@ test_expect_success setup '
 
 	mkdir dir3 &&
 	cp dir/sub dir3/sub &&
-	test-chmtime +1 dir3/sub &&
+	test-tool chmtime +1 dir3/sub &&
 
 	git config log.showroot false &&
 	git commit --amend &&
@@ -129,7 +129,7 @@ do
 		case "$magic" in
 		noellipses) ;;
 		*)
-			die "bug in t4103: unknown magic $magic" ;;
+			BUG "unknown magic $magic" ;;
 		esac ;;
 	*)
 		cmd="$magic $cmd" magic=
@@ -140,7 +140,7 @@ do
 	expect="$TEST_DIRECTORY/t4013/diff.$test"
 	actual="$pfx-diff.$test"
 
-	test_expect_success "git $cmd # magic is ${magic:-"(not used)"}" '
+	test_expect_success "git $cmd # magic is ${magic:-(not used)}" '
 		{
 			echo "$ git $cmd"
 			case "$magic" in

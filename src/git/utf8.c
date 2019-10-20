@@ -81,7 +81,7 @@ static int git_wcwidth(ucs_char_t ch)
 	/*
 	 * Sorted list of non-overlapping intervals of non-spacing characters,
 	 */
-#include "unicode_width.h"
+#include "unicode-width.h"
 
 	/* test for 8-bit control characters */
 	if (ch == 0)
@@ -401,18 +401,40 @@ out:
 	strbuf_release(&sb_dst);
 }
 
+/*
+ * Returns true (1) if the src encoding name matches the dst encoding
+ * name directly or one of its alternative names. E.g. UTF-16BE is the
+ * same as UTF16BE.
+ */
+static int same_utf_encoding(const char *src, const char *dst)
+{
+	if (istarts_with(src, "utf") && istarts_with(dst, "utf")) {
+		/* src[3] or dst[3] might be '\0' */
+		int i = (src[3] == '-' ? 4 : 3);
+		int j = (dst[3] == '-' ? 4 : 3);
+		return !strcasecmp(src+i, dst+j);
+	}
+	return 0;
+}
+
 int is_encoding_utf8(const char *name)
 {
 	if (!name)
 		return 1;
-	if (!strcasecmp(name, "utf-8") || !strcasecmp(name, "utf8"))
+	if (same_utf_encoding("utf-8", name))
 		return 1;
 	return 0;
 }
 
 int same_encoding(const char *src, const char *dst)
 {
-	if (is_encoding_utf8(src) && is_encoding_utf8(dst))
+	static const char utf8[] = "UTF-8";
+
+	if (!src)
+		src = utf8;
+	if (!dst)
+		dst = utf8;
+	if (same_utf_encoding(src, dst))
 		return 1;
 	return !strcasecmp(src, dst);
 }
@@ -448,14 +470,14 @@ int utf8_fprintf(FILE *stream, const char *format, ...)
 #else
 	typedef char * iconv_ibp;
 #endif
-char *reencode_string_iconv(const char *in, size_t insz, iconv_t conv, int *outsz_p)
+char *reencode_string_iconv(const char *in, size_t insz, iconv_t conv, size_t *outsz_p)
 {
 	size_t outsz, outalloc;
 	char *out, *outpos;
 	iconv_ibp cp;
 
 	outsz = insz;
-	outalloc = outsz + 1; /* for terminating NUL */
+	outalloc = st_add(outsz, 1); /* for terminating NUL */
 	out = xmalloc(outalloc);
 	outpos = out;
 	cp = (iconv_ibp)in;
@@ -475,7 +497,7 @@ char *reencode_string_iconv(const char *in, size_t insz, iconv_t conv, int *outs
 			 * converting the rest.
 			 */
 			sofar = outpos - out;
-			outalloc = sofar + insz * 2 + 32;
+			outalloc = st_add3(sofar, st_mult(insz, 2), 32);
 			out = xrealloc(out, outalloc);
 			outpos = out + sofar;
 			outsz = outalloc - sofar - 1;
@@ -512,9 +534,9 @@ static const char *fallback_encoding(const char *name)
 	return name;
 }
 
-char *reencode_string_len(const char *in, int insz,
+char *reencode_string_len(const char *in, size_t insz,
 			  const char *out_encoding, const char *in_encoding,
-			  int *outsz)
+			  size_t *outsz)
 {
 	iconv_t conv;
 	char *out;
@@ -537,6 +559,45 @@ char *reencode_string_len(const char *in, int insz,
 	return out;
 }
 #endif
+
+static int has_bom_prefix(const char *data, size_t len,
+			  const char *bom, size_t bom_len)
+{
+	return data && bom && (len >= bom_len) && !memcmp(data, bom, bom_len);
+}
+
+static const char utf16_be_bom[] = {'\xFE', '\xFF'};
+static const char utf16_le_bom[] = {'\xFF', '\xFE'};
+static const char utf32_be_bom[] = {'\0', '\0', '\xFE', '\xFF'};
+static const char utf32_le_bom[] = {'\xFF', '\xFE', '\0', '\0'};
+
+int has_prohibited_utf_bom(const char *enc, const char *data, size_t len)
+{
+	return (
+	  (same_utf_encoding("UTF-16BE", enc) ||
+	   same_utf_encoding("UTF-16LE", enc)) &&
+	  (has_bom_prefix(data, len, utf16_be_bom, sizeof(utf16_be_bom)) ||
+	   has_bom_prefix(data, len, utf16_le_bom, sizeof(utf16_le_bom)))
+	) || (
+	  (same_utf_encoding("UTF-32BE",  enc) ||
+	   same_utf_encoding("UTF-32LE", enc)) &&
+	  (has_bom_prefix(data, len, utf32_be_bom, sizeof(utf32_be_bom)) ||
+	   has_bom_prefix(data, len, utf32_le_bom, sizeof(utf32_le_bom)))
+	);
+}
+
+int is_missing_required_utf_bom(const char *enc, const char *data, size_t len)
+{
+	return (
+	   (same_utf_encoding(enc, "UTF-16")) &&
+	   !(has_bom_prefix(data, len, utf16_be_bom, sizeof(utf16_be_bom)) ||
+	     has_bom_prefix(data, len, utf16_le_bom, sizeof(utf16_le_bom)))
+	) || (
+	   (same_utf_encoding(enc, "UTF-32")) &&
+	   !(has_bom_prefix(data, len, utf32_be_bom, sizeof(utf32_be_bom)) ||
+	     has_bom_prefix(data, len, utf32_le_bom, sizeof(utf32_le_bom)))
+	);
+}
 
 /*
  * Returns first character length in bytes for multi-byte `text` according to

@@ -10,7 +10,7 @@ check_relative() {
 	t=$(($TEST_DATE_NOW - $1))
 	echo "$t -> $2" >expect
 	test_expect_${3:-success} "relative date ($2)" "
-	test-date relative $t >actual &&
+	test-tool date relative $t >actual &&
 	test_i18ncmp expect actual
 	"
 }
@@ -35,7 +35,7 @@ check_show () {
 	zone=$5
 	test_expect_success $prereqs "show date ($format:$time)" '
 		echo "$time -> $expect" >expect &&
-		TZ=${zone:-$TZ} test-date show:"$format" "$time" >actual &&
+		TZ=${zone:-$TZ} test-tool date show:"$format" "$time" >actual &&
 		test_cmp expect actual
 	'
 }
@@ -71,7 +71,7 @@ check_show iso-local "$FUTURE" "2152-06-19 22:24:56 +0000" TIME_IS_64BIT,TIME_T_
 check_parse() {
 	echo "$1 -> $2" >expect
 	test_expect_${4:-success} "parse date ($1${3:+ TZ=$3})" "
-	TZ=${3:-$TZ} test-date parse '$1' >actual &&
+	TZ=${3:-$TZ} test-tool date parse '$1' >actual &&
 	test_cmp expect actual
 	"
 }
@@ -92,7 +92,7 @@ check_parse '2008-02-14 20:30:45' '2008-02-14 20:30:45 -0500' EST5
 check_approxidate() {
 	echo "$1 -> $2 +0000" >expect
 	test_expect_${3:-success} "parse approxidate ($1)" "
-	test-date approxidate '$1' >actual &&
+	test-tool date approxidate '$1' >actual &&
 	test_cmp expect actual
 	"
 }
@@ -113,6 +113,8 @@ check_approxidate '3:00' '2009-08-30 03:00:00'
 check_approxidate '15:00' '2009-08-30 15:00:00'
 check_approxidate 'noon today' '2009-08-30 12:00:00'
 check_approxidate 'noon yesterday' '2009-08-29 12:00:00'
+check_approxidate 'January 5th noon pm' '2009-01-05 12:00:00'
+check_approxidate '10am noon' '2009-08-29 12:00:00'
 
 check_approxidate 'last tuesday' '2009-08-25 19:20:00'
 check_approxidate 'July 5th' '2009-07-05 19:20:00'

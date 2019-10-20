@@ -2,12 +2,12 @@
 .\"     Title: git-merge
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-MERGE" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-MERGE" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,7 @@ git-merge \- Join two or more development histories together
 \fIgit merge\fR [\-n] [\-\-stat] [\-\-no\-commit] [\-\-squash] [\-\-[no\-]edit]
         [\-s <strategy>] [\-X <strategy\-option>] [\-S[<keyid>]]
         [\-\-[no\-]allow\-unrelated\-histories]
-        [\-\-[no\-]rerere\-autoupdate] [\-m <msg>] [<commit>\&...]
+        [\-\-[no\-]rerere\-autoupdate] [\-m <msg>] [\-F <file>] [<commit>\&...]
 \fIgit merge\fR \-\-abort
 \fIgit merge\fR \-\-continue
 .fi
@@ -78,7 +78,7 @@ The second syntax ("\fBgit merge \-\-abort\fR") can only be run after the merge 
 .sp
 \fBWarning\fR: Running \fIgit merge\fR with non\-trivial uncommitted changes is discouraged: while possible, it may leave you in a state that is hard to back out of in the case of a conflict\&.
 .sp
-The fourth syntax ("\fBgit merge \-\-continue\fR") can only be run after the merge has resulted in conflicts\&.
+The third syntax ("\fBgit merge \-\-continue\fR") can only be run after the merge has resulted in conflicts\&.
 .SH "OPTIONS"
 .PP
 \-\-commit, \-\-no\-commit
@@ -231,6 +231,15 @@ command can be used to give a good default for automated
 invocations\&. The automated message can include the branch description\&.
 .RE
 .PP
+\-F <file>, \-\-file=<file>
+.RS 4
+Read the commit message to be used for the merge commit (in case one is created)\&.
+.sp
+If
+\fB\-\-log\fR
+is specified, a shortlog of the commits being merged will be appended to the specified message\&.
+.RE
+.PP
 \-\-[no\-]rerere\-autoupdate
 .RS 4
 Allow the rerere mechanism to update the index with the result of auto\-conflict resolution if possible\&.
@@ -280,7 +289,7 @@ for merging are merged to the current branch\&.
 .sp
 Before applying outside changes, you should get your own work in good shape and committed locally, so it will not be clobbered if there are conflicts\&. See also \fBgit-stash\fR(1)\&. \fIgit pull\fR and \fIgit merge\fR will stop without doing anything when local uncommitted changes overlap with files that \fIgit pull\fR/\fIgit merge\fR may need to update\&.
 .sp
-To avoid recording unrelated changes in the merge commit, \fIgit pull\fR and \fIgit merge\fR will also abort if there are any changes registered in the index relative to the \fBHEAD\fR commit\&. (One exception is when the changed index entries are in the state that would result from the merge already\&.)
+To avoid recording unrelated changes in the merge commit, \fIgit pull\fR and \fIgit merge\fR will also abort if there are any changes registered in the index relative to the \fBHEAD\fR commit\&. (Special narrow exceptions to this rule may exist depending on which merge strategy is in use, but generally, the index must match HEAD\&.)
 .sp
 If all named commits are already ancestors of \fBHEAD\fR, \fIgit merge\fR will exit early with the message "Already up to date\&."
 .SH "FAST\-FORWARD MERGE"
@@ -634,7 +643,7 @@ This can only resolve two heads (i\&.e\&. the current branch and another branch 
 .PP
 recursive
 .RS 4
-This can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this can detect and handle merges involving renames\&. This is the default merge strategy when pulling or merging one branch\&.
+This can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this can detect and handle merges involving renames, but currently cannot make use of detected copies\&. This is the default merge strategy when pulling or merging one branch\&.
 .sp
 The
 \fIrecursive\fR
@@ -751,14 +760,18 @@ configuration variable\&.
 .PP
 no\-renames
 .RS 4
-Turn off rename detection\&. See also
+Turn off rename detection\&. This overrides the
+\fBmerge\&.renames\fR
+configuration variable\&. See also
 \fBgit-diff\fR(1)
 \fB\-\-no\-renames\fR\&.
 .RE
 .PP
 find\-renames[=<n>]
 .RS 4
-Turn on rename detection, optionally setting the similarity threshold\&. This is the default\&. See also
+Turn on rename detection, optionally setting the similarity threshold\&. This is the default\&. This overrides the
+\fImerge\&.renames\fR
+configuration variable\&. See also
 \fBgit-diff\fR(1)
 \fB\-\-find\-renames\fR\&.
 .RE
@@ -853,7 +866,12 @@ In addition to branch names, populate the log message with at most the specified
 .PP
 merge\&.renameLimit
 .RS 4
-The number of files to consider when performing rename detection during a merge; if not specified, defaults to the value of diff\&.renameLimit\&.
+The number of files to consider when performing rename detection during a merge; if not specified, defaults to the value of diff\&.renameLimit\&. This setting has no effect if rename detection is turned off\&.
+.RE
+.PP
+merge\&.renames
+.RS 4
+Whether and how Git detects renames\&. If set to "false", rename detection is disabled\&. If set to "true", basic rename detection is enabled\&. Defaults to the value of diff\&.renames\&.
 .RE
 .PP
 merge\&.renormalize
@@ -871,6 +889,13 @@ merge\&.tool
 .RS 4
 Controls which merge tool is used by
 \fBgit-mergetool\fR(1)\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom merge tool and requires that a corresponding mergetool\&.<tool>\&.cmd variable is defined\&.
+.RE
+.PP
+merge\&.guitool
+.RS 4
+Controls which merge tool is used by
+\fBgit-mergetool\fR(1)
+when the \-g/\-\-gui flag is specified\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom merge tool and requires that a corresponding mergetool\&.<guitool>\&.cmd variable is defined\&.
 .sp
 .RS 4
 .ie n \{\
@@ -980,6 +1005,17 @@ emerge
 .IP \(bu 2.3
 .\}
 examdiff
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+guiffy
 .RE
 .sp
 .RS 4

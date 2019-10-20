@@ -30,7 +30,7 @@ add () {
 	test_tick &&
 	commit=$(echo "$text" | git commit-tree $tree $parents) &&
 	eval "$name=$commit; export $name" &&
-	echo $commit > .git/refs/heads/$branch &&
+	git update-ref "refs/heads/$branch" "$commit" &&
 	eval ${branch}TIP=$commit
 }
 
@@ -45,13 +45,16 @@ pull_to_client () {
 
 			case "$heads" in
 			    *A*)
-				    echo $ATIP > .git/refs/heads/A;;
+				    git update-ref refs/heads/A "$ATIP";;
 			esac &&
 			case "$heads" in *B*)
-			    echo $BTIP > .git/refs/heads/B;;
+			    git update-ref refs/heads/B "$BTIP";;
 			esac &&
-			git symbolic-ref HEAD refs/heads/$(echo $heads \
-				| sed -e "s/^\(.\).*$/\1/") &&
+
+			git symbolic-ref HEAD refs/heads/$(
+				echo $heads |
+				sed -e "s/^\(.\).*$/\1/"
+			) &&
 
 			git fsck --full &&
 
@@ -92,8 +95,8 @@ test_expect_success 'setup' '
 		cur=$(($cur+1))
 	done &&
 	add B1 $A1 &&
-	echo $ATIP > .git/refs/heads/A &&
-	echo $BTIP > .git/refs/heads/B &&
+	git update-ref refs/heads/A "$ATIP" &&
+	git update-ref refs/heads/B "$BTIP" &&
 	git symbolic-ref HEAD refs/heads/B
 '
 
@@ -161,7 +164,7 @@ test_expect_success 'clone shallow object count' '
 test_expect_success 'clone shallow object count (part 2)' '
 	sed -e "/^in-pack:/d" -e "/^packs:/d" -e "/^size-pack:/d" \
 	    -e "/: 0$/d" count.shallow > count_output &&
-	! test -s count_output
+	test_must_be_empty count_output
 '
 
 test_expect_success 'fsck in shallow repo' '
@@ -259,7 +262,7 @@ test_expect_success 'clone shallow object count' '
 test_expect_success 'pull in shallow repo with missing merge base' '
 	(
 		cd shallow &&
-		git fetch --depth 4 .. A
+		git fetch --depth 4 .. A &&
 		test_must_fail git merge --allow-unrelated-histories FETCH_HEAD
 	)
 '
@@ -403,7 +406,7 @@ test_expect_success 'fetch creating new shallow root' '
 		git fetch --depth=1 --progress 2>actual &&
 		# This should fetch only the empty commit, no tree or
 		# blob objects
-		grep "remote: Total 1" actual
+		test_i18ngrep "remote: Total 1" actual
 	)
 '
 
@@ -516,6 +519,54 @@ test_expect_success 'test --all, --depth, and explicit tag' '
 		cd client &&
 		git fetch-pack --no-progress --all --depth=1 .. refs/tags/OLDTAG
 	) >out-adt 2>error-adt
+'
+
+test_expect_success 'test --all with tag to non-tip' '
+	git commit --allow-empty -m non-tip &&
+	git commit --allow-empty -m tip &&
+	git tag -m "annotated" non-tip HEAD^ &&
+	(
+		cd client &&
+		git fetch-pack --all ..
+	)
+'
+
+test_expect_success 'test --all wrt tag to non-commits' '
+	# create tag-to-{blob,tree,commit,tag}, making sure all tagged objects
+	# are reachable only via created tag references.
+	blob=$(echo "hello blob" | git hash-object -t blob -w --stdin) &&
+	git tag -a -m "tag -> blob" tag-to-blob $blob &&
+
+	tree=$(printf "100644 blob $blob\tfile" | git mktree) &&
+	git tag -a -m "tag -> tree" tag-to-tree $tree &&
+
+	tree2=$(printf "100644 blob $blob\tfile2" | git mktree) &&
+	commit=$(git commit-tree -m "hello commit" $tree) &&
+	git tag -a -m "tag -> commit" tag-to-commit $commit &&
+
+	blob2=$(echo "hello blob2" | git hash-object -t blob -w --stdin) &&
+	tag=$(git mktag <<-EOF
+		object $blob2
+		type blob
+		tag tag-to-blob2
+		tagger author A U Thor <author@example.com> 0 +0000
+
+		hello tag
+	EOF
+	) &&
+	git tag -a -m "tag -> tag" tag-to-tag $tag &&
+
+	# `fetch-pack --all` should succeed fetching all those objects.
+	mkdir fetchall &&
+	(
+		cd fetchall &&
+		git init &&
+		git fetch-pack --all .. &&
+		git cat-file blob $blob >/dev/null &&
+		git cat-file tree $tree >/dev/null &&
+		git cat-file commit $commit >/dev/null &&
+		git cat-file tag $tag >/dev/null
+	)
 '
 
 test_expect_success 'shallow fetch with tags does not break the repository' '
@@ -711,6 +762,17 @@ test_expect_success 'fetch shallow since ...' '
 	test_cmp expected actual
 '
 
+test_expect_success 'clone shallow since selects no commits' '
+	test_create_repo shallow-since-the-future &&
+	(
+	cd shallow-since-the-future &&
+	GIT_COMMITTER_DATE="100000000 +0700" git commit --allow-empty -m one &&
+	GIT_COMMITTER_DATE="200000000 +0700" git commit --allow-empty -m two &&
+	GIT_COMMITTER_DATE="300000000 +0700" git commit --allow-empty -m three &&
+	test_must_fail git clone --shallow-since "900000000 +0700" "file://$(pwd)/." ../shallow111
+	)
+'
+
 test_expect_success 'shallow clone exclude tag two' '
 	test_create_repo shallow-exclude &&
 	(
@@ -753,6 +815,39 @@ test_expect_success 'fetching deepen' '
 	EOF
 	test_cmp expected actual
 	)
+'
+
+test_expect_success 'use ref advertisement to prune "have" lines sent' '
+	rm -rf server client &&
+	git init server &&
+	test_commit -C server both_have_1 &&
+	git -C server tag -d both_have_1 &&
+	test_commit -C server both_have_2 &&
+
+	git clone server client &&
+	test_commit -C server server_has &&
+	test_commit -C client client_has &&
+
+	# In both protocol v0 and v2, ensure that the parent of both_have_2 is
+	# not sent as a "have" line. The client should know that the server has
+	# both_have_2, so it only needs to inform the server that it has
+	# both_have_2, and the server can infer the rest.
+
+	rm -f trace &&
+	cp -r client clientv0 &&
+	GIT_TRACE_PACKET="$(pwd)/trace" git -C clientv0 \
+		fetch origin server_has both_have_2 &&
+	grep "have $(git -C client rev-parse client_has)" trace &&
+	grep "have $(git -C client rev-parse both_have_2)" trace &&
+	! grep "have $(git -C client rev-parse both_have_2^)" trace &&
+
+	rm -f trace &&
+	cp -r client clientv2 &&
+	GIT_TRACE_PACKET="$(pwd)/trace" git -C clientv2 -c protocol.version=2 \
+		fetch origin server_has both_have_2 &&
+	grep "have $(git -C client rev-parse client_has)" trace &&
+	grep "have $(git -C client rev-parse both_have_2)" trace &&
+	! grep "have $(git -C client rev-parse both_have_2^)" trace
 '
 
 test_expect_success 'filtering by size' '

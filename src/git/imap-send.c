@@ -24,7 +24,7 @@
 #include "cache.h"
 #include "config.h"
 #include "credential.h"
-#include "exec_cmd.h"
+#include "exec-cmd.h"
 #include "run-command.h"
 #include "parse-options.h"
 #ifdef NO_OPENSSL
@@ -511,7 +511,7 @@ static int nfsnprintf(char *buf, int blen, const char *fmt, ...)
 
 	va_start(va, fmt);
 	if (blen <= 0 || (unsigned)(ret = vsnprintf(buf, blen, fmt, va)) >= (unsigned)blen)
-		die("BUG: buffer too small. Please report a bug.");
+		BUG("buffer too small. Please report a bug.");
 	va_end(va);
 	return ret;
 }

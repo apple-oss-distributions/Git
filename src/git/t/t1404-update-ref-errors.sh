@@ -27,7 +27,7 @@ test_update_rejected () {
 	fi &&
 	printf "create $prefix/%s $C\n" $create >input &&
 	test_must_fail git update-ref --stdin <input 2>output.err &&
-	grep -F "$error" output.err &&
+	test_i18ngrep -F "$error" output.err &&
 	git for-each-ref $prefix >actual &&
 	test_cmp unchanged actual
 }
@@ -103,7 +103,7 @@ df_test() {
 		printf "%s\n" "delete $delname" "create $addname $D"
 	fi >commands &&
 	test_must_fail git update-ref --stdin <commands 2>output.err &&
-	test_cmp expected-err output.err &&
+	test_i18ncmp expected-err output.err &&
 	printf "%s\n" "$C $delref" >expected-refs &&
 	git for-each-ref --format="%(objectname) %(refname)" $prefix/r >actual-refs &&
 	test_cmp expected-refs actual-refs
@@ -559,9 +559,9 @@ test_expect_success 'no bogus intermediate values during delete' '
 	{
 		# Note: the following command is intentionally run in the
 		# background. We increase the timeout so that `update-ref`
-		# attempts to acquire the `packed-refs` lock for longer than
-		# it takes for us to do the check then delete it:
-		git -c core.packedrefstimeout=3000 update-ref -d $prefix/foo &
+		# attempts to acquire the `packed-refs` lock for much longer
+		# than it takes for us to do the check then delete it:
+		git -c core.packedrefstimeout=30000 update-ref -d $prefix/foo &
 	} &&
 	pid2=$! &&
 	# Give update-ref plenty of time to get to the point where it tries

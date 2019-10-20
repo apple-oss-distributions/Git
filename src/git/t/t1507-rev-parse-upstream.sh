@@ -123,9 +123,9 @@ test_expect_success 'checkout -b new my-side@{u} forks from the same' '
 
 test_expect_success 'merge my-side@{u} records the correct name' '
 (
-	cd clone || exit
-	git checkout master || exit
-	git branch -D new ;# can fail but is ok
+	cd clone &&
+	git checkout master &&
+	test_might_fail git branch -D new &&
 	git branch -t new my-side@{u} &&
 	git merge -s ours new@{u} &&
 	git show -s --pretty=tformat:%s >actual &&
@@ -138,8 +138,7 @@ test_expect_success 'branch -d other@{u}' '
 	git checkout -t -b other master &&
 	git branch -d @{u} &&
 	git for-each-ref refs/heads/master >actual &&
-	>expect &&
-	test_cmp expect actual
+	test_must_be_empty actual
 '
 
 test_expect_success 'checkout other@{u}' '
@@ -209,8 +208,9 @@ test_expect_success '@{u} works when tracking a local branch' '
 	test refs/heads/master = "$(full_name @{u})"
 '
 
+commit=$(git rev-parse HEAD)
 cat >expect <<EOF
-commit 8f489d01d0cc65c3b0f09504ec50b5ed02a70bd5
+commit $commit
 Reflog: master@{0} (C O Mitter <committer@example.com>)
 Reflog message: branch: Created from HEAD
 Author: A U Thor <author@example.com>
@@ -224,7 +224,7 @@ test_expect_success 'log -g other@{u}' '
 '
 
 cat >expect <<EOF
-commit 8f489d01d0cc65c3b0f09504ec50b5ed02a70bd5
+commit $commit
 Reflog: master@{Thu Apr 7 15:17:13 2005 -0700} (C O Mitter <committer@example.com>)
 Reflog message: branch: Created from HEAD
 Author: A U Thor <author@example.com>

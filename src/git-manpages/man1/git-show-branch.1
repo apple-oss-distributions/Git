@@ -2,12 +2,12 @@
 .\"     Title: git-show-branch
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-SHOW\-BRANCH" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-SHOW\-BRANCH" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -42,7 +42,7 @@ git-show-branch \- Show branches and their commits
 .sp
 .SH "DESCRIPTION"
 .sp
-Shows the commit ancestry graph starting from the commits named with <rev>s or <globs>s (or all refs under refs/heads and/or refs/tags) semi\-visually\&.
+Shows the commit ancestry graph starting from the commits named with <rev>s or <glob>s (or all refs under refs/heads and/or refs/tags) semi\-visually\&.
 .sp
 It cannot show more than 29 branches and commits at a time\&.
 .sp
@@ -190,7 +190,7 @@ $ git show\-branch master fixes mhf
 .sp
 .sp
 These three branches all forked from a common commit, [master], whose commit message is "Add \(aqgit show\-branch\(aq"\&. The "fixes" branch adds one commit "Introduce "reset type" flag to "git reset""\&. The "mhf" branch adds many other commits\&. The current branch is "master"\&.
-.SH "EXAMPLE"
+.SH "EXAMPLES"
 .sp
 If you keep your primary branches immediately under \fBrefs/heads\fR, and topic branches in subdirectories of it, having the following in the configuration file may help:
 .sp

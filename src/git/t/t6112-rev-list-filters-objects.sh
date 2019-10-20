@@ -21,24 +21,43 @@ test_expect_success 'setup r1' '
 
 test_expect_success 'verify blob:none omits all 5 blobs' '
 	git -C r1 ls-files -s file.1 file.2 file.3 file.4 file.5 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r1 rev-list HEAD --quiet --objects --filter-print-omitted --filter=blob:none \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+		>ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r1 rev-list --quiet --objects --filter-print-omitted \
+		--filter=blob:none HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
+'
+
+test_expect_success 'specify blob explicitly prevents filtering' '
+	file_3=$(git -C r1 ls-files -s file.3 |
+		 awk -f print_2.awk) &&
+
+	file_4=$(git -C r1 ls-files -s file.4 |
+		 awk -f print_2.awk) &&
+
+	git -C r1 rev-list --objects --filter=blob:none HEAD $file_3 >observed &&
+	grep "$file_3" observed &&
+	! grep "$file_4" observed
 '
 
 test_expect_success 'verify emitted+omitted == all' '
-	git -C r1 rev-list HEAD --objects \
-		| awk -f print_1.awk \
-		| sort >expected &&
-	git -C r1 rev-list HEAD --objects --filter-print-omitted --filter=blob:none \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r1 rev-list --objects HEAD >revs &&
+	awk -f print_1.awk revs |
+	sort >expected &&
+
+	git -C r1 rev-list --objects --filter-print-omitted --filter=blob:none \
+		HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 
@@ -58,67 +77,83 @@ test_expect_success 'setup r2' '
 '
 
 test_expect_success 'verify blob:limit=500 omits all blobs' '
-	git -C r2 ls-files -s large.1000 large.10000 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r2 rev-list HEAD --quiet --objects --filter-print-omitted --filter=blob:limit=500 \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r2 ls-files -s large.1000 large.10000 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r2 rev-list --quiet --objects --filter-print-omitted \
+		--filter=blob:limit=500 HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify emitted+omitted == all' '
-	git -C r2 rev-list HEAD --objects \
-		| awk -f print_1.awk \
-		| sort >expected &&
-	git -C r2 rev-list HEAD --objects --filter-print-omitted --filter=blob:limit=500 \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r2 rev-list --objects HEAD >revs &&
+	awk -f print_1.awk revs |
+	sort >expected &&
+
+	git -C r2 rev-list --objects --filter-print-omitted \
+		--filter=blob:limit=500 HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify blob:limit=1000' '
-	git -C r2 ls-files -s large.1000 large.10000 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r2 rev-list HEAD --quiet --objects --filter-print-omitted --filter=blob:limit=1000 \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r2 ls-files -s large.1000 large.10000 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r2 rev-list --quiet --objects --filter-print-omitted \
+		--filter=blob:limit=1000 HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify blob:limit=1001' '
-	git -C r2 ls-files -s large.10000 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r2 rev-list HEAD --quiet --objects --filter-print-omitted --filter=blob:limit=1001 \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r2 ls-files -s large.10000 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r2 rev-list --quiet --objects --filter-print-omitted \
+		--filter=blob:limit=1001 HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify blob:limit=1k' '
-	git -C r2 ls-files -s large.10000 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r2 rev-list HEAD --quiet --objects --filter-print-omitted --filter=blob:limit=1k \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r2 ls-files -s large.10000 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r2 rev-list --quiet --objects --filter-print-omitted \
+		--filter=blob:limit=1k HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify blob:limit=1m' '
-	cat </dev/null >expected &&
-	git -C r2 rev-list HEAD --quiet --objects --filter-print-omitted --filter=blob:limit=1m \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r2 rev-list --quiet --objects --filter-print-omitted \
+		--filter=blob:limit=1m HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_must_be_empty observed
 '
 
 # Test sparse:path=<path> filter.
@@ -142,25 +177,31 @@ test_expect_success 'setup r3' '
 '
 
 test_expect_success 'verify sparse:path=pattern1 omits top-level files' '
-	git -C r3 ls-files -s sparse1 sparse2 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r3 rev-list HEAD --quiet --objects --filter-print-omitted --filter=sparse:path=../pattern1 \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r3 ls-files -s sparse1 sparse2 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r3 rev-list --quiet --objects --filter-print-omitted \
+		--filter=sparse:path=../pattern1 HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify sparse:path=pattern2 omits both sparse2 files' '
-	git -C r3 ls-files -s sparse2 dir1/sparse2 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r3 rev-list HEAD --quiet --objects --filter-print-omitted --filter=sparse:path=../pattern2 \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r3 ls-files -s sparse2 dir1/sparse2 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r3 rev-list --quiet --objects --filter-print-omitted \
+		--filter=sparse:path=../pattern2 HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 # Test sparse:oid=<oid-ish> filter.
@@ -174,26 +215,83 @@ test_expect_success 'setup r3 part 2' '
 '
 
 test_expect_success 'verify sparse:oid=OID omits top-level files' '
-	git -C r3 ls-files -s pattern sparse1 sparse2 \
-		| awk -f print_2.awk \
-		| sort >expected &&
+	git -C r3 ls-files -s pattern sparse1 sparse2 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
 	oid=$(git -C r3 ls-files -s pattern | awk -f print_2.awk) &&
-	git -C r3 rev-list HEAD --quiet --objects --filter-print-omitted --filter=sparse:oid=$oid \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+
+	git -C r3 rev-list --quiet --objects --filter-print-omitted \
+		--filter=sparse:oid=$oid HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'verify sparse:oid=oid-ish omits top-level files' '
-	git -C r3 ls-files -s pattern sparse1 sparse2 \
-		| awk -f print_2.awk \
-		| sort >expected &&
-	git -C r3 rev-list HEAD --quiet --objects --filter-print-omitted --filter=sparse:oid=master:pattern \
-		| awk -f print_1.awk \
-		| sed "s/~//" \
-		| sort >observed &&
-	test_cmp observed expected
+	git -C r3 ls-files -s pattern sparse1 sparse2 >ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
+	git -C r3 rev-list --quiet --objects --filter-print-omitted \
+		--filter=sparse:oid=master:pattern HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/~//" |
+	sort >observed &&
+
+	test_cmp expected observed
+'
+
+test_expect_success 'rev-list W/ --missing=print and --missing=allow-any for trees' '
+	TREE=$(git -C r3 rev-parse HEAD:dir1) &&
+
+	# Create a spare repo because we will be deleting objects from this one.
+	git clone r3 r3.b &&
+
+	rm r3.b/.git/objects/$(echo $TREE | sed "s|^..|&/|") &&
+
+	git -C r3.b rev-list --quiet --missing=print --objects HEAD \
+		>missing_objs 2>rev_list_err &&
+	echo "?$TREE" >expected &&
+	test_cmp expected missing_objs &&
+
+	# do not complain when a missing tree cannot be parsed
+	test_must_be_empty rev_list_err &&
+
+	git -C r3.b rev-list --missing=allow-any --objects HEAD \
+		>objs 2>rev_list_err &&
+	! grep $TREE objs &&
+	test_must_be_empty rev_list_err
+'
+
+# Test tree:0 filter.
+
+test_expect_success 'verify tree:0 includes trees in "filtered" output' '
+	git -C r3 rev-list --quiet --objects --filter-print-omitted \
+		--filter=tree:0 HEAD >revs &&
+
+	awk -f print_1.awk revs |
+	sed s/~// |
+	xargs -n1 git -C r3 cat-file -t >unsorted_filtered_types &&
+
+	sort -u unsorted_filtered_types >filtered_types &&
+	test_write_lines blob tree >expected &&
+	test_cmp expected filtered_types
+'
+
+# Make sure tree:0 does not iterate through any trees.
+
+test_expect_success 'filter a GIANT tree through tree:0' '
+	GIT_TRACE=1 git -C r3 rev-list \
+		--objects --filter=tree:0 HEAD 2>filter_trace &&
+	grep "Skipping contents of tree [.][.][.]" filter_trace >actual &&
+	# One line for each commit traversed.
+	test_line_count = 2 actual &&
+
+	# Make sure no other trees were considered besides the root.
+	! grep "Skipping contents of tree [^.]" filter_trace
 '
 
 # Delete some loose objects and use rev-list, but WITHOUT any filtering.
@@ -201,17 +299,21 @@ test_expect_success 'verify sparse:oid=oid-ish omits top-level files' '
 
 test_expect_success 'rev-list W/ --missing=print' '
 	git -C r1 ls-files -s file.1 file.2 file.3 file.4 file.5 \
-		| awk -f print_2.awk \
-		| sort >expected &&
+		>ls_files_result &&
+	awk -f print_2.awk ls_files_result |
+	sort >expected &&
+
 	for id in `cat expected | sed "s|..|&/|"`
 	do
 		rm r1/.git/objects/$id
 	done &&
-	git -C r1 rev-list --quiet HEAD --missing=print --objects \
-		| awk -f print_1.awk \
-		| sed "s/?//" \
-		| sort >observed &&
-	test_cmp observed expected
+
+	git -C r1 rev-list --quiet --missing=print --objects HEAD >revs &&
+	awk -f print_1.awk revs |
+	sed "s/?//" |
+	sort >observed &&
+
+	test_cmp expected observed
 '
 
 test_expect_success 'rev-list W/O --missing fails' '

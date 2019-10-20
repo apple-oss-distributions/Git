@@ -29,7 +29,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -43,7 +43,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -59,7 +59,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase failure -p
+test_have_prereq !REBASE_P || test_run_rebase failure -p
 
 test_run_rebase () {
 	result=$1
@@ -73,7 +73,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 #       f
 #      /
@@ -113,7 +113,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase failure -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -128,7 +128,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase failure -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -143,7 +143,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase failure -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -158,7 +158,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 # a---b---c---j!
 #      \
@@ -186,7 +186,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -199,9 +199,9 @@ test_run_rebase () {
 	"
 }
 test_run_rebase success ''
-test_run_rebase failure -m
+test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase failure -p
+test_have_prereq !REBASE_P || test_run_rebase failure -p
 
 test_run_rebase () {
 	result=$1
@@ -214,9 +214,10 @@ test_run_rebase () {
 	"
 }
 test_run_rebase success ''
-test_run_rebase failure -m
-test_run_rebase failure -i
-test_run_rebase failure -p
+test_run_rebase success -m
+test_run_rebase success -i
+test_have_prereq !REBASE_P || test_run_rebase failure -p
+test_run_rebase success --rebase-merges
 
 #       m
 #      /
@@ -255,7 +256,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -270,7 +271,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase failure -p
+test_have_prereq !REBASE_P || test_run_rebase failure -p
 
 test_run_rebase () {
 	result=$1
@@ -285,7 +286,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase failure -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_run_rebase () {
 	result=$1
@@ -301,7 +302,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase failure -p
+test_have_prereq !REBASE_P || test_run_rebase failure -p
 
 test_run_rebase () {
 	result=$1
@@ -316,7 +317,7 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase failure -m
 test_run_rebase success -i
-test_run_rebase failure -p
+test_have_prereq !REBASE_P || test_run_rebase failure -p
 
 test_run_rebase () {
 	result=$1
@@ -327,10 +328,10 @@ test_run_rebase () {
 		test_cmp_rev c HEAD
 	"
 }
-test_run_rebase failure ''
-test_run_rebase failure -m
-test_run_rebase failure -i
-test_run_rebase failure -p
+test_run_rebase success ''
+test_run_rebase success -m
+test_run_rebase success -i
+test_have_prereq !REBASE_P || test_run_rebase failure -p
 
 test_run_rebase () {
 	result=$1
@@ -345,6 +346,6 @@ test_run_rebase () {
 test_run_rebase success ''
 test_run_rebase success -m
 test_run_rebase success -i
-test_run_rebase success -p
+test_have_prereq !REBASE_P || test_run_rebase success -p
 
 test_done

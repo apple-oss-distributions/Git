@@ -202,7 +202,7 @@ testrebase () {
 		echo dirty >>file3 &&
 		test_must_fail git rebase$type related-onto-branch &&
 		test_path_is_file $dotest/autostash &&
-		! grep dirty file3 &&
+		test_path_is_missing file3 &&
 		rm -rf $dotest &&
 		git reset --hard &&
 		git checkout feature-branch
@@ -216,7 +216,7 @@ testrebase () {
 		echo dirty >>file3 &&
 		test_must_fail git rebase$type related-onto-branch &&
 		test_path_is_file $dotest/autostash &&
-		! grep dirty file3 &&
+		test_path_is_missing file3 &&
 		echo "conflicting-plus-goodbye" >file2 &&
 		git add file2 &&
 		git rebase --continue &&
@@ -233,7 +233,7 @@ testrebase () {
 		echo dirty >>file3 &&
 		test_must_fail git rebase$type related-onto-branch &&
 		test_path_is_file $dotest/autostash &&
-		! grep dirty file3 &&
+		test_path_is_missing file3 &&
 		git rebase --skip &&
 		test_path_is_missing $dotest/autostash &&
 		grep dirty file3 &&
@@ -248,7 +248,7 @@ testrebase () {
 		echo dirty >>file3 &&
 		test_must_fail git rebase$type related-onto-branch &&
 		test_path_is_file $dotest/autostash &&
-		! grep dirty file3 &&
+		test_path_is_missing file3 &&
 		git rebase --abort &&
 		test_path_is_missing $dotest/autostash &&
 		grep dirty file3 &&
@@ -349,6 +349,24 @@ test_expect_success 'autostash is saved on editor failure with conflict' '
 	git stash pop &&
 	echo uncommitted-content >expected &&
 	test_cmp expected file0
+'
+
+test_expect_success 'autostash with dirty submodules' '
+	test_when_finished "git reset --hard && git checkout master" &&
+	git checkout -b with-submodule &&
+	git submodule add ./ sub &&
+	test_tick &&
+	git commit -m add-submodule &&
+	echo changed >sub/file0 &&
+	git rebase -i --autostash HEAD
+'
+
+test_expect_success 'branch is left alone when possible' '
+	git checkout -b unchanged-branch &&
+	echo changed >file0 &&
+	git rebase --autostash unchanged-branch &&
+	test changed = "$(cat file0)" &&
+	test unchanged-branch = "$(git rev-parse --abbrev-ref HEAD)"
 '
 
 test_done

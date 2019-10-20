@@ -1,5 +1,5 @@
 #include "cache.h"
-#include "exec_cmd.h"
+#include "exec-cmd.h"
 #include "attr.h"
 
 /*
@@ -32,11 +32,13 @@ int main(int argc, const char **argv)
 	 */
 	sanitize_stdfds();
 
+	git_resolve_executable_dir(argv[0]);
+
 	git_setup_gettext();
 
-	attr_start();
+	initialize_the_repository();
 
-	git_extract_argv0_path(argv[0]);
+	attr_start();
 
 	restore_sigpipe_to_default();
 

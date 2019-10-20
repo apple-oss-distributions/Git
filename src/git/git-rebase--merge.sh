@@ -27,7 +27,7 @@ continue_merge () {
 	cmt=$(cat "$state_dir/current")
 	if ! git diff-index --quiet --ignore-submodules HEAD --
 	then
-		if ! git commit ${gpg_sign_opt:+"$gpg_sign_opt"} $allow_empty_message \
+		if ! git commit ${gpg_sign_opt:+"$gpg_sign_opt"} $signoff $allow_empty_message \
 			--no-verify -C "$cmt"
 		then
 			echo "Commit failed, please do not call \"git commit\""
@@ -71,7 +71,7 @@ call_merge () {
 	test -z "$strategy" && strategy=recursive
 	# If cmt doesn't have a parent, don't include it as a base
 	base=$(git rev-parse --verify --quiet $cmt^)
-	eval 'git-merge-$strategy' $strategy_opts $base ' -- "$hd" "$cmt"'
+	eval 'git merge-$strategy' $strategy_opts $base ' -- "$hd" "$cmt"'
 	rv=$?
 	case "$rv" in
 	0)
@@ -88,7 +88,7 @@ call_merge () {
 		;;
 	*)
 		die "Unknown exit code ($rv) from command:" \
-			"git-merge-$strategy $cmt^ -- HEAD $cmt"
+			"git merge-$strategy $cmt^ -- HEAD $cmt"
 		;;
 	esac
 }
@@ -104,15 +104,6 @@ finish_rb_merge () {
 	say All done.
 }
 
-# The whole contents of this file is run by dot-sourcing it from
-# inside a shell function.  It used to be that "return"s we see
-# below were not inside any function, and expected to return
-# to the function that dot-sourced us.
-#
-# However, older (9.x) versions of FreeBSD /bin/sh misbehave on such a
-# construct and continue to run the statements that follow such a "return".
-# As a work-around, we introduce an extra layer of a function
-# here, and immediately call it after defining it.
 git_rebase__merge () {
 
 case "$action" in
@@ -171,5 +162,3 @@ done
 finish_rb_merge
 
 }
-# ... and then we call the whole thing.
-git_rebase__merge

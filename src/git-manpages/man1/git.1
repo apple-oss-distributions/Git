@@ -2,12 +2,12 @@
 .\"     Title: git
 .\"    Author: [see the "Authors" section]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,7 @@ git \- the stupid content tracker
 .nf
 \fIgit\fR [\-\-version] [\-\-help] [\-C <path>] [\-c <name>=<value>]
     [\-\-exec\-path[=<path>]] [\-\-html\-path] [\-\-man\-path] [\-\-info\-path]
-    [\-p|\-\-paginate|\-\-no\-pager] [\-\-no\-replace\-objects] [\-\-bare]
+    [\-p|\-\-paginate|\-P|\-\-no\-pager] [\-\-no\-replace\-objects] [\-\-bare]
     [\-\-git\-dir=<path>] [\-\-work\-tree=<path>] [\-\-namespace=<name>]
     [\-\-super\-prefix=<path>]
     <command> [<args>]
@@ -123,7 +123,7 @@ would in a config file)\&. Including the equals but with an empty value (like
 \fBgit \-c foo\&.bar= \&.\&.\&.\fR) sets
 \fBfoo\&.bar\fR
 to the empty string which
-\fBgit config \-\-bool\fR
+\fBgit config \-\-type=bool\fR
 will convert to
 \fBfalse\fR\&.
 .RE
@@ -160,7 +160,7 @@ Pipe all output into
 configuration options (see the "Configuration Mechanism" section below)\&.
 .RE
 .PP
-\-\-no\-pager
+\-P, \-\-no\-pager
 .RS 4
 Do not pipe Git output into a pager\&.
 .RE
@@ -243,6 +243,13 @@ Do not perform optional operations that require locks\&. This is equivalent to s
 \fBGIT_OPTIONAL_LOCKS\fR
 to
 \fB0\fR\&.
+.RE
+.PP
+\-\-list\-cmds=group[,group\&...]
+.RS 4
+List commands by group\&. This is an internal/experimental option and may change or be removed in the future\&. Supported groups are: builtins, parseopt (builtin commands that use parse\-options), main (all commands in libexec directory), others (all other commands in
+\fB$PATH\fR
+that have git\- prefix), list\-<category> (see categories in command\-list\&.txt), nohelpers (exclude helper commands), alias and config (retrieve command list from config variable completion\&.commands)
 .RE
 .SH "GIT COMMANDS"
 .sp
@@ -382,6 +389,11 @@ Fetch from and integrate with another repository or a local branch\&.
 Update remote refs along with associated objects\&.
 .RE
 .PP
+\fBgit-range-diff\fR(1)
+.RS 4
+Compare two commit ranges (e\&.g\&. two versions of a branch)\&.
+.RE
+.PP
 \fBgit-rebase\fR(1)
 .RS 4
 Reapply commits on top of another base tip\&.
@@ -514,11 +526,6 @@ Annotate file lines with commit information\&.
 Show what revision and author last modified each line of a file\&.
 .RE
 .PP
-\fBgit-cherry\fR(1)
-.RS 4
-Find commits yet to be applied to upstream\&.
-.RE
-.PP
 \fBgit-count-objects\fR(1)
 .RS 4
 Count unpacked number of objects and their disk consumption\&.
@@ -532,11 +539,6 @@ Show changes using common diff tools\&.
 \fBgit-fsck\fR(1)
 .RS 4
 Verifies the connectivity and validity of the objects in the database\&.
-.RE
-.PP
-\fBgit-get-tar-commit-id\fR(1)
-.RS 4
-Extract commit ID from an archive created using git\-archive\&.
 .RE
 .PP
 \fBgit-help\fR(1)
@@ -557,11 +559,6 @@ Show three\-way merge without touching index\&.
 \fBgit-rerere\fR(1)
 .RS 4
 Reuse recorded resolution of conflicted merges\&.
-.RE
-.PP
-\fBgit-rev-parse\fR(1)
-.RS 4
-Pick out and massage parameters\&.
 .RE
 .PP
 \fBgit-show-branch\fR(1)
@@ -594,7 +591,7 @@ These commands are to interact with foreign SCM and with other people via patch 
 .PP
 \fBgit-archimport\fR(1)
 .RS 4
-Import an Arch repository into Git\&.
+Import a GNU Arch repository into Git\&.
 .RE
 .PP
 \fBgit-cvsexportcommit\fR(1)
@@ -660,6 +657,11 @@ Apply a patch to files and/or to the index\&.
 Copy files from the index to the working tree\&.
 .RE
 .PP
+\fBgit-commit-graph\fR(1)
+.RS 4
+Write and verify Git commit\-graph files\&.
+.RE
+.PP
 \fBgit-commit-tree\fR(1)
 .RS 4
 Create a new commit object\&.
@@ -693,6 +695,11 @@ Creates a tag object\&.
 \fBgit-mktree\fR(1)
 .RS 4
 Build a tree\-object from ls\-tree formatted text\&.
+.RE
+.PP
+\fBgit-multi-pack-index\fR(1)
+.RS 4
+Write and verify multi\-pack\-indexes\&.
 .RE
 .PP
 \fBgit-pack-objects\fR(1)
@@ -741,6 +748,11 @@ Create a tree object from the current index\&.
 Provide content or type and size information for repository objects\&.
 .RE
 .PP
+\fBgit-cherry\fR(1)
+.RS 4
+Find commits yet to be applied to upstream\&.
+.RE
+.PP
 \fBgit-diff-files\fR(1)
 .RS 4
 Compares files in the working tree and the index\&.
@@ -759,6 +771,11 @@ Compares the content and mode of blobs found via two tree objects\&.
 \fBgit-for-each-ref\fR(1)
 .RS 4
 Output information on each ref\&.
+.RE
+.PP
+\fBgit-get-tar-commit-id\fR(1)
+.RS 4
+Extract commit ID from an archive created using git\-archive\&.
 .RE
 .PP
 \fBgit-ls-files\fR(1)
@@ -794,6 +811,11 @@ Find redundant pack files\&.
 \fBgit-rev-list\fR(1)
 .RS 4
 Lists commit objects in reverse chronological order\&.
+.RE
+.PP
+\fBgit-rev-parse\fR(1)
+.RS 4
+Pick out and massage parameters\&.
 .RE
 .PP
 \fBgit-show-index\fR(1)
@@ -1118,19 +1140,14 @@ directory is used\&.
 .RS 4
 Due to the immutable nature of Git objects, old objects can be archived into shared, read\-only directories\&. This variable specifies a ":" separated (on Windows ";" separated) list of Git object directories which can be used to search for Git objects\&. New objects will not be written to these directories\&.
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-Entries that begin with `"` (double\-quote) will be interpreted
-as C\-style quoted paths, removing leading and trailing
-double\-quotes and respecting backslash escapes\&. E\&.g\&., the value
-`"path\-with\-\e"\-and\-:\-in\-it":vanilla\-path` has two paths:
-`path\-with\-"\-and\-:\-in\-it` and `vanilla\-path`\&.
-.fi
-.if n \{\
-.RE
-.\}
+Entries that begin with
+\fB"\fR
+(double\-quote) will be interpreted as C\-style quoted paths, removing leading and trailing double\-quotes and respecting backslash escapes\&. E\&.g\&., the value
+\fB"path\-with\-\e"\-and\-:\-in\-it":vanilla\-path\fR
+has two paths:
+\fBpath\-with\-"\-and\-:\-in\-it\fR
+and
+\fBvanilla\-path\fR\&.
 .RE
 .PP
 \fBGIT_DIR\fR
@@ -1375,7 +1392,7 @@ If the variable is set to an integer value greater than 2 and lower than 10 (str
 .sp
 Alternatively, if the variable is set to an absolute path (starting with a
 \fI/\fR
-character), Git will interpret this as a file path and will try to write the trace messages into it\&.
+character), Git will interpret this as a file path and will try to append the trace messages to it\&.
 .sp
 Unsetting the variable, or setting it to empty, "0" or "false" (case insensitive) disables trace messages\&.
 .RE
@@ -1610,7 +1627,7 @@ Git was started by Linus Torvalds, and is currently maintained by Junio C Hamano
 If you have a clone of git\&.git itself, the output of \fBgit-shortlog\fR(1) and \fBgit-blame\fR(1) can show you the authors for specific parts of the project\&.
 .SH "REPORTING BUGS"
 .sp
-Report bugs to the Git mailing list <\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[5]\d\s+2> where the development and maintenance is primarily done\&. You do not have to be subscribed to the list to send a message there\&.
+Report bugs to the Git mailing list <\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[5]\d\s+2> where the development and maintenance is primarily done\&. You do not have to be subscribed to the list to send a message there\&. See the list archive at \m[blue]\fBhttps://public\-inbox\&.org/git\fR\m[] for previous bug reports and other discussions\&.
 .sp
 Issues which are security relevant should be disclosed privately to the Git Security mailing list <\m[blue]\fBgit\-security@googlegroups\&.com\fR\m[]\&\s-2\u[6]\d\s+2>\&.
 .SH "SEE ALSO"

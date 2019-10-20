@@ -1,3 +1,4 @@
+#include "test-tool.h"
 #include "cache.h"
 #include "config.h"
 #include "submodule-config.h"
@@ -10,7 +11,7 @@ static void die_usage(int argc, const char **argv, const char *msg)
 	exit(1);
 }
 
-int cmd_main(int argc, const char **argv)
+int cmd__submodule_config(int argc, const char **argv)
 {
 	const char **arg = argv;
 	int my_argc = argc;
@@ -48,9 +49,11 @@ int cmd_main(int argc, const char **argv)
 			die_usage(argc, argv, "Commit not found.");
 
 		if (lookup_name) {
-			submodule = submodule_from_name(&commit_oid, path_or_name);
+			submodule = submodule_from_name(the_repository,
+							&commit_oid, path_or_name);
 		} else
-			submodule = submodule_from_path(&commit_oid, path_or_name);
+			submodule = submodule_from_path(the_repository,
+							&commit_oid, path_or_name);
 		if (!submodule)
 			die_usage(argc, argv, "Submodule not found.");
 
@@ -64,7 +67,7 @@ int cmd_main(int argc, const char **argv)
 		arg += 2;
 	}
 
-	submodule_free();
+	submodule_free(the_repository);
 
 	return 0;
 }

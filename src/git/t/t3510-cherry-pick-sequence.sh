@@ -103,7 +103,8 @@ test_expect_success '--quit cleans up sequencer state' '
 	pristine_detach initial &&
 	test_expect_code 1 git cherry-pick base..picked &&
 	git cherry-pick --quit &&
-	test_path_is_missing .git/sequencer
+	test_path_is_missing .git/sequencer &&
+	test_path_is_missing .git/CHERRY_PICK_HEAD
 '
 
 test_expect_success '--quit keeps HEAD and conflicted index intact' '
@@ -122,7 +123,7 @@ test_expect_success '--quit keeps HEAD and conflicted index intact' '
 	{
 		git rev-list HEAD |
 		git diff-tree --root --stdin |
-		sed "s/$_x40/OBJID/g"
+		sed "s/$OID_REGEX/OBJID/g"
 	} >actual &&
 	test_cmp expect actual
 '
@@ -132,6 +133,7 @@ test_expect_success '--abort to cancel multiple cherry-pick' '
 	test_expect_code 1 git cherry-pick base..anotherpick &&
 	git cherry-pick --abort &&
 	test_path_is_missing .git/sequencer &&
+	test_path_is_missing .git/CHERRY_PICK_HEAD &&
 	test_cmp_rev initial HEAD &&
 	git update-index --refresh &&
 	git diff-index --exit-code HEAD
@@ -142,6 +144,7 @@ test_expect_success '--abort to cancel single cherry-pick' '
 	test_expect_code 1 git cherry-pick picked &&
 	git cherry-pick --abort &&
 	test_path_is_missing .git/sequencer &&
+	test_path_is_missing .git/CHERRY_PICK_HEAD &&
 	test_cmp_rev initial HEAD &&
 	git update-index --refresh &&
 	git diff-index --exit-code HEAD
@@ -162,6 +165,7 @@ test_expect_success 'cherry-pick --abort to cancel multiple revert' '
 	test_expect_code 1 git revert base..picked &&
 	git cherry-pick --abort &&
 	test_path_is_missing .git/sequencer &&
+	test_path_is_missing .git/CHERRY_PICK_HEAD &&
 	test_cmp_rev anotherpick HEAD &&
 	git update-index --refresh &&
 	git diff-index --exit-code HEAD
@@ -220,7 +224,7 @@ test_expect_success 'cherry-pick still writes sequencer state when one commit is
 	{
 		git rev-list HEAD |
 		git diff-tree --root --stdin |
-		sed "s/$_x40/OBJID/g"
+		sed "s/$OID_REGEX/OBJID/g"
 	} >actual &&
 	cat >expect <<-\EOF &&
 	OBJID
@@ -239,6 +243,7 @@ test_expect_success '--abort after last commit in sequence' '
 	test_expect_code 1 git cherry-pick base..picked &&
 	git cherry-pick --abort &&
 	test_path_is_missing .git/sequencer &&
+	test_path_is_missing .git/CHERRY_PICK_HEAD &&
 	test_cmp_rev initial HEAD &&
 	git update-index --refresh &&
 	git diff-index --exit-code HEAD
@@ -247,9 +252,9 @@ test_expect_success '--abort after last commit in sequence' '
 test_expect_success 'cherry-pick does not implicitly stomp an existing operation' '
 	pristine_detach initial &&
 	test_expect_code 1 git cherry-pick base..anotherpick &&
-	test-chmtime -v +0 .git/sequencer >expect &&
+	test-tool chmtime --get .git/sequencer >expect &&
 	test_expect_code 128 git cherry-pick unrelatedpick &&
-	test-chmtime -v +0 .git/sequencer >actual &&
+	test-tool chmtime --get .git/sequencer >actual &&
 	test_cmp expect actual
 '
 
@@ -317,7 +322,7 @@ test_expect_success '--continue after resolving conflicts' '
 	{
 		git rev-list HEAD |
 		git diff-tree --root --stdin |
-		sed "s/$_x40/OBJID/g"
+		sed "s/$OID_REGEX/OBJID/g"
 	} >actual.log &&
 	test_cmp expect foo &&
 	test_cmp expect.log actual.log
@@ -334,7 +339,7 @@ test_expect_success '--continue after resolving conflicts and committing' '
 	{
 		git rev-list HEAD |
 		git diff-tree --root --stdin |
-		sed "s/$_x40/OBJID/g"
+		sed "s/$OID_REGEX/OBJID/g"
 	} >actual &&
 	cat >expect <<-\EOF &&
 	OBJID
@@ -480,9 +485,14 @@ test_expect_success 'malformed instruction sheet 2' '
 	test_expect_code 128 git cherry-pick --continue
 '
 
-test_expect_success 'empty commit set' '
+test_expect_success 'empty commit set (no commits to walk)' '
 	pristine_detach initial &&
 	test_expect_code 128 git cherry-pick base..base
+'
+
+test_expect_success 'empty commit set (culled during walk)' '
+	pristine_detach initial &&
+	test_expect_code 128 git cherry-pick -2 --author=no.such.author base
 '
 
 test_expect_success 'malformed instruction sheet 3' '

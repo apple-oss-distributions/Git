@@ -19,7 +19,7 @@ write_script rot13-filter.pl "$PERL_PATH" \
 generate_random_characters () {
 	LEN=$1
 	NAME=$2
-	test-genrandom some-seed $LEN |
+	test-tool genrandom some-seed $LEN |
 		perl -pe "s/./chr((ord($&) % 26) + ord('a'))/sge" >"$TEST_ROOT/$NAME"
 }
 
@@ -166,10 +166,10 @@ test_expect_success expanded_in_repo '
 	rm -f expanded-keywords expanded-keywords-crlf &&
 
 	git checkout -- expanded-keywords &&
-	test_cmp expanded-keywords expected-output &&
+	test_cmp expected-output expanded-keywords &&
 
 	git checkout -- expanded-keywords-crlf &&
-	test_cmp expanded-keywords-crlf expected-output-crlf
+	test_cmp expected-output-crlf expanded-keywords-crlf
 '
 
 # The use of %f in a filter definition is expanded to the path to
@@ -267,7 +267,7 @@ test_expect_success 'filtering large input to small output should use little mem
 '
 
 test_expect_success 'filter that does not read is fine' '
-	test-genrandom foo $((128 * 1024 + 1)) >big &&
+	test-tool genrandom foo $((128 * 1024 + 1)) >big &&
 	echo "big filter=epipe" >.gitattributes &&
 	test_config filter.epipe.clean "echo xyzzy" &&
 	git add big &&
@@ -583,7 +583,7 @@ test_expect_success PERL 'process filter should restart after unexpected write f
 		git checkout --quiet --no-progress . 2>git-stderr.log &&
 
 		grep "smudge write error at" git-stderr.log &&
-		grep "error: external filter" git-stderr.log &&
+		test_i18ngrep "error: external filter" git-stderr.log &&
 
 		cat >expected.log <<-EOF &&
 			START
@@ -785,7 +785,7 @@ test_expect_success PERL 'missing file in delayed checkout' '
 		cd repo &&
 		git init &&
 		echo "*.a filter=bug" >.gitattributes &&
-		cp "$TEST_ROOT/test.o" missing-delay.a
+		cp "$TEST_ROOT/test.o" missing-delay.a &&
 		git add . &&
 		git commit -m "test commit"
 	) &&
@@ -807,7 +807,7 @@ test_expect_success PERL 'invalid file in delayed checkout' '
 		git init &&
 		echo "*.a filter=bug" >.gitattributes &&
 		cp "$TEST_ROOT/test.o" invalid-delay.a &&
-		cp "$TEST_ROOT/test.o" unfiltered
+		cp "$TEST_ROOT/test.o" unfiltered &&
 		git add . &&
 		git commit -m "test commit"
 	) &&

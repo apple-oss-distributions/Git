@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-log(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -925,7 +926,7 @@ file.</p></div>
         Simplification</em> below for details and other simplification
         modes.
 </p>
-<div class="paragraph"><p>Paths may need to be prefixed with &#8216;`-- '&#8217; to separate them from
+<div class="paragraph"><p>Paths may need to be prefixed with <code>--</code> to separate them from
 options or the revision range, when confusion arises.</p></div>
 </dd>
 </dl></div>
@@ -1868,18 +1869,6 @@ together.</p></div>
 <div class="paragraph"><p>These options are mostly targeted for packing of Git repositories.</p></div>
 <div class="dlist"><dl>
 <dt class="hdlist1">
---exclude-promisor-objects
-</dt>
-<dd>
-<p>
-        (For internal use only.)  Prefilter object traversal at
-        promisor boundary.  This is used with partial clone.  This is
-        stronger than <code>--missing=allow-promisor</code> because it limits the
-        traversal, rather than just silencing errors about missing
-        objects.
-</p>
-</dd>
-<dt class="hdlist1">
 --no-walk[=(sorted|unsorted)]
 </dt>
 <dd>
@@ -2624,6 +2613,17 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
+<em>%GF</em>: show the fingerprint of the key used to sign a signed commit
+</p>
+</li>
+<li>
+<p>
+<em>%GP</em>: show the fingerprint of the primary key whose subkey was used
+  to sign a signed commit
+</p>
+</li>
+<li>
+<p>
 <em>%gD</em>: reflog selector, e.g., <code>refs/stash@{1}</code> or
   <code>refs/stash@{2 minutes ago</code>}; the format follows the rules described
   for the <code>-g</code> option. The portion before the <code>@</code> is the refname as
@@ -2901,7 +2901,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 </dt>
 <dd>
 <p>
-        Enable the heuristic that shift diff hunk boundaries to make patches
+        Enable the heuristic that shifts diff hunk boundaries to make patches
         easier to read. This is the default.
 </p>
 </dd>
@@ -2997,7 +2997,7 @@ diff" algorithm internally.</p></div>
 </dd>
 </dl></div>
 </div></div>
-<div class="paragraph"><p>For instance, if you configured diff.algorithm variable to a
+<div class="paragraph"><p>For instance, if you configured the <code>diff.algorithm</code> variable to a
 non-default value and want to use the default one, then you
 have to use <code>--diff-algorithm=default</code> option.</p></div>
 </dd>
@@ -3032,7 +3032,7 @@ have to use <code>--diff-algorithm=default</code> option.</p></div>
         as file creations or deletions ("new" or "gone", optionally "+l"
         if it&#8217;s a symlink) and mode changes ("+x" or "-x" for adding
         or removing executable bit respectively) in diffstat. The
-        information is put betwen the filename part and the graph
+        information is put between the filename part and the graph
         part. Implies <code>--stat</code>.
 </p>
 </dd>
@@ -3265,25 +3265,89 @@ plain
 </p>
 </dd>
 <dt class="hdlist1">
-zebra
+blocks
 </dt>
 <dd>
 <p>
         Blocks of moved text of at least 20 alphanumeric characters
         are detected greedily. The detected blocks are
-        painted using either the <em>color.diff.{old,new}Moved</em> color or
+        painted using either the <em>color.diff.{old,new}Moved</em> color.
+        Adjacent blocks cannot be told apart.
+</p>
+</dd>
+<dt class="hdlist1">
+zebra
+</dt>
+<dd>
+<p>
+        Blocks of moved text are detected as in <em>blocks</em> mode. The blocks
+        are painted using either the <em>color.diff.{old,new}Moved</em> color or
         <em>color.diff.{old,new}MovedAlternative</em>. The change between
         the two colors indicates that a new block was detected.
 </p>
 </dd>
 <dt class="hdlist1">
-dimmed_zebra
+dimmed-zebra
 </dt>
 <dd>
 <p>
         Similar to <em>zebra</em>, but additional dimming of uninteresting parts
         of moved code is performed. The bordering lines of two adjacent
         blocks are considered interesting, the rest is uninteresting.
+        <code>dimmed_zebra</code> is a deprecated synonym.
+</p>
+</dd>
+</dl></div>
+</div></div>
+</dd>
+<dt class="hdlist1">
+--color-moved-ws=&lt;modes&gt;
+</dt>
+<dd>
+<p>
+        This configures how white spaces are ignored when performing the
+        move detection for <code>--color-moved</code>.
+        These modes can be given as a comma separated list:
+</p>
+<div class="openblock">
+<div class="content">
+<div class="dlist"><dl>
+<dt class="hdlist1">
+ignore-space-at-eol
+</dt>
+<dd>
+<p>
+        Ignore changes in whitespace at EOL.
+</p>
+</dd>
+<dt class="hdlist1">
+ignore-space-change
+</dt>
+<dd>
+<p>
+        Ignore changes in amount of whitespace.  This ignores whitespace
+        at line end, and considers all other sequences of one or
+        more whitespace characters to be equivalent.
+</p>
+</dd>
+<dt class="hdlist1">
+ignore-all-space
+</dt>
+<dd>
+<p>
+        Ignore whitespace when comparing lines. This ignores differences
+        even if one line has whitespace where the other line has none.
+</p>
+</dd>
+<dt class="hdlist1">
+allow-indentation-change
+</dt>
+<dd>
+<p>
+        Initially ignore any white spaces in the move detection, then
+        group the moved code blocks only into a block if the change in
+        whitespace is the same per line. This is incompatible with the
+        other modes.
 </p>
 </dd>
 </dl></div>
@@ -3395,7 +3459,7 @@ override configuration settings.</p></div>
         Warn if changes introduce conflict markers or whitespace errors.
         What are considered whitespace errors is controlled by <code>core.whitespace</code>
         configuration.  By default, trailing whitespaces (including
-        lines that solely consist of whitespaces) and a space character
+        lines that consist solely of whitespaces) and a space character
         that is immediately followed by a tab character inside the
         initial indent of the line are considered whitespace errors.
         Exits with non-zero status if problems are found. Not compatible
@@ -3414,7 +3478,7 @@ override configuration settings.</p></div>
         this option is not given, and the configuration variable
         <code>diff.wsErrorHighlight</code> is not set, only whitespace errors in
         <code>new</code> lines are highlighted. The whitespace errors are colored
-        whith <code>color.diff.whitespace</code>.
+        with <code>color.diff.whitespace</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3696,7 +3760,7 @@ Each other line contains a single pattern.
 </ul></div>
 </div></div>
 <div class="paragraph"><p>Patterns have the same syntax and semantics as patterns used for
-fnmantch(3) without the FNM_PATHNAME flag, except a pathname also
+fnmatch(3) without the FNM_PATHNAME flag, except a pathname also
 matches a pattern if removing any number of the final pathname
 components matches the pattern.  For example, the pattern "<code>foo*bar</code>"
 matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<code>foobarx</code>".</p></div>
@@ -3739,7 +3803,7 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </dt>
 <dd>
 <p>
-        Ignore carrige-return at the end of line when doing a comparison.
+        Ignore carriage-return at the end of line when doing a comparison.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -4150,7 +4214,7 @@ two unresolved merge parents with the working tree file
 <dd>
 <p>
         Show the changes during the last two weeks to the file <em>gitk</em>.
-        The &#8220;--&#8221; is necessary to avoid confusion with the <strong>branch</strong> named
+        The <code>--</code> is necessary to avoid confusion with the <strong>branch</strong> named
         <em>gitk</em>
 </p>
 </dd>
@@ -4419,7 +4483,7 @@ and overridden by the <code>--notes=&lt;ref&gt;</code> option.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-05-08 16:51:20 JST
 </div>
 </div>
 </body>

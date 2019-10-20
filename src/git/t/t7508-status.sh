@@ -1099,6 +1099,7 @@ EOF
 '
 
 test_expect_success POSIXPERM,SANITY 'status succeeds in a read-only repository' '
+	test_when_finished "chmod 775 .git" &&
 	(
 		chmod a-w .git &&
 		# make dir1/tracked stat-dirty
@@ -1108,9 +1109,6 @@ test_expect_success POSIXPERM,SANITY 'status succeeds in a read-only repository'
 		# make sure "status" succeeded without writing index out
 		git diff-files | grep dir1/tracked
 	)
-	status=$?
-	chmod 775 .git
-	(exit $status)
 '
 
 (cd sm && echo > bar && git add bar && git commit -q -m 'Add bar') && git add sm
@@ -1672,12 +1670,12 @@ test_expect_success '"Initial commit" should not be noted in commit template' '
 '
 
 test_expect_success '--no-optional-locks prevents index update' '
-	test-chmtime =1234567890 .git/index &&
+	test-tool chmtime =1234567890 .git/index &&
 	git --no-optional-locks status &&
-	test-chmtime -v +0 .git/index >out &&
+	test-tool chmtime --get .git/index >out &&
 	grep ^1234567890 out &&
 	git status &&
-	test-chmtime -v +0 .git/index >out &&
+	test-tool chmtime --get .git/index >out &&
 	! grep ^1234567890 out
 '
 

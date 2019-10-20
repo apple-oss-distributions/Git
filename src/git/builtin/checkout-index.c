@@ -132,6 +132,8 @@ static const char * const builtin_checkout_index_usage[] = {
 static int option_parse_stage(const struct option *opt,
 			      const char *arg, int unset)
 {
+	BUG_ON_OPT_NEG(unset);
+
 	if (!strcmp(arg, "all")) {
 		to_tempfile = 1;
 		checkout_stage = CHECKOUT_ALL;
@@ -172,7 +174,7 @@ int cmd_checkout_index(int argc, const char **argv, const char *prefix)
 			N_("write the content to temporary files")),
 		OPT_STRING(0, "prefix", &state.base_dir, N_("string"),
 			N_("when creating files, prepend <string>")),
-		{ OPTION_CALLBACK, 0, "stage", NULL, "1-3|all",
+		{ OPTION_CALLBACK, 0, "stage", NULL, "(1|2|3|all)",
 			N_("copy out the files from named stage"),
 			PARSE_OPT_NONEG, option_parse_stage },
 		OPT_END()
@@ -190,6 +192,7 @@ int cmd_checkout_index(int argc, const char **argv, const char *prefix)
 
 	argc = parse_options(argc, argv, prefix, builtin_checkout_index_options,
 			builtin_checkout_index_usage, 0);
+	state.istate = &the_index;
 	state.force = force;
 	state.quiet = quiet;
 	state.not_new = not_new;

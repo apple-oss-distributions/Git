@@ -332,7 +332,7 @@ test_expect_success 'difftool --extcmd cat arg1' '
 test_expect_success 'difftool --extcmd cat arg2' '
 	echo branch >expect &&
 	git difftool --no-prompt \
-		--extcmd sh\ -c\ \"cat\ \$2\" branch >actual &&
+		--extcmd sh\ -c\ \"cat\ \\\"\$2\\\"\" branch >actual &&
 	test_cmp expect actual
 '
 
@@ -557,7 +557,7 @@ test_expect_success SYMLINKS 'difftool --dir-diff --symlink without unstaged cha
 	EOF
 	git difftool --dir-diff --symlink \
 		--extcmd "./.git/CHECK_SYMLINKS" branch HEAD &&
-	test_cmp actual expect
+	test_cmp expect actual
 '
 
 write_script modify-right-file <<\EOF

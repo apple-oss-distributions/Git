@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-rebase(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -748,9 +749,9 @@ git-rebase(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git rebase</em> [-i | --interactive] [options] [--exec &lt;cmd&gt;] [--onto &lt;newbase&gt;]
+<pre class="content"><em>git rebase</em> [-i | --interactive] [&lt;options&gt;] [--exec &lt;cmd&gt;] [--onto &lt;newbase&gt;]
         [&lt;upstream&gt; [&lt;branch&gt;]]
-<em>git rebase</em> [-i | --interactive] [options] [--exec &lt;cmd&gt;] [--onto &lt;newbase&gt;]
+<em>git rebase</em> [-i | --interactive] [&lt;options&gt;] [--exec &lt;cmd&gt;] [--onto &lt;newbase&gt;]
         --root [&lt;branch&gt;]
 <em>git rebase</em> --continue | --skip | --abort | --quit | --edit-todo | --show-current-patch</pre>
 <div class="attribution">
@@ -931,6 +932,23 @@ desired resolution, you can continue the rebasing process with</p></div>
 <div class="sectionbody">
 <div class="dlist"><dl>
 <dt class="hdlist1">
+rebase.useBuiltin
+</dt>
+<dd>
+<p>
+        Set to <code>false</code> to use the legacy shellscript implementation of
+        <a href="git-rebase.html">git-rebase(1)</a>. Is <code>true</code> by default, which means use
+        the built-in rewrite of it in C.
+</p>
+<div class="paragraph"><p>The C rewrite is first included with Git version 2.20. This option
+serves an an escape hatch to re-enable the legacy version in case any
+bugs are found in the rewrite. This option and the shellscript version
+of <a href="git-rebase.html">git-rebase(1)</a> will be removed in some future release.</p></div>
+<div class="paragraph"><p>If you find some reason to set this option to <code>false</code> other than
+one-off testing you should report the behavior difference as a bug in
+git.</p></div>
+</dd>
+<dt class="hdlist1">
 rebase.stat
 </dt>
 <dd>
@@ -1088,6 +1106,7 @@ leave out at most one of A and B, in which case it defaults to HEAD.</p></div>
         Keep the commits that do not change anything from its
         parents in the result.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --allow-empty-message
@@ -1098,6 +1117,7 @@ leave out at most one of A and B, in which case it defaults to HEAD.</p></div>
         This option overrides that behavior, allowing commits with empty
         messages to be rebased.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --skip
@@ -1142,6 +1162,7 @@ branch on top of the &lt;upstream&gt; branch.  Because of this, when a merge
 conflict happens, the side reported as <em>ours</em> is the so-far rebased
 series, starting with &lt;upstream&gt;, and <em>theirs</em> is the working branch.  In
 other words, the sides are swapped.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 -s &lt;strategy&gt;
@@ -1157,8 +1178,9 @@ other words, the sides are swapped.</p></div>
 </p>
 <div class="paragraph"><p>Because <em>git rebase</em> replays each commit from the working branch
 on top of the &lt;upstream&gt; branch using the given strategy, using
-the <em>ours</em> strategy simply discards all patches from the &lt;branch&gt;,
+the <em>ours</em> strategy simply empties all patches from the &lt;branch&gt;,
 which makes little sense.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 -X &lt;strategy-option&gt;
@@ -1173,6 +1195,7 @@ which makes little sense.</p></div>
         specified, <code>-s recursive</code>.  Note the reversal of <em>ours</em> and
         <em>theirs</em> as noted above for the <code>-m</code> option.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 -S[&lt;keyid&gt;]
@@ -1256,23 +1279,28 @@ which makes little sense.</p></div>
         context exist they all must match.  By default no context is
         ever ignored.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
--f
+--no-ff
 </dt>
 <dt class="hdlist1">
 --force-rebase
 </dt>
+<dt class="hdlist1">
+-f
+</dt>
 <dd>
 <p>
-        Force a rebase even if the current branch is up to date and
-        the command without <code>--force</code> would return without doing anything.
+        Individually replay all rebased commits instead of fast-forwarding
+        over the unchanged ones.  This ensures that the entire history of
+        the rebased branch is composed of new commits.
 </p>
-<div class="paragraph"><p>You may find this (or --no-ff with an interactive rebase) helpful after
-reverting a topic branch merge, as this option recreates the topic branch with
-fresh commits so it can be remerged successfully without needing to "revert
-the reversion" (see the
-<a href="howto/revert-a-faulty-merge.html">revert-a-faulty-merge How-To</a> for details).</p></div>
+<div class="paragraph"><p>You may find this helpful after reverting a topic branch merge, as this option
+recreates the topic branch with fresh commits so it can be remerged
+successfully without needing to "revert the reversion" (see the
+<a href="howto/revert-a-faulty-merge.html">revert-a-faulty-merge How-To</a> for
+details).</p></div>
 </dd>
 <dt class="hdlist1">
 --fork-point
@@ -1304,8 +1332,8 @@ default is <code>--no-fork-point</code>, otherwise the default is <code>--fork-p
 <p>
         These flag are passed to the <em>git apply</em> program
         (see <a href="git-apply.html">git-apply(1)</a>) that applies the patch.
-        Incompatible with the --interactive option.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --committer-date-is-author-date
@@ -1317,18 +1345,19 @@ default is <code>--no-fork-point</code>, otherwise the default is <code>--fork-p
 <p>
         These flags are passed to <em>git am</em> to easily change the dates
         of the rebased commits (see <a href="git-am.html">git-am(1)</a>).
-        Incompatible with the --interactive option.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --signoff
 </dt>
 <dd>
 <p>
-        This flag is passed to <em>git am</em> to sign off all the rebased
-        commits (see <a href="git-am.html">git-am(1)</a>). Incompatible with the
-        --interactive option.
+        Add a Signed-off-by: trailer to all the rebased commits. Note
+        that if <code>--interactive</code> is given then only commits marked to be
+        picked, edited or reworded will have the trailer added.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 -i
@@ -1345,6 +1374,37 @@ default is <code>--no-fork-point</code>, otherwise the default is <code>--fork-p
 <div class="paragraph"><p>The commit list format can be changed by setting the configuration option
 rebase.instructionFormat.  A customized instruction format will automatically
 have the long commit hash prepended to the format.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
+</dd>
+<dt class="hdlist1">
+-r
+</dt>
+<dt class="hdlist1">
+--rebase-merges[=(rebase-cousins|no-rebase-cousins)]
+</dt>
+<dd>
+<p>
+        By default, a rebase will simply drop merge commits from the todo
+        list, and put the rebased commits into a single, linear branch.
+        With <code>--rebase-merges</code>, the rebase will instead try to preserve
+        the branching structure within the commits that are to be rebased,
+        by recreating the merge commits. Any resolved merge conflicts or
+        manual amendments in these merge commits will have to be
+        resolved/re-applied manually.
+</p>
+<div class="paragraph"><p>By default, or when <code>no-rebase-cousins</code> was specified, commits which do not
+have <code>&lt;upstream&gt;</code> as direct ancestor will keep their original branch point,
+i.e. commits that would be excluded by gitlink:git-log[1]'s
+<code>--ancestry-path</code> option will keep their original ancestry by default. If
+the <code>rebase-cousins</code> mode is turned on, such commits are instead rebased
+onto <code>&lt;upstream&gt;</code> (or <code>&lt;onto&gt;</code>, if specified).</p></div>
+<div class="paragraph"><p>The <code>--rebase-merges</code> mode is similar in spirit to <code>--preserve-merges</code>, but
+in contrast to that option works well in interactive rebases: commits can be
+reordered, inserted and dropped at will.</p></div>
+<div class="paragraph"><p>It is currently only possible to recreate the merge commits using the
+<code>recursive</code> merge strategy; Different merge strategies can be used only via
+explicit <code>exec git merge -s &lt;strategy&gt; [...]</code> commands.</p></div>
+<div class="paragraph"><p>See also REBASING MERGES and INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 -p
@@ -1361,6 +1421,7 @@ have the long commit hash prepended to the format.</p></div>
 <div class="paragraph"><p>This uses the <code>--interactive</code> machinery internally, but combining it
 with the <code>--interactive</code> option explicitly is generally not a good
 idea unless you know what you are doing (see BUGS below).</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 -x &lt;cmd&gt;
@@ -1372,7 +1433,8 @@ idea unless you know what you are doing (see BUGS below).</p></div>
 <p>
         Append "exec &lt;cmd&gt;" after each line creating a commit in the
         final history. &lt;cmd&gt; will be interpreted as one or more shell
-        commands.
+        commands. Any command that fails will interrupt the rebase,
+        with exit code 1.
 </p>
 <div class="paragraph"><p>You may execute several commands by either using one instance of <code>--exec</code>
 with several commands:</p></div>
@@ -1390,6 +1452,7 @@ the intermediate commits, and will only appear at the end of each
 squash/fixup series.</p></div>
 <div class="paragraph"><p>This uses the <code>--interactive</code> machinery internally, but it can be run
 without an explicit <code>--interactive</code>.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --root
@@ -1405,6 +1468,7 @@ without an explicit <code>--interactive</code>.</p></div>
         <em>all</em> root commits will be rewritten to have &lt;newbase&gt; as parent
         instead.
 </p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --autosquash
@@ -1425,10 +1489,10 @@ without an explicit <code>--interactive</code>.</p></div>
         too.  The recommended way to create fixup/squash commits is by using
         the <code>--fixup</code>/<code>--squash</code> options of <a href="git-commit.html">git-commit(1)</a>.
 </p>
-<div class="paragraph"><p>This option is only valid when the <code>--interactive</code> option is used.</p></div>
 <div class="paragraph"><p>If the <code>--autosquash</code> option is enabled by default using the
 configuration variable <code>rebase.autoSquash</code>, this option can be
 used to override and disable this setting.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --autostash
@@ -1445,22 +1509,182 @@ used to override and disable this setting.</p></div>
         rebase might result in non-trivial conflicts.
 </p>
 </dd>
-<dt class="hdlist1">
---no-ff
-</dt>
-<dd>
-<p>
-        With --interactive, cherry-pick all rebased commits instead of
-        fast-forwarding over the unchanged ones.  This ensures that the
-        entire history of the rebased branch is composed of new commits.
-</p>
-<div class="paragraph"><p>Without --interactive, this is a synonym for --force-rebase.</p></div>
-<div class="paragraph"><p>You may find this helpful after reverting a topic branch merge, as this option
-recreates the topic branch with fresh commits so it can be remerged
-successfully without needing to "revert the reversion" (see the
-<a href="howto/revert-a-faulty-merge.html">revert-a-faulty-merge How-To</a> for details).</p></div>
-</dd>
 </dl></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_incompatible_options">INCOMPATIBLE OPTIONS</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>git-rebase has many flags that are incompatible with each other,
+predominantly due to the fact that it has three different underlying
+implementations:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+one based on <a href="git-am.html">git-am(1)</a> (the default)
+</p>
+</li>
+<li>
+<p>
+one based on git-merge-recursive (merge backend)
+</p>
+</li>
+<li>
+<p>
+one based on <a href="git-cherry-pick.html">git-cherry-pick(1)</a> (interactive backend)
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Flags only understood by the am backend:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+--committer-date-is-author-date
+</p>
+</li>
+<li>
+<p>
+--ignore-date
+</p>
+</li>
+<li>
+<p>
+--whitespace
+</p>
+</li>
+<li>
+<p>
+--ignore-whitespace
+</p>
+</li>
+<li>
+<p>
+-C
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Flags understood by both merge and interactive backends:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+--merge
+</p>
+</li>
+<li>
+<p>
+--strategy
+</p>
+</li>
+<li>
+<p>
+--strategy-option
+</p>
+</li>
+<li>
+<p>
+--allow-empty-message
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Flags only understood by the interactive backend:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+--[no-]autosquash
+</p>
+</li>
+<li>
+<p>
+--rebase-merges
+</p>
+</li>
+<li>
+<p>
+--preserve-merges
+</p>
+</li>
+<li>
+<p>
+--interactive
+</p>
+</li>
+<li>
+<p>
+--exec
+</p>
+</li>
+<li>
+<p>
+--keep-empty
+</p>
+</li>
+<li>
+<p>
+--autosquash
+</p>
+</li>
+<li>
+<p>
+--edit-todo
+</p>
+</li>
+<li>
+<p>
+--root when used in combination with --onto
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Other incompatible flag pairs:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+--preserve-merges and --interactive
+</p>
+</li>
+<li>
+<p>
+--preserve-merges and --signoff
+</p>
+</li>
+<li>
+<p>
+--preserve-merges and --rebase-merges
+</p>
+</li>
+<li>
+<p>
+--rebase-merges and --strategy
+</p>
+</li>
+<li>
+<p>
+--rebase-merges and --strategy-option
+</p>
+</li>
+</ul></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_behavioral_differences">BEHAVIORAL DIFFERENCES</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>There are some subtle differences how the backends behave.</p></div>
+<div class="sect2">
+<h3 id="_empty_commits">Empty commits</h3>
+<div class="paragraph"><p>The am backend drops any "empty" commits, regardless of whether the
+commit started empty (had no changes relative to its parent to
+start with) or ended empty (all changes were already applied
+upstream in other commits).</p></div>
+<div class="paragraph"><p>The merge backend does the same.</p></div>
+<div class="paragraph"><p>The interactive backend drops commits by default that
+started empty and halts if it hits a commit that ended up empty.
+The <code>--keep-empty</code> option exists for the interactive backend to allow
+it to keep commits that started empty.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_directory_rename_detection">Directory rename detection</h3>
+<div class="paragraph"><p>The merge and interactive backends work fine with
+directory rename detection.  The am backend sometimes does not.</p></div>
+</div>
 </div>
 </div>
 <div class="sect1">
@@ -1497,8 +1721,9 @@ recursive
         causing mismerges by tests done on actual merge commits
         taken from Linux 2.6 kernel development history.
         Additionally this can detect and handle merges involving
-        renames.  This is the default merge strategy when
-        pulling or merging one branch.
+        renames, but currently cannot make use of detected
+        copies.  This is the default merge strategy when pulling
+        or merging one branch.
 </p>
 <div class="paragraph"><p>The <em>recursive</em> strategy can take the following options:</p></div>
 <div class="dlist"><dl>
@@ -1615,7 +1840,8 @@ no-renames
 </dt>
 <dd>
 <p>
-        Turn off rename detection.
+        Turn off rename detection. This overrides the <code>merge.renames</code>
+        configuration variable.
         See also <a href="git-diff.html">git-diff(1)</a> <code>--no-renames</code>.
 </p>
 </dd>
@@ -1625,7 +1851,8 @@ find-renames[=&lt;n&gt;]
 <dd>
 <p>
         Turn on rename detection, optionally setting the similarity
-        threshold.  This is the default.
+        threshold.  This is the default. This overrides the
+        <em>merge.renames</em> configuration variable.
         See also <a href="git-diff.html">git-diff(1)</a> <code>--find-renames</code>.
 </p>
 </dd>
@@ -1799,6 +2026,8 @@ example), so do not delete or edit the names.</p></div>
 <em>git rebase</em> to stop after applying that commit, so that you can edit
 the files and/or the commit message, amend the commit, and continue
 rebasing.</p></div>
+<div class="paragraph"><p>To interrupt the rebase (just like an "edit" command would do, but without
+cherry-picking any commit first), use the "break" command.</p></div>
 <div class="paragraph"><p>If you just want to edit the commit message for a commit, replace the
 command "pick" with the command "reword".</p></div>
 <div class="paragraph"><p>To drop a commit, replace the command "pick" with "drop", or just
@@ -2070,12 +2299,135 @@ case" recovery too!</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_rebasing_merges">REBASING MERGES</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>The interactive rebase command was originally designed to handle
+individual patch series. As such, it makes sense to exclude merge
+commits from the todo list, as the developer may have merged the
+then-current <code>master</code> while working on the branch, only to rebase
+all the commits onto <code>master</code> eventually (skipping the merge
+commits).</p></div>
+<div class="paragraph"><p>However, there are legitimate reasons why a developer may want to
+recreate merge commits: to keep the branch structure (or "commit
+topology") when working on multiple, inter-related branches.</p></div>
+<div class="paragraph"><p>In the following example, the developer works on a topic branch that
+refactors the way buttons are defined, and on another topic branch
+that uses that refactoring to implement a "Report a bug" button. The
+output of <code>git log --graph --format=%s -5</code> may look like this:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>*   Merge branch 'report-a-bug'
+|\
+| * Add the feedback button
+* | Merge branch 'refactor-button'
+|\ \
+| |/
+| * Use the Button class for all buttons
+| * Extract a generic Button class from the DownloadButton one</code></pre>
+</div></div>
+<div class="paragraph"><p>The developer might want to rebase those commits to a newer <code>master</code>
+while keeping the branch topology, for example when the first topic
+branch is expected to be integrated into <code>master</code> much earlier than the
+second one, say, to resolve merge conflicts with changes to the
+DownloadButton class that made it into <code>master</code>.</p></div>
+<div class="paragraph"><p>This rebase can be performed using the <code>--rebase-merges</code> option.
+It will generate a todo list looking like this:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>label onto
+
+# Branch: refactor-button
+reset onto
+pick 123456 Extract a generic Button class from the DownloadButton one
+pick 654321 Use the Button class for all buttons
+label refactor-button
+
+# Branch: report-a-bug
+reset refactor-button # Use the Button class for all buttons
+pick abcdef Add the feedback button
+label report-a-bug
+
+reset onto
+merge -C a1b2c3 refactor-button # Merge 'refactor-button'
+merge -C 6f5e4d report-a-bug # Merge 'report-a-bug'</code></pre>
+</div></div>
+<div class="paragraph"><p>In contrast to a regular interactive rebase, there are <code>label</code>, <code>reset</code>
+and <code>merge</code> commands in addition to <code>pick</code> ones.</p></div>
+<div class="paragraph"><p>The <code>label</code> command associates a label with the current HEAD when that
+command is executed. These labels are created as worktree-local refs
+(<code>refs/rewritten/&lt;label&gt;</code>) that will be deleted when the rebase
+finishes. That way, rebase operations in multiple worktrees linked to
+the same repository do not interfere with one another. If the <code>label</code>
+command fails, it is rescheduled immediately, with a helpful message how
+to proceed.</p></div>
+<div class="paragraph"><p>The <code>reset</code> command resets the HEAD, index and worktree to the specified
+revision. It is similar to an <code>exec git reset --hard &lt;label&gt;</code>, but
+refuses to overwrite untracked files. If the <code>reset</code> command fails, it is
+rescheduled immediately, with a helpful message how to edit the todo list
+(this typically happens when a <code>reset</code> command was inserted into the todo
+list manually and contains a typo).</p></div>
+<div class="paragraph"><p>The <code>merge</code> command will merge the specified revision(s) into whatever
+is HEAD at that time. With <code>-C &lt;original-commit&gt;</code>, the commit message of
+the specified merge commit will be used. When the <code>-C</code> is changed to
+a lower-case <code>-c</code>, the message will be opened in an editor after a
+successful merge so that the user can edit the message.</p></div>
+<div class="paragraph"><p>If a <code>merge</code> command fails for any reason other than merge conflicts (i.e.
+when the merge operation did not even start), it is rescheduled immediately.</p></div>
+<div class="paragraph"><p>At this time, the <code>merge</code> command will <strong>always</strong> use the <code>recursive</code>
+merge strategy for regular merges, and <code>octopus</code> for octopus merges,
+strategy, with no way to choose a different one. To work around
+this, an <code>exec</code> command can be used to call <code>git merge</code> explicitly,
+using the fact that the labels are worktree-local refs (the ref
+<code>refs/rewritten/onto</code> would correspond to the label <code>onto</code>, for example).</p></div>
+<div class="paragraph"><p>Note: the first command (<code>label onto</code>) labels the revision onto which
+the commits are rebased; The name <code>onto</code> is just a convention, as a nod
+to the <code>--onto</code> option.</p></div>
+<div class="paragraph"><p>It is also possible to introduce completely new merge commits from scratch
+by adding a command of the form <code>merge &lt;merge-head&gt;</code>. This form will
+generate a tentative commit message and always open an editor to let the
+user edit it. This can be useful e.g. when a topic branch turns out to
+address more than a single concern and wants to be split into two or
+even more topic branches. Consider this todo list:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>pick 192837 Switch from GNU Makefiles to CMake
+pick 5a6c7e Document the switch to CMake
+pick 918273 Fix detection of OpenSSL in CMake
+pick afbecd http: add support for TLS v1.3
+pick fdbaec Fix detection of cURL in CMake on Windows</code></pre>
+</div></div>
+<div class="paragraph"><p>The one commit in this list that is not related to CMake may very well
+have been motivated by working on fixing all those bugs introduced by
+switching to CMake, but it addresses a different concern. To split this
+branch into two topic branches, the todo list could be edited like this:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>label onto
+
+pick afbecd http: add support for TLS v1.3
+label tlsv1.3
+
+reset onto
+pick 192837 Switch from GNU Makefiles to CMake
+pick 918273 Fix detection of OpenSSL in CMake
+pick fdbaec Fix detection of cURL in CMake on Windows
+pick 5a6c7e Document the switch to CMake
+label cmake
+
+reset onto
+merge tlsv1.3
+merge cmake</code></pre>
+</div></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_bugs">BUGS</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>The todo list presented by <code>--preserve-merges --interactive</code> does not
 represent the topology of the revision graph.  Editing commits and
 rewording their commit messages should work fine, but attempts to
-reorder commits tend to produce counterintuitive results.</p></div>
+reorder commits tend to produce counterintuitive results. Use
+<code>--rebase-merges</code> in such scenarios instead.</p></div>
 <div class="paragraph"><p>For example, an attempt to rearrange</p></div>
 <div class="listingblock">
 <div class="content">
@@ -2106,7 +2458,7 @@ reorder commits tend to produce counterintuitive results.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-03-06 15:25:02 PST
+ 2018-12-09 13:56:31 JST
 </div>
 </div>
 </body>

@@ -90,9 +90,8 @@ test_expect_success 'matched bogus object count' '
 
 	# Unlike above, we should notice early that the .idx is totally
 	# bogus, and not even enumerate its contents.
-	>expect &&
 	git cat-file --batch-all-objects --batch-check >actual &&
-	test_cmp expect actual &&
+	test_must_be_empty actual &&
 
 	# But as before, we can do the same object-access checks.
 	test_must_fail git cat-file blob $object &&
@@ -163,8 +162,8 @@ test_expect_success 'bogus offset inside v2 extended table' '
 
 test_expect_success 'bogus OFS_DELTA in packfile' '
 	# Generate a pack with a delta in it.
-	base=$(test-genrandom foo 3000 | git hash-object --stdin -w) &&
-	delta=$(test-genrandom foo 2000 | git hash-object --stdin -w) &&
+	base=$(test-tool genrandom foo 3000 | git hash-object --stdin -w) &&
+	delta=$(test-tool genrandom foo 2000 | git hash-object --stdin -w) &&
 	do_pack "$base $delta" --delta-base-offset &&
 	rm -f .git/objects/??/* &&
 

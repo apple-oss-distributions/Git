@@ -7,6 +7,7 @@
 #include "rerere.h"
 #include "dir.h"
 #include "sequencer.h"
+#include "branch.h"
 
 /*
  * This implements the builtins revert and cherry-pick.
@@ -173,7 +174,7 @@ static int run_sequencer(int argc, const char **argv, struct replay_opts *opts)
 	} else {
 		struct setup_revision_opt s_r_opt;
 		opts->revs = xmalloc(sizeof(*opts->revs));
-		init_revisions(opts->revs, NULL);
+		repo_init_revisions(the_repository, opts->revs, NULL);
 		opts->revs->no_walk = REVISION_WALK_NO_WALK_UNSORTED;
 		if (argc < 2)
 			usage_with_options(usage_str, options);
@@ -191,8 +192,12 @@ static int run_sequencer(int argc, const char **argv, struct replay_opts *opts)
 	opts->gpg_sign = xstrdup_or_null(opts->gpg_sign);
 	opts->strategy = xstrdup_or_null(opts->strategy);
 
-	if (cmd == 'q')
-		return sequencer_remove_state(opts);
+	if (cmd == 'q') {
+		int ret = sequencer_remove_state(opts);
+		if (!ret)
+			remove_branch_state();
+		return ret;
+	}
 	if (cmd == 'c')
 		return sequencer_continue(opts);
 	if (cmd == 'a')

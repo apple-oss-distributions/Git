@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-interpret-trailers(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -748,8 +749,8 @@ git-interpret-trailers(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git interpret-trailers</em> [options] [(--trailer &lt;token&gt;[(=|:)&lt;value&gt;])&#8230;] [&lt;file&gt;&#8230;]
-<em>git interpret-trailers</em> [options] [--parse] [&lt;file&gt;&#8230;]</pre>
+<pre class="content"><em>git interpret-trailers</em> [&lt;options&gt;] [(--trailer &lt;token&gt;[(=|:)&lt;value&gt;])&#8230;] [&lt;file&gt;&#8230;]
+<em>git interpret-trailers</em> [&lt;options&gt;] [--parse] [&lt;file&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -793,8 +794,9 @@ least one Git-generated or user-configured trailer and consists of at
 least 25% trailers.
 The group must be preceded by one or more empty (or whitespace-only) lines.
 The group must either be at the end of the message or be the last
-non-whitespace lines before a line that starts with <em>---</em>. Such three
-minus signs start the patch part of the message.</p></div>
+non-whitespace lines before a line that starts with <em>---</em> (followed by a
+space or the end of the line). Such three minus signs start the patch
+part of the message. See also <code>--no-divider</code> below.</p></div>
 <div class="paragraph"><p>When reading trailers, there can be whitespaces after the
 token, the separator and the value. There can also be whitespaces
 inside the token and the value. The value may be split over multiple lines with
@@ -847,7 +849,8 @@ the encoding rules and probably many other rules.</p></div>
         Specify where all new trailers will be added.  A setting
         provided with <em>--where</em> overrides all configuration variables
         and applies to all <em>--trailer</em> options until the next occurrence of
-        <em>--where</em> or <em>--no-where</em>.
+        <em>--where</em> or <em>--no-where</em>. Possible values are <code>after</code>, <code>before</code>,
+        <code>end</code> or <code>start</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -862,7 +865,8 @@ the encoding rules and probably many other rules.</p></div>
         least one trailer with the same &lt;token&gt; in the message.  A setting
         provided with <em>--if-exists</em> overrides all configuration variables
         and applies to all <em>--trailer</em> options until the next occurrence of
-        <em>--if-exists</em> or <em>--no-if-exists</em>.
+        <em>--if-exists</em> or <em>--no-if-exists</em>. Possible actions are <code>addIfDifferent</code>,
+        <code>addIfDifferentNeighbor</code>, <code>add</code>, <code>replace</code> and <code>doNothing</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -877,7 +881,8 @@ the encoding rules and probably many other rules.</p></div>
         trailer with the same &lt;token&gt; in the message.  A setting
         provided with <em>--if-missing</em> overrides all configuration variables
         and applies to all <em>--trailer</em> options until the next occurrence of
-        <em>--if-missing</em> or <em>--no-if-missing</em>.
+        <em>--if-missing</em> or <em>--no-if-missing</em>. Possible actions are <code>doNothing</code>
+        or <code>add</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -914,6 +919,16 @@ the encoding rules and probably many other rules.</p></div>
 <p>
         A convenience alias for <code>--only-trailers --only-input
         --unfold</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+--no-divider
+</dt>
+<dd>
+<p>
+        Do not treat <code>---</code> as the end of the commit message. Use this
+        when you know your input contains just the commit message itself
+        (and not an email or the output of <code>git format-patch</code>).
 </p>
 </dd>
 </dl></div>
@@ -1240,7 +1255,7 @@ $ chmod +x .git/hooks/commit-msg</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-02-28 15:39:58 PST
+ 2018-09-18 07:45:24 JST
 </div>
 </div>
 </body>

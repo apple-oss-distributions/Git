@@ -4,6 +4,7 @@ use lib '../../perl/build/lib';
 use strict;
 use warnings;
 use JSON;
+use Getopt::Long;
 use Git;
 
 sub get_times {
@@ -12,58 +13,92 @@ sub get_times {
 	my $line = <$fh>;
 	return undef if not defined $line;
 	close $fh or die "cannot close $name: $!";
-	$line =~ /^(?:(\d+):)?(\d+):(\d+(?:\.\d+)?) (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)$/
-		or die "bad input line: $line";
-	my $rt = ((defined $1 ? $1 : 0.0)*60+$2)*60+$3;
-	return ($rt, $4, $5);
+	# times
+	if ($line =~ /^(?:(\d+):)?(\d+):(\d+(?:\.\d+)?) (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)$/) {
+		my $rt = ((defined $1 ? $1 : 0.0)*60+$2)*60+$3;
+		return ($rt, $4, $5);
+	# size
+	} elsif ($line =~ /^\d+$/) {
+		return $&;
+	} else {
+		die "bad input line: $line";
+	}
+}
+
+sub relative_change {
+	my ($r, $firstr) = @_;
+	if ($firstr > 0) {
+		return sprintf "%+.1f%%", 100.0*($r-$firstr)/$firstr;
+	} elsif ($r == 0) {
+		return "=";
+	} else {
+		return "+inf";
+	}
 }
 
 sub format_times {
 	my ($r, $u, $s, $firstr) = @_;
+	# no value means we did not finish the test
 	if (!defined $r) {
 		return "<missing>";
 	}
-	my $out = sprintf "%.2f(%.2f+%.2f)", $r, $u, $s;
-	if (defined $firstr) {
-		if ($firstr > 0) {
-			$out .= sprintf " %+.1f%%", 100.0*($r-$firstr)/$firstr;
-		} elsif ($r == 0) {
-			$out .= " =";
-		} else {
-			$out .= " +inf";
-		}
+	# a single value means we have a size, not times
+	if (!defined $u) {
+		return format_size($r, $firstr);
 	}
+	# otherwise, we have real/user/system times
+	my $out = sprintf "%.2f(%.2f+%.2f)", $r, $u, $s;
+	$out .= ' ' . relative_change($r, $firstr) if defined $firstr;
+	return $out;
+}
+
+sub usage {
+	print <<EOT;
+./aggregate.perl [options] [--] [<dir_or_rev>...] [--] [<test_script>...] >
+
+  Options:
+    --codespeed          * Format output for Codespeed
+    --reponame    <str>  * Send given reponame to codespeed
+    --sort-by     <str>  * Sort output (only "regression" criteria is supported)
+    --subsection  <str>  * Use results from given subsection
+
+EOT
+	exit(1);
+}
+
+sub human_size {
+	my $n = shift;
+	my @units = ('', qw(K M G));
+	while ($n > 900 && @units > 1) {
+		$n /= 1000;
+		shift @units;
+	}
+	return $n unless length $units[0];
+	return sprintf '%.1f%s', $n, $units[0];
+}
+
+sub format_size {
+	my ($size, $first) = @_;
+	# match the width of a time: 0.00(0.00+0.00)
+	my $out = sprintf '%15s', human_size($size);
+	$out .= ' ' . relative_change($size, $first) if defined $first;
 	return $out;
 }
 
 my (@dirs, %dirnames, %dirabbrevs, %prefixes, @tests,
-    $codespeed, $subsection, $reponame);
+    $codespeed, $sortby, $subsection, $reponame);
+
+Getopt::Long::Configure qw/ require_order /;
+
+my $rc = GetOptions("codespeed"     => \$codespeed,
+		    "reponame=s"    => \$reponame,
+		    "sort-by=s"     => \$sortby,
+		    "subsection=s"  => \$subsection);
+usage() unless $rc;
+
 while (scalar @ARGV) {
 	my $arg = $ARGV[0];
 	my $dir;
-	if ($arg eq "--codespeed") {
-		$codespeed = 1;
-		shift @ARGV;
-		next;
-	}
-	if ($arg eq "--subsection") {
-		shift @ARGV;
-		$subsection = $ARGV[0];
-		shift @ARGV;
-		if (! $subsection) {
-			die "empty subsection";
-		}
-		next;
-	}
-	if ($arg eq "--reponame") {
-		shift @ARGV;
-		$reponame = $ARGV[0];
-		shift @ARGV;
-		if (! $reponame) {
-			die "empty reponame";
-		}
-		next;
-	}
 	last if -f $arg or $arg eq "--";
 	if (! -d $arg) {
 		my $rev = Git::command_oneline(qw(rev-parse --verify), $arg);
@@ -147,6 +182,11 @@ sub have_slash {
 	return 0;
 }
 
+sub display_dir {
+	my ($d) = @_;
+	return exists $dirabbrevs{$d} ? $dirabbrevs{$d} : $dirnames{$d};
+}
+
 sub print_default_results {
 	my %descrs;
 	my $descrlen = 4; # "Test"
@@ -168,15 +208,21 @@ sub print_default_results {
 	my %times;
 	my @colwidth = ((0)x@dirs);
 	for my $i (0..$#dirs) {
-		my $d = $dirs[$i];
-		my $w = length (exists $dirabbrevs{$d} ? $dirabbrevs{$d} : $dirnames{$d});
+		my $w = length display_dir($dirs[$i]);
 		$colwidth[$i] = $w if $w > $colwidth[$i];
 	}
 	for my $t (@subtests) {
 		my $firstr;
 		for my $i (0..$#dirs) {
 			my $d = $dirs[$i];
-			$times{$prefixes{$d}.$t} = [get_times("$resultsdir/$prefixes{$d}$t.times")];
+			my $base = "$resultsdir/$prefixes{$d}$t";
+			$times{$prefixes{$d}.$t} = [];
+			foreach my $type (qw(times size)) {
+				if (-e "$base.$type") {
+					$times{$prefixes{$d}.$t} = [get_times("$base.$type")];
+					last;
+				}
+			}
 			my ($r,$u,$s) = @{$times{$prefixes{$d}.$t}};
 			my $w = length format_times($r,$u,$s,$firstr);
 			$colwidth[$i] = $w if $w > $colwidth[$i];
@@ -188,8 +234,7 @@ sub print_default_results {
 
 	printf "%-${descrlen}s", "Test";
 	for my $i (0..$#dirs) {
-		my $d = $dirs[$i];
-		printf "   %-$colwidth[$i]s", (exists $dirabbrevs{$d} ? $dirabbrevs{$d} : $dirnames{$d});
+		printf "   %-$colwidth[$i]s", display_dir($dirs[$i]);
 	}
 	print "\n";
 	print "-"x$totalwidth, "\n";
@@ -202,6 +247,50 @@ sub print_default_results {
 			printf "   %-$colwidth[$i]s", format_times($r,$u,$s,$firstr);
 			$firstr = $r unless defined $firstr;
 		}
+		print "\n";
+	}
+}
+
+sub print_sorted_results {
+	my ($sortby) = @_;
+
+	if ($sortby ne "regression") {
+		print "Only 'regression' is supported as '--sort-by' argument\n";
+		usage();
+	}
+
+	my @evolutions;
+	for my $t (@subtests) {
+		my ($prevr, $prevu, $prevs, $prevrev);
+		for my $i (0..$#dirs) {
+			my $d = $dirs[$i];
+			my ($r, $u, $s) = get_times("$resultsdir/$prefixes{$d}$t.times");
+			if ($i > 0 and defined $r and defined $prevr and $prevr > 0) {
+				my $percent = 100.0 * ($r - $prevr) / $prevr;
+				push @evolutions, { "percent"  => $percent,
+						    "test"     => $t,
+						    "prevrev"  => $prevrev,
+						    "rev"      => $d,
+						    "prevr"    => $prevr,
+						    "r"        => $r,
+						    "prevu"    => $prevu,
+						    "u"        => $u,
+						    "prevs"    => $prevs,
+						    "s"        => $s};
+			}
+			($prevr, $prevu, $prevs, $prevrev) = ($r, $u, $s, $d);
+		}
+	}
+
+	my @sorted_evolutions = sort { $b->{percent} <=> $a->{percent} } @evolutions;
+
+	for my $e (@sorted_evolutions) {
+		printf "%+.1f%%", $e->{percent};
+		print " " . $e->{test};
+		print " " . format_times($e->{prevr}, $e->{prevu}, $e->{prevs});
+		print " " . format_times($e->{r}, $e->{u}, $e->{s});
+		print " " . display_dir($e->{prevrev});
+		print " " . display_dir($e->{rev});
 		print "\n";
 	}
 }
@@ -260,6 +349,8 @@ binmode STDOUT, ":utf8" or die "PANIC on binmode: $!";
 
 if ($codespeed) {
 	print_codespeed_results($subsection);
+} elsif (defined $sortby) {
+	print_sorted_results($sortby);
 } else {
 	print_default_results();
 }

@@ -2,12 +2,12 @@
 .\"     Title: gitignore
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GITIGNORE" "5" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GITIGNORE" "5" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -31,7 +31,7 @@
 gitignore \- Specifies intentionally untracked files to ignore
 .SH "SYNOPSIS"
 .sp
-$HOME/\&.config/git/ignore, $GIT_DIR/info/exclude, \&.gitignore
+$XDG_CONFIG_HOME/git/ignore, $GIT_DIR/info/exclude, \&.gitignore
 .SH "DESCRIPTION"
 .sp
 A \fBgitignore\fR file specifies intentionally untracked files that Git should ignore\&. Files already tracked by Git are not affected; see the NOTES below for details\&.
@@ -279,7 +279,7 @@ A slash followed by two consecutive asterisks then a slash matches zero or more 
 .sp -1
 .IP \(bu 2.3
 .\}
-Other consecutive asterisks are considered invalid\&.
+Other consecutive asterisks are considered regular asterisks and will match according to the previous rules\&.
 .RE
 .SH "NOTES"
 .sp

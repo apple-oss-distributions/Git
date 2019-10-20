@@ -1,6 +1,7 @@
 #include "cache.h"
 #include "config.h"
 #include "notes.h"
+#include "object-store.h"
 #include "blob.h"
 #include "tree.h"
 #include "utf8.h"
@@ -146,7 +147,7 @@ static struct leaf_node *note_tree_find(struct notes_tree *t,
 	void **p = note_tree_search(t, &tree, &n, key_sha1);
 	if (GET_PTR_TYPE(*p) == PTR_TYPE_NOTE) {
 		struct leaf_node *l = (struct leaf_node *) CLR_PTR_TYPE(*p);
-		if (!hashcmp(key_sha1, l->key_oid.hash))
+		if (hasheq(key_sha1, l->key_oid.hash))
 			return l;
 	}
 	return NULL;
@@ -205,7 +206,7 @@ static void note_tree_remove(struct notes_tree *t,
 	if (GET_PTR_TYPE(*p) != PTR_TYPE_NOTE)
 		return; /* type mismatch, nothing to remove */
 	l = (struct leaf_node *) CLR_PTR_TYPE(*p);
-	if (oidcmp(&l->key_oid, &entry->key_oid))
+	if (!oideq(&l->key_oid, &entry->key_oid))
 		return; /* key mismatch, nothing to remove */
 
 	/* we have found a matching entry */
@@ -265,9 +266,9 @@ static int note_tree_insert(struct notes_tree *t, struct int_node *tree,
 	case PTR_TYPE_NOTE:
 		switch (type) {
 		case PTR_TYPE_NOTE:
-			if (!oidcmp(&l->key_oid, &entry->key_oid)) {
+			if (oideq(&l->key_oid, &entry->key_oid)) {
 				/* skip concatenation if l == entry */
-				if (!oidcmp(&l->val_oid, &entry->val_oid))
+				if (oideq(&l->val_oid, &entry->val_oid))
 					return 0;
 
 				ret = combine_notes(&l->val_oid,
@@ -796,13 +797,13 @@ int combine_notes_concatenate(struct object_id *cur_oid,
 
 	/* read in both note blob objects */
 	if (!is_null_oid(new_oid))
-		new_msg = read_sha1_file(new_oid->hash, &new_type, &new_len);
+		new_msg = read_object_file(new_oid, &new_type, &new_len);
 	if (!new_msg || !new_len || new_type != OBJ_BLOB) {
 		free(new_msg);
 		return 0;
 	}
 	if (!is_null_oid(cur_oid))
-		cur_msg = read_sha1_file(cur_oid->hash, &cur_type, &cur_len);
+		cur_msg = read_object_file(cur_oid, &cur_type, &cur_len);
 	if (!cur_msg || !cur_len || cur_type != OBJ_BLOB) {
 		free(cur_msg);
 		free(new_msg);
@@ -858,7 +859,7 @@ static int string_list_add_note_lines(struct string_list *list,
 		return 0;
 
 	/* read_sha1_file NUL-terminates */
-	data = read_sha1_file(oid->hash, &t, &len);
+	data = read_object_file(oid, &t, &len);
 	if (t != OBJ_BLOB || !data || !len) {
 		free(data);
 		return t != OBJ_BLOB || !data;
@@ -1012,7 +1013,7 @@ void init_notes(struct notes_tree *t, const char *notes_ref,
 		return;
 	if (flags & NOTES_INIT_WRITABLE && read_ref(notes_ref, &object_oid))
 		die("Cannot use notes ref %s", notes_ref);
-	if (get_tree_entry(object_oid.hash, "", oid.hash, &mode))
+	if (get_tree_entry(&object_oid, "", &oid, &mode))
 		die("Failed to read notes tree referenced by %s (%s)",
 		    notes_ref, oid_to_hex(&object_oid));
 
@@ -1217,7 +1218,7 @@ static void format_note(struct notes_tree *t, const struct object_id *object_oid
 	if (!oid)
 		return;
 
-	if (!(msg = read_sha1_file(oid->hash, &type, &msglen)) || type != OBJ_BLOB) {
+	if (!(msg = read_object_file(oid, &type, &msglen)) || type != OBJ_BLOB) {
 		free(msg);
 		return;
 	}

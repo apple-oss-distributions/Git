@@ -183,13 +183,13 @@ test_expect_success 'cherry-picked commits and fork-point work together' '
 	test_commit final_B B "Final B" &&
 	git rebase &&
 	echo Amended >expect &&
-	test_cmp A expect &&
+	test_cmp expect A &&
 	echo "Final B" >expect &&
-	test_cmp B expect &&
+	test_cmp expect B &&
 	echo C >expect &&
-	test_cmp C expect &&
+	test_cmp expect C &&
 	echo D >expect &&
-	test_cmp D expect
+	test_cmp expect D
 '
 
 test_expect_success 'rebase -q is quiet' '
@@ -200,10 +200,10 @@ test_expect_success 'rebase -q is quiet' '
 
 test_expect_success 'Rebase a commit that sprinkles CRs in' '
 	(
-		echo "One"
-		echo "TwoQ"
-		echo "Three"
-		echo "FQur"
+		echo "One" &&
+		echo "TwoQ" &&
+		echo "Three" &&
+		echo "FQur" &&
 		echo "Five"
 	) | q_to_cr >CR &&
 	git add CR &&

@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-svn(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -748,7 +749,7 @@ git-svn(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git svn</em> &lt;command&gt; [options] [arguments]</pre>
+<pre class="content"><em>git svn</em> &lt;command&gt; [&lt;options&gt;] [&lt;arguments&gt;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1546,7 +1547,7 @@ environment). This command has the same behaviour.</td>
 <dd>
 <p>
         Commits the diff of two tree-ish arguments from the
-        command-line.  This command does not rely on being inside an <code>git svn
+        command-line.  This command does not rely on being inside a <code>git svn
         init</code>-ed repository.  This command takes three arguments, (a) the
         original tree to diff against, (b) the new tree result, (c) the
         URL of the target Subversion repository.  The final argument
@@ -1847,7 +1848,8 @@ config key: svn.findcopiesharder</pre>
 </dt>
 <dd>
 <p>
-        Syntax is compatible with the file used by <em>git cvsimport</em>:
+        Syntax is compatible with the file used by <em>git cvsimport</em> but
+        an empty email address can be supplied with <em>&lt;&gt;</em>:
 </p>
 <div class="listingblock">
 <div class="content">
@@ -1871,9 +1873,14 @@ after the authors-file is modified should continue operation.</p></div>
         If this option is specified, for each SVN committer name that
         does not exist in the authors file, the given file is executed
         with the committer name as the first argument.  The program is
-        expected to return a single line of the form "Name &lt;email&gt;",
-        which will be treated as if included in the authors file.
+        expected to return a single line of the form "Name &lt;email&gt;" or
+        "Name &lt;&gt;", which will be treated as if included in the authors
+        file.
 </p>
+<div class="paragraph"><p>Due to historical reasons a relative <em>filename</em> is first searched
+relative to the current directory for <em>init</em> and <em>clone</em> and relative
+to the root of the working tree for <em>fetch</em>. If <em>filename</em> is
+not found, it is searched like any other command in <em>$PATH</em>.</p></div>
 <div class="verseblock">
 <pre class="content">config key: svn.authorsProg</pre>
 <div class="attribution">
@@ -1954,7 +1961,7 @@ creating the branch or tag.</p></div>
 </dt>
 <dd>
 <p>
-        When committing to svn from Git (as part of <em>commit-diff</em>, <em>set-tree</em> or <em>dcommit</em>
+        When committing to svn from Git (as part of <em>set-tree</em> or <em>dcommit</em>
         operations), if the existing log message doesn&#8217;t already have a
         <code>From:</code> or <code>Signed-off-by:</code> line, append a <code>From:</code> line based on the
         Git commit&#8217;s author string.  If you use this, then <code>--use-log-author</code>
@@ -2507,7 +2514,7 @@ rewinds it.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-07-19 05:16:04 JST
 </div>
 </div>
 </body>

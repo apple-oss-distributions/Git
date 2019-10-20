@@ -6,6 +6,7 @@
 #include "reachable.h"
 #include "parse-options.h"
 #include "progress.h"
+#include "object-store.h"
 
 static const char * const prune_usage[] = {
 	N_("git prune [-n] [-v] [--progress] [--expire <time>] [--] [<head>...]"),
@@ -39,7 +40,7 @@ static int prune_object(const struct object_id *oid, const char *fullpath,
 	 * Do we know about this object?
 	 * It must have been reachable
 	 */
-	if (lookup_object(oid->hash))
+	if (lookup_object(the_repository, oid->hash))
 		return 0;
 
 	if (lstat(fullpath, &st)) {
@@ -50,7 +51,8 @@ static int prune_object(const struct object_id *oid, const char *fullpath,
 	if (st.st_mtime > expire)
 		return 0;
 	if (show_only || verbose) {
-		enum object_type type = sha1_object_info(oid->hash, NULL);
+		enum object_type type = oid_object_info(the_repository, oid,
+							NULL);
 		printf("%s %s\n", oid_to_hex(oid),
 		       (type > 0) ? type_name(type) : "unknown");
 	}
@@ -116,9 +118,10 @@ int cmd_prune(int argc, const char **argv, const char *prefix)
 
 	expire = TIME_MAX;
 	save_commit_buffer = 0;
-	check_replace_refs = 0;
+	read_replace_refs = 0;
 	ref_paranoia = 1;
-	init_revisions(&revs, prefix);
+	revs.allow_exclude_promisor_objects_opt = 1;
+	repo_init_revisions(the_repository, &revs, prefix);
 
 	argc = parse_options(argc, argv, prefix, options, prune_usage, 0);
 
@@ -158,8 +161,8 @@ int cmd_prune(int argc, const char **argv, const char *prefix)
 	remove_temporary_files(s);
 	free(s);
 
-	if (is_repository_shallow())
-		prune_shallow(show_only);
+	if (is_repository_shallow(the_repository))
+		prune_shallow(show_only ? PRUNE_SHOW_ONLY : 0);
 
 	return 0;
 }

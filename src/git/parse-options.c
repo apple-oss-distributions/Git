@@ -317,14 +317,16 @@ is_abbreviated:
 		return get_value(p, options, all_opts, flags ^ opt_flags);
 	}
 
-	if (ambiguous_option)
-		return error("Ambiguous option: %s "
+	if (ambiguous_option) {
+		error("Ambiguous option: %s "
 			"(could be --%s%s or --%s%s)",
 			arg,
 			(ambiguous_flags & OPT_UNSET) ?  "no-" : "",
 			ambiguous_option->long_name,
 			(abbrev_flags & OPT_UNSET) ?  "no-" : "",
 			abbrev_option->long_name);
+		return -3;
+	}
 	if (abbrev_option)
 		return get_value(p, abbrev_option, all_opts, abbrev_flags);
 	return -2;
@@ -425,13 +427,59 @@ void parse_options_start(struct parse_opt_ctx_t *ctx,
 	parse_options_check(options);
 }
 
-/*
- * TODO: we are not completing the --no-XXX form yet because there are
- * many options that do not suppress it properly.
- */
+static void show_negated_gitcomp(const struct option *opts, int nr_noopts)
+{
+	int printed_dashdash = 0;
+
+	for (; opts->type != OPTION_END; opts++) {
+		int has_unset_form = 0;
+		const char *name;
+
+		if (!opts->long_name)
+			continue;
+		if (opts->flags & (PARSE_OPT_HIDDEN | PARSE_OPT_NOCOMPLETE))
+			continue;
+		if (opts->flags & PARSE_OPT_NONEG)
+			continue;
+
+		switch (opts->type) {
+		case OPTION_STRING:
+		case OPTION_FILENAME:
+		case OPTION_INTEGER:
+		case OPTION_MAGNITUDE:
+		case OPTION_CALLBACK:
+		case OPTION_BIT:
+		case OPTION_NEGBIT:
+		case OPTION_COUNTUP:
+		case OPTION_SET_INT:
+			has_unset_form = 1;
+			break;
+		default:
+			break;
+		}
+		if (!has_unset_form)
+			continue;
+
+		if (skip_prefix(opts->long_name, "no-", &name)) {
+			if (nr_noopts < 0)
+				printf(" --%s", name);
+		} else if (nr_noopts >= 0) {
+			if (nr_noopts && !printed_dashdash) {
+				printf(" --");
+				printed_dashdash = 1;
+			}
+			printf(" --no-%s", opts->long_name);
+			nr_noopts++;
+		}
+	}
+}
+
 static int show_gitcomp(struct parse_opt_ctx_t *ctx,
 			const struct option *opts)
 {
+	const struct option *original_opts = opts;
+	int nr_noopts = 0;
+
 	for (; opts->type != OPTION_END; opts++) {
 		const char *suffix = "";
 
@@ -461,10 +509,14 @@ static int show_gitcomp(struct parse_opt_ctx_t *ctx,
 		}
 		if (opts->flags & PARSE_OPT_COMP_ARG)
 			suffix = "=";
+		if (starts_with(opts->long_name, "no-"))
+			nr_noopts++;
 		printf(" --%s%s", opts->long_name, suffix);
 	}
+	show_negated_gitcomp(original_opts, -1);
+	show_negated_gitcomp(original_opts, nr_noopts);
 	fputc('\n', stdout);
-	exit(0);
+	return PARSE_OPT_COMPLETE;
 }
 
 static int usage_with_options_internal(struct parse_opt_ctx_t *,
@@ -476,7 +528,6 @@ int parse_options_step(struct parse_opt_ctx_t *ctx,
 		       const char * const usagestr[])
 {
 	int internal_help = !(ctx->flags & PARSE_OPT_NO_INTERNAL_HELP);
-	int err = 0;
 
 	/* we must reset ->opt, unknown short option leave it dangling */
 	ctx->opt = NULL;
@@ -505,7 +556,7 @@ int parse_options_step(struct parse_opt_ctx_t *ctx,
 			ctx->opt = arg + 1;
 			switch (parse_short_opt(ctx, options)) {
 			case -1:
-				goto show_usage_error;
+				return PARSE_OPT_ERROR;
 			case -2:
 				if (ctx->opt)
 					check_typos(arg + 1, options);
@@ -518,7 +569,7 @@ int parse_options_step(struct parse_opt_ctx_t *ctx,
 			while (ctx->opt) {
 				switch (parse_short_opt(ctx, options)) {
 				case -1:
-					goto show_usage_error;
+					return PARSE_OPT_ERROR;
 				case -2:
 					if (internal_help && *ctx->opt == 'h')
 						goto show_usage;
@@ -550,9 +601,11 @@ int parse_options_step(struct parse_opt_ctx_t *ctx,
 			goto show_usage;
 		switch (parse_long_opt(ctx, arg + 2, options)) {
 		case -1:
-			goto show_usage_error;
+			return PARSE_OPT_ERROR;
 		case -2:
 			goto unknown;
+		case -3:
+			goto show_usage;
 		}
 		continue;
 unknown:
@@ -563,10 +616,8 @@ unknown:
 	}
 	return PARSE_OPT_DONE;
 
- show_usage_error:
-	err = 1;
  show_usage:
-	return usage_with_options_internal(ctx, usagestr, options, 0, err);
+	return usage_with_options_internal(ctx, usagestr, options, 0, 0);
 }
 
 int parse_options_end(struct parse_opt_ctx_t *ctx)
@@ -585,7 +636,10 @@ int parse_options(int argc, const char **argv, const char *prefix,
 	parse_options_start(&ctx, argc, argv, prefix, options, flags);
 	switch (parse_options_step(&ctx, options, usagestr)) {
 	case PARSE_OPT_HELP:
+	case PARSE_OPT_ERROR:
 		exit(129);
+	case PARSE_OPT_COMPLETE:
+		exit(0);
 	case PARSE_OPT_NON_OPTION:
 	case PARSE_OPT_DONE:
 		break;
@@ -608,7 +662,8 @@ int parse_options(int argc, const char **argv, const char *prefix,
 static int usage_argh(const struct option *opts, FILE *outfile)
 {
 	const char *s;
-	int literal = (opts->flags & PARSE_OPT_LITERAL_ARGHELP) || !opts->argh;
+	int literal = (opts->flags & PARSE_OPT_LITERAL_ARGHELP) ||
+		!opts->argh || !!strpbrk(opts->argh, "()<>[]|");
 	if (opts->flags & PARSE_OPT_OPTARG)
 		if (opts->long_name)
 			s = literal ? "[=%s]" : "[=<%s>]";

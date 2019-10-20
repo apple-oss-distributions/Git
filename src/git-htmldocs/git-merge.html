@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-merge(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -751,7 +752,7 @@ git-merge(1) Manual Page
 <pre class="content"><em>git merge</em> [-n] [--stat] [--no-commit] [--squash] [--[no-]edit]
         [-s &lt;strategy&gt;] [-X &lt;strategy-option&gt;] [-S[&lt;keyid&gt;]]
         [--[no-]allow-unrelated-histories]
-        [--[no-]rerere-autoupdate] [-m &lt;msg&gt;] [&lt;commit&gt;&#8230;]
+        [--[no-]rerere-autoupdate] [-m &lt;msg&gt;] [-F &lt;file&gt;] [&lt;commit&gt;&#8230;]
 <em>git merge</em> --abort
 <em>git merge</em> --continue</pre>
 <div class="attribution">
@@ -795,7 +796,7 @@ reconstruct the original (pre-merge) changes. Therefore:</p></div>
 <div class="paragraph"><p><strong>Warning</strong>: Running <em>git merge</em> with non-trivial uncommitted changes is
 discouraged: while possible, it may leave you in a state that is hard to
 back out of in the case of a conflict.</p></div>
-<div class="paragraph"><p>The fourth syntax ("<code>git merge --continue</code>") can only be run after the
+<div class="paragraph"><p>The third syntax ("<code>git merge --continue</code>") can only be run after the
 merge has resulted in conflicts.</p></div>
 </div>
 </div>
@@ -1074,6 +1075,20 @@ used to give a good default for automated <em>git merge</em>
 invocations. The automated message can include the branch description.</p></div>
 </dd>
 <dt class="hdlist1">
+-F &lt;file&gt;
+</dt>
+<dt class="hdlist1">
+--file=&lt;file&gt;
+</dt>
+<dd>
+<p>
+        Read the commit message to be used for the merge commit (in
+        case one is created).
+</p>
+<div class="paragraph"><p>If <code>--log</code> is specified, a shortlog of the commits being merged
+will be appended to the specified message.</p></div>
+</dd>
+<dt class="hdlist1">
 --[no-]rerere-autoupdate
 </dt>
 <dd>
@@ -1137,9 +1152,9 @@ local uncommitted changes overlap with files that <em>git pull</em>/<em>git
 merge</em> may need to update.</p></div>
 <div class="paragraph"><p>To avoid recording unrelated changes in the merge commit,
 <em>git pull</em> and <em>git merge</em> will also abort if there are any changes
-registered in the index relative to the <code>HEAD</code> commit.  (One
-exception is when the changed index entries are in the state that
-would result from the merge already.)</p></div>
+registered in the index relative to the <code>HEAD</code> commit.  (Special
+narrow exceptions to this rule may exist depending on which merge
+strategy is in use, but generally, the index must match HEAD.)</p></div>
 <div class="paragraph"><p>If all named commits are already ancestors of <code>HEAD</code>, <em>git merge</em>
 will exit early with the message "Already up to date."</p></div>
 </div>
@@ -1422,8 +1437,9 @@ recursive
         causing mismerges by tests done on actual merge commits
         taken from Linux 2.6 kernel development history.
         Additionally this can detect and handle merges involving
-        renames.  This is the default merge strategy when
-        pulling or merging one branch.
+        renames, but currently cannot make use of detected
+        copies.  This is the default merge strategy when pulling
+        or merging one branch.
 </p>
 <div class="paragraph"><p>The <em>recursive</em> strategy can take the following options:</p></div>
 <div class="dlist"><dl>
@@ -1540,7 +1556,8 @@ no-renames
 </dt>
 <dd>
 <p>
-        Turn off rename detection.
+        Turn off rename detection. This overrides the <code>merge.renames</code>
+        configuration variable.
         See also <a href="git-diff.html">git-diff(1)</a> <code>--no-renames</code>.
 </p>
 </dd>
@@ -1550,7 +1567,8 @@ find-renames[=&lt;n&gt;]
 <dd>
 <p>
         Turn on rename detection, optionally setting the similarity
-        threshold.  This is the default.
+        threshold.  This is the default. This overrides the
+        <em>merge.renames</em> configuration variable.
         See also <a href="git-diff.html">git-diff(1)</a> <code>--find-renames</code>.
 </p>
 </dd>
@@ -1707,7 +1725,18 @@ merge.renameLimit
 <p>
         The number of files to consider when performing rename detection
         during a merge; if not specified, defaults to the value of
-        diff.renameLimit.
+        diff.renameLimit. This setting has no effect if rename detection
+        is turned off.
+</p>
+</dd>
+<dt class="hdlist1">
+merge.renames
+</dt>
+<dd>
+<p>
+        Whether and how Git detects renames.  If set to "false",
+        rename detection is disabled. If set to "true", basic rename
+        detection is enabled.  Defaults to the value of diff.renames.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1743,6 +1772,17 @@ merge.tool
         The list below shows the valid built-in values.
         Any other value is treated as a custom merge tool and requires
         that a corresponding mergetool.&lt;tool&gt;.cmd variable is defined.
+</p>
+</dd>
+<dt class="hdlist1">
+merge.guitool
+</dt>
+<dd>
+<p>
+        Controls which merge tool is used by <a href="git-mergetool.html">git-mergetool(1)</a> when the
+        -g/--gui flag is specified. The list below shows the valid built-in values.
+        Any other value is treated as a custom merge tool and requires that a
+        corresponding mergetool.&lt;guitool&gt;.cmd variable is defined.
 </p>
 <div class="ulist"><ul>
 <li>
@@ -1793,6 +1833,11 @@ emerge
 <li>
 <p>
 examdiff
+</p>
+</li>
+<li>
+<p>
+guiffy
 </p>
 </li>
 <li>
@@ -1943,7 +1988,7 @@ branch.&lt;name&gt;.mergeOptions
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-11-13 23:05:48 JST
 </div>
 </div>
 </body>

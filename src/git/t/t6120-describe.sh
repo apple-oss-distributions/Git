@@ -121,10 +121,9 @@ test_expect_success 'describe --contains defaults to HEAD without commit-ish' '
 	test_cmp expect actual
 '
 
-: >err.expect
 check_describe tags/A --all A^0
 test_expect_success 'no warning was displayed for A' '
-	test_cmp err.expect err.actual
+	test_must_be_empty err.actual
 '
 
 test_expect_success 'rename tag A to Q locally' '
@@ -383,7 +382,7 @@ test_expect_success 'describe complains about tree object' '
 '
 
 test_expect_success 'describe complains about missing object' '
-	test_must_fail git describe $_z40
+	test_must_fail git describe $ZERO_OID
 '
 
 test_done

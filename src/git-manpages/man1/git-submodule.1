@@ -2,12 +2,12 @@
 .\"     Title: git-submodule
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-SUBMODULE" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-SUBMODULE" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -63,7 +63,7 @@ instead of
 \fI\&./foo\&.git\fR
 \- as one might expect when following the rules for relative URLs \- because the evaluation of relative URLs in Git is identical to that of relative directories)\&.
 .sp
-The default remote is the remote of the remote tracking branch of the current branch\&. If no such remote tracking branch exists or the HEAD is detached, "origin" is assumed to be the default remote\&. If the superproject doesn\(cqt have a default remote configured the superproject is its own authoritative upstream and the current working directory is used instead\&.
+The default remote is the remote of the remote\-tracking branch of the current branch\&. If no such remote\-tracking branch exists or the HEAD is detached, "origin" is assumed to be the default remote\&. If the superproject doesn\(cqt have a default remote configured the superproject is its own authoritative upstream and the current working directory is used instead\&.
 .sp
 The optional argument <path> is the relative location for the cloned submodule to exist in the superproject\&. If <path> is not given, the canonical part of the source repository is used ("repo" for "/path/to/repo\&.git" and "foo" for "host\&.xz:foo/\&.git")\&. If <path> exists and is already a valid Git repository, then it is staged for commit without cloning\&. The <path> is also used as the submodule\(cqs logical name in its configuration entries unless
 \fB\-\-name\fR
@@ -222,8 +222,14 @@ will provide that information too\&.
 .PP
 foreach [\-\-recursive] <command>
 .RS 4
-Evaluates an arbitrary shell command in each checked out submodule\&. The command has access to the variables $name, $path, $sha1 and $toplevel: $name is the name of the relevant submodule section in
-\fB\&.gitmodules\fR, $path is the name of the submodule directory relative to the superproject, $sha1 is the commit as recorded in the superproject, and $toplevel is the absolute path to the top\-level of the superproject\&. Any submodules defined in the superproject but not checked out are ignored by this command\&. Unless given
+Evaluates an arbitrary shell command in each checked out submodule\&. The command has access to the variables $name, $sm_path, $displaypath, $sha1 and $toplevel: $name is the name of the relevant submodule section in
+\fB\&.gitmodules\fR, $sm_path is the path of the submodule as recorded in the immediate superproject, $displaypath contains the relative path from the current working directory to the submodules root directory, $sha1 is the commit as recorded in the immediate superproject, and $toplevel is the absolute path to the top\-level of the immediate superproject\&. Note that to avoid conflicts with
+\fI$PATH\fR
+on Windows, the
+\fI$path\fR
+variable is now a deprecated synonym of
+\fI$sm_path\fR
+variable\&. Any submodules defined in the superproject but not checked out are ignored by this command\&. Unless given
 \fB\-\-quiet\fR, foreach prints the name of each submodule before evaluating the command\&. If
 \fB\-\-recursive\fR
 is given, submodules are traversed recursively (i\&.e\&. the given shell command is evaluated in nested submodules as well)\&. A non\-zero return from the command in any submodule causes the processing to terminate\&. This can be overridden by adding
@@ -249,7 +255,10 @@ sync [\-\-recursive] [\-\-] [<path>\&...]
 Synchronizes submodules\(aq remote URL configuration setting to the value specified in
 \fB\&.gitmodules\fR\&. It will only affect those submodules which already have a URL entry in \&.git/config (that is the case when they are initialized or freshly added)\&. This is useful when submodule URLs change upstream and you need to update your local repositories accordingly\&.
 .sp
-"git submodule sync" synchronizes all submodules while "git submodule sync \-\- A" synchronizes submodule "A" only\&.
+\fBgit submodule sync\fR
+synchronizes all submodules while
+\fBgit submodule sync \-\- A\fR
+synchronizes submodule "A" only\&.
 .sp
 If
 \fB\-\-recursive\fR
@@ -273,6 +282,11 @@ This command is recursive by default\&.
 \-q, \-\-quiet
 .RS 4
 Only print error messages\&.
+.RE
+.PP
+\-\-progress
+.RS 4
+This option is only valid for add and update commands\&. Progress status is reported on the standard error stream by default when it is attached to a terminal, unless \-q is specified\&. This flag forces progress status even if the standard error stream is not directed to a terminal\&.
 .RE
 .PP
 \-\-all
@@ -407,10 +421,21 @@ command\&.
 \fBnot\fR
 use this option unless you have read the note for
 \fBgit-clone\fR(1)\(aqs
-\fB\-\-reference\fR
-and
-\fB\-\-shared\fR
+\fB\-\-reference\fR,
+\fB\-\-shared\fR, and
+\fB\-\-dissociate\fR
 options carefully\&.
+.RE
+.PP
+\-\-dissociate
+.RS 4
+This option is only valid for add and update commands\&. These commands sometimes need to clone a remote repository\&. In this case, this option will be passed to the
+\fBgit-clone\fR(1)
+command\&.
+.sp
+\fBNOTE\fR: see the NOTE for the
+\fB\-\-reference\fR
+option\&.
 .RE
 .PP
 \-\-recursive

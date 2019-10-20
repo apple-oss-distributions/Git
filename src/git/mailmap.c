@@ -1,6 +1,7 @@
 #include "cache.h"
 #include "string-list.h"
 #include "mailmap.h"
+#include "object-store.h"
 
 #define DEBUG_MAILMAP 0
 #if DEBUG_MAILMAP
@@ -224,7 +225,7 @@ static int read_mailmap_blob(struct string_list *map,
 	if (get_oid(name, &oid) < 0)
 		return 0;
 
-	buf = read_sha1_file(oid.hash, &type, &size);
+	buf = read_object_file(&oid, &type, &size);
 	if (!buf)
 		return error("unable to read mailmap object at %s", name);
 	if (type != OBJ_BLOB)

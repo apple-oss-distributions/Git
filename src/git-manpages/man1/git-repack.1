@@ -2,12 +2,12 @@
 .\"     Title: git-repack
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-REPACK" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-REPACK" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,7 @@ git-repack \- Pack unpacked objects in a repository
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit repack\fR [\-a] [\-A] [\-d] [\-f] [\-F] [\-l] [\-n] [\-q] [\-b] [\-\-window=<n>] [\-\-depth=<n>] [\-\-threads=<n>]
+\fIgit repack\fR [\-a] [\-A] [\-d] [\-f] [\-F] [\-l] [\-n] [\-q] [\-b] [\-\-window=<n>] [\-\-depth=<n>] [\-\-threads=<n>] [\-\-keep\-pack=<pack\-name>]
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -54,6 +54,8 @@ leaves behind, but
 shows as dangling\&.
 .sp
 Note that users fetching over dumb protocols will have to fetch the whole new pack in order to get any contained object, no matter how many other objects in that pack they already have locally\&.
+.sp
+Promisor packfiles are repacked separately: if there are packfiles that have an associated "\&.promisor" file, these packfiles will be repacked into another separate pack, and an empty "\&.promisor" file corresponding to the new separate pack will be written\&.
 .RE
 .PP
 \-A
@@ -123,7 +125,9 @@ These two options affect how the objects contained in the pack are stored using 
 \fB\-\-window\fR
 to see if using delta compression saves space\&.
 \fB\-\-depth\fR
-limits the maximum delta depth; making it too deep affects the performance on the unpacker side, because delta data needs to be applied that many times to get to the necessary object\&. The default value for \-\-window is 10 and \-\-depth is 50\&.
+limits the maximum delta depth; making it too deep affects the performance on the unpacker side, because delta data needs to be applied that many times to get to the necessary object\&.
+.sp
+The default value for \-\-window is 10 and \-\-depth is 50\&. The maximum depth is 4095\&.
 .RE
 .PP
 \-\-threads=<n>
@@ -175,6 +179,16 @@ or
 \fBrepack\&.writeBitmaps\fR, as it ensures that the bitmapped packfile has the necessary objects\&.
 .RE
 .PP
+\-\-keep\-pack=<pack\-name>
+.RS 4
+Exclude the given pack from repacking\&. This is the equivalent of having
+\fB\&.keep\fR
+file on the pack\&.
+\fB<pack\-name>\fR
+is the the pack file name without leading directory (e\&.g\&.
+\fBpack\-123\&.pack\fR)\&. The option could be specified multiple times to keep multiple packs\&.
+.RE
+.PP
 \-\-unpack\-unreachable=<when>
 .RS 4
 When loosening unreachable objects, do not bother loosening any objects older than
@@ -186,6 +200,15 @@ When loosening unreachable objects, do not bother loosening any objects older th
 .RS 4
 When used with
 \fB\-ad\fR, any unreachable objects from existing packs will be appended to the end of the packfile instead of being removed\&. In addition, any unreachable loose objects will be packed (and their loose counterparts removed)\&.
+.RE
+.PP
+\-i, \-\-delta\-islands
+.RS 4
+Pass the
+\fB\-\-delta\-islands\fR
+option to
+\fBgit\-pack\-objects\fR, see
+\fBgit-pack-objects\fR(1)\&.
 .RE
 .SH "CONFIGURATION"
 .sp

@@ -2,12 +2,12 @@
 .\"     Title: git-status
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-STATUS" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-STATUS" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -171,7 +171,7 @@ The possible options are:
 .IP \(bu 2.3
 .\}
 \fItraditional\fR
-\- Shows ignored files and directories, unless \-\-untracked\-files=all is specifed, in which case individual files in ignored directories are displayed\&.
+\- Shows ignored files and directories, unless \-\-untracked\-files=all is specified, in which case individual files in ignored directories are displayed\&.
 .RE
 .sp
 .RS 4
@@ -199,7 +199,7 @@ The possible options are:
 .sp
 When
 \fImatching\fR
-mode is specified, paths that explicity match an ignored pattern are shown\&. If a directory matches an ignore pattern, then it is shown, but not paths contained in the ignored directory\&. If a directory does not match an ignore pattern, but all contents are ignored, then the directory is not shown, but all contents are shown\&.
+mode is specified, paths that explicitly match an ignored pattern are shown\&. If a directory matches an ignore pattern, then it is shown, but not paths contained in the ignored directory\&. If a directory does not match an ignore pattern, but all contents are ignored, then the directory is not shown, but all contents are shown\&.
 .RE
 .RE
 .PP
@@ -225,6 +225,20 @@ respectively\&.
 \-\-ahead\-behind, \-\-no\-ahead\-behind
 .RS 4
 Display or do not display detailed ahead/behind counts for the branch relative to its upstream branch\&. Defaults to true\&.
+.RE
+.PP
+\-\-renames, \-\-no\-renames
+.RS 4
+Turn on/off rename detection regardless of user configuration\&. See also
+\fBgit-diff\fR(1)
+\fB\-\-no\-renames\fR\&.
+.RE
+.PP
+\-\-find\-renames[=<n>]
+.RS 4
+Turn on rename detection, optionally setting the similarity threshold\&. See also
+\fBgit-diff\fR(1)
+\fB\-\-find\-renames\fR\&.
 .RE
 .PP
 <pathspec>\&...

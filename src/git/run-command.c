@@ -1,6 +1,6 @@
 #include "cache.h"
 #include "run-command.h"
-#include "exec_cmd.h"
+#include "exec-cmd.h"
 #include "sigchain.h"
 #include "argv-array.h"
 #include "thread-utils.h"
@@ -245,7 +245,7 @@ int sane_execvp(const char *file, char * const argv[])
 static const char **prepare_shell_cmd(struct argv_array *out, const char **argv)
 {
 	if (!argv[0])
-		die("BUG: shell command is empty");
+		BUG("shell command is empty");
 
 	if (strcspn(argv[0], "|&;<>()$`\\\"' \t\n*?[#~=%") != strlen(argv[0])) {
 #ifndef GIT_WINDOWS_NATIVE
@@ -380,10 +380,10 @@ static void child_err_spew(struct child_process *cmd, struct child_err *cerr)
 	set_error_routine(old_errfn);
 }
 
-static void prepare_cmd(struct argv_array *out, const struct child_process *cmd)
+static int prepare_cmd(struct argv_array *out, const struct child_process *cmd)
 {
 	if (!cmd->argv[0])
-		die("BUG: command is empty");
+		BUG("command is empty");
 
 	/*
 	 * Add SHELL_PATH so in the event exec fails with ENOEXEC we can
@@ -403,16 +403,22 @@ static void prepare_cmd(struct argv_array *out, const struct child_process *cmd)
 	/*
 	 * If there are no '/' characters in the command then perform a path
 	 * lookup and use the resolved path as the command to exec.  If there
-	 * are no '/' characters or if the command wasn't found in the path,
-	 * have exec attempt to invoke the command directly.
+	 * are '/' characters, we have exec attempt to invoke the command
+	 * directly.
 	 */
 	if (!strchr(out->argv[1], '/')) {
 		char *program = locate_in_PATH(out->argv[1]);
 		if (program) {
 			free((char *)out->argv[1]);
 			out->argv[1] = program;
+		} else {
+			argv_array_clear(out);
+			errno = ENOENT;
+			return -1;
 		}
 	}
+
+	return 0;
 }
 
 static char **prep_childenv(const char *const *deltaenv)
@@ -471,15 +477,12 @@ struct atfork_state {
 	sigset_t old;
 };
 
-#ifndef NO_PTHREADS
-static void bug_die(int err, const char *msg)
-{
-	if (err) {
-		errno = err;
-		die_errno("BUG: %s", msg);
-	}
-}
-#endif
+#define CHECK_BUG(err, msg) \
+	do { \
+		int e = (err); \
+		if (e) \
+			BUG("%s: %s", msg, strerror(e)); \
+	} while(0)
 
 static void atfork_prepare(struct atfork_state *as)
 {
@@ -491,9 +494,9 @@ static void atfork_prepare(struct atfork_state *as)
 	if (sigprocmask(SIG_SETMASK, &all, &as->old))
 		die_errno("sigprocmask");
 #else
-	bug_die(pthread_sigmask(SIG_SETMASK, &all, &as->old),
+	CHECK_BUG(pthread_sigmask(SIG_SETMASK, &all, &as->old),
 		"blocking all signals");
-	bug_die(pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &as->cs),
+	CHECK_BUG(pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &as->cs),
 		"disabling cancellation");
 #endif
 }
@@ -504,9 +507,9 @@ static void atfork_parent(struct atfork_state *as)
 	if (sigprocmask(SIG_SETMASK, &as->old, NULL))
 		die_errno("sigprocmask");
 #else
-	bug_die(pthread_setcancelstate(as->cs, NULL),
+	CHECK_BUG(pthread_setcancelstate(as->cs, NULL),
 		"re-enabling cancellation");
-	bug_die(pthread_sigmask(SIG_SETMASK, &as->old, NULL),
+	CHECK_BUG(pthread_sigmask(SIG_SETMASK, &as->old, NULL),
 		"restoring signal mask");
 #endif
 }
@@ -621,7 +624,7 @@ static void trace_run_command(const struct child_process *cp)
 	if (!trace_want(&trace_default_key))
 		return;
 
-	strbuf_addf(&buf, "trace: run_command:");
+	strbuf_addstr(&buf, "trace: run_command:");
 	if (cp->dir) {
 		strbuf_addstr(&buf, " cd ");
 		sq_quote_buf_pretty(&buf, cp->dir);
@@ -722,6 +725,14 @@ fail_pipe:
 	struct child_err cerr;
 	struct atfork_state as;
 
+	if (prepare_cmd(&argv, cmd) < 0) {
+		failed_errno = errno;
+		cmd->pid = -1;
+		if (!cmd->silent_exec_failure)
+			error_errno("cannot run %s", cmd->argv[0]);
+		goto end_of_spawn;
+	}
+
 	if (pipe(notify_pipe))
 		notify_pipe[0] = notify_pipe[1] = -1;
 
@@ -732,7 +743,6 @@ fail_pipe:
 		set_cloexec(null_fd);
 	}
 
-	prepare_cmd(&argv, cmd);
 	childenv = prep_childenv(cmd->env);
 	atfork_prepare(&as);
 
@@ -860,6 +870,8 @@ fail_pipe:
 	argv_array_clear(&argv);
 	free(childenv);
 }
+end_of_spawn:
+
 #else
 {
 	int fhin = 0, fhout = 1, fherr = 2;
@@ -967,7 +979,7 @@ int run_command(struct child_process *cmd)
 	int code;
 
 	if (cmd->out < 0 || cmd->err < 0)
-		die("BUG: run_command with a pipe can cause deadlock");
+		BUG("run_command with a pipe can cause deadlock");
 
 	code = start_command(cmd);
 	if (code)
@@ -1216,7 +1228,7 @@ int start_async(struct async *async)
 	{
 		int err = pthread_create(&async->tid, NULL, run_thread, async);
 		if (err) {
-			error_errno("cannot create thread");
+			error(_("cannot create async thread: %s"), strerror(err));
 			goto error;
 		}
 	}
@@ -1246,6 +1258,15 @@ int finish_async(struct async *async)
 	if (pthread_join(async->tid, &ret))
 		error("pthread_join failed");
 	return (int)(intptr_t)ret;
+#endif
+}
+
+int async_with_fork(void)
+{
+#ifdef NO_PTHREADS
+	return 1;
+#else
+	return 0;
 #endif
 }
 
@@ -1557,7 +1578,7 @@ static void pp_init(struct parallel_processes *pp,
 
 	pp->data = data;
 	if (!get_next_task)
-		die("BUG: you need to specify a get_next_task function");
+		BUG("you need to specify a get_next_task function");
 	pp->get_next_task = get_next_task;
 
 	pp->start_failure = start_failure ? start_failure : default_start_failure;
@@ -1619,7 +1640,7 @@ static int pp_start_one(struct parallel_processes *pp)
 		if (pp->children[i].state == GIT_CP_FREE)
 			break;
 	if (i == pp->max_processes)
-		die("BUG: bookkeeping is hard");
+		BUG("bookkeeping is hard");
 
 	code = pp->get_next_task(&pp->children[i].process,
 				 &pp->children[i].err,

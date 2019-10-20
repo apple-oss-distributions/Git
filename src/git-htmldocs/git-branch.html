@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-branch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -754,7 +755,7 @@ git-branch(1) Manual Page
         [(--merged | --no-merged) [&lt;commit&gt;]]
         [--contains [&lt;commit]] [--no-contains [&lt;commit&gt;]]
         [--points-at &lt;object&gt;] [--format=&lt;format&gt;] [&lt;pattern&gt;&#8230;]
-<em>git branch</em> [--track | --no-track] [-l] [-f] &lt;branchname&gt; [&lt;start-point&gt;]
+<em>git branch</em> [--track | --no-track] [-f] &lt;branchname&gt; [&lt;start-point&gt;]
 <em>git branch</em> (--set-upstream-to=&lt;upstream&gt; | -u &lt;upstream&gt;) [&lt;branchname&gt;]
 <em>git branch</em> --unset-upstream [&lt;branchname&gt;]
 <em>git branch</em> (-m | -M) [&lt;oldbranch&gt;] &lt;newbranch&gt;
@@ -840,9 +841,6 @@ way to clean up all obsolete remote-tracking branches.</p></div>
         Shortcut for <code>--delete --force</code>.
 </p>
 </dd>
-<dt class="hdlist1">
--l
-</dt>
 <dt class="hdlist1">
 --create-reflog
 </dt>
@@ -980,6 +978,9 @@ way to clean up all obsolete remote-tracking branches.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+-l
+</dt>
+<dt class="hdlist1">
 --list
 </dt>
 <dd>
@@ -988,9 +989,6 @@ way to clean up all obsolete remote-tracking branches.</p></div>
         branch --list 'maint-*'</code>, list only the branches that match
         the pattern(s).
 </p>
-<div class="paragraph"><p>This should not be confused with <code>git branch -l &lt;branchname&gt;</code>,
-which creates a branch named <code>&lt;branchname&gt;</code> with a reflog.
-See <code>--create-reflog</code> above for details.</p></div>
 </dd>
 <dt class="hdlist1">
 -v
@@ -1198,10 +1196,11 @@ start-point is either a local or remote-tracking branch.</p></div>
         order of the value. You may use the --sort=&lt;key&gt; option
         multiple times, in which case the last key becomes the primary
         key. The keys supported are the same as those in <code>git
-        for-each-ref</code>. Sort order defaults to sorting based on the
+        for-each-ref</code>. Sort order defaults to the value configured for the
+        <code>branch.sort</code> variable if exists, or to sorting based on the
         full refname (including <code>refs/...</code> prefix). This lists
         detached HEAD (if present) first, then local branches and
-        finally remote-tracking branches.
+        finally remote-tracking branches. See <a href="git-config.html">git-config(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1234,7 +1233,7 @@ See <a href="git-config.html">git-config(1)</a>.</p></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_examples">Examples</h2>
+<h2 id="_examples">EXAMPLES</h2>
 <div class="sectionbody">
 <div class="dlist"><dl>
 <dt class="hdlist1">
@@ -1288,7 +1287,7 @@ is currently checked out) does not have all commits from the test branch.
 </div>
 </div>
 <div class="sect1">
-<h2 id="_notes">Notes</h2>
+<h2 id="_notes">NOTES</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>If you are creating a branch that you want to checkout immediately, it is
 easier to use the git checkout command with its <code>-b</code> option to create
@@ -1345,7 +1344,7 @@ a branch?&#8221;</a> in the Git User&#8217;s Manual.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-09-18 07:45:24 JST
 </div>
 </div>
 </body>

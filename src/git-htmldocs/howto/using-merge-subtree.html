@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>How to use the subtree merge strategy</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -756,7 +757,7 @@ branch.</p></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>$ git remote add -f Bproject /path/to/B <b>&lt;1&gt;</b>
-$ git merge -s ours --no-commit Bproject/master <b>&lt;2&gt;</b>
+$ git merge -s ours --no-commit --allow-unrelated-histories Bproject/master <b>&lt;2&gt;</b>
 $ git read-tree --prefix=dir-B/ -u Bproject/master <b>&lt;3&gt;</b>
 $ git commit -m "Merge B project as our subdirectory" <b>&lt;4&gt;</b>
 
@@ -847,7 +848,7 @@ Please note that if the other project merges from you, then it will
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-04-02 12:24:22 PDT
+ 2018-12-09 13:57:26 JST
 </div>
 </div>
 </body>

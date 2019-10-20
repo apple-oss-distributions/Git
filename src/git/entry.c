@@ -1,5 +1,6 @@
 #include "cache.h"
 #include "blob.h"
+#include "object-store.h"
 #include "dir.h"
 #include "streaming.h"
 #include "submodule.h"
@@ -85,7 +86,7 @@ static int create_file(const char *path, unsigned int mode)
 static void *read_blob_entry(const struct cache_entry *ce, unsigned long *size)
 {
 	enum object_type type;
-	void *blob_data = read_sha1_file(ce->oid.hash, &type, size);
+	void *blob_data = read_object_file(&ce->oid, &type, size);
 
 	if (blob_data) {
 		if (type == OBJ_BLOB)
@@ -265,8 +266,8 @@ static int write_entry(struct cache_entry *ce,
 	const struct submodule *sub;
 
 	if (ce_mode_s_ifmt == S_IFREG) {
-		struct stream_filter *filter = get_stream_filter(ce->name,
-								 ce->oid.hash);
+		struct stream_filter *filter = get_stream_filter(state->istate, ce->name,
+								 &ce->oid);
 		if (filter &&
 		    !streaming_write_entry(ce, path, filter,
 					   state, to_tempfile,
@@ -313,14 +314,14 @@ static int write_entry(struct cache_entry *ce,
 		 * Convert from git internal format to working tree format
 		 */
 		if (dco && dco->state != CE_NO_DELAY) {
-			ret = async_convert_to_working_tree(ce->name, new_blob,
+			ret = async_convert_to_working_tree(state->istate, ce->name, new_blob,
 							    size, &buf, dco);
 			if (ret && string_list_has_string(&dco->paths, ce->name)) {
 				free(new_blob);
 				goto delayed;
 			}
 		} else
-			ret = convert_to_working_tree(ce->name, new_blob, size, &buf);
+			ret = convert_to_working_tree(state->istate, ce->name, new_blob, size, &buf);
 
 		if (ret) {
 			free(new_blob);
@@ -398,6 +399,34 @@ static int check_path(const char *path, int len, struct stat *st, int skiplen)
 	return lstat(path, st);
 }
 
+static void mark_colliding_entries(const struct checkout *state,
+				   struct cache_entry *ce, struct stat *st)
+{
+	int i, trust_ino = check_stat;
+
+#if defined(GIT_WINDOWS_NATIVE) || defined(__CYGWIN__)
+	trust_ino = 0;
+#endif
+
+	ce->ce_flags |= CE_MATCHED;
+
+	for (i = 0; i < state->istate->cache_nr; i++) {
+		struct cache_entry *dup = state->istate->cache[i];
+
+		if (dup == ce)
+			break;
+
+		if (dup->ce_flags & (CE_MATCHED | CE_VALID | CE_SKIP_WORKTREE))
+			continue;
+
+		if ((trust_ino && !match_stat_data(&dup->ce_stat_data, st)) ||
+		    (!trust_ino && !fspathcmp(ce->name, dup->name))) {
+			dup->ce_flags |= CE_MATCHED;
+			break;
+		}
+	}
+}
+
 /*
  * Write the contents from ce out to the working tree.
  *
@@ -421,7 +450,8 @@ int checkout_entry(struct cache_entry *ce,
 
 	if (!check_path(path.buf, path.len, &st, state->base_dir_len)) {
 		const struct submodule *sub;
-		unsigned changed = ce_match_stat(ce, &st, CE_MATCH_IGNORE_VALID|CE_MATCH_IGNORE_SKIP_WORKTREE);
+		unsigned changed = ie_match_stat(state->istate, ce, &st,
+						 CE_MATCH_IGNORE_VALID | CE_MATCH_IGNORE_SKIP_WORKTREE);
 		/*
 		 * Needs to be checked before !changed returns early,
 		 * as the possibly empty directory was not changed
@@ -453,6 +483,9 @@ int checkout_entry(struct cache_entry *ce,
 					path.buf);
 			return -1;
 		}
+
+		if (state->clone)
+			mark_colliding_entries(state, ce, &st);
 
 		/*
 		 * We unlink the old file, to get the new one with the

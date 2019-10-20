@@ -1,9 +1,11 @@
 #include "cache.h"
+#include "repository.h"
 #include "refs.h"
 #include "object.h"
 #include "commit.h"
 #include "tag.h"
 #include "packfile.h"
+#include "object-store.h"
 
 /*
  * Create the file "path" by writing to a temporary file and renaming
@@ -54,7 +56,7 @@ static int add_info_ref(const char *path, const struct object_id *oid,
 			int flag, void *cb_data)
 {
 	FILE *fp = cb_data;
-	struct object *o = parse_object(oid);
+	struct object *o = parse_object(the_repository, oid);
 	if (!o)
 		return -1;
 
@@ -62,7 +64,7 @@ static int add_info_ref(const char *path, const struct object_id *oid,
 		return -1;
 
 	if (o->type == OBJ_TAG) {
-		o = deref_tag(o, path, 0);
+		o = deref_tag(the_repository, o, path, 0);
 		if (o)
 			if (fprintf(fp, "%s	%s^{}\n",
 				oid_to_hex(&o->oid), path) < 0)
@@ -90,8 +92,6 @@ static struct pack_info {
 	int old_num;
 	int new_num;
 	int nr_alloc;
-	int nr_heads;
-	unsigned char (*head)[20];
 } **info;
 static int num_pack;
 static const char *objdir;
@@ -199,8 +199,7 @@ static void init_pack_info(const char *infofile, int force)
 	objdir = get_object_directory();
 	objdirlen = strlen(objdir);
 
-	prepare_packed_git();
-	for (p = packed_git; p; p = p->next) {
+	for (p = get_all_packs(the_repository); p; p = p->next) {
 		/* we ignore things on alternate path since they are
 		 * not available to the pullers in general.
 		 */
@@ -210,7 +209,7 @@ static void init_pack_info(const char *infofile, int force)
 	}
 	num_pack = i;
 	info = xcalloc(num_pack, sizeof(struct pack_info *));
-	for (i = 0, p = packed_git; p; p = p->next) {
+	for (i = 0, p = get_all_packs(the_repository); p; p = p->next) {
 		if (!p->pack_local)
 			continue;
 		info[i] = xcalloc(1, sizeof(struct pack_info));
@@ -224,12 +223,9 @@ static void init_pack_info(const char *infofile, int force)
 	else
 		stale = 1;
 
-	for (i = 0; i < num_pack; i++) {
-		if (stale) {
+	for (i = 0; i < num_pack; i++)
+		if (stale)
 			info[i]->old_num = -1;
-			info[i]->nr_heads = 0;
-		}
-	}
 
 	/* renumber them */
 	QSORT(info, num_pack, compare_info);

@@ -198,13 +198,25 @@ test_expect_success '"add" with <branch> omitted' '
 	test_cmp_rev HEAD bat
 '
 
-test_expect_success '"add" auto-vivify does not clobber existing branch' '
-	test_commit c1 &&
-	test_commit c2 &&
-	git branch precious HEAD~1 &&
-	test_must_fail git worktree add precious &&
-	test_cmp_rev HEAD~1 precious &&
-	test_path_is_missing precious
+test_expect_success '"add" checks out existing branch of dwimd name' '
+	git branch dwim HEAD~1 &&
+	git worktree add dwim &&
+	test_cmp_rev HEAD~1 dwim &&
+	(
+		cd dwim &&
+		test_cmp_rev HEAD dwim
+	)
+'
+
+test_expect_success '"add <path>" dwim fails with checked out branch' '
+	git checkout -b test-branch &&
+	test_must_fail git worktree add test-branch &&
+	test_path_is_missing test-branch
+'
+
+test_expect_success '"add --force" with existing dwimd name doesnt die' '
+	git checkout test-branch &&
+	git worktree add --force test-branch
 '
 
 test_expect_success '"add" no auto-vivify with --detach and <branch> omitted' '
@@ -238,6 +250,11 @@ test_expect_success 'add -B' '
 	echo refs/heads/poodle >expected &&
 	test_cmp expected actual &&
 	test_cmp_rev master^ poodle
+'
+
+test_expect_success 'add --quiet' '
+	git worktree add --quiet another-worktree master 2>actual &&
+	test_must_be_empty actual
 '
 
 test_expect_success 'local clone from linked checkout' '
@@ -390,6 +407,26 @@ test_expect_success '"add" <path> <branch> dwims' '
 	)
 '
 
+test_expect_success '"add" <path> <branch> dwims with checkout.defaultRemote' '
+	test_when_finished rm -rf repo_upstream repo_dwim foo &&
+	setup_remote_repo repo_upstream repo_dwim &&
+	git init repo_dwim &&
+	(
+		cd repo_dwim &&
+		git remote add repo_upstream2 ../repo_upstream &&
+		git fetch repo_upstream2 &&
+		test_must_fail git worktree add ../foo foo &&
+		git -c checkout.defaultRemote=repo_upstream worktree add ../foo foo &&
+		git status -uno --porcelain >status.actual &&
+		test_must_be_empty status.actual
+	) &&
+	(
+		cd foo &&
+		test_branch_upstream foo repo_upstream foo &&
+		test_cmp_rev refs/remotes/repo_upstream/foo refs/heads/foo
+	)
+'
+
 test_expect_success 'git worktree add does not match remote' '
 	test_when_finished rm -rf repo_a repo_b foo &&
 	setup_remote_repo repo_a repo_b &&
@@ -465,7 +502,7 @@ post_checkout_hook () {
 test_expect_success '"add" invokes post-checkout hook (branch)' '
 	post_checkout_hook &&
 	{
-		echo $_z40 $(git rev-parse HEAD) 1 &&
+		echo $ZERO_OID $(git rev-parse HEAD) 1 &&
 		echo $(pwd)/.git/worktrees/gumby &&
 		echo $(pwd)/gumby
 	} >hook.expect &&
@@ -476,7 +513,7 @@ test_expect_success '"add" invokes post-checkout hook (branch)' '
 test_expect_success '"add" invokes post-checkout hook (detached)' '
 	post_checkout_hook &&
 	{
-		echo $_z40 $(git rev-parse HEAD) 1 &&
+		echo $ZERO_OID $(git rev-parse HEAD) 1 &&
 		echo $(pwd)/.git/worktrees/grumpy &&
 		echo $(pwd)/grumpy
 	} >hook.expect &&
@@ -494,7 +531,7 @@ test_expect_success '"add --no-checkout" suppresses post-checkout hook' '
 test_expect_success '"add" in other worktree invokes post-checkout hook' '
 	post_checkout_hook &&
 	{
-		echo $_z40 $(git rev-parse HEAD) 1 &&
+		echo $ZERO_OID $(git rev-parse HEAD) 1 &&
 		echo $(pwd)/.git/worktrees/guppy &&
 		echo $(pwd)/guppy
 	} >hook.expect &&
@@ -506,13 +543,31 @@ test_expect_success '"add" in bare repo invokes post-checkout hook' '
 	rm -rf bare &&
 	git clone --bare . bare &&
 	{
-		echo $_z40 $(git --git-dir=bare rev-parse HEAD) 1 &&
+		echo $ZERO_OID $(git --git-dir=bare rev-parse HEAD) 1 &&
 		echo $(pwd)/bare/worktrees/goozy &&
 		echo $(pwd)/goozy
 	} >hook.expect &&
 	post_checkout_hook bare &&
 	git -C bare worktree add --detach ../goozy &&
 	test_cmp hook.expect goozy/hook.actual
+'
+
+test_expect_success '"add" an existing but missing worktree' '
+	git worktree add --detach pneu &&
+	test_must_fail git worktree add --detach pneu &&
+	rm -fr pneu &&
+	test_must_fail git worktree add --detach pneu &&
+	git worktree add --force --detach pneu
+'
+
+test_expect_success '"add" an existing locked but missing worktree' '
+	git worktree add --detach gnoo &&
+	git worktree lock gnoo &&
+	test_when_finished "git worktree unlock gnoo || :" &&
+	rm -fr gnoo &&
+	test_must_fail git worktree add --detach gnoo &&
+	test_must_fail git worktree add --force --detach gnoo &&
+	git worktree add --force --force --detach gnoo
 '
 
 test_done

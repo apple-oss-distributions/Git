@@ -74,8 +74,7 @@ test_expect_success 'add another remote' '
 		git for-each-ref "--format=%(refname)" refs/remotes |
 		sed -e "/^refs\/remotes\/origin\//d" \
 		    -e "/^refs\/remotes\/second\//d" >actual &&
-		>expect &&
-		test_cmp expect actual
+		test_must_be_empty actual
 	)
 '
 
@@ -112,8 +111,7 @@ test_expect_success C_LOCALE_OUTPUT 'remove remote' '
 		check_remote_track origin master side &&
 		git for-each-ref "--format=%(refname)" refs/remotes |
 		sed -e "/^refs\/remotes\/origin\//d" >actual &&
-		>expect &&
-		test_cmp expect actual
+		test_must_be_empty actual
 	)
 '
 
@@ -147,7 +145,7 @@ test_expect_success 'remove remote protects local branches' '
 test_expect_success 'remove errors out early when deleting non-existent branch' '
 	(
 		cd test &&
-		echo "fatal: No such remote: foo" >expect &&
+		echo "fatal: No such remote: '\''foo'\''" >expect &&
 		test_must_fail git remote rm foo 2>actual &&
 		test_i18ncmp expect actual
 	)
@@ -175,7 +173,7 @@ test_expect_success 'remove remote with a branch without configured merge' '
 test_expect_success 'rename errors out early when deleting non-existent branch' '
 	(
 		cd test &&
-		echo "fatal: No such remote: foo" >expect &&
+		echo "fatal: No such remote: '\''foo'\''" >expect &&
 		test_must_fail git remote rename foo bar 2>actual &&
 		test_i18ncmp expect actual
 	)
@@ -348,17 +346,13 @@ URL: $(pwd)/one
 EOF
 
 test_expect_success 'prune --dry-run' '
-	(
-		cd one &&
-		git branch -m side2 side) &&
+	git -C one branch -m side2 side &&
+	test_when_finished "git -C one branch -m side side2" &&
 	(
 		cd test &&
 		git remote prune --dry-run origin >output &&
 		git rev-parse refs/remotes/origin/side2 &&
 		test_must_fail git rev-parse refs/remotes/origin/side &&
-	(
-		cd ../one &&
-		git branch -m side side2) &&
 		test_i18ncmp expect output
 	)
 '
@@ -848,7 +842,7 @@ test_expect_success 'migrate a remote from named file in $GIT_DIR/branches (2)' 
 		git remote rename origin origin &&
 		test_path_is_missing .git/branches/origin &&
 		test "$(git config remote.origin.url)" = "quux" &&
-		test "$(git config remote.origin.fetch)" = "refs/heads/foom:refs/heads/origin"
+		test "$(git config remote.origin.fetch)" = "refs/heads/foom:refs/heads/origin" &&
 		test "$(git config remote.origin.push)" = "HEAD:refs/heads/foom"
 	)
 '
@@ -876,7 +870,7 @@ test_expect_success 'remote prune to cause a dangling symref' '
 		cd eight &&
 		test_must_fail git branch nomore origin
 	) 2>err &&
-	grep "dangling symref" err
+	test_i18ngrep "dangling symref" err
 '
 
 test_expect_success 'show empty remote' '

@@ -3,12 +3,13 @@
 #include "config.h"
 #include "branch.h"
 #include "refs.h"
+#include "refspec.h"
 #include "remote.h"
 #include "commit.h"
 #include "worktree.h"
 
 struct tracking {
-	struct refspec spec;
+	struct refspec_item spec;
 	char *src;
 	const char *remote;
 	int matches;
@@ -24,9 +25,7 @@ static int find_tracked_branch(struct remote *remote, void *priv)
 			tracking->remote = remote->name;
 		} else {
 			free(tracking->spec.src);
-			if (tracking->src) {
-				FREE_AND_NULL(tracking->src);
-			}
+			FREE_AND_NULL(tracking->src);
 		}
 		tracking->spec.src = NULL;
 	}
@@ -218,8 +217,8 @@ int validate_new_branchname(const char *name, struct strbuf *ref, int force)
 static int check_tracking_branch(struct remote *remote, void *cb_data)
 {
 	char *tracking_branch = cb_data;
-	struct refspec query;
-	memset(&query, 0, sizeof(struct refspec));
+	struct refspec_item query;
+	memset(&query, 0, sizeof(struct refspec_item));
 	query.dst = tracking_branch;
 	return !remote_find_tracking(remote, &query);
 }
@@ -301,7 +300,7 @@ void create_branch(const char *name, const char *start_name,
 		break;
 	}
 
-	if ((commit = lookup_commit_reference(&oid)) == NULL)
+	if ((commit = lookup_commit_reference(the_repository, &oid)) == NULL)
 		die(_("Not a valid branch point: '%s'."), start_name);
 	oidcpy(&oid, &commit->object.oid);
 
@@ -339,13 +338,13 @@ void create_branch(const char *name, const char *start_name,
 
 void remove_branch_state(void)
 {
-	unlink(git_path_cherry_pick_head());
-	unlink(git_path_revert_head());
-	unlink(git_path_merge_head());
-	unlink(git_path_merge_rr());
-	unlink(git_path_merge_msg());
-	unlink(git_path_merge_mode());
-	unlink(git_path_squash_msg());
+	unlink(git_path_cherry_pick_head(the_repository));
+	unlink(git_path_revert_head(the_repository));
+	unlink(git_path_merge_head(the_repository));
+	unlink(git_path_merge_rr(the_repository));
+	unlink(git_path_merge_msg(the_repository));
+	unlink(git_path_merge_mode(the_repository));
+	unlink(git_path_squash_msg(the_repository));
 }
 
 void die_if_checked_out(const char *branch, int ignore_current_worktree)

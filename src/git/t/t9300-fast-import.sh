@@ -1185,7 +1185,7 @@ test_expect_success PIPE 'N: empty directory reads as missing' '
 	test_cmp expect.response response &&
 	git rev-list read-empty |
 	git diff-tree -r --root --stdin |
-	sed "s/$_x40/OBJNAME/g" >actual &&
+	sed "s/$OID_REGEX/OBJNAME/g" >actual &&
 	test_cmp expect actual
 '
 
@@ -1271,7 +1271,7 @@ test_expect_success 'N: delete directory by copying' '
 	git fast-import <input &&
 	git rev-list N-delete |
 		git diff-tree -r --stdin --root --always |
-		sed -e "s/$_x40/OBJID/g" >actual &&
+		sed -e "s/$OID_REGEX/OBJID/g" >actual &&
 	test_cmp expect actual
 '
 
@@ -1558,7 +1558,7 @@ test_expect_success 'O: blank lines not necessary after other commands' '
 	INPUT_END
 
 	git fast-import <input &&
-	test 8 = $(find .git/objects/pack -type f | wc -l) &&
+	test 8 = $(find .git/objects/pack -type f | grep -v multi-pack-index | wc -l) &&
 	test $(git rev-parse refs/tags/O3-2nd) = $(git rev-parse O3^) &&
 	git log --reverse --pretty=oneline O3 | sed s/^.*z// >actual &&
 	test_cmp expect actual
@@ -2191,12 +2191,11 @@ test_expect_success 'R: --import-marks-if-exists' '
 
 test_expect_success 'R: feature import-marks-if-exists' '
 	rm -f io.marks &&
-	>expect &&
 
 	git fast-import --export-marks=io.marks <<-\EOF &&
 	feature import-marks-if-exists=not_io.marks
 	EOF
-	test_cmp expect io.marks &&
+	test_must_be_empty io.marks &&
 
 	blob=$(echo hi | git hash-object --stdin) &&
 
@@ -2227,13 +2226,11 @@ test_expect_success 'R: feature import-marks-if-exists' '
 	EOF
 	test_cmp expect io.marks &&
 
-	>expect &&
-
 	git fast-import --import-marks-if-exists=not_io.marks \
 			--export-marks=io.marks <<-\EOF &&
 	feature import-marks-if-exists=io.marks
 	EOF
-	test_cmp expect io.marks
+	test_must_be_empty io.marks
 '
 
 test_expect_success 'R: import to output marks works without any content' '
@@ -2602,7 +2599,7 @@ test_expect_success 'R: terminating "done" within commit' '
 	EOF
 	git rev-list done-ends |
 	git diff-tree -r --stdin --root --always |
-	sed -e "s/$_x40/OBJID/g" >actual &&
+	sed -e "s/$OID_REGEX/OBJID/g" >actual &&
 	test_cmp expect actual
 '
 
@@ -2654,7 +2651,7 @@ test_expect_success 'R: corrupt lines do not mess marks file' '
 ##
 test_expect_success 'R: blob bigger than threshold' '
 	blobsize=$((2*1024*1024 + 53)) &&
-	test-genrandom bar $blobsize >expect &&
+	test-tool genrandom bar $blobsize >expect &&
 	cat >input <<-INPUT_END &&
 	commit refs/heads/big-file
 	committer $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> $GIT_COMMITTER_DATE
@@ -3147,7 +3144,10 @@ background_import_then_checkpoint () {
 	echo $! >V.pid
 	# We don't mind if fast-import has already died by the time the test
 	# ends.
-	test_when_finished "exec 8>&-; exec 9>&-; kill $(cat V.pid) || true"
+	test_when_finished "
+		exec 8>&-; exec 9>&-;
+		kill $(cat V.pid) && wait $(cat V.pid)
+		true"
 
 	# Start in the background to ensure we adhere strictly to (blocking)
 	# pipes writing sequence. We want to assume that the write below could

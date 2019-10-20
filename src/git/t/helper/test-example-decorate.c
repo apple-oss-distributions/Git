@@ -1,8 +1,9 @@
+#include "test-tool.h"
 #include "cache.h"
 #include "object.h"
 #include "decorate.h"
 
-int cmd_main(int argc, const char **argv)
+int cmd__example_decorate(int argc, const char **argv)
 {
 	struct decoration n;
 	struct object_id one_oid = { {1} };
@@ -29,10 +30,10 @@ int cmd_main(int argc, const char **argv)
 	two = lookup_unknown_object(two_oid.hash);
 	ret = add_decoration(&n, one, &decoration_a);
 	if (ret)
-		die("BUG: when adding a brand-new object, NULL should be returned");
+		BUG("when adding a brand-new object, NULL should be returned");
 	ret = add_decoration(&n, two, NULL);
 	if (ret)
-		die("BUG: when adding a brand-new object, NULL should be returned");
+		BUG("when adding a brand-new object, NULL should be returned");
 
 	/*
 	 * When re-adding an already existing object, the old decoration is
@@ -40,10 +41,10 @@ int cmd_main(int argc, const char **argv)
 	 */
 	ret = add_decoration(&n, one, NULL);
 	if (ret != &decoration_a)
-		die("BUG: when readding an already existing object, existing decoration should be returned");
+		BUG("when readding an already existing object, existing decoration should be returned");
 	ret = add_decoration(&n, two, &decoration_b);
 	if (ret)
-		die("BUG: when readding an already existing object, existing decoration should be returned");
+		BUG("when readding an already existing object, existing decoration should be returned");
 
 	/*
 	 * Lookup returns the added declarations, or NULL if the object was
@@ -51,14 +52,14 @@ int cmd_main(int argc, const char **argv)
 	 */
 	ret = lookup_decoration(&n, one);
 	if (ret)
-		die("BUG: lookup should return added declaration");
+		BUG("lookup should return added declaration");
 	ret = lookup_decoration(&n, two);
 	if (ret != &decoration_b)
-		die("BUG: lookup should return added declaration");
+		BUG("lookup should return added declaration");
 	three = lookup_unknown_object(three_oid.hash);
 	ret = lookup_decoration(&n, three);
 	if (ret)
-		die("BUG: lookup for unknown object should return NULL");
+		BUG("lookup for unknown object should return NULL");
 
 	/*
 	 * The user can also loop through all entries.
@@ -68,7 +69,7 @@ int cmd_main(int argc, const char **argv)
 			objects_noticed++;
 	}
 	if (objects_noticed != 2)
-		die("BUG: should have 2 objects");
+		BUG("should have 2 objects");
 
 	return 0;
 }

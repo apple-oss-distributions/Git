@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-format-patch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -762,6 +763,8 @@ git-format-patch(1) Manual Page
                    [(--reroll-count|-v) &lt;n&gt;]
                    [--to=&lt;email&gt;] [--cc=&lt;email&gt;]
                    [--[no-]cover-letter] [--quiet] [--notes[=&lt;ref&gt;]]
+                   [--interdiff=&lt;previous&gt;]
+                   [--range-diff=&lt;previous&gt; [--creation-factor=&lt;percent&gt;]]
                    [--progress]
                    [&lt;common diff options&gt;]
                    [ &lt;since&gt; | &lt;revision range&gt; ]</pre>
@@ -795,7 +798,7 @@ Generic &lt;revision range&gt; expression (see "SPECIFYING
 </ol></div>
 <div class="paragraph"><p>The first rule takes precedence in the case of a single &lt;commit&gt;.  To
 apply the second rule, i.e., format everything since the beginning of
-history up until &lt;commit&gt;, use the <em>--root</em> option: <code>git format-patch
+history up until &lt;commit&gt;, use the <code>--root</code> option: <code>git format-patch
 --root &lt;commit&gt;</code>.  If you want to format only &lt;commit&gt; itself, you
 can do this with <code>git format-patch -1 &lt;commit&gt;</code>.</p></div>
 <div class="paragraph"><p>By default, each output file is numbered sequentially from 1, and uses the
@@ -854,7 +857,7 @@ reference.</p></div>
 </dt>
 <dd>
 <p>
-        Enable the heuristic that shift diff hunk boundaries to make patches
+        Enable the heuristic that shifts diff hunk boundaries to make patches
         easier to read. This is the default.
 </p>
 </dd>
@@ -950,7 +953,7 @@ diff" algorithm internally.</p></div>
 </dd>
 </dl></div>
 </div></div>
-<div class="paragraph"><p>For instance, if you configured diff.algorithm variable to a
+<div class="paragraph"><p>For instance, if you configured the <code>diff.algorithm</code> variable to a
 non-default value and want to use the default one, then you
 have to use <code>--diff-algorithm=default</code> option.</p></div>
 </dd>
@@ -985,7 +988,7 @@ have to use <code>--diff-algorithm=default</code> option.</p></div>
         as file creations or deletions ("new" or "gone", optionally "+l"
         if it&#8217;s a symlink) and mode changes ("+x" or "-x" for adding
         or removing executable bit respectively) in diffstat. The
-        information is put betwen the filename part and the graph
+        information is put between the filename part and the graph
         part. Implies <code>--stat</code>.
 </p>
 </dd>
@@ -1292,7 +1295,7 @@ Each other line contains a single pattern.
 </ul></div>
 </div></div>
 <div class="paragraph"><p>Patterns have the same syntax and semantics as patterns used for
-fnmantch(3) without the FNM_PATHNAME flag, except a pathname also
+fnmatch(3) without the FNM_PATHNAME flag, except a pathname also
 matches a pattern if removing any number of the final pathname
 components matches the pattern.  For example, the pattern "<code>foo*bar</code>"
 matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<code>foobarx</code>".</p></div>
@@ -1313,7 +1316,7 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </dt>
 <dd>
 <p>
-        Ignore carrige-return at the end of line when doing a comparison.
+        Ignore carriage-return at the end of line when doing a comparison.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1753,6 +1756,52 @@ feeding the result to <code>git send-email</code>.</p></div>
         In addition to the patches, generate a cover letter file
         containing the branch description, shortlog and the overall diffstat.  You can
         fill in a description in the file before sending it out.
+</p>
+</dd>
+<dt class="hdlist1">
+--interdiff=&lt;previous&gt;
+</dt>
+<dd>
+<p>
+        As a reviewer aid, insert an interdiff into the cover letter,
+        or as commentary of the lone patch of a 1-patch series, showing
+        the differences between the previous version of the patch series and
+        the series currently being formatted. <code>previous</code> is a single revision
+        naming the tip of the previous series which shares a common base with
+        the series being formatted (for example <code>git format-patch
+        --cover-letter --interdiff=feature/v1 -3 feature/v2</code>).
+</p>
+</dd>
+<dt class="hdlist1">
+--range-diff=&lt;previous&gt;
+</dt>
+<dd>
+<p>
+        As a reviewer aid, insert a range-diff (see <a href="git-range-diff.html">git-range-diff(1)</a>)
+        into the cover letter, or as commentary of the lone patch of a
+        1-patch series, showing the differences between the previous
+        version of the patch series and the series currently being formatted.
+        <code>previous</code> can be a single revision naming the tip of the previous
+        series if it shares a common base with the series being formatted (for
+        example <code>git format-patch --cover-letter --range-diff=feature/v1 -3
+        feature/v2</code>), or a revision range if the two versions of the series are
+        disjoint (for example <code>git format-patch --cover-letter
+        --range-diff=feature/v1~3..feature/v1 -3 feature/v2</code>).
+</p>
+<div class="paragraph"><p>Note that diff options passed to the command affect how the primary
+product of <code>format-patch</code> is generated, and they are not passed to
+the underlying <code>range-diff</code> machinery used to generate the cover-letter
+material (this may change in the future).</p></div>
+</dd>
+<dt class="hdlist1">
+--creation-factor=&lt;percent&gt;
+</dt>
+<dd>
+<p>
+        Used with <code>--range-diff</code>, tweak the heuristic which matches up commits
+        between the previous and current series of patches by adjusting the
+        creation/deletion cost fudge factor. See <a href="git-range-diff.html">git-range-diff(1)</a>)
+        for details.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2311,7 +2360,7 @@ as e-mailable patches:
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-12-01 23:35:58 JST
 </div>
 </div>
 </body>

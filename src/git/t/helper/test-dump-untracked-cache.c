@@ -1,3 +1,4 @@
+#include "test-tool.h"
 #include "cache.h"
 #include "dir.h"
 
@@ -23,7 +24,7 @@ static void dump(struct untracked_cache_dir *ucd, struct strbuf *base)
 	len = base->len;
 	strbuf_addf(base, "%s/", ucd->name);
 	printf("%s %s", base->buf,
-	       sha1_to_hex(ucd->exclude_sha1));
+	       oid_to_hex(&ucd->exclude_oid));
 	if (ucd->recurse)
 		fputs(" recurse", stdout);
 	if (ucd->check_only)
@@ -38,7 +39,7 @@ static void dump(struct untracked_cache_dir *ucd, struct strbuf *base)
 	strbuf_setlen(base, len);
 }
 
-int cmd_main(int ac, const char **av)
+int cmd__dump_untracked_cache(int ac, const char **av)
 {
 	struct untracked_cache *uc;
 	struct strbuf base = STRBUF_INIT;

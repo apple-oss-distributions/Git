@@ -154,6 +154,7 @@ appropriately before running "make".
 	As the names depend on the tests' file names, it is safe to
 	run the tests with this option in parallel.
 
+-V::
 --verbose-log::
 	Write verbose output to the same logfile as `--tee`, but do
 	_not_ write it to stdout. Unlike `--tee --verbose`, this option
@@ -293,6 +294,70 @@ and know what setup is needed for it.  Or when you want to run
 everything up to a certain test.
 
 
+Running tests with special setups
+---------------------------------
+
+The whole test suite could be run to test some special features
+that cannot be easily covered by a few specific test cases. These
+could be enabled by running the test suite with correct GIT_TEST_
+environment set.
+
+GIT_TEST_GETTEXT_POISON=<non-empty?> turns all strings marked for
+translation into gibberish if non-empty (think "test -n"). Used for
+spotting those tests that need to be marked with a C_LOCALE_OUTPUT
+prerequisite when adding more strings for translation. See "Testing
+marked strings" in po/README for details.
+
+GIT_TEST_SPLIT_INDEX=<boolean> forces split-index mode on the whole
+test suite. Accept any boolean values that are accepted by git-config.
+
+GIT_TEST_FULL_IN_PACK_ARRAY=<boolean> exercises the uncommon
+pack-objects code path where there are more than 1024 packs even if
+the actual number of packs in repository is below this limit. Accept
+any boolean values that are accepted by git-config.
+
+GIT_TEST_OE_SIZE=<n> exercises the uncommon pack-objects code path
+where we do not cache object size in memory and read it from existing
+packs on demand. This normally only happens when the object size is
+over 2GB. This variable forces the code path on any object larger than
+<n> bytes.
+
+GIT_TEST_OE_DELTA_SIZE=<n> exercises the uncommon pack-objects code
+path where deltas larger than this limit require extra memory
+allocation for bookkeeping.
+
+GIT_TEST_VALIDATE_INDEX_CACHE_ENTRIES=<boolean> checks that cache-tree
+records are valid when the index is written out or after a merge. This
+is mostly to catch missing invalidation. Default is true.
+
+GIT_TEST_COMMIT_GRAPH=<boolean>, when true, forces the commit-graph to
+be written after every 'git commit' command, and overrides the
+'core.commitGraph' setting to true.
+
+GIT_TEST_FSMONITOR=$PWD/t7519/fsmonitor-all exercises the fsmonitor
+code path for utilizing a file system monitor to speed up detecting
+new or changed files.
+
+GIT_TEST_INDEX_VERSION=<n> exercises the index read/write code path
+for the index version specified.  Can be set to any valid version
+(currently 2, 3, or 4).
+
+GIT_TEST_PRELOAD_INDEX=<boolean> exercises the preload-index code path
+by overriding the minimum number of cache entries required per thread.
+
+GIT_TEST_REBASE_USE_BUILTIN=<boolean>, when false, disables the
+builtin version of git-rebase. See 'rebase.useBuiltin' in
+git-config(1).
+
+GIT_TEST_INDEX_THREADS=<n> enables exercising the multi-threaded loading
+of the index for the whole test suite by bypassing the default number of
+cache entries and thread minimums. Setting this to 1 will make the
+index loading single threaded.
+
+GIT_TEST_MULTI_PACK_INDEX=<boolean>, when true, forces the multi-pack-
+index to be written after every 'git repack' command, and overrides the
+'core.multiPackIndex' setting to true.
+
 Naming Tests
 ------------
 
@@ -367,13 +432,13 @@ This test harness library does the following things:
    consistently when command line arguments --verbose (or -v),
    --debug (or -d), and --immediate (or -i) is given.
 
-Do's, don'ts & things to keep in mind
--------------------------------------
+Do's & don'ts
+-------------
 
 Here are a few examples of things you probably should and shouldn't do
 when writing tests.
 
-Do:
+Here are the "do's:"
 
  - Put all code inside test_expect_success and other assertions.
 
@@ -418,16 +483,21 @@ Do:
    Windows, where the shell (MSYS bash) mangles absolute path names.
    For details, see the commit message of 4114156ae9.
 
-Don't:
+ - Remember that inside the <script> part, the standard output and
+   standard error streams are discarded, and the test harness only
+   reports "ok" or "not ok" to the end user running the tests. Under
+   --verbose, they are shown to help debug the tests.
 
- - exit() within a <script> part.
+And here are the "don'ts:"
+
+ - Don't exit() within a <script> part.
 
    The harness will catch this as a programming error of the test.
    Use test_done instead if you need to stop the tests early (see
    "Skipping tests" below).
 
- - use '! git cmd' when you want to make sure the git command exits
-   with failure in a controlled way by calling "die()".  Instead,
+ - Don't use '! git cmd' when you want to make sure the git command
+   exits with failure in a controlled way by calling "die()".  Instead,
    use 'test_must_fail git cmd'.  This will signal a failure if git
    dies in an unexpected way (e.g. segfault).
 
@@ -435,8 +505,35 @@ Don't:
    platform commands; just use '! cmd'.  We are not in the business
    of verifying that the world given to us sanely works.
 
- - use perl without spelling it as "$PERL_PATH". This is to help our
-   friends on Windows where the platform Perl often adds CR before
+ - Don't feed the output of a git command to a pipe, as in:
+
+     git -C repo ls-files |
+     xargs -n 1 basename |
+     grep foo
+
+   which will discard git's exit code and may mask a crash. In the
+   above example, all exit codes are ignored except grep's.
+
+   Instead, write the output of that command to a temporary
+   file with ">" or assign it to a variable with "x=$(git ...)" rather
+   than pipe it.
+
+ - Don't use command substitution in a way that discards git's exit
+   code. When assigning to a variable, the exit code is not discarded,
+   e.g.:
+
+     x=$(git cat-file -p $sha) &&
+     ...
+
+   is OK because a crash in "git cat-file" will cause the "&&" chain
+   to fail, but:
+
+     test "refs/heads/foo" = "$(git symbolic-ref HEAD)"
+
+   is not OK and a crash in git could go undetected.
+
+ - Don't use perl without spelling it as "$PERL_PATH". This is to help
+   our friends on Windows where the platform Perl often adds CR before
    the end of line, and they bundle Git with a version of Perl that
    does not do so, whose path is specified with $PERL_PATH. Note that we
    provide a "perl" function which uses $PERL_PATH under the hood, so
@@ -444,17 +541,17 @@ Don't:
    (but you do, for example, on a shebang line or in a sub script
    created via "write_script").
 
- - use sh without spelling it as "$SHELL_PATH", when the script can
-   be misinterpreted by broken platform shell (e.g. Solaris).
+ - Don't use sh without spelling it as "$SHELL_PATH", when the script
+   can be misinterpreted by broken platform shell (e.g. Solaris).
 
- - chdir around in tests.  It is not sufficient to chdir to
+ - Don't chdir around in tests.  It is not sufficient to chdir to
    somewhere and then chdir back to the original location later in
    the test, as any intermediate step can fail and abort the test,
    causing the next test to start in an unexpected directory.  Do so
    inside a subshell if necessary.
 
- - save and verify the standard error of compound commands, i.e. group
-   commands, subshells, and shell functions (except test helper
+ - Don't save and verify the standard error of compound commands, i.e.
+   group commands, subshells, and shell functions (except test helper
    functions like 'test_must_fail') like this:
 
      ( cd dir && git cmd ) 2>error &&
@@ -469,7 +566,7 @@ Don't:
      ( cd dir && git cmd 2>../error ) &&
      test_cmp expect error
 
- - Break the TAP output
+ - Don't break the TAP output
 
    The raw output from your test may be interpreted by a TAP harness. TAP
    harnesses will ignore everything they don't know about, but don't step
@@ -488,13 +585,6 @@ Don't:
    (see https://metacpan.org/pod/TAP::Parser::Grammar#TAP-GRAMMAR)
    but the best indication is to just run the tests with prove(1),
    it'll complain if anything is amiss.
-
-Keep in mind:
-
- - Inside the <script> part, the standard output and standard error
-   streams are discarded, and the test harness only reports "ok" or
-   "not ok" to the end user running the tests. Under --verbose, they
-   are shown to help debugging the tests.
 
 
 Skipping tests
@@ -779,6 +869,28 @@ library for your script to use.
    Sometimes it is possible to split a test in a part that does not need
    the symbolic link in the file system and a part that does; then only
    the latter part need be protected by a SYMLINKS prerequisite (see below).
+
+ - test_oid_init
+
+   This function loads facts and useful object IDs related to the hash
+   algorithm(s) in use from the files in t/oid-info.
+
+ - test_oid_cache
+
+   This function reads per-hash algorithm information from standard
+   input (usually a heredoc) in the format described in
+   t/oid-info/README.  This is useful for test-specific values, such as
+   object IDs, which must vary based on the hash algorithm.
+
+   Certain fixed values, such as hash sizes and common placeholder
+   object IDs, can be loaded with test_oid_init (described above).
+
+ - test_oid <key>
+
+   This function looks up a value for the hash algorithm in use, based
+   on the key given.  The value must have been loaded using
+   test_oid_init or test_oid_cache.  Providing an unknown key is an
+   error.
 
 Prerequisites
 -------------

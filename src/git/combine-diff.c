@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "object-store.h"
 #include "commit.h"
 #include "blob.h"
 #include "diff.h"
@@ -284,7 +285,8 @@ static struct lline *coalesce_lines(struct lline *base, int *lenbase,
 	return base;
 }
 
-static char *grab_blob(const struct object_id *oid, unsigned int mode,
+static char *grab_blob(struct repository *r,
+		       const struct object_id *oid, unsigned int mode,
 		       unsigned long *size, struct userdiff_driver *textconv,
 		       const char *path)
 {
@@ -303,10 +305,10 @@ static char *grab_blob(const struct object_id *oid, unsigned int mode,
 	} else if (textconv) {
 		struct diff_filespec *df = alloc_filespec(path);
 		fill_filespec(df, oid, 1, mode);
-		*size = fill_textconv(textconv, df, &blob);
+		*size = fill_textconv(r, textconv, df, &blob);
 		free_filespec(df);
 	} else {
-		blob = read_sha1_file(oid->hash, &type, size);
+		blob = read_object_file(oid, &type, size);
 		if (type != OBJ_BLOB)
 			die("object '%s' is not a blob!", oid_to_hex(oid));
 	}
@@ -343,38 +345,43 @@ struct combine_diff_state {
 	struct sline *lost_bucket;
 };
 
+static void consume_hunk(void *state_,
+			 long ob, long on,
+			 long nb, long nn,
+			 const char *funcline, long funclen)
+{
+	struct combine_diff_state *state = state_;
+
+	state->ob = ob;
+	state->on = on;
+	state->nb = nb;
+	state->nn = nn;
+	state->lno = state->nb;
+	if (state->nn == 0) {
+		/* @@ -X,Y +N,0 @@ removed Y lines
+		 * that would have come *after* line N
+		 * in the result.  Our lost buckets hang
+		 * to the line after the removed lines,
+		 *
+		 * Note that this is correct even when N == 0,
+		 * in which case the hunk removes the first
+		 * line in the file.
+		 */
+		state->lost_bucket = &state->sline[state->nb];
+		if (!state->nb)
+			state->nb = 1;
+	} else {
+		state->lost_bucket = &state->sline[state->nb-1];
+	}
+	if (!state->sline[state->nb-1].p_lno)
+		state->sline[state->nb-1].p_lno =
+			xcalloc(state->num_parent, sizeof(unsigned long));
+	state->sline[state->nb-1].p_lno[state->n] = state->ob;
+}
+
 static void consume_line(void *state_, char *line, unsigned long len)
 {
 	struct combine_diff_state *state = state_;
-	if (5 < len && !memcmp("@@ -", line, 4)) {
-		if (parse_hunk_header(line, len,
-				      &state->ob, &state->on,
-				      &state->nb, &state->nn))
-			return;
-		state->lno = state->nb;
-		if (state->nn == 0) {
-			/* @@ -X,Y +N,0 @@ removed Y lines
-			 * that would have come *after* line N
-			 * in the result.  Our lost buckets hang
-			 * to the line after the removed lines,
-			 *
-			 * Note that this is correct even when N == 0,
-			 * in which case the hunk removes the first
-			 * line in the file.
-			 */
-			state->lost_bucket = &state->sline[state->nb];
-			if (!state->nb)
-				state->nb = 1;
-		} else {
-			state->lost_bucket = &state->sline[state->nb-1];
-		}
-		if (!state->sline[state->nb-1].p_lno)
-			state->sline[state->nb-1].p_lno =
-				xcalloc(state->num_parent,
-					sizeof(unsigned long));
-		state->sline[state->nb-1].p_lno[state->n] = state->ob;
-		return;
-	}
 	if (!state->lost_bucket)
 		return; /* not in any hunk yet */
 	switch (line[0]) {
@@ -388,7 +395,8 @@ static void consume_line(void *state_, char *line, unsigned long len)
 	}
 }
 
-static void combine_diff(const struct object_id *parent, unsigned int mode,
+static void combine_diff(struct repository *r,
+			 const struct object_id *parent, unsigned int mode,
 			 mmfile_t *result_file,
 			 struct sline *sline, unsigned int cnt, int n,
 			 int num_parent, int result_deleted,
@@ -406,7 +414,7 @@ static void combine_diff(const struct object_id *parent, unsigned int mode,
 	if (result_deleted)
 		return; /* result deleted */
 
-	parent_file.ptr = grab_blob(parent, mode, &sz, textconv, path);
+	parent_file.ptr = grab_blob(r, parent, mode, &sz, textconv, path);
 	parent_file.size = sz;
 	memset(&xpp, 0, sizeof(xpp));
 	xpp.flags = flags;
@@ -418,8 +426,8 @@ static void combine_diff(const struct object_id *parent, unsigned int mode,
 	state.num_parent = num_parent;
 	state.n = n;
 
-	if (xdi_diff_outf(&parent_file, result_file, consume_line, &state,
-			  &xpp, &xecfg))
+	if (xdi_diff_outf(&parent_file, result_file, consume_hunk,
+			  consume_line, &state, &xpp, &xecfg))
 		die("unable to generate combined diff for %s",
 		    oid_to_hex(parent));
 	free(parent_file.ptr);
@@ -915,11 +923,11 @@ static void show_combined_header(struct combine_diff_path *elem,
 			 "", elem->path, line_prefix, c_meta, c_reset);
 	printf("%s%sindex ", line_prefix, c_meta);
 	for (i = 0; i < num_parent; i++) {
-		abb = find_unique_abbrev(elem->parent[i].oid.hash,
+		abb = find_unique_abbrev(&elem->parent[i].oid,
 					 abbrev);
 		printf("%s%s", i ? "," : "", abb);
 	}
-	abb = find_unique_abbrev(elem->oid.hash, abbrev);
+	abb = find_unique_abbrev(&elem->oid, abbrev);
 	printf("..%s%s\n", abb, c_reset);
 
 	if (mode_differs) {
@@ -984,7 +992,7 @@ static void show_patch_diff(struct combine_diff_path *elem, int num_parent,
 	const char *line_prefix = diff_line_prefix(opt);
 
 	context = opt->context;
-	userdiff = userdiff_find_by_path(elem->path);
+	userdiff = userdiff_find_by_path(opt->repo->index, elem->path);
 	if (!userdiff)
 		userdiff = userdiff_find_by_name("default");
 	if (opt->flags.allow_textconv)
@@ -992,7 +1000,7 @@ static void show_patch_diff(struct combine_diff_path *elem, int num_parent,
 
 	/* Read the result of merge first */
 	if (!working_tree_file)
-		result = grab_blob(&elem->oid, elem->mode, &result_size,
+		result = grab_blob(opt->repo, &elem->oid, elem->mode, &result_size,
 				   textconv, elem->path);
 	else {
 		/* Used by diff-tree to read from the working tree */
@@ -1015,15 +1023,16 @@ static void show_patch_diff(struct combine_diff_path *elem, int num_parent,
 		} else if (S_ISDIR(st.st_mode)) {
 			struct object_id oid;
 			if (resolve_gitlink_ref(elem->path, "HEAD", &oid) < 0)
-				result = grab_blob(&elem->oid, elem->mode,
-						   &result_size, NULL, NULL);
+				result = grab_blob(opt->repo, &elem->oid,
+						   elem->mode, &result_size,
+						   NULL, NULL);
 			else
-				result = grab_blob(&oid, elem->mode,
+				result = grab_blob(opt->repo, &oid, elem->mode,
 						   &result_size, NULL, NULL);
 		} else if (textconv) {
 			struct diff_filespec *df = alloc_filespec(elem->path);
 			fill_filespec(df, &null_oid, 0, st.st_mode);
-			result_size = fill_textconv(textconv, df, &result);
+			result_size = fill_textconv(opt->repo, textconv, df, &result);
 			free_filespec(df);
 		} else if (0 <= (fd = open(elem->path, O_RDONLY))) {
 			size_t len = xsize_t(st.st_size);
@@ -1053,7 +1062,8 @@ static void show_patch_diff(struct combine_diff_path *elem, int num_parent,
 			if (is_file) {
 				struct strbuf buf = STRBUF_INIT;
 
-				if (convert_to_git(&the_index, elem->path, result, len, &buf, global_conv_flags_eol)) {
+				if (convert_to_git(rev->diffopt.repo->index,
+						   elem->path, result, len, &buf, global_conv_flags_eol)) {
 					free(result);
 					result = strbuf_detach(&buf, &len);
 					result_size = len;
@@ -1088,7 +1098,8 @@ static void show_patch_diff(struct combine_diff_path *elem, int num_parent,
 		for (i = 0; !is_binary && i < num_parent; i++) {
 			char *buf;
 			unsigned long size;
-			buf = grab_blob(&elem->parent[i].oid,
+			buf = grab_blob(opt->repo,
+					&elem->parent[i].oid,
 					elem->parent[i].mode,
 					&size, NULL, NULL);
 			if (buffer_is_binary(buf, size))
@@ -1137,14 +1148,15 @@ static void show_patch_diff(struct combine_diff_path *elem, int num_parent,
 	for (i = 0; i < num_parent; i++) {
 		int j;
 		for (j = 0; j < i; j++) {
-			if (!oidcmp(&elem->parent[i].oid,
-				     &elem->parent[j].oid)) {
+			if (oideq(&elem->parent[i].oid,
+				  &elem->parent[j].oid)) {
 				reuse_combine_diff(sline, cnt, i, j);
 				break;
 			}
 		}
 		if (i <= j)
-			combine_diff(&elem->parent[i].oid,
+			combine_diff(opt->repo,
+				     &elem->parent[i].oid,
 				     elem->parent[i].mode,
 				     &result_file, sline,
 				     cnt, i, num_parent, result_deleted,

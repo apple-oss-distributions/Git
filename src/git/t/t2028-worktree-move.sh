@@ -72,12 +72,11 @@ test_expect_success 'move locked worktree' '
 '
 
 test_expect_success 'move worktree' '
-	toplevel="$(pwd)" &&
 	git worktree move source destination &&
 	test_path_is_missing source &&
 	git worktree list --porcelain >out &&
-	grep "^worktree.*/destination" out &&
-	! grep "^worktree.*/source" out &&
+	grep "^worktree.*/destination$" out &&
+	! grep "^worktree.*/source$" out &&
 	git -C destination log --format=%s >actual2 &&
 	echo init >expected2 &&
 	test_cmp expected2 actual2
@@ -93,10 +92,24 @@ test_expect_success 'move worktree to another dir' '
 	test_when_finished "git worktree move some-dir/destination destination" &&
 	test_path_is_missing destination &&
 	git worktree list --porcelain >out &&
-	grep "^worktree.*/some-dir/destination" out &&
+	grep "^worktree.*/some-dir/destination$" out &&
 	git -C some-dir/destination log --format=%s >actual2 &&
 	echo init >expected2 &&
 	test_cmp expected2 actual2
+'
+
+test_expect_success 'move locked worktree (force)' '
+	test_when_finished "
+		git worktree unlock flump || :
+		git worktree remove flump || :
+		git worktree unlock ploof || :
+		git worktree remove ploof || :
+		" &&
+	git worktree add --detach flump &&
+	git worktree lock flump &&
+	test_must_fail git worktree move flump ploof" &&
+	test_must_fail git worktree move --force flump ploof" &&
+	git worktree move --force --force flump ploof
 '
 
 test_expect_success 'remove main worktree' '
@@ -140,6 +153,36 @@ test_expect_success 'NOT remove missing-but-locked worktree' '
 	mv gone-but-locked really-gone-now &&
 	test_must_fail git worktree remove gone-but-locked &&
 	test_path_is_dir .git/worktrees/gone-but-locked
+'
+
+test_expect_success 'proper error when worktree not found' '
+	for i in noodle noodle/bork
+	do
+		test_must_fail git worktree lock $i 2>err &&
+		test_i18ngrep "not a working tree" err || return 1
+	done
+'
+
+test_expect_success 'remove locked worktree (force)' '
+	git worktree add --detach gumby &&
+	test_when_finished "git worktree remove gumby || :" &&
+	git worktree lock gumby &&
+	test_when_finished "git worktree unlock gumby || :" &&
+	test_must_fail git worktree remove gumby &&
+	test_must_fail git worktree remove --force gumby &&
+	git worktree remove --force --force gumby
+'
+
+test_expect_success 'remove cleans up .git/worktrees when empty' '
+	git init moog &&
+	(
+		cd moog &&
+		test_commit bim &&
+		git worktree add --detach goom &&
+		test_path_exists .git/worktrees &&
+		git worktree remove goom &&
+		test_path_is_missing .git/worktrees
+	)
 '
 
 test_done

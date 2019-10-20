@@ -2,12 +2,12 @@
 .\"     Title: gitrevisions
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GITREVISIONS" "7" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GITREVISIONS" "7" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,7 +28,7 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-gitrevisions \- specifying revisions and ranges for Git
+gitrevisions \- Specifying revisions and ranges for Git
 .SH "SYNOPSIS"
 .sp
 gitrevisions
@@ -36,10 +36,26 @@ gitrevisions
 .sp
 Many Git commands take revision parameters as arguments\&. Depending on the command, they denote a specific commit or, for commands which walk the revision graph (such as \fBgit-log\fR(1)), all commits which are reachable from that commit\&. For commands that walk the revision graph one can also specify a range of revisions explicitly\&.
 .sp
-In addition, some Git commands (such as \fBgit-show\fR(1)) also take revision parameters which denote other objects than commits, e\&.g\&. blobs ("files") or trees ("directories of files")\&.
+In addition, some Git commands (such as \fBgit-show\fR(1) and \fBgit-push\fR(1)) can also take revision parameters which denote other objects than commits, e\&.g\&. blobs ("files") or trees ("directories of files")\&.
 .SH "SPECIFYING REVISIONS"
 .sp
 A revision parameter \fI<rev>\fR typically, but not necessarily, names a commit object\&. It uses what is called an \fIextended SHA\-1\fR syntax\&. Here are various ways to spell object names\&. The ones listed near the end of this list name trees and blobs contained in a commit\&.
+.if n \{\
+.sp
+.\}
+.RS 4
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.ps +1
+\fBNote\fR
+.ps -1
+.br
+.sp
+This document shows the "raw" syntax as seen by git\&. The shell and other UIs might require additional quoting to protect special characters and to avoid word splitting\&.
+.sp .5v
+.RE
 .PP
 \fI<sha1>\fR, e\&.g\&. \fIdae86e1950b1277e545cee180551750029cfe735\fR, \fIdae86e\fR
 .RS 4
@@ -375,7 +391,7 @@ before
 .PP
 \fI:/<text>\fR, e\&.g\&. \fI:/fix nasty bug\fR
 .RS 4
-A colon, followed by a slash, followed by a text, names a commit whose commit message matches the specified regular expression\&. This name returns the youngest matching commit which is reachable from any ref\&. The regular expression can match any part of the commit message\&. To match messages starting with a string, one can use e\&.g\&.
+A colon, followed by a slash, followed by a text, names a commit whose commit message matches the specified regular expression\&. This name returns the youngest matching commit which is reachable from any ref, including HEAD\&. The regular expression can match any part of the commit message\&. To match messages starting with a string, one can use e\&.g\&.
 \fI:/^foo\fR\&. The special sequence
 \fI:/!\fR
 is reserved for modifiers to what is matched\&.
@@ -387,7 +403,7 @@ matches a literal
 character, followed by
 \fIfoo\fR\&. Any other sequence beginning with
 \fI:/!\fR
-is reserved for now\&.
+is reserved for now\&. Depending on the given text, the shell\(cqs word splitting rules might require additional quoting\&.
 .RE
 .PP
 \fI<rev>:<path>\fR, e\&.g\&. \fIHEAD:README\fR, \fI:README\fR, \fImaster:\&./README\fR
@@ -572,28 +588,28 @@ Here are a handful of examples using the Loeliger illustration above, with each 
 .RS 4
 .\}
 .nf
-Args   Expanded arguments    Selected commits
-D                            G H D
-D F                          G H I J D F
-^G D                         H D
-^D B                         E I J F B
-^D B C                       E I J F B C
-C                            I J F C
-B\&.\&.C   = ^B C                C
-B\&.\&.\&.C  = B ^F C              G H D E B C
-B^\-    = B^\&.\&.B
-       = ^B^1 B              E I J F B
-C^@    = C^1
-       = F                   I J F
-B^@    = B^1 B^2 B^3
-       = D E F               D G H E F I J
-C^!    = C ^C^@
-       = C ^C^1
-       = C ^F                C
-B^!    = B ^B^@
-       = B ^B^1 ^B^2 ^B^3
-       = B ^D ^E ^F          B
-F^! D  = F ^I ^J D           G H D F
+   Args   Expanded arguments    Selected commits
+   D                            G H D
+   D F                          G H I J D F
+   ^G D                         H D
+   ^D B                         E I J F B
+   ^D B C                       E I J F B C
+   C                            I J F C
+   B\&.\&.C   = ^B C                C
+   B\&.\&.\&.C  = B ^F C              G H D E B C
+   B^\-    = B^\&.\&.B
+          = ^B^1 B              E I J F B
+   C^@    = C^1
+          = F                   I J F
+   B^@    = B^1 B^2 B^3
+          = D E F               D G H E F I J
+   C^!    = C ^C^@
+          = C ^C^1
+          = C ^F                C
+   B^!    = B ^B^@
+          = B ^B^1 ^B^2 ^B^3
+          = B ^D ^E ^F          B
+   F^! D  = F ^I ^J D           G H D F
 .fi
 .if n \{\
 .RE

@@ -731,6 +731,11 @@ the requested refs.
 +
 The form '--filter=sparse:path=<path>' similarly uses a sparse-checkout
 specification contained in <path>.
++
+The form '--filter=tree:<depth>' omits all blobs and trees whose depth
+from the root tree is >= <depth> (minimum depth if an object is located
+at multiple depths in the commits traversed). Currently, only <depth>=0
+is supported, which omits all blobs and trees.
 
 --no-filter::
 	Turn off any previous `--filter=` argument.
@@ -756,7 +761,6 @@ Unexpected missing objects will raise an error.
 +
 The form '--missing=print' is like 'allow-any', but will also print a
 list of the missing objects.  Object IDs are prefixed with a ``?'' character.
-endif::git-rev-list[]
 
 --exclude-promisor-objects::
 	(For internal use only.)  Prefilter object traversal at
@@ -764,6 +768,7 @@ endif::git-rev-list[]
 	stronger than `--missing=allow-promisor` because it limits the
 	traversal, rather than just silencing errors about missing
 	objects.
+endif::git-rev-list[]
 
 --no-walk[=(sorted|unsorted)]::
 	Only show the given commits, but do not traverse their ancestors.

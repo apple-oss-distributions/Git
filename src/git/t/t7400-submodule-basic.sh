@@ -101,7 +101,6 @@ inspect() {
 
 test_expect_success 'submodule add' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	(
 		cd addtest &&
@@ -123,7 +122,25 @@ test_expect_success 'submodule add' '
 	inspect addtest/submod ../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
+'
+
+test_expect_success 'setup parent and one repository' '
+	test_create_repo parent &&
+	test_commit -C parent one
+'
+
+test_expect_success 'redirected submodule add does not show progress' '
+	git -C addtest submodule add "file://$submodurl/parent" submod-redirected \
+		2>err &&
+	! grep % err &&
+	test_i18ngrep ! "Checking connectivity" err
+'
+
+test_expect_success 'redirected submodule add --progress does show progress' '
+	git -C addtest submodule add --progress "file://$submodurl/parent" \
+		submod-redirected-progress 2>err && \
+	grep % err
 '
 
 test_expect_success 'submodule add to .gitignored path fails' '
@@ -153,12 +170,13 @@ test_expect_success 'submodule add to .gitignored path with --force' '
 test_expect_success 'submodule add to reconfigure existing submodule with --force' '
 	(
 		cd addtest-ignore &&
-		git submodule add --force bogus-url submod &&
-		git submodule add -b initial "$submodurl" submod-branch &&
-		test "bogus-url" = "$(git config -f .gitmodules submodule.submod.url)" &&
-		test "bogus-url" = "$(git config submodule.submod.url)" &&
+		bogus_url="$(pwd)/bogus-url" &&
+		git submodule add --force "$bogus_url" submod &&
+		git submodule add --force -b initial "$submodurl" submod-branch &&
+		test "$bogus_url" = "$(git config -f .gitmodules submodule.submod.url)" &&
+		test "$bogus_url" = "$(git config submodule.submod.url)" &&
 		# Restore the url
-		git submodule add --force "$submodurl" submod
+		git submodule add --force "$submodurl" submod &&
 		test "$submodurl" = "$(git config -f .gitmodules submodule.submod.url)" &&
 		test "$submodurl" = "$(git config submodule.submod.url)"
 	)
@@ -170,7 +188,6 @@ test_expect_success 'submodule add --branch' '
 	refs/heads/initial
 	refs/heads/master
 	EOF
-	>empty &&
 
 	(
 		cd addtest &&
@@ -183,12 +200,11 @@ test_expect_success 'submodule add --branch' '
 	inspect addtest/submod-branch ../.. &&
 	test_cmp expect-heads heads &&
 	test_cmp expect-head head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success 'submodule add with ./ in path' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	(
 		cd addtest &&
@@ -200,12 +216,11 @@ test_expect_success 'submodule add with ./ in path' '
 	inspect addtest/dotsubmod/frotz ../../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success 'submodule add with /././ in path' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	(
 		cd addtest &&
@@ -217,12 +232,11 @@ test_expect_success 'submodule add with /././ in path' '
 	inspect addtest/dotslashdotsubmod/frotz ../../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success 'submodule add with // in path' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	(
 		cd addtest &&
@@ -234,12 +248,11 @@ test_expect_success 'submodule add with // in path' '
 	inspect addtest/slashslashsubmod/frotz ../../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success 'submodule add with /.. in path' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	(
 		cd addtest &&
@@ -251,12 +264,11 @@ test_expect_success 'submodule add with /.. in path' '
 	inspect addtest/realsubmod ../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success 'submodule add with ./, /.. and // in path' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	(
 		cd addtest &&
@@ -268,7 +280,7 @@ test_expect_success 'submodule add with ./, /.. and // in path' '
 	inspect addtest/realsubmod2 ../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success !CYGWIN 'submodule add with \\ in path' '
@@ -287,7 +299,6 @@ test_expect_success !CYGWIN 'submodule add with \\ in path' '
 
 test_expect_success 'submodule add in subdirectory' '
 	echo "refs/heads/master" >expect &&
-	>empty &&
 
 	mkdir addtest/sub &&
 	(
@@ -300,7 +311,7 @@ test_expect_success 'submodule add in subdirectory' '
 	inspect addtest/realsubmod3 ../.. &&
 	test_cmp expect heads &&
 	test_cmp expect head &&
-	test_cmp empty untracked
+	test_must_be_empty untracked
 '
 
 test_expect_success 'submodule add in subdirectory with relative path should fail' '
@@ -359,7 +370,7 @@ test_expect_success 'init should register submodule url in .git/config' '
 
 test_failure_with_unknown_submodule () {
 	test_must_fail git submodule $1 no-such-submodule 2>output.err &&
-	grep "^error: .*no-such-submodule" output.err
+	test_i18ngrep "^error: .*no-such-submodule" output.err
 }
 
 test_expect_success 'init should fail with unknown submodule' '
@@ -483,8 +494,6 @@ test_expect_success 'checkout superproject with subproject already present' '
 '
 
 test_expect_success 'apply submodule diff' '
-	>empty &&
-
 	git branch second &&
 	(
 		cd init &&
@@ -499,7 +508,7 @@ test_expect_success 'apply submodule diff' '
 	git apply --index P.diff &&
 
 	git diff --cached master >staged &&
-	test_cmp empty staged
+	test_must_be_empty staged
 '
 
 test_expect_success 'update --init' '
@@ -800,7 +809,7 @@ test_expect_success '../bar/a/b/c works with relative local path - ../foo/bar.gi
 		cp pristine-.git-config .git/config &&
 		cp pristine-.gitmodules .gitmodules &&
 		mkdir -p a/b/c &&
-		(cd a/b/c; git init) &&
+		(cd a/b/c && git init) &&
 		git config remote.origin.url ../foo/bar.git &&
 		git submodule add ../bar/a/b/c ./a/b/c &&
 		git submodule init &&
@@ -819,6 +828,21 @@ test_expect_success 'moving the superproject does not break submodules' '
 		git submodule status >actual &&
 		test_cmp expect actual
 	)
+'
+
+test_expect_success 'moving the submodule does not break the superproject' '
+	(
+		cd addtest2 &&
+		git submodule status
+	) >actual &&
+	sed -e "s/^ \([^ ]* repo\) .*/-\1/" <actual >expect &&
+	mv addtest2/repo addtest2/repo.bak &&
+	test_when_finished "mv addtest2/repo.bak addtest2/repo" &&
+	(
+		cd addtest2 &&
+		git submodule status
+	) >actual &&
+	test_cmp expect actual
 '
 
 test_expect_success 'submodule add --name allows to replace a submodule with another at the same path' '
@@ -1198,6 +1222,30 @@ test_expect_success 'submodule update and setting submodule.<name>.active' '
 	git -C multisuper_clone submodule update &&
 	git -C multisuper_clone submodule status |cut -c 1,43- >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success 'clone active submodule without submodule url set' '
+	test_when_finished "rm -rf test/test" &&
+	mkdir test &&
+	# another dir breaks accidental relative paths still being correct
+	git clone file://"$pwd"/multisuper test/test &&
+	(
+		cd test/test &&
+		git config submodule.active "." &&
+
+		# do not pass --init flag, as the submodule is already active:
+		git submodule update &&
+		git submodule status >actual_raw &&
+
+		cut -c 1,43- actual_raw >actual &&
+		cat >expect <<-\EOF &&
+		 sub0 (test2)
+		 sub1 (test2)
+		 sub2 (test2)
+		 sub3 (test2)
+		EOF
+		test_cmp expect actual
+	)
 '
 
 test_expect_success 'clone --recurse-submodules with a pathspec works' '

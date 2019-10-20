@@ -49,17 +49,27 @@ export ASAN_OPTIONS
 : ${LSAN_OPTIONS=abort_on_error=1}
 export LSAN_OPTIONS
 
-################################################################
-# It appears that people try to run tests without building...
-"$GIT_BUILD_DIR/git" >/dev/null
-if test $? != 1
+if test ! -f "$GIT_BUILD_DIR"/GIT-BUILD-OPTIONS
 then
-	echo >&2 'error: you do not seem to have built git yet.'
+	echo >&2 'error: GIT-BUILD-OPTIONS missing (has Git been built?).'
 	exit 1
 fi
-
 . "$GIT_BUILD_DIR"/GIT-BUILD-OPTIONS
 export PERL_PATH SHELL_PATH
+
+################################################################
+# It appears that people try to run tests without building...
+"${GIT_TEST_INSTALLED:-$GIT_BUILD_DIR}/git$X" >/dev/null
+if test $? != 1
+then
+	if test -n "$GIT_TEST_INSTALLED"
+	then
+		echo >&2 "error: there is no working Git at '$GIT_TEST_INSTALLED'"
+	else
+		echo >&2 'error: you do not seem to have built git yet.'
+	fi
+	exit 1
+fi
 
 # if --tee was passed, write the output not only to the terminal, but
 # additionally to the file test-results/$BASENAME.out, too.
@@ -67,7 +77,7 @@ case "$GIT_TEST_TEE_STARTED, $* " in
 done,*)
 	# do not redirect again
 	;;
-*' --tee '*|*' --va'*|*' --verbose-log '*)
+*' --tee '*|*' --va'*|*' -V '*|*' --verbose-log '*)
 	mkdir -p "$TEST_OUTPUT_DIRECTORY/test-results"
 	BASE="$TEST_OUTPUT_DIRECTORY/test-results/$(basename "$0" .sh)"
 
@@ -95,6 +105,16 @@ PAGER=cat
 TZ=UTC
 export LANG LC_ALL PAGER TZ
 EDITOR=:
+
+# GIT_TEST_GETTEXT_POISON should not influence git commands executed
+# during initialization of test-lib and the test repo. Back it up,
+# unset and then restore after initialization is finished.
+if test -n "$GIT_TEST_GETTEXT_POISON"
+then
+	GIT_TEST_GETTEXT_POISON_ORIG=$GIT_TEST_GETTEXT_POISON
+	unset GIT_TEST_GETTEXT_POISON
+fi
+
 # A call to "unset" with no arguments causes at least Solaris 10
 # /usr/xpg4/bin/sh and /bin/ksh to bail out.  So keep the unsets
 # deriving from the command substitution clustered with the other
@@ -134,9 +154,40 @@ export EDITOR
 GIT_TRACE_BARE=1
 export GIT_TRACE_BARE
 
-if test -n "${TEST_GIT_INDEX_VERSION:+isset}"
+check_var_migration () {
+	# the warnings and hints given from this helper depends
+	# on end-user settings, which will disrupt the self-test
+	# done on the test framework itself.
+	case "$GIT_TEST_FRAMEWORK_SELFTEST" in
+	t)	return ;;
+	esac
+
+	old_name=$1 new_name=$2
+	eval "old_isset=\${${old_name}:+isset}"
+	eval "new_isset=\${${new_name}:+isset}"
+
+	case "$old_isset,$new_isset" in
+	isset,)
+		echo >&2 "warning: $old_name is now $new_name"
+		echo >&2 "hint: set $new_name too during the transition period"
+		eval "$new_name=\$$old_name"
+		;;
+	isset,isset)
+		# do this later
+		# echo >&2 "warning: $old_name is now $new_name"
+		# echo >&2 "hint: remove $old_name"
+		;;
+	esac
+}
+
+check_var_migration GIT_FSMONITOR_TEST GIT_TEST_FSMONITOR
+check_var_migration TEST_GIT_INDEX_VERSION GIT_TEST_INDEX_VERSION
+check_var_migration GIT_FORCE_PRELOAD_TEST GIT_TEST_PRELOAD_INDEX
+
+# Use specific version of the index file format
+if test -n "${GIT_TEST_INDEX_VERSION:+isset}"
 then
-	GIT_INDEX_VERSION="$TEST_GIT_INDEX_VERSION"
+	GIT_INDEX_VERSION="$GIT_TEST_INDEX_VERSION"
 	export GIT_INDEX_VERSION
 fi
 
@@ -184,6 +235,8 @@ _x40="$_x35$_x05"
 # Zero SHA-1
 _z40=0000000000000000000000000000000000000000
 
+OID_REGEX="$_x40"
+ZERO_OID=$_z40
 EMPTY_TREE=4b825dc642cb6eb9a060e54bf8d69288fbee4904
 EMPTY_BLOB=e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 
@@ -195,7 +248,7 @@ LF='
 # when case-folding filenames
 u200c=$(printf '\342\200\214')
 
-export _x05 _x35 _x40 _z40 LF u200c EMPTY_TREE EMPTY_BLOB
+export _x05 _x35 _x40 _z40 LF u200c EMPTY_TREE EMPTY_BLOB ZERO_OID OID_REGEX
 
 # Each test should start with something like this, after copyright notices:
 #
@@ -283,7 +336,7 @@ do
 			echo >&2 "warning: ignoring -x; '$0' is untraceable without BASH_XTRACEFD"
 		fi
 		shift ;;
-	--verbose-log)
+	-V|--verbose-log)
 		verbose_log=t
 		shift ;;
 	*)
@@ -347,6 +400,10 @@ error () {
 	say_color error "error: $*"
 	GIT_EXIT_OK=t
 	exit 1
+}
+
+BUG () {
+	error >&7 "bug in the test script: $*"
 }
 
 say () {
@@ -673,9 +730,10 @@ test_run_ () {
 		trace=
 		# 117 is magic because it is unlikely to match the exit
 		# code of other programs
-		if test "OK-117" != "$(test_eval_ "(exit 117) && $1${LF}${LF}echo OK-\$?" 3>&1)"
+		if $(printf '%s\n' "$1" | sed -f "$GIT_BUILD_DIR/t/chainlint.sed" | grep -q '?![A-Z][A-Z]*?!') ||
+			test "OK-117" != "$(test_eval_ "(exit 117) && $1${LF}${LF}echo OK-\$?" 3>&1)"
 		then
-			error "bug in the test script: broken &&-chain or run-away HERE-DOC: $1"
+			BUG "broken &&-chain or run-away HERE-DOC: $1"
 		fi
 		trace=$trace_tmp
 	fi
@@ -864,7 +922,7 @@ then
 		# handle only executables, unless they are shell libraries that
 		# need to be in the exec-path.
 		test -x "$1" ||
-		test "# " = "$(head -c 2 <"$1")" ||
+		test "# " = "$(test_copy_bytes 2 <"$1")" ||
 		return;
 
 		base=$(basename "$1")
@@ -879,7 +937,7 @@ then
 		# do not override scripts
 		if test -x "$symlink_target" &&
 		    test ! -d "$symlink_target" &&
-		    test "#!" != "$(head -c 2 < "$symlink_target")"
+		    test "#!" != "$(test_copy_bytes 2 <"$symlink_target")"
 		then
 			symlink_target=../valgrind.sh
 		fi
@@ -923,7 +981,7 @@ elif test -n "$GIT_TEST_INSTALLED"
 then
 	GIT_EXEC_PATH=$($GIT_TEST_INSTALLED/git --exec-path)  ||
 	error "Cannot run git from $GIT_TEST_INSTALLED."
-	PATH=$GIT_TEST_INSTALLED:$GIT_BUILD_DIR:$PATH
+	PATH=$GIT_TEST_INSTALLED:$GIT_BUILD_DIR/t/helper:$PATH
 	GIT_EXEC_PATH=${GIT_TEST_EXEC_PATH:-$GIT_EXEC_PATH}
 else # normal case, use ../bin-wrappers only unless $with_dashes:
 	git_bin_dir="$GIT_BUILD_DIR/bin-wrappers"
@@ -966,10 +1024,10 @@ test -d "$GIT_BUILD_DIR"/templates/blt || {
 	error "You haven't built things yet, have you?"
 }
 
-if ! test -x "$GIT_BUILD_DIR"/t/helper/test-chmtime
+if ! test -x "$GIT_BUILD_DIR"/t/helper/test-tool
 then
-	echo >&2 'You need to build test-chmtime:'
-	echo >&2 'Run "make t/helper/test-chmtime" in the source (toplevel) directory'
+	echo >&2 'You need to build test-tool:'
+	echo >&2 'Run "make t/helper/test-tool" in the source (toplevel) directory'
 	exit 1
 fi
 
@@ -1073,14 +1131,22 @@ test -n "$USE_LIBPCRE1" && test_set_prereq LIBPCRE1
 test -n "$USE_LIBPCRE2" && test_set_prereq LIBPCRE2
 test -z "$NO_GETTEXT" && test_set_prereq GETTEXT
 
-# Can we rely on git's output in the C locale?
-if test -n "$GETTEXT_POISON"
+if test -n "$GIT_TEST_GETTEXT_POISON_ORIG"
 then
-	GIT_GETTEXT_POISON=YesPlease
-	export GIT_GETTEXT_POISON
-	test_set_prereq GETTEXT_POISON
-else
+	GIT_TEST_GETTEXT_POISON=$GIT_TEST_GETTEXT_POISON_ORIG
+	unset GIT_TEST_GETTEXT_POISON_ORIG
+fi
+
+# Can we rely on git's output in the C locale?
+if test -z "$GIT_TEST_GETTEXT_POISON"
+then
 	test_set_prereq C_LOCALE_OUTPUT
+fi
+
+if test -z "$GIT_TEST_CHECK_CACHE_TREE"
+then
+	GIT_TEST_CHECK_CACHE_TREE=true
+	export GIT_TEST_CHECK_CACHE_TREE
 fi
 
 test_lazy_prereq PIPE '
@@ -1104,11 +1170,26 @@ test_lazy_prereq CASE_INSENSITIVE_FS '
 	test "$(cat CamelCase)" != good
 '
 
+test_lazy_prereq FUNNYNAMES '
+	test_have_prereq !MINGW &&
+	touch -- \
+		"FUNNYNAMES tab	embedded" \
+		"FUNNYNAMES \"quote embedded\"" \
+		"FUNNYNAMES newline
+embedded" 2>/dev/null &&
+	rm -- \
+		"FUNNYNAMES tab	embedded" \
+		"FUNNYNAMES \"quote embedded\"" \
+		"FUNNYNAMES newline
+embedded" 2>/dev/null
+'
+
 test_lazy_prereq UTF8_NFD_TO_NFC '
 	# check whether FS converts nfd unicode to nfc
 	auml=$(printf "\303\244")
 	aumlcdiar=$(printf "\141\314\210")
-	>"$auml" && test -f "$aumlcdiar"
+	>"$auml" &&
+	test -f "$aumlcdiar"
 '
 
 test_lazy_prereq AUTOIDENT '
@@ -1157,7 +1238,7 @@ test_lazy_prereq SANITY '
 	chmod -w SANETESTD.1 &&
 	chmod -r SANETESTD.1/x &&
 	chmod -rx SANETESTD.2 ||
-	error "bug in test sript: cannot prepare SANETESTD"
+	BUG "cannot prepare SANETESTD"
 
 	! test -r SANETESTD.1/x &&
 	! rm SANETESTD.1/x && ! test -f SANETESTD.2/x
@@ -1165,7 +1246,7 @@ test_lazy_prereq SANITY '
 
 	chmod +rwx SANETESTD.1 SANETESTD.2 &&
 	rm -rf SANETESTD.1 SANETESTD.2 ||
-	error "bug in test sript: cannot clean SANETESTD"
+	BUG "cannot clean SANETESTD"
 	return $status
 '
 
@@ -1203,5 +1284,20 @@ test_lazy_prereq LONG_IS_64BIT '
 	test 8 -le "$(build_option sizeof-long)"
 '
 
-test_lazy_prereq TIME_IS_64BIT 'test-date is64bit'
-test_lazy_prereq TIME_T_IS_64BIT 'test-date time_t-is64bit'
+test_lazy_prereq TIME_IS_64BIT 'test-tool date is64bit'
+test_lazy_prereq TIME_T_IS_64BIT 'test-tool date time_t-is64bit'
+
+test_lazy_prereq CURL '
+	curl --version
+'
+
+# SHA1 is a test if the hash algorithm in use is SHA-1.  This is both for tests
+# which will not work with other hash algorithms and tests that work but don't
+# test anything meaningful (e.g. special values which cause short collisions).
+test_lazy_prereq SHA1 '
+	test $(git hash-object /dev/null) = e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+'
+
+test_lazy_prereq REBASE_P '
+	test -z "$GIT_TEST_SKIP_REBASE_P"
+'

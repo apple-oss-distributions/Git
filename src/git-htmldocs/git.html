@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -750,7 +751,7 @@ git(1) Manual Page
 <div class="verseblock">
 <pre class="content"><em>git</em> [--version] [--help] [-C &lt;path&gt;] [-c &lt;name&gt;=&lt;value&gt;]
     [--exec-path[=&lt;path&gt;]] [--html-path] [--man-path] [--info-path]
-    [-p|--paginate|--no-pager] [--no-replace-objects] [--bare]
+    [-p|--paginate|-P|--no-pager] [--no-replace-objects] [--bare]
     [--git-dir=&lt;path&gt;] [--work-tree=&lt;path&gt;] [--namespace=&lt;name&gt;]
     [--super-prefix=&lt;path&gt;]
     &lt;command&gt; [&lt;args&gt;]</pre>
@@ -837,7 +838,7 @@ git --git-dir=c/a.git --work-tree=c/b status</code></pre>
 <code>foo.bar</code> to the boolean true value (just like <code>[foo]bar</code> would in a
 config file). Including the equals but with an empty value (like <code>git -c
 foo.bar= ...</code>) sets <code>foo.bar</code> to the empty string which <code>git config
---bool</code> will convert to <code>false</code>.</p></div>
+--type=bool</code> will convert to <code>false</code>.</p></div>
 </dd>
 <dt class="hdlist1">
 --exec-path[=&lt;path&gt;]
@@ -891,6 +892,9 @@ foo.bar= ...</code>) sets <code>foo.bar</code> to the empty string which <code>g
         below).
 </p>
 </dd>
+<dt class="hdlist1">
+-P
+</dt>
 <dt class="hdlist1">
 --no-pager
 </dt>
@@ -1009,6 +1013,21 @@ foo.bar= ...</code>) sets <code>foo.bar</code> to the empty string which <code>g
 <p>
         Do not perform optional operations that require locks. This is
         equivalent to setting the <code>GIT_OPTIONAL_LOCKS</code> to <code>0</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+--list-cmds=group[,group&#8230;]
+</dt>
+<dd>
+<p>
+        List commands by group. This is an internal/experimental
+        option and may change or be removed in the future. Supported
+        groups are: builtins, parseopt (builtin commands that use
+        parse-options), main (all commands in libexec directory),
+        others (all other commands in <code>$PATH</code> that have git- prefix),
+        list-&lt;category&gt; (see categories in command-list.txt),
+        nohelpers (exclude helper commands), alias and config
+        (retrieve command list from config variable completion.commands)
 </p>
 </dd>
 </dl></div>
@@ -1238,6 +1257,14 @@ ancillary user utilities.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<a href="git-range-diff.html">git-range-diff(1)</a>
+</dt>
+<dd>
+<p>
+        Compare two commit ranges (e.g. two versions of a branch).
+</p>
+</dd>
+<dt class="hdlist1">
 <a href="git-rebase.html">git-rebase(1)</a>
 </dt>
 <dd>
@@ -1447,14 +1474,6 @@ ancillary user utilities.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
-<a href="git-cherry.html">git-cherry(1)</a>
-</dt>
-<dd>
-<p>
-        Find commits yet to be applied to upstream.
-</p>
-</dd>
-<dt class="hdlist1">
 <a href="git-count-objects.html">git-count-objects(1)</a>
 </dt>
 <dd>
@@ -1476,14 +1495,6 @@ ancillary user utilities.</p></div>
 <dd>
 <p>
         Verifies the connectivity and validity of the objects in the database.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="git-get-tar-commit-id.html">git-get-tar-commit-id(1)</a>
-</dt>
-<dd>
-<p>
-        Extract commit ID from an archive created using git-archive.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1516,14 +1527,6 @@ ancillary user utilities.</p></div>
 <dd>
 <p>
         Reuse recorded resolution of conflicted merges.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="git-rev-parse.html">git-rev-parse(1)</a>
-</dt>
-<dd>
-<p>
-        Pick out and massage parameters.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1578,7 +1581,7 @@ people via patch over e-mail.</p></div>
 </dt>
 <dd>
 <p>
-        Import an Arch repository into Git.
+        Import a GNU Arch repository into Git.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1696,6 +1699,14 @@ repositories.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<a href="git-commit-graph.html">git-commit-graph(1)</a>
+</dt>
+<dd>
+<p>
+        Write and verify Git commit-graph files.
+</p>
+</dd>
+<dt class="hdlist1">
 <a href="git-commit-tree.html">git-commit-tree(1)</a>
 </dt>
 <dd>
@@ -1749,6 +1760,14 @@ repositories.</p></div>
 <dd>
 <p>
         Build a tree-object from ls-tree formatted text.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="git-multi-pack-index.html">git-multi-pack-index(1)</a>
+</dt>
+<dd>
+<p>
+        Write and verify multi-pack-indexes.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1829,6 +1848,14 @@ repositories.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<a href="git-cherry.html">git-cherry(1)</a>
+</dt>
+<dd>
+<p>
+        Find commits yet to be applied to upstream.
+</p>
+</dd>
+<dt class="hdlist1">
 <a href="git-diff-files.html">git-diff-files(1)</a>
 </dt>
 <dd>
@@ -1858,6 +1885,14 @@ repositories.</p></div>
 <dd>
 <p>
         Output information on each ref.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="git-get-tar-commit-id.html">git-get-tar-commit-id(1)</a>
+</dt>
+<dd>
+<p>
+        Extract commit ID from an archive created using git-archive.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1914,6 +1949,14 @@ repositories.</p></div>
 <dd>
 <p>
         Lists commit objects in reverse chronological order.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="git-rev-parse.html">git-rev-parse(1)</a>
+</dt>
+<dd>
+<p>
+        Pick out and massage parameters.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2421,14 +2464,11 @@ Git so take care if using a foreign front-end.</p></div>
         of Git object directories which can be used to search for Git
         objects. New objects will not be written to these directories.
 </p>
-<div class="literalblock">
-<div class="content">
-<pre><code>Entries that begin with `"` (double-quote) will be interpreted
+<div class="paragraph"><p>Entries that begin with <code>"</code> (double-quote) will be interpreted
 as C-style quoted paths, removing leading and trailing
 double-quotes and respecting backslash escapes. E.g., the value
-`"path-with-\"-and-:-in-it":vanilla-path` has two paths:
-`path-with-"-and-:-in-it` and `vanilla-path`.</code></pre>
-</div></div>
+<code>"path-with-\"-and-:-in-it":vanilla-path</code> has two paths:
+<code>path-with-"-and-:-in-it</code> and <code>vanilla-path</code>.</p></div>
 </dd>
 <dt class="hdlist1">
 <code>GIT_DIR</code>
@@ -2765,8 +2805,8 @@ value as an open file descriptor and will try to write the
 trace messages into this file descriptor.</p></div>
 <div class="paragraph"><p>Alternatively, if the variable is set to an absolute path
 (starting with a <em>/</em> character), Git will interpret this
-as a file path and will try to write the trace messages
-into it.</p></div>
+as a file path and will try to append the trace messages
+to it.</p></div>
 <div class="paragraph"><p>Unsetting the variable, or setting it to empty, "0" or
 "false" (case insensitive) disables trace messages.</p></div>
 </dd>
@@ -3128,7 +3168,9 @@ the authors for specific parts of the project.</p></div>
 <div class="sectionbody">
 <div class="paragraph"><p>Report bugs to the Git mailing list &lt;<a href="mailto:git@vger.kernel.org">git@vger.kernel.org</a>&gt; where the
 development and maintenance is primarily done.  You do not have to be
-subscribed to the list to send a message there.</p></div>
+subscribed to the list to send a message there.  See the list archive
+at <a href="https://public-inbox.org/git">https://public-inbox.org/git</a> for previous bug reports and other
+discussions.</p></div>
 <div class="paragraph"><p>Issues which are security relevant should be disclosed privately to
 the Git Security mailing list &lt;<a href="mailto:git-security@googlegroups.com">git-security@googlegroups.com</a>&gt;.</p></div>
 </div>
@@ -3154,7 +3196,7 @@ the Git Security mailing list &lt;<a href="mailto:git-security@googlegroups.com"
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-03-15 15:49:20 PDT
+ 2018-10-30 16:33:48 JST
 </div>
 </div>
 </body>

@@ -14,15 +14,13 @@ test_expect_success \
      git add -- foo bar baz 'space embedded' -q &&
      git commit -m 'add normal files'"
 
-if test_have_prereq !MINGW && touch -- 'tab	embedded' 'newline
-embedded' 2>/dev/null
-then
-	test_set_prereq FUNNYNAMES
-else
+if test_have_prereq !FUNNYNAMES; then
 	say 'Your filesystem does not allow tabs in filenames.'
 fi
 
 test_expect_success FUNNYNAMES 'add files with funny names' "
+     touch -- 'tab	embedded' 'newline
+embedded' &&
      git add -- 'tab	embedded' 'newline
 embedded' &&
      git commit -m 'add files with tabs and newlines'
@@ -232,7 +230,7 @@ test_expect_success 'Call "rm" from outside the work tree' '
 test_expect_success 'refresh index before checking if it is up-to-date' '
 
 	git reset --hard &&
-	test-chmtime -86400 frotz/nitfol &&
+	test-tool chmtime -86400 frotz/nitfol &&
 	git rm frotz/nitfol &&
 	test ! -f frotz/nitfol
 
@@ -382,7 +380,7 @@ test_expect_success 'rm does not complain when no .gitmodules file is found' '
 	git submodule update &&
 	git rm .gitmodules &&
 	git rm submod >actual 2>actual.err &&
-	! test -s actual.err &&
+	test_must_be_empty actual.err &&
 	! test -d submod &&
 	! test -f submod/.git &&
 	git status -s -uno >actual &&
@@ -400,7 +398,7 @@ test_expect_success 'rm will error out on a modified .gitmodules file unless sta
 	git diff-files --quiet -- submod &&
 	git add .gitmodules &&
 	git rm submod >actual 2>actual.err &&
-	! test -s actual.err &&
+	test_must_be_empty actual.err &&
 	! test -d submod &&
 	! test -f submod/.git &&
 	git status -s -uno >actual &&
@@ -694,7 +692,7 @@ test_expect_success 'checking out a commit after submodule removal needs manual 
 	test_cmp expected actual &&
 	rm -rf submod &&
 	git status -s -uno --ignore-submodules=none >actual &&
-	! test -s actual
+	test_must_be_empty actual
 '
 
 test_expect_success 'rm of d/f when d has become a non-directory' '

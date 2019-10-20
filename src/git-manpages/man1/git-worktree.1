@@ -2,12 +2,12 @@
 .\"     Title: git-worktree
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-WORKTREE" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-WORKTREE" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -37,7 +37,7 @@ git-worktree \- Manage multiple working trees
 \fIgit worktree lock\fR [\-\-reason <string>] <worktree>
 \fIgit worktree move\fR <worktree> <new\-path>
 \fIgit worktree prune\fR [\-n] [\-v] [\-\-expire <expire>]
-\fIgit worktree remove\fR [\-\-force] <worktree>
+\fIgit worktree remove\fR [\-f] <worktree>
 \fIgit worktree unlock\fR <worktree>
 .fi
 .sp
@@ -45,9 +45,9 @@ git-worktree \- Manage multiple working trees
 .sp
 Manage multiple working trees attached to the same repository\&.
 .sp
-A git repository can support multiple working trees, allowing you to check out more than one branch at a time\&. With \fBgit worktree add\fR a new working tree is associated with the repository\&. This new working tree is called a "linked working tree" as opposed to the "main working tree" prepared by "git init" or "git clone"\&. A repository has one main working tree (if it\(cqs not a bare repository) and zero or more linked working trees\&.
+A git repository can support multiple working trees, allowing you to check out more than one branch at a time\&. With \fBgit worktree add\fR a new working tree is associated with the repository\&. This new working tree is called a "linked working tree" as opposed to the "main working tree" prepared by "git init" or "git clone"\&. A repository has one main working tree (if it\(cqs not a bare repository) and zero or more linked working trees\&. When you are done with a linked working tree, remove it with \fBgit worktree remove\fR\&.
 .sp
-When you are done with a linked working tree you can simply delete it\&. The working tree\(cqs administrative files in the repository (see "DETAILS" below) will eventually be removed automatically (see \fBgc\&.worktreePruneExpire\fR in \fBgit-config\fR(1)), or you can run \fBgit worktree prune\fR in the main or any linked working tree to clean up any stale administrative files\&.
+If a working tree is deleted without using \fBgit worktree remove\fR, then its associated administrative files, which reside in the repository (see "DETAILS" below), will eventually be removed automatically (see \fBgc\&.worktreePruneExpire\fR in \fBgit-config\fR(1)), or you can run \fBgit worktree prune\fR in the main or any linked working tree to clean up any stale administrative files\&.
 .sp
 If a linked working tree is stored on a portable device or network share which is not always mounted, you can prevent its administrative files from being pruned by issuing the \fBgit worktree lock\fR command, optionally specifying \fB\-\-reason\fR to explain why the working tree is locked\&.
 .SH "COMMANDS"
@@ -84,6 +84,21 @@ $ git worktree add \-\-track \-b <branch> <path> <remote>/<branch>
 .RE
 .\}
 .sp
+If the branch exists in multiple remotes and one of them is named by the
+\fBcheckout\&.defaultRemote\fR
+configuration variable, we\(cqll use that one for the purposes of disambiguation, even if the
+\fB<branch>\fR
+isn\(cqt unique across all remotes\&. Set it to e\&.g\&.
+\fBcheckout\&.defaultRemote=origin\fR
+to always checkout remote branches from there if
+\fB<branch>\fR
+is ambiguous but exists on the
+\fIorigin\fR
+remote\&. See also
+\fBcheckout\&.defaultRemote\fR
+in
+\fBgit-config\fR(1)\&.
+.sp
 If
 \fB<commit\-ish>\fR
 is omitted and neither
@@ -92,9 +107,17 @@ nor
 \fB\-B\fR
 nor
 \fB\-\-detach\fR
-used, then, as a convenience, a new branch based at HEAD is created automatically, as if
-\fB\-b $(basename <path>)\fR
-was specified\&.
+used, then, as a convenience, the new worktree is associated with a branch (call it
+\fB<branch>\fR) named after
+\fB$(basename <path>)\fR\&. If
+\fB<branch>\fR
+doesn\(cqt exist, a new branch based on HEAD is automatically created as if
+\fB\-b <branch>\fR
+was given\&. If
+\fB<branch>\fR
+does exist, it will be checked out in the new worktree, if it\(cqs not checked out anywhere else, otherwise the command will refuse to create the worktree (unless
+\fB\-\-force\fR
+is used)\&.
 .RE
 .PP
 list
@@ -138,9 +161,25 @@ By default,
 \fBadd\fR
 refuses to create a new working tree when
 \fB<commit\-ish>\fR
-is a branch name and is already checked out by another working tree and
+is a branch name and is already checked out by another working tree, or if
+\fB<path>\fR
+is already assigned to some working tree but is missing (for instance, if
+\fB<path>\fR
+was deleted manually)\&. This option overrides these safeguards\&. To add a missing but locked working tree path, specify
+\fB\-\-force\fR
+twice\&.
+.sp
+\fBmove\fR
+refuses to move a locked working tree unless
+\fB\-\-force\fR
+is specified twice\&.
+.sp
 \fBremove\fR
-refuses to remove an unclean working tree\&. This option overrides that safeguard\&.
+refuses to remove an unclean working tree unless
+\fB\-\-force\fR
+is used\&. To remove a locked working tree, specify
+\fB\-\-force\fR
+twice\&.
 .RE
 .PP
 \-b <new\-branch>, \-B <new\-branch>
@@ -224,6 +263,12 @@ With
 \fBlist\fR, output in an easy\-to\-parse format for scripts\&. This format will remain stable across Git versions and regardless of user configuration\&. See below for details\&.
 .RE
 .PP
+\-q, \-\-quiet
+.RS 4
+With
+\fIadd\fR, suppress feedback messages\&.
+.RE
+.PP
 \-v, \-\-verbose
 .RS 4
 With
@@ -248,19 +293,78 @@ Working trees can be identified by path, either relative or absolute\&.
 .sp
 If the last path components in the working tree\(cqs path is unique among working trees, it can be used to identify worktrees\&. For example if you only have two working trees, at "/abc/def/ghi" and "/abc/def/ggg", then "ghi" or "def/ghi" is enough to point to the former working tree\&.
 .RE
+.SH "REFS"
+.sp
+In multiple working trees, some refs may be shared between all working trees, some refs are local\&. One example is HEAD is different for all working trees\&. This section is about the sharing rules and how to access refs of one working tree from another\&.
+.sp
+In general, all pseudo refs are per working tree and all refs starting with "refs/" are shared\&. Pseudo refs are ones like HEAD which are directly under GIT_DIR instead of inside GIT_DIR/refs\&. There are one exception to this: refs inside refs/bisect and refs/worktree is not shared\&.
+.sp
+Refs that are per working tree can still be accessed from another working tree via two special paths, main\-worktree and worktrees\&. The former gives access to per\-worktree refs of the main working tree, while the latter to all linked working trees\&.
+.sp
+For example, main\-worktree/HEAD or main\-worktree/refs/bisect/good resolve to the same value as the main working tree\(cqs HEAD and refs/bisect/good respectively\&. Similarly, worktrees/foo/HEAD or worktrees/bar/refs/bisect/bad are the same as GIT_COMMON_DIR/worktrees/foo/HEAD and GIT_COMMON_DIR/worktrees/bar/refs/bisect/bad\&.
+.sp
+To access refs, it\(cqs best not to look inside GIT_DIR directly\&. Instead use commands such as \fBgit-rev-parse\fR(1) or \fBgit-update-ref\fR(1) which will handle refs correctly\&.
+.SH "CONFIGURATION FILE"
+.sp
+By default, the repository "config" file is shared across all working trees\&. If the config variables \fBcore\&.bare\fR or \fBcore\&.worktree\fR are already present in the config file, they will be applied to the main working trees only\&.
+.sp
+In order to have configuration specific to working trees, you can turn on "worktreeConfig" extension, e\&.g\&.:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git config extensions\&.worktreeConfig true
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+In this mode, specific configuration stays in the path pointed by \fBgit rev\-parse \-\-git\-path config\&.worktree\fR\&. You can add or update configuration in this file with \fBgit config \-\-worktree\fR\&. Older Git versions will refuse to access repositories with this extension\&.
+.sp
+Note that in this file, the exception for \fBcore\&.bare\fR and \fBcore\&.worktree\fR is gone\&. If you have them in $GIT_DIR/config before, you must move them to the \fBconfig\&.worktree\fR of the main working tree\&. You may also take this opportunity to review and move other configuration that you do not want to share to all working trees:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBcore\&.worktree\fR
+and
+\fBcore\&.bare\fR
+should never be shared
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBcore\&.sparseCheckout\fR
+is recommended per working tree, unless you are sure you always use sparse checkout for all working trees\&.
+.RE
 .SH "DETAILS"
 .sp
 Each linked working tree has a private sub\-directory in the repository\(cqs $GIT_DIR/worktrees directory\&. The private sub\-directory\(cqs name is usually the base name of the linked working tree\(cqs path, possibly appended with a number to make it unique\&. For example, when \fB$GIT_DIR=/path/main/\&.git\fR the command \fBgit worktree add /path/other/test\-next next\fR creates the linked working tree in \fB/path/other/test\-next\fR and also creates a \fB$GIT_DIR/worktrees/test\-next\fR directory (or \fB$GIT_DIR/worktrees/test\-next1\fR if \fBtest\-next\fR is already taken)\&.
 .sp
 Within a linked working tree, $GIT_DIR is set to point to this private directory (e\&.g\&. \fB/path/main/\&.git/worktrees/test\-next\fR in the example) and $GIT_COMMON_DIR is set to point back to the main working tree\(cqs $GIT_DIR (e\&.g\&. \fB/path/main/\&.git\fR)\&. These settings are made in a \fB\&.git\fR file located at the top directory of the linked working tree\&.
 .sp
-Path resolution via \fBgit rev\-parse \-\-git\-path\fR uses either $GIT_DIR or $GIT_COMMON_DIR depending on the path\&. For example, in the linked working tree \fBgit rev\-parse \-\-git\-path HEAD\fR returns \fB/path/main/\&.git/worktrees/test\-next/HEAD\fR (not \fB/path/other/test\-next/\&.git/HEAD\fR or \fB/path/main/\&.git/HEAD\fR) while \fBgit rev\-parse \-\-git\-path refs/heads/master\fR uses $GIT_COMMON_DIR and returns \fB/path/main/\&.git/refs/heads/master\fR, since refs are shared across all working trees\&.
+Path resolution via \fBgit rev\-parse \-\-git\-path\fR uses either $GIT_DIR or $GIT_COMMON_DIR depending on the path\&. For example, in the linked working tree \fBgit rev\-parse \-\-git\-path HEAD\fR returns \fB/path/main/\&.git/worktrees/test\-next/HEAD\fR (not \fB/path/other/test\-next/\&.git/HEAD\fR or \fB/path/main/\&.git/HEAD\fR) while \fBgit rev\-parse \-\-git\-path refs/heads/master\fR uses $GIT_COMMON_DIR and returns \fB/path/main/\&.git/refs/heads/master\fR, since refs are shared across all working trees, except refs/bisect and refs/worktree\&.
 .sp
 See \fBgitrepository-layout\fR(5) for more information\&. The rule of thumb is do not make any assumption about whether a path belongs to $GIT_DIR or $GIT_COMMON_DIR when you need to directly access something inside $GIT_DIR\&. Use \fBgit rev\-parse \-\-git\-path\fR to get the final path\&.
 .sp
 If you manually move a linked working tree, you need to update the \fIgitdir\fR file in the entry\(cqs directory\&. For example, if a linked working tree is moved to \fB/newpath/test\-next\fR and its \fB\&.git\fR file points to \fB/path/main/\&.git/worktrees/test\-next\fR, then update \fB/path/main/\&.git/worktrees/test\-next/gitdir\fR to reference \fB/newpath/test\-next\fR instead\&.
 .sp
 To prevent a $GIT_DIR/worktrees entry from being pruned (which can be useful in some situations, such as when the entry\(cqs working tree is stored on a portable device), use the \fBgit worktree lock\fR command, which adds a file named \fIlocked\fR to the entry\(cqs directory\&. The file contains the reason in plain text\&. For example, if a linked working tree\(cqs \fB\&.git\fR file points to \fB/path/main/\&.git/worktrees/test\-next\fR then a file named \fB/path/main/\&.git/worktrees/test\-next/locked\fR will prevent the \fBtest\-next\fR entry from being pruned\&. See \fBgitrepository-layout\fR(5) for details\&.
+.sp
+When extensions\&.worktreeConfig is enabled, the config file \fB\&.git/worktrees/<id>/config\&.worktree\fR is read after \fB\&.git/config\fR is\&.
 .SH "LIST OUTPUT FORMAT"
 .sp
 The worktree list command has two output formats\&. The default format shows the details on a single line with columns\&. For example:
@@ -269,7 +373,7 @@ The worktree list command has two output formats\&. The default format shows the
 .RS 4
 .\}
 .nf
-S git worktree list
+$ git worktree list
 /path/to/bare\-source            (bare)
 /path/to/linked\-worktree        abcd1234 [master]
 /path/to/other\-linked\-worktree  1234abc  (detached HEAD)
@@ -280,13 +384,13 @@ S git worktree list
 .sp
 .SS "Porcelain Format"
 .sp
-The porcelain format has a line per attribute\&. Attributes are listed with a label and value separated by a single space\&. Boolean attributes (like \fIbare\fR and \fIdetached\fR) are listed as a label only, and are only present if and only if the value is true\&. An empty line indicates the end of a worktree\&. For example:
+The porcelain format has a line per attribute\&. Attributes are listed with a label and value separated by a single space\&. Boolean attributes (like \fIbare\fR and \fIdetached\fR) are listed as a label only, and are only present if and only if the value is true\&. The first attribute of a worktree is always \fBworktree\fR, an empty line indicates the end of the record\&. For example:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-S git worktree list \-\-porcelain
+$ git worktree list \-\-porcelain
 worktree /path/to/bare\-source
 bare
 
@@ -315,8 +419,7 @@ $ pushd \&.\&./temp
 # \&.\&.\&. hack hack hack \&.\&.\&.
 $ git commit \-a \-m \(aqemergency fix for boss\(aq
 $ popd
-$ rm \-rf \&.\&./temp
-$ git worktree prune
+$ git worktree remove \&.\&./temp
 .fi
 .if n \{\
 .RE

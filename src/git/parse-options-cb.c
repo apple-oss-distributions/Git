@@ -28,17 +28,14 @@ int parse_opt_abbrev_cb(const struct option *opt, const char *arg, int unset)
 	return 0;
 }
 
-int parse_opt_approxidate_cb(const struct option *opt, const char *arg,
-			     int unset)
-{
-	*(timestamp_t *)(opt->value) = approxidate(arg);
-	return 0;
-}
-
 int parse_opt_expiry_date_cb(const struct option *opt, const char *arg,
 			     int unset)
 {
-	return parse_expiry_date(arg, (timestamp_t *)opt->value);
+	if (unset)
+		arg = "never";
+	if (parse_expiry_date(arg, (timestamp_t *)opt->value))
+		die(_("malformed expiration date '%s'"), arg);
+	return 0;
 }
 
 int parse_opt_color_flag_cb(const struct option *opt, const char *arg,
@@ -60,6 +57,8 @@ int parse_opt_verbosity_cb(const struct option *opt, const char *arg,
 			   int unset)
 {
 	int *target = opt->value;
+
+	BUG_ON_OPT_ARG(arg);
 
 	if (unset)
 		/* --no-quiet, --no-verbose */
@@ -83,11 +82,13 @@ int parse_opt_commits(const struct option *opt, const char *arg, int unset)
 	struct object_id oid;
 	struct commit *commit;
 
+	BUG_ON_OPT_NEG(unset);
+
 	if (!arg)
 		return -1;
 	if (get_oid(arg, &oid))
 		return error("malformed object name %s", arg);
-	commit = lookup_commit_reference(&oid);
+	commit = lookup_commit_reference(the_repository, &oid);
 	if (!commit)
 		return error("no such commit %s", arg);
 	commit_list_insert(commit, opt->value);
@@ -113,6 +114,9 @@ int parse_opt_object_name(const struct option *opt, const char *arg, int unset)
 int parse_opt_tertiary(const struct option *opt, const char *arg, int unset)
 {
 	int *target = opt->value;
+
+	BUG_ON_OPT_ARG(arg);
+
 	*target = unset ? 2 : 1;
 	return 0;
 }

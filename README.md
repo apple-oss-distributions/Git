@@ -23,6 +23,7 @@ This project contains git from http://git-scm.com with some minor modifications
 Ideally, you have a git remote setup for git://git.kernel.org/pub/scm/git/git.git
 If you do not, then do this:
 
+    git remote add cabal git@github.com:git/cabal.git
     git remote add upstream git://git.kernel.org/pub/scm/git/git.git
     git remote add upstream-htmldocs git://git.kernel.org/pub/scm/git/git-htmldocs.git
     git remote add upstream-manpages git://git.kernel.org/pub/scm/git/git-manpages.git

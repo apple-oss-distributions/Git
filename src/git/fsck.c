@@ -1,4 +1,6 @@
 #include "cache.h"
+#include "object-store.h"
+#include "repository.h"
 #include "object.h"
 #include "blob.h"
 #include "tree.h"
@@ -8,12 +10,12 @@
 #include "fsck.h"
 #include "refs.h"
 #include "utf8.h"
-#include "sha1-array.h"
 #include "decorate.h"
 #include "oidset.h"
 #include "packfile.h"
 #include "submodule-config.h"
 #include "config.h"
+#include "help.h"
 
 static struct oidset gitmodules_found = OIDSET_INIT;
 static struct oidset gitmodules_done = OIDSET_INIT;
@@ -61,7 +63,7 @@ static struct oidset gitmodules_done = OIDSET_INIT;
 	FUNC(ZERO_PADDED_DATE, ERROR) \
 	FUNC(GITMODULES_MISSING, ERROR) \
 	FUNC(GITMODULES_BLOB, ERROR) \
-	FUNC(GITMODULES_PARSE, ERROR) \
+	FUNC(GITMODULES_LARGE, ERROR) \
 	FUNC(GITMODULES_NAME, ERROR) \
 	FUNC(GITMODULES_SYMLINK, ERROR) \
 	FUNC(GITMODULES_URL, ERROR) \
@@ -77,6 +79,7 @@ static struct oidset gitmodules_done = OIDSET_INIT;
 	FUNC(ZERO_PADDED_FILEMODE, WARN) \
 	FUNC(NUL_IN_COMMIT, WARN) \
 	/* infos (reported as warnings, but ignored by default) */ \
+	FUNC(GITMODULES_PARSE, INFO) \
 	FUNC(BAD_TAG_NAME, INFO) \
 	FUNC(MISSING_TAGGER_ENTRY, INFO)
 
@@ -88,43 +91,76 @@ enum fsck_msg_id {
 #undef MSG_ID
 
 #define STR(x) #x
-#define MSG_ID(id, msg_type) { STR(id), NULL, FSCK_##msg_type },
+#define MSG_ID(id, msg_type) { STR(id), NULL, NULL, FSCK_##msg_type },
 static struct {
 	const char *id_string;
 	const char *downcased;
+	const char *camelcased;
 	int msg_type;
 } msg_id_info[FSCK_MSG_MAX + 1] = {
 	FOREACH_MSG_ID(MSG_ID)
-	{ NULL, NULL, -1 }
+	{ NULL, NULL, NULL, -1 }
 };
 #undef MSG_ID
+
+static void prepare_msg_ids(void)
+{
+	int i;
+
+	if (msg_id_info[0].downcased)
+		return;
+
+	/* convert id_string to lower case, without underscores. */
+	for (i = 0; i < FSCK_MSG_MAX; i++) {
+		const char *p = msg_id_info[i].id_string;
+		int len = strlen(p);
+		char *q = xmalloc(len);
+
+		msg_id_info[i].downcased = q;
+		while (*p)
+			if (*p == '_')
+				p++;
+			else
+				*(q)++ = tolower(*(p)++);
+		*q = '\0';
+
+		p = msg_id_info[i].id_string;
+		q = xmalloc(len);
+		msg_id_info[i].camelcased = q;
+		while (*p) {
+			if (*p == '_') {
+				p++;
+				if (*p)
+					*q++ = *p++;
+			} else {
+				*q++ = tolower(*p++);
+			}
+		}
+		*q = '\0';
+	}
+}
 
 static int parse_msg_id(const char *text)
 {
 	int i;
 
-	if (!msg_id_info[0].downcased) {
-		/* convert id_string to lower case, without underscores. */
-		for (i = 0; i < FSCK_MSG_MAX; i++) {
-			const char *p = msg_id_info[i].id_string;
-			int len = strlen(p);
-			char *q = xmalloc(len);
-
-			msg_id_info[i].downcased = q;
-			while (*p)
-				if (*p == '_')
-					p++;
-				else
-					*(q)++ = tolower(*(p)++);
-			*q = '\0';
-		}
-	}
+	prepare_msg_ids();
 
 	for (i = 0; i < FSCK_MSG_MAX; i++)
 		if (!strcmp(text, msg_id_info[i].downcased))
 			return i;
 
 	return -1;
+}
+
+void list_config_fsck_msg_ids(struct string_list *list, const char *prefix)
+{
+	int i;
+
+	prepare_msg_ids();
+
+	for (i = 0; i < FSCK_MSG_MAX; i++)
+		list_config_item(list, prefix, msg_id_info[i].camelcased);
 }
 
 static int fsck_msg_type(enum fsck_msg_id msg_id,
@@ -147,40 +183,37 @@ static int fsck_msg_type(enum fsck_msg_id msg_id,
 
 static void init_skiplist(struct fsck_options *options, const char *path)
 {
-	static struct oid_array skiplist = OID_ARRAY_INIT;
-	int sorted, fd;
-	char buffer[GIT_MAX_HEXSZ + 1];
+	FILE *fp;
+	struct strbuf sb = STRBUF_INIT;
 	struct object_id oid;
 
-	if (options->skiplist)
-		sorted = options->skiplist->sorted;
-	else {
-		sorted = 1;
-		options->skiplist = &skiplist;
-	}
-
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
+	fp = fopen(path, "r");
+	if (!fp)
 		die("Could not open skip list: %s", path);
-	for (;;) {
+	while (!strbuf_getline(&sb, fp)) {
 		const char *p;
-		int result = read_in_full(fd, buffer, sizeof(buffer));
-		if (result < 0)
-			die_errno("Could not read '%s'", path);
-		if (!result)
-			break;
-		if (parse_oid_hex(buffer, &oid, &p) || *p != '\n')
-			die("Invalid SHA-1: %s", buffer);
-		oid_array_append(&skiplist, &oid);
-		if (sorted && skiplist.nr > 1 &&
-				oidcmp(&skiplist.oid[skiplist.nr - 2],
-				       &oid) > 0)
-			sorted = 0;
-	}
-	close(fd);
+		const char *hash;
 
-	if (sorted)
-		skiplist.sorted = 1;
+		/*
+		 * Allow trailing comments, leading whitespace
+		 * (including before commits), and empty or whitespace
+		 * only lines.
+		 */
+		hash = strchr(sb.buf, '#');
+		if (hash)
+			strbuf_setlen(&sb, hash - sb.buf);
+		strbuf_trim(&sb);
+		if (!sb.len)
+			continue;
+
+		if (parse_oid_hex(sb.buf, &oid, &p) || *p != '\0')
+			die("Invalid SHA-1: %s", sb.buf);
+		oidset_insert(&options->skiplist, &oid);
+	}
+	if (ferror(fp))
+		die_errno("Could not read '%s'", path);
+	fclose(fp);
+	strbuf_release(&sb);
 }
 
 static int parse_msg_type(const char *str)
@@ -283,6 +316,11 @@ static void append_msg_id(struct strbuf *sb, const char *msg_id)
 	strbuf_addstr(sb, ": ");
 }
 
+static int object_on_skiplist(struct fsck_options *opts, struct object *obj)
+{
+	return opts && obj && oidset_contains(&opts->skiplist, &obj->oid);
+}
+
 __attribute__((format (printf, 4, 5)))
 static int report(struct fsck_options *options, struct object *object,
 	enum fsck_msg_id id, const char *fmt, ...)
@@ -294,8 +332,7 @@ static int report(struct fsck_options *options, struct object *object,
 	if (msg_type == FSCK_IGNORE)
 		return 0;
 
-	if (options->skiplist && object &&
-			oid_array_lookup(options->skiplist, &object->oid) >= 0)
+	if (object_on_skiplist(options, object))
 		return 0;
 
 	if (msg_type == FSCK_FATAL)
@@ -373,14 +410,14 @@ static int fsck_walk_tree(struct tree *tree, void *data, struct fsck_options *op
 			continue;
 
 		if (S_ISDIR(entry.mode)) {
-			obj = (struct object *)lookup_tree(entry.oid);
+			obj = (struct object *)lookup_tree(the_repository, entry.oid);
 			if (name && obj)
 				put_object_name(options, obj, "%s%s/", name,
 					entry.path);
 			result = options->walk(obj, OBJ_TREE, data, options);
 		}
 		else if (S_ISREG(entry.mode) || S_ISLNK(entry.mode)) {
-			obj = (struct object *)lookup_blob(entry.oid);
+			obj = (struct object *)lookup_blob(the_repository, entry.oid);
 			if (name && obj)
 				put_object_name(options, obj, "%s%s", name,
 					entry.path);
@@ -411,9 +448,11 @@ static int fsck_walk_commit(struct commit *commit, void *data, struct fsck_optio
 
 	name = get_object_name(options, &commit->object);
 	if (name)
-		put_object_name(options, &commit->tree->object, "%s:", name);
+		put_object_name(options, &get_commit_tree(commit)->object,
+				"%s:", name);
 
-	result = options->walk((struct object *)commit->tree, OBJ_TREE, data, options);
+	result = options->walk((struct object *)get_commit_tree(commit),
+			       OBJ_TREE, data, options);
 	if (result < 0)
 		return result;
 	res = result;
@@ -440,7 +479,7 @@ static int fsck_walk_commit(struct commit *commit, void *data, struct fsck_optio
 		if (name) {
 			struct object *obj = &parents->item->object;
 
-			if (++counter > 1)
+			if (counter++)
 				put_object_name(options, obj, "%s^%d",
 					name, counter);
 			else if (generation > 0)
@@ -476,7 +515,7 @@ int fsck_walk(struct object *obj, void *data, struct fsck_options *options)
 		return -1;
 
 	if (obj->type == OBJ_NONE)
-		parse_object(&obj->oid);
+		parse_object(the_repository, &obj->oid);
 
 	switch (obj->type) {
 	case OBJ_BLOB:
@@ -734,33 +773,34 @@ static int fsck_ident(const char **ident, struct object *obj, struct fsck_option
 static int fsck_commit_buffer(struct commit *commit, const char *buffer,
 	unsigned long size, struct fsck_options *options)
 {
-	unsigned char tree_sha1[20], sha1[20];
+	struct object_id tree_oid, oid;
 	struct commit_graft *graft;
 	unsigned parent_count, parent_line_count = 0, author_count;
 	int err;
 	const char *buffer_begin = buffer;
+	const char *p;
 
 	if (verify_headers(buffer, size, &commit->object, options))
 		return -1;
 
 	if (!skip_prefix(buffer, "tree ", &buffer))
 		return report(options, &commit->object, FSCK_MSG_MISSING_TREE, "invalid format - expected 'tree' line");
-	if (get_sha1_hex(buffer, tree_sha1) || buffer[40] != '\n') {
+	if (parse_oid_hex(buffer, &tree_oid, &p) || *p != '\n') {
 		err = report(options, &commit->object, FSCK_MSG_BAD_TREE_SHA1, "invalid 'tree' line format - bad sha1");
 		if (err)
 			return err;
 	}
-	buffer += 41;
+	buffer = p + 1;
 	while (skip_prefix(buffer, "parent ", &buffer)) {
-		if (get_sha1_hex(buffer, sha1) || buffer[40] != '\n') {
+		if (parse_oid_hex(buffer, &oid, &p) || *p != '\n') {
 			err = report(options, &commit->object, FSCK_MSG_BAD_PARENT_SHA1, "invalid 'parent' line format - bad sha1");
 			if (err)
 				return err;
 		}
-		buffer += 41;
+		buffer = p + 1;
 		parent_line_count++;
 	}
-	graft = lookup_commit_graft(&commit->object.oid);
+	graft = lookup_commit_graft(the_repository, &commit->object.oid);
 	parent_count = commit_list_count(commit->parents);
 	if (graft) {
 		if (graft->nr_parent == -1 && !parent_count)
@@ -795,8 +835,8 @@ static int fsck_commit_buffer(struct commit *commit, const char *buffer,
 	err = fsck_ident(&buffer, &commit->object, options);
 	if (err)
 		return err;
-	if (!commit->tree) {
-		err = report(options, &commit->object, FSCK_MSG_BAD_TREE, "could not load commit's tree %s", sha1_to_hex(tree_sha1));
+	if (!get_commit_tree(commit)) {
+		err = report(options, &commit->object, FSCK_MSG_BAD_TREE, "could not load commit's tree %s", oid_to_hex(&tree_oid));
 		if (err)
 			return err;
 	}
@@ -822,11 +862,12 @@ static int fsck_commit(struct commit *commit, const char *data,
 static int fsck_tag_buffer(struct tag *tag, const char *data,
 	unsigned long size, struct fsck_options *options)
 {
-	unsigned char sha1[20];
+	struct object_id oid;
 	int ret = 0;
 	const char *buffer;
 	char *to_free = NULL, *eol;
 	struct strbuf sb = STRBUF_INIT;
+	const char *p;
 
 	if (data)
 		buffer = data;
@@ -834,7 +875,7 @@ static int fsck_tag_buffer(struct tag *tag, const char *data,
 		enum object_type type;
 
 		buffer = to_free =
-			read_sha1_file(tag->object.oid.hash, &type, &size);
+			read_object_file(&tag->object.oid, &type, &size);
 		if (!buffer)
 			return report(options, &tag->object,
 				FSCK_MSG_MISSING_TAG_OBJECT,
@@ -857,12 +898,12 @@ static int fsck_tag_buffer(struct tag *tag, const char *data,
 		ret = report(options, &tag->object, FSCK_MSG_MISSING_OBJECT, "invalid format - expected 'object' line");
 		goto done;
 	}
-	if (get_sha1_hex(buffer, sha1) || buffer[40] != '\n') {
+	if (parse_oid_hex(buffer, &oid, &p) || *p != '\n') {
 		ret = report(options, &tag->object, FSCK_MSG_BAD_OBJECT_SHA1, "invalid 'object' line format - bad sha1");
 		if (ret)
 			goto done;
 	}
-	buffer += 41;
+	buffer = p + 1;
 
 	if (!skip_prefix(buffer, "type ", &buffer)) {
 		ret = report(options, &tag->object, FSCK_MSG_MISSING_TYPE_ENTRY, "invalid format - expected 'type' line");
@@ -968,10 +1009,14 @@ static int fsck_blob(struct blob *blob, const char *buf,
 		     unsigned long size, struct fsck_options *options)
 {
 	struct fsck_gitmodules_data data;
+	struct config_options config_opts = { 0 };
 
 	if (!oidset_contains(&gitmodules_found, &blob->object.oid))
 		return 0;
 	oidset_insert(&gitmodules_done, &blob->object.oid);
+
+	if (object_on_skiplist(options, &blob->object))
+		return 0;
 
 	if (!buf) {
 		/*
@@ -980,15 +1025,16 @@ static int fsck_blob(struct blob *blob, const char *buf,
 		 * that an error.
 		 */
 		return report(options, &blob->object,
-			      FSCK_MSG_GITMODULES_PARSE,
+			      FSCK_MSG_GITMODULES_LARGE,
 			      ".gitmodules too large to parse");
 	}
 
 	data.obj = &blob->object;
 	data.options = options;
 	data.ret = 0;
+	config_opts.error_action = CONFIG_ERROR_SILENT;
 	if (git_config_from_mem(fsck_gitmodules_fn, CONFIG_ORIGIN_BLOB,
-				".gitmodules", buf, size, &data))
+				".gitmodules", buf, size, &data, &config_opts))
 		data.ret |= report(options, &blob->object,
 				   FSCK_MSG_GITMODULES_PARSE,
 				   "could not parse gitmodules blob");
@@ -1044,15 +1090,16 @@ int fsck_finish(struct fsck_options *options)
 		if (oidset_contains(&gitmodules_done, oid))
 			continue;
 
-		blob = lookup_blob(oid);
+		blob = lookup_blob(the_repository, oid);
 		if (!blob) {
-			ret |= report(options, &blob->object,
+			struct object *obj = lookup_unknown_object(oid->hash);
+			ret |= report(options, obj,
 				      FSCK_MSG_GITMODULES_BLOB,
 				      "non-blob found at .gitmodules");
 			continue;
 		}
 
-		buf = read_sha1_file(oid->hash, &type, &size);
+		buf = read_object_file(oid, &type, &size);
 		if (!buf) {
 			if (is_promisor_object(&blob->object.oid))
 				continue;

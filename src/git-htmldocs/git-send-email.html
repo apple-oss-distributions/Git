@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-send-email(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -748,7 +749,7 @@ git-send-email(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git send-email</em> [options] &lt;file|directory|rev-list options&gt;&#8230;
+<pre class="content"><em>git send-email</em> [&lt;options&gt;] &lt;file|directory|rev-list options&gt;&#8230;
 <em>git send-email</em> --dump-aliases</pre>
 <div class="attribution">
 </div></div>
@@ -932,7 +933,7 @@ is not set, this will be prompted for.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---transfer-encoding=(7bit|8bit|quoted-printable|base64)
+--transfer-encoding=(7bit|8bit|quoted-printable|base64|auto)
 </dt>
 <dd>
 <p>
@@ -941,10 +942,11 @@ is not set, this will be prompted for.</p></div>
         can be useful when the repository contains files that contain carriage
         returns, but makes the raw patch email file (as saved from a MUA) much
         harder to inspect manually.  base64 is even more fool proof, but also
-        even more opaque.  Default is the value of the <code>sendemail.transferEncoding</code>
-        configuration value; if that is unspecified, git will use 8bit and not
-        add a Content-Transfer-Encoding header.
+        even more opaque.  auto will use 8bit when possible, and quoted-printable
+        otherwise.
 </p>
+<div class="paragraph"><p>Default is the value of the <code>sendemail.transferEncoding</code> configuration
+value; if that is unspecified, default to <code>auto</code>.</p></div>
 </dd>
 <dt class="hdlist1">
 --xmailer
@@ -1015,7 +1017,9 @@ is not set, this will be prompted for.</p></div>
 <div class="paragraph"><p>If at least one of the specified mechanisms matches the ones advertised by the
 SMTP server and if it is supported by the utilized SASL library, the mechanism
 is used for authentication. If neither <em>sendemail.smtpAuth</em> nor <code>--smtp-auth</code>
-is specified, all mechanisms supported by the SASL library can be used.</p></div>
+is specified, all mechanisms supported by the SASL library can be used. The
+special value <em>none</em> maybe specified to completely disable authentication
+independently of <code>--smtp-user</code></p></div>
 </dd>
 <dt class="hdlist1">
 --smtp-pass[=&lt;password&gt;]
@@ -1032,6 +1036,14 @@ or on the command line. If a username has been specified (with
 <code>--smtp-user</code> or a <code>sendemail.smtpUser</code>), but no password has been
 specified (with <code>--smtp-pass</code> or <code>sendemail.smtpPass</code>), then
 a password is obtained using <em>git-credential</em>.</p></div>
+</dd>
+<dt class="hdlist1">
+--no-smtp-auth
+</dt>
+<dd>
+<p>
+        Disable SMTP authentication. Short hand for <code>--smtp-auth=none</code>
+</p>
 </dd>
 <dt class="hdlist1">
 --smtp-server=&lt;host&gt;
@@ -1124,7 +1136,7 @@ must be used for each option.</p></div>
 <dd>
 <p>
         Some email servers (e.g. smtp.163.com) limit the number emails to be
-        sent per session (connection) and this will lead to a faliure when
+        sent per session (connection) and this will lead to a failure when
         sending many messages.  With this option, send-email will disconnect after
         sending $&lt;num&gt; messages and wait for a few seconds (see --relogin-delay)
         and reconnect, to work around such a limit.  You may want to
@@ -1239,12 +1251,12 @@ must be used for each option.</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
-<em>author</em> will avoid including the patch author
+<em>author</em> will avoid including the patch author.
 </p>
 </li>
 <li>
 <p>
-<em>self</em> will avoid including the sender
+<em>self</em> will avoid including the sender.
 </p>
 </li>
 <li>
@@ -1262,7 +1274,14 @@ must be used for each option.</p></div>
 <li>
 <p>
 <em>sob</em> will avoid including anyone mentioned in Signed-off-by lines except
-   for self (use <em>self</em> for that).
+  for self (use <em>self</em> for that).
+</p>
+</li>
+<li>
+<p>
+<em>misc-by</em> will avoid including anyone mentioned in Acked-by,
+  Reviewed-by, Tested-by and other "-by" lines in the patch body,
+  except Signed-off-by (use <em>sob</em> for that).
 </p>
 </li>
 <li>
@@ -1272,7 +1291,7 @@ must be used for each option.</p></div>
 </li>
 <li>
 <p>
-<em>body</em> is equivalent to <em>sob</em> + <em>bodycc</em>
+<em>body</em> is equivalent to <em>sob</em> + <em>bodycc</em> + <em>misc-by</em>.
 </p>
 </li>
 <li>
@@ -1410,8 +1429,11 @@ Invoke the sendemail-validate hook if present (see <a href="githooks.html">githo
 </li>
 <li>
 <p>
-Warn of patches that contain lines longer than 998 characters; this
-                        is due to SMTP limits as described by <a href="http://www.ietf.org/rfc/rfc2821.txt">http://www.ietf.org/rfc/rfc2821.txt</a>.
+Warn of patches that contain lines longer than
+                        998 characters unless a suitable transfer encoding
+                        (<em>auto</em>, <em>base64</em>, or <em>quoted-printable</em>) is used;
+                        this is due to SMTP limits as described by
+                        <a href="http://www.ietf.org/rfc/rfc5322.txt">http://www.ietf.org/rfc/rfc5322.txt</a>.
 </p>
 </li>
 </ul></div>
@@ -1534,7 +1556,7 @@ sendemail.confirm
 </div>
 </div>
 <div class="sect1">
-<h2 id="_example">EXAMPLE</h2>
+<h2 id="_examples">EXAMPLES</h2>
 <div class="sectionbody">
 <div class="sect2">
 <h3 id="_use_gmail_as_the_smtp_server">Use gmail as the smtp server</h3>
@@ -1550,17 +1572,7 @@ edit ~/.gitconfig to specify your account settings:</p></div>
 </div></div>
 <div class="paragraph"><p>If you have multifactor authentication setup on your gmail account, you will
 need to generate an app-specific password for use with <em>git send-email</em>. Visit
-<a href="https://security.google.com/settings/security/apppasswords">https://security.google.com/settings/security/apppasswords</a> to setup an
-app-specific password.  Once setup, you can store it with the credentials
-helper:</p></div>
-<div class="literalblock">
-<div class="content">
-<pre><code>$ git credential fill
-protocol=smtp
-host=smtp.gmail.com
-username=youname@gmail.com
-password=app-password</code></pre>
-</div></div>
+<a href="https://security.google.com/settings/security/apppasswords">https://security.google.com/settings/security/apppasswords</a> to create it.</p></div>
 <div class="paragraph"><p>Once your commits are ready to be sent to the mailing list, run the
 following commands:</p></div>
 <div class="literalblock">
@@ -1569,6 +1581,10 @@ following commands:</p></div>
 $ edit outgoing/0000-*
 $ git send-email outgoing/*</code></pre>
 </div></div>
+<div class="paragraph"><p>The first time you run it, you will be prompted for your credentials.  Enter the
+app-specific or your regular password as appropriate.  If you have credential
+helper configured (see <a href="git-credential.html">git-credential(1)</a>), the password will be saved in
+the credential store so you won&#8217;t have to type it the next time.</p></div>
 <div class="paragraph"><p>Note: the following perl modules are required
       Net::SMTP::SSL, MIME::Base64 and Authen::SASL</p></div>
 </div>
@@ -1591,7 +1607,7 @@ $ git send-email outgoing/*</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-03-15 15:49:20 PDT
+ 2018-11-07 12:54:03 JST
 </div>
 </div>
 </body>

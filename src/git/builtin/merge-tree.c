@@ -1,8 +1,10 @@
 #include "builtin.h"
 #include "tree-walk.h"
 #include "xdiff-interface.h"
+#include "object-store.h"
+#include "repository.h"
 #include "blob.h"
-#include "exec_cmd.h"
+#include "exec-cmd.h"
 #include "merge-blobs.h"
 
 static const char merge_tree_usage[] = "git merge-tree <base-tree> <branch1> <branch2>";
@@ -60,7 +62,7 @@ static void *result(struct merge_list *entry, unsigned long *size)
 	const char *path = entry->path;
 
 	if (!entry->stage)
-		return read_sha1_file(entry->blob->object.oid.hash, &type, size);
+		return read_object_file(&entry->blob->object.oid, &type, size);
 	base = NULL;
 	if (entry->stage == 1) {
 		base = entry->blob;
@@ -74,7 +76,7 @@ static void *result(struct merge_list *entry, unsigned long *size)
 	their = NULL;
 	if (entry)
 		their = entry->blob;
-	return merge_blobs(path, base, our, their, size);
+	return merge_blobs(&the_index, path, base, our, their, size);
 }
 
 static void *origin(struct merge_list *entry, unsigned long *size)
@@ -82,7 +84,8 @@ static void *origin(struct merge_list *entry, unsigned long *size)
 	enum object_type type;
 	while (entry) {
 		if (entry->stage == 2)
-			return read_sha1_file(entry->blob->object.oid.hash, &type, size);
+			return read_object_file(&entry->blob->object.oid,
+						&type, size);
 		entry = entry->link;
 	}
 	return NULL;
@@ -107,7 +110,8 @@ static void show_diff(struct merge_list *entry)
 	xpp.flags = 0;
 	memset(&xecfg, 0, sizeof(xecfg));
 	xecfg.ctxlen = 3;
-	ecb.outf = show_outf;
+	ecb.out_hunk = NULL;
+	ecb.out_line = show_outf;
 	ecb.priv = NULL;
 
 	src.ptr = origin(entry, &size);
@@ -152,7 +156,7 @@ static int same_entry(struct name_entry *a, struct name_entry *b)
 {
 	return	a->oid &&
 		b->oid &&
-		!oidcmp(a->oid, b->oid) &&
+		oideq(a->oid, b->oid) &&
 		a->mode == b->mode;
 }
 
@@ -168,7 +172,7 @@ static struct merge_list *create_entry(unsigned stage, unsigned mode, const stru
 	res->stage = stage;
 	res->path = path;
 	res->mode = mode;
-	res->blob = lookup_blob(oid);
+	res->blob = lookup_blob(the_repository, oid);
 	return res;
 }
 

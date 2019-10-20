@@ -2,12 +2,12 @@
 .\"     Title: git-branch
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-BRANCH" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-BRANCH" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -38,7 +38,7 @@ git-branch \- List, create, or delete branches
         [(\-\-merged | \-\-no\-merged) [<commit>]]
         [\-\-contains [<commit]] [\-\-no\-contains [<commit>]]
         [\-\-points\-at <object>] [\-\-format=<format>] [<pattern>\&...]
-\fIgit branch\fR [\-\-track | \-\-no\-track] [\-l] [\-f] <branchname> [<start\-point>]
+\fIgit branch\fR [\-\-track | \-\-no\-track] [\-f] <branchname> [<start\-point>]
 \fIgit branch\fR (\-\-set\-upstream\-to=<upstream> | \-u <upstream>) [<branchname>]
 \fIgit branch\fR \-\-unset\-upstream [<branchname>]
 \fIgit branch\fR (\-m | \-M) [<oldbranch>] <newbranch>
@@ -84,7 +84,7 @@ Shortcut for
 \fB\-\-delete \-\-force\fR\&.
 .RE
 .PP
-\-l, \-\-create\-reflog
+\-\-create\-reflog
 .RS 4
 Create the branch\(cqs reflog\&. This activates recording of all changes made to the branch ref, enabling use of date based sha1 expressions such as "<branchname>@{yesterday}"\&. Note that in non\-bare repositories, reflogs are usually enabled by default by the
 \fBcore\&.logAllRefUpdates\fR
@@ -174,18 +174,11 @@ List or delete (if used with \-d) the remote\-tracking branches\&.
 List both remote\-tracking branches and local branches\&.
 .RE
 .PP
-\-\-list
+\-l, \-\-list
 .RS 4
 List branches\&. With optional
 \fB<pattern>\&.\&.\&.\fR, e\&.g\&.
 \fBgit branch \-\-list \(aqmaint\-*\(aq\fR, list only the branches that match the pattern(s)\&.
-.sp
-This should not be confused with
-\fBgit branch \-l <branchname>\fR, which creates a branch named
-\fB<branchname>\fR
-with a reflog\&. See
-\fB\-\-create\-reflog\fR
-above for details\&.
 .RE
 .PP
 \-v, \-vv, \-\-verbose
@@ -322,9 +315,12 @@ The new name for an existing branch\&. The same restrictions as for <branchname>
 Sort based on the key given\&. Prefix
 \fB\-\fR
 to sort in descending order of the value\&. You may use the \-\-sort=<key> option multiple times, in which case the last key becomes the primary key\&. The keys supported are the same as those in
-\fBgit for\-each\-ref\fR\&. Sort order defaults to sorting based on the full refname (including
+\fBgit for\-each\-ref\fR\&. Sort order defaults to the value configured for the
+\fBbranch\&.sort\fR
+variable if exists, or to sorting based on the full refname (including
 \fBrefs/\&.\&.\&.\fR
-prefix)\&. This lists detached HEAD (if present) first, then local branches and finally remote\-tracking branches\&.
+prefix)\&. This lists detached HEAD (if present) first, then local branches and finally remote\-tracking branches\&. See
+\fBgit-config\fR(1)\&.
 .RE
 .PP
 \-\-points\-at <object>

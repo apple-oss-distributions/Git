@@ -57,7 +57,7 @@ OPTIONS
 	`xx`; for example `%00` interpolates to `\0` (NUL),
 	`%09` to `\t` (TAB) and `%0a` to `\n` (LF).
 
---color[=<when>]:
+--color[=<when>]::
 	Respect any colors specified in the `--format` option. The
 	`<when>` field must be one of `always`, `never`, or `auto` (if
 	`<when>` is absent, behave as if `always` was given).
@@ -121,7 +121,7 @@ refname::
 	stripping with positive <N>, or it becomes the full refname if
 	stripping with negative <N>.  Neither is an error.
 +
-`strip` can be used as a synomym to `lstrip`.
+`strip` can be used as a synonym to `lstrip`.
 
 objecttype::
 	The type of the object (`blob`, `tree`, `commit`, `tag`).

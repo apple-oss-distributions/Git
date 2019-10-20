@@ -1,5 +1,6 @@
 #include "builtin.h"
 #include "config.h"
+#include "object-store.h"
 
 static char *create_temp_file(struct object_id *oid)
 {
@@ -9,7 +10,7 @@ static char *create_temp_file(struct object_id *oid)
 	unsigned long size;
 	int fd;
 
-	buf = read_sha1_file(oid->hash, &type, &size);
+	buf = read_object_file(oid, &type, &size);
 	if (!buf || type != OBJ_BLOB)
 		die("unable to read blob object %s", oid_to_hex(oid));
 

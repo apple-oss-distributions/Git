@@ -2,12 +2,12 @@
 .\"     Title: git-pull
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 04/02/2018
+.\"      Date: 12/09/2018
 .\"    Manual: Git Manual
-.\"    Source: Git 2.17.0
+.\"    Source: Git 2.20.0
 .\"  Language: English
 .\"
-.TH "GIT\-PULL" "1" "04/02/2018" "Git 2\&.17\&.0" "Git Manual"
+.TH "GIT\-PULL" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,7 @@ git-pull \- Fetch from and integrate with another repository or a local branch
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit pull\fR [options] [<repository> [<refspec>\&...]]
+\fIgit pull\fR [<options>] [<repository> [<refspec>\&...]]
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -222,9 +222,16 @@ By default,
 command refuses to merge histories that do not share a common ancestor\&. This option can be used to override this safety when merging histories of two projects that started their lives independently\&. As that is a very rare occasion, no configuration variable to enable this by default exists and will not be added\&.
 .RE
 .PP
-\-r, \-\-rebase[=false|true|preserve|interactive]
+\-r, \-\-rebase[=false|true|merges|preserve|interactive]
 .RS 4
 When true, rebase the current branch on top of the upstream branch after fetching\&. If there is a remote\-tracking branch corresponding to the upstream branch and the upstream branch was rebased since last fetched, the rebase uses that information to avoid rebasing non\-local changes\&.
+.sp
+When set to
+\fBmerges\fR, rebase using
+\fBgit rebase \-\-rebase\-merges\fR
+so that the local merge commits are included in the rebase (see
+\fBgit-rebase\fR(1)
+for details)\&.
 .sp
 When set to preserve, rebase with the
 \fB\-\-preserve\-merges\fR
@@ -345,18 +352,31 @@ By default when fetching from a shallow repository,
 refuses refs that require updating \&.git/shallow\&. This option updates \&.git/shallow and accept such refs\&.
 .RE
 .PP
+\-\-negotiation\-tip=<commit|glob>
+.RS 4
+By default, Git will report, to the server, commits reachable from all local refs to find common commits in an attempt to reduce the size of the to\-be\-received packfile\&. If specified, Git will only report commits reachable from the given tips\&. This is useful to speed up fetches when the user knows which local ref is likely to have commits in common with the upstream ref being fetched\&.
+.sp
+This option may be specified more than once; if so, Git will report commits reachable from any of the given commits\&.
+.sp
+The argument to this option may be a glob on ref names, a ref, or the (possibly abbreviated) SHA\-1 of a commit\&. Specifying a glob is equivalent to specifying this option multiple times, one for each matching ref name\&.
+.sp
+See also the
+\fBfetch\&.negotiationAlgorithm\fR
+configuration variable documented in
+\fBgit-config\fR(1)\&.
+.RE
+.PP
 \-f, \-\-force
 .RS 4
 When
 \fIgit fetch\fR
 is used with
-\fB<rbranch>:<lbranch>\fR
-refspec, it refuses to update the local branch
-\fB<lbranch>\fR
-unless the remote branch
-\fB<rbranch>\fR
-it fetches is a descendant of
-\fB<lbranch>\fR\&. This option overrides that check\&.
+\fB<src>:<dst>\fR
+refspec it may refuse to update the local branch as discussed in the
+\fB<refspec>\fR
+part of the
+\fBgit-fetch\fR(1)
+documentation\&. This option overrides that check\&.
 .RE
 .PP
 \-k, \-\-keep
@@ -393,6 +413,13 @@ is passed to the command to specify non\-default path for the command run on the
 Progress status is reported on the standard error stream by default when it is attached to a terminal, unless \-q is specified\&. This flag forces progress status even if the standard error stream is not directed to a terminal\&.
 .RE
 .PP
+\-o <option>, \-\-server\-option=<option>
+.RS 4
+Transmit the given string to the server when communicating using protocol version 2\&. The given string must not contain a NUL or LF character\&. When multiple
+\fB\-\-server\-option=<option>\fR
+are given, they are all sent to the other side in the order listed on the command line\&.
+.RE
+.PP
 \-4, \-\-ipv4
 .RS 4
 Use IPv4 addresses only, ignoring IPv6 addresses\&.
@@ -427,9 +454,54 @@ The format of a <refspec> parameter is an optional plus
 means the same as
 \fBrefs/tags/<tag>:refs/tags/<tag>\fR; it requests fetching everything up to the given tag\&.
 .sp
-The remote ref that matches <src> is fetched, and if <dst> is not empty string, the local ref that matches it is fast\-forwarded using <src>\&. If the optional plus
+The remote ref that matches <src> is fetched, and if <dst> is not an empty string, an attempt is made to update the local ref that matches it\&.
+.sp
+Whether that update is allowed without
+\fB\-\-force\fR
+depends on the ref namespace it\(cqs being fetched to, the type of object being fetched, and whether the update is considered to be a fast\-forward\&. Generally, the same rules apply for fetching as when pushing, see the
+\fB<refspec>\&.\&.\&.\fR
+section of
+\fBgit-push\fR(1)
+for what those are\&. Exceptions to those rules particular to
+\fIgit fetch\fR
+are noted below\&.
+.sp
+Until Git version 2\&.20, and unlike when pushing with
+\fBgit-push\fR(1), any updates to
+\fBrefs/tags/*\fR
+would be accepted without
 \fB+\fR
-is used, the local ref is updated even if it does not result in a fast\-forward update\&.
+in the refspec (or
+\fB\-\-force\fR)\&. When fetching, we promiscuously considered all tag updates from a remote to be forced fetches\&. Since Git version 2\&.20, fetching to update
+\fBrefs/tags/*\fR
+works the same way as when pushing\&. I\&.e\&. any updates will be rejected without
+\fB+\fR
+in the refspec (or
+\fB\-\-force\fR)\&.
+.sp
+Unlike when pushing with
+\fBgit-push\fR(1), any updates outside of
+\fBrefs/{tags,heads}/*\fR
+will be accepted without
+\fB+\fR
+in the refspec (or
+\fB\-\-force\fR), whether that\(cqs swapping e\&.g\&. a tree object for a blob, or a commit for another commit that\(cqs doesn\(cqt have the previous commit as an ancestor etc\&.
+.sp
+Unlike when pushing with
+\fBgit-push\fR(1), there is no configuration which\(cqll amend these rules, and nothing like a
+\fBpre\-fetch\fR
+hook analogous to the
+\fBpre\-receive\fR
+hook\&.
+.sp
+As with pushing with
+\fBgit-push\fR(1), all of the rules described above about what\(cqs not allowed as an update can be overridden by adding an the optional leading
+\fB+\fR
+to a refspec (or using
+\fB\-\-force\fR
+command line option)\&. The only exception to this is that no amount of forcing will make the
+\fBrefs/heads/*\fR
+namespace accept a non\-commit object\&.
 .if n \{\
 .sp
 .\}
@@ -816,7 +888,7 @@ This can only resolve two heads (i\&.e\&. the current branch and another branch 
 .PP
 recursive
 .RS 4
-This can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this can detect and handle merges involving renames\&. This is the default merge strategy when pulling or merging one branch\&.
+This can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this can detect and handle merges involving renames, but currently cannot make use of detected copies\&. This is the default merge strategy when pulling or merging one branch\&.
 .sp
 The
 \fIrecursive\fR
@@ -933,14 +1005,18 @@ configuration variable\&.
 .PP
 no\-renames
 .RS 4
-Turn off rename detection\&. See also
+Turn off rename detection\&. This overrides the
+\fBmerge\&.renames\fR
+configuration variable\&. See also
 \fBgit-diff\fR(1)
 \fB\-\-no\-renames\fR\&.
 .RE
 .PP
 find\-renames[=<n>]
 .RS 4
-Turn on rename detection, optionally setting the similarity threshold\&. This is the default\&. See also
+Turn on rename detection, optionally setting the similarity threshold\&. This is the default\&. This overrides the
+\fImerge\&.renames\fR
+configuration variable\&. See also
 \fBgit-diff\fR(1)
 \fB\-\-find\-renames\fR\&.
 .RE

@@ -1,6 +1,8 @@
 #include "cache.h"
 #include "commit.h"
 #include "refs.h"
+#include "object-store.h"
+#include "repository.h"
 #include "diff.h"
 #include "diffcore.h"
 #include "xdiff-interface.h"
@@ -10,6 +12,7 @@
 #include "notes-merge.h"
 #include "strbuf.h"
 #include "notes-utils.h"
+#include "commit-reach.h"
 
 struct notes_merge_pair {
 	struct object_id obj, base, local, remote;
@@ -124,7 +127,7 @@ static struct notes_merge_pair *diff_tree_remote(struct notes_merge_options *o,
 	trace_printf("\tdiff_tree_remote(base = %.7s, remote = %.7s)\n",
 	       oid_to_hex(base), oid_to_hex(remote));
 
-	diff_setup(&opt);
+	repo_diff_setup(the_repository, &opt);
 	opt.flags.recursive = 1;
 	opt.output_format = DIFF_FORMAT_NO_OUTPUT;
 	diff_setup_done(&opt);
@@ -149,7 +152,7 @@ static struct notes_merge_pair *diff_tree_remote(struct notes_merge_options *o,
 		mp = find_notes_merge_pair_pos(changes, len, &obj, 1, &occupied);
 		if (occupied) {
 			/* We've found an addition/deletion pair */
-			assert(!oidcmp(&mp->obj, &obj));
+			assert(oideq(&mp->obj, &obj));
 			if (is_null_oid(&p->one->oid)) { /* addition */
 				assert(is_null_oid(&mp->remote));
 				oidcpy(&mp->remote, &p->two->oid);
@@ -187,7 +190,7 @@ static void diff_tree_local(struct notes_merge_options *o,
 	trace_printf("\tdiff_tree_local(len = %i, base = %.7s, local = %.7s)\n",
 	       len, oid_to_hex(base), oid_to_hex(local));
 
-	diff_setup(&opt);
+	repo_diff_setup(the_repository, &opt);
 	opt.flags.recursive = 1;
 	opt.output_format = DIFF_FORMAT_NO_OUTPUT;
 	diff_setup_done(&opt);
@@ -216,7 +219,7 @@ static void diff_tree_local(struct notes_merge_options *o,
 			continue;
 		}
 
-		assert(!oidcmp(&mp->obj, &obj));
+		assert(oideq(&mp->obj, &obj));
 		if (is_null_oid(&p->two->oid)) { /* deletion */
 			/*
 			 * Either this is a true deletion (1), or it is part
@@ -227,7 +230,7 @@ static void diff_tree_local(struct notes_merge_options *o,
 			 * (3) mp->local is uninitialized; set it to null_sha1
 			 *     (will be overwritten by following addition)
 			 */
-			if (!oidcmp(&mp->local, &uninitialized))
+			if (oideq(&mp->local, &uninitialized))
 				oidclr(&mp->local);
 		} else if (is_null_oid(&p->one->oid)) { /* addition */
 			/*
@@ -239,7 +242,7 @@ static void diff_tree_local(struct notes_merge_options *o,
 			 * (3) mp->local is null_sha1;     set to p->two->sha1
 			 */
 			assert(is_null_oid(&mp->local) ||
-			       !oidcmp(&mp->local, &uninitialized));
+			       oideq(&mp->local, &uninitialized));
 			oidcpy(&mp->local, &p->two->oid);
 		} else { /* modification */
 			/*
@@ -247,8 +250,8 @@ static void diff_tree_local(struct notes_merge_options *o,
 			 * match mp->base, and mp->local shall be uninitialized.
 			 * Set mp->local to p->two->sha1.
 			 */
-			assert(!oidcmp(&p->one->oid, &mp->base));
-			assert(!oidcmp(&mp->local, &uninitialized));
+			assert(oideq(&p->one->oid, &mp->base));
+			assert(oideq(&mp->local, &uninitialized));
 			oidcpy(&mp->local, &p->two->oid);
 		}
 		trace_printf("\t\tStored local change for %s: %.7s -> %.7s\n",
@@ -322,7 +325,7 @@ static void write_note_to_worktree(const struct object_id *obj,
 {
 	enum object_type type;
 	unsigned long size;
-	void *buf = read_sha1_file(note->hash, &type, &size);
+	void *buf = read_object_file(note, &type, &size);
 
 	if (!buf)
 		die("cannot read note %s for object %s",
@@ -346,7 +349,8 @@ static int ll_merge_in_worktree(struct notes_merge_options *o,
 	read_mmblob(&remote, &p->remote);
 
 	status = ll_merge(&result_buf, oid_to_hex(&p->obj), &base, NULL,
-			  &local, o->local_ref, &remote, o->remote_ref, NULL);
+			  &local, o->local_ref, &remote, o->remote_ref,
+			  &the_index, NULL);
 
 	free(base.ptr);
 	free(local.ptr);
@@ -442,7 +446,7 @@ static int merge_one_change(struct notes_merge_options *o,
 			printf("Using remote notes for %s\n",
 						oid_to_hex(&p->obj));
 		if (add_note(t, &p->obj, &p->remote, combine_notes_overwrite))
-			die("BUG: combine_notes_overwrite failed");
+			BUG("combine_notes_overwrite failed");
 		return 0;
 	case NOTES_MERGE_RESOLVE_UNION:
 		if (o->verbosity >= 2)
@@ -478,19 +482,19 @@ static int merge_changes(struct notes_merge_options *o,
 		       oid_to_hex(&p->local),
 		       oid_to_hex(&p->remote));
 
-		if (!oidcmp(&p->base, &p->remote)) {
+		if (oideq(&p->base, &p->remote)) {
 			/* no remote change; nothing to do */
 			trace_printf("\t\t\tskipping (no remote change)\n");
-		} else if (!oidcmp(&p->local, &p->remote)) {
+		} else if (oideq(&p->local, &p->remote)) {
 			/* same change in local and remote; nothing to do */
 			trace_printf("\t\t\tskipping (local == remote)\n");
-		} else if (!oidcmp(&p->local, &uninitialized) ||
-			   !oidcmp(&p->local, &p->base)) {
+		} else if (oideq(&p->local, &uninitialized) ||
+			   oideq(&p->local, &p->base)) {
 			/* no local change; adopt remote change */
 			trace_printf("\t\t\tno local change, adopted remote\n");
 			if (add_note(t, &p->obj, &p->remote,
 				     combine_notes_overwrite))
-				die("BUG: combine_notes_overwrite failed");
+				BUG("combine_notes_overwrite failed");
 		} else {
 			/* need file-level merge between local and remote */
 			trace_printf("\t\t\tneed content-level merge\n");
@@ -552,7 +556,7 @@ int notes_merge(struct notes_merge_options *o,
 	else if (!check_refname_format(o->local_ref, 0) &&
 		is_null_oid(&local_oid))
 		local = NULL; /* local_oid == null_oid indicates unborn ref */
-	else if (!(local = lookup_commit_reference(&local_oid)))
+	else if (!(local = lookup_commit_reference(the_repository, &local_oid)))
 		die("Could not parse local commit %s (%s)",
 		    oid_to_hex(&local_oid), o->local_ref);
 	trace_printf("\tlocal commit: %.7s\n", oid_to_hex(&local_oid));
@@ -570,7 +574,7 @@ int notes_merge(struct notes_merge_options *o,
 			die("Failed to resolve remote notes ref '%s'",
 			    o->remote_ref);
 		}
-	} else if (!(remote = lookup_commit_reference(&remote_oid))) {
+	} else if (!(remote = lookup_commit_reference(the_repository, &remote_oid))) {
 		die("Could not parse remote commit %s (%s)",
 		    oid_to_hex(&remote_oid), o->remote_ref);
 	}
@@ -600,14 +604,14 @@ int notes_merge(struct notes_merge_options *o,
 			printf("No merge base found; doing history-less merge\n");
 	} else if (!bases->next) {
 		base_oid = &bases->item->object.oid;
-		base_tree_oid = &bases->item->tree->object.oid;
+		base_tree_oid = get_commit_tree_oid(bases->item);
 		if (o->verbosity >= 4)
 			printf("One merge base found (%.7s)\n",
 			       oid_to_hex(base_oid));
 	} else {
 		/* TODO: How to handle multiple merge-bases? */
 		base_oid = &bases->item->object.oid;
-		base_tree_oid = &bases->item->tree->object.oid;
+		base_tree_oid = get_commit_tree_oid(bases->item);
 		if (o->verbosity >= 3)
 			printf("Multiple merge bases found. Using the first "
 				"(%.7s)\n", oid_to_hex(base_oid));
@@ -619,14 +623,14 @@ int notes_merge(struct notes_merge_options *o,
 			oid_to_hex(&local->object.oid),
 			oid_to_hex(base_oid));
 
-	if (!oidcmp(&remote->object.oid, base_oid)) {
+	if (oideq(&remote->object.oid, base_oid)) {
 		/* Already merged; result == local commit */
 		if (o->verbosity >= 2)
 			printf("Already up to date!\n");
 		oidcpy(result_oid, &local->object.oid);
 		goto found_result;
 	}
-	if (!oidcmp(&local->object.oid, base_oid)) {
+	if (oideq(&local->object.oid, base_oid)) {
 		/* Fast-forward; result == remote commit */
 		if (o->verbosity >= 2)
 			printf("Fast-forward\n");
@@ -634,8 +638,9 @@ int notes_merge(struct notes_merge_options *o,
 		goto found_result;
 	}
 
-	result = merge_from_diffs(o, base_tree_oid, &local->tree->object.oid,
-				  &remote->tree->object.oid, local_tree);
+	result = merge_from_diffs(o, base_tree_oid,
+				  get_commit_tree_oid(local),
+				  get_commit_tree_oid(remote), local_tree);
 
 	if (result != 0) { /* non-trivial merge (with or without conflicts) */
 		/* Commit (partial) result */
@@ -706,7 +711,7 @@ int notes_merge_commit(struct notes_merge_options *o,
 		/* write file as blob, and add to partial_tree */
 		if (stat(path.buf, &st))
 			die_errno("Failed to stat '%s'", path.buf);
-		if (index_path(&blob_oid, path.buf, &st, HASH_WRITE_OBJECT))
+		if (index_path(&the_index, &blob_oid, path.buf, &st, HASH_WRITE_OBJECT))
 			die("Failed to write blob object from '%s'", path.buf);
 		if (add_note(partial_tree, &obj_oid, &blob_oid, NULL))
 			die("Failed to add resolved note '%s' to notes tree",

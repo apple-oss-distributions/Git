@@ -74,9 +74,10 @@ submakevars := -j`sysctl -n hw.activecpu` prefix=$(PREFIX) \
   PYTHON_PATH='MACOSX_DEPLOYMENT_TARGET="" /usr/bin/python' \
   PYTHON_PATH_SQ='/usr/bin/python' \
   NO_LIBPCRE1_JIT=YesPlease \
-  NO_GETTEXT=YesPlease NO_INSTALL_HARDLINKS=YesPlease \
+  NO_GETTEXT=YesPlease INSTALL_SYMLINKS=YesPlease \
   NO_FINK=YesPlease NO_DARWIN_PORTS=YesPlease \
-  RUNTIME_PREFIX=YesPlease USE_LIBPCRE=YesPlease \
+  RUNTIME_PREFIX=YesPlease USE_LIBPCRE1=YesPlease \
+  HAVE_NS_GET_EXECUTABLE_PATH=YesPlease \
   XDL_FAST_HASH=YesPlease \
   GITGUI_VERSION=0.12.2 V=1 \
   LDFLAGS='$(LDFLAGS)' \
@@ -195,7 +196,9 @@ $(OBJROOT)/$(1)/dir.timestamp:
 	mkdir -p $$(dir $$@) && touch $$@
 
 $(OBJROOT)/$(1)/ditto.timestamp: $(OBJROOT)/$(1)/dir.timestamp
-	ditto $$(CURDIR)/src/git $$(dir $$@) && touch $$@
+	ditto $$(CURDIR)/src/git $$(dir $$@)
+	sed -n "s/^DEF_VER=\\(.*\\)/\\1 (Apple Git-$(RC_ProjectSourceVersion))/p" < $$(dir $$@)/GIT-VERSION-GEN > $$(dir $$@)/version
+	touch $$@
 
 $(OBJROOT)/$(1)/build.timestamp: $(OBJROOT)/$(1)/ditto.timestamp $(OBJROOT)/Info.plist
 	cat /dev/null > $$(OBJROOT)/$(1)/program-list

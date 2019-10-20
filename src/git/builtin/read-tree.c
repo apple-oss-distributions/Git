@@ -44,6 +44,7 @@ static const char * const read_tree_usage[] = {
 static int index_output_cb(const struct option *opt, const char *arg,
 				 int unset)
 {
+	BUG_ON_OPT_NEG(unset);
 	set_alternate_index_output(arg);
 	return 0;
 }
@@ -53,6 +54,8 @@ static int exclude_per_directory_cb(const struct option *opt, const char *arg,
 {
 	struct dir_struct *dir;
 	struct unpack_trees_options *opts;
+
+	BUG_ON_OPT_NEG(unset);
 
 	opts = (struct unpack_trees_options *)opt->value;
 
@@ -107,8 +110,6 @@ static int git_read_tree_config(const char *var, const char *value, void *cb)
 	return git_default_config(var, value, cb);
 }
 
-static struct lock_file lock_file;
-
 int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 {
 	int i, stage = 0;
@@ -116,6 +117,7 @@ int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 	struct tree_desc t[MAX_UNPACK_TREES];
 	struct unpack_trees_options opts;
 	int prefix_set = 0;
+	struct lock_file lock_file = LOCK_INIT;
 	const struct option read_tree_options[] = {
 		{ OPTION_CALLBACK, 0, "index-output", NULL, N_("file"),
 		  N_("write resulting index to <file>"),
@@ -134,7 +136,7 @@ int cmd_read_tree(int argc, const char **argv, const char *unused_prefix)
 			 N_("same as -m, but discard unmerged entries")),
 		{ OPTION_STRING, 0, "prefix", &opts.prefix, N_("<subdirectory>/"),
 		  N_("read the tree into the index under <subdirectory>/"),
-		  PARSE_OPT_NONEG | PARSE_OPT_LITERAL_ARGHELP },
+		  PARSE_OPT_NONEG },
 		OPT_BOOL('u', NULL, &opts.update,
 			 N_("update working tree with merge result")),
 		{ OPTION_CALLBACK, 0, "exclude-per-directory", &opts,

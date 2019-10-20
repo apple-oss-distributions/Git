@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.9" />
+<meta name="generator" content="AsciiDoc 8.6.10" />
 <title>git-help(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -748,7 +749,7 @@ git-help(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git help</em> [-a|--all] [-g|--guide]
+<pre class="content"><em>git help</em> [-a|--all [--[no-]verbose]] [-g|--guide]
            [-i|--info|-m|--man|-w|--web] [COMMAND|GUIDE]</pre>
 <div class="attribution">
 </div></div>
@@ -768,6 +769,9 @@ Git guides is also printed on the standard output.</p></div>
 guide is brought up. The <em>man</em> program is used by default for this
 purpose, but this can be overridden by other options or configuration
 variables.</p></div>
+<div class="paragraph"><p>If an alias is given, git shows the definition of the alias on
+standard output. To get the manual page for the aliased command, use
+<code>git COMMAND --help</code>.</p></div>
 <div class="paragraph"><p>Note that <code>git --help ...</code> is identical to <code>git help ...</code> because the
 former is internally converted into the latter.</p></div>
 <div class="paragraph"><p>To display the <a href="git.html">git(1)</a> man page, use <code>git help git</code>.</p></div>
@@ -788,6 +792,27 @@ former is internally converted into the latter.</p></div>
 <p>
         Prints all the available commands on the standard output. This
         option overrides any given command or guide name.
+</p>
+</dd>
+<dt class="hdlist1">
+--verbose
+</dt>
+<dd>
+<p>
+        When used with <code>--all</code> print description for all recognized
+        commands. This is the default.
+</p>
+</dd>
+<dt class="hdlist1">
+-c
+</dt>
+<dt class="hdlist1">
+--config
+</dt>
+<dd>
+<p>
+        List all available configuration variables. This is a short
+        summary of the list in <a href="git-config.html">git-config(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -986,7 +1011,7 @@ See <a href="git-config.html">git-config(1)</a> for more information about this.
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-26 15:11:04 PST
+ 2018-10-26 15:36:57 JST
 </div>
 </div>
 </body>

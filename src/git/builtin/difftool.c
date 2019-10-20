@@ -15,11 +15,12 @@
 #include "config.h"
 #include "builtin.h"
 #include "run-command.h"
-#include "exec_cmd.h"
+#include "exec-cmd.h"
 #include "parse-options.h"
 #include "argv-array.h"
 #include "strbuf.h"
 #include "lockfile.h"
+#include "object-store.h"
 #include "dir.h"
 
 static char *diff_gui_tool;
@@ -111,11 +112,11 @@ static int use_wt_file(const char *workdir, const char *name,
 		int fd = open(buf.buf, O_RDONLY);
 
 		if (fd >= 0 &&
-		    !index_fd(&wt_oid, fd, &st, OBJ_BLOB, name, 0)) {
+		    !index_fd(&the_index, &wt_oid, fd, &st, OBJ_BLOB, name, 0)) {
 			if (is_null_oid(oid)) {
 				oidcpy(oid, &wt_oid);
 				use = 1;
-			} else if (!oidcmp(oid, &wt_oid))
+			} else if (oideq(oid, &wt_oid))
 				use = 1;
 		}
 	}
@@ -306,7 +307,7 @@ static char *get_symlink(const struct object_id *oid, const char *path)
 	} else {
 		enum object_type type;
 		unsigned long size;
-		data = read_sha1_file(oid->hash, &type, &size);
+		data = read_object_file(oid, &type, &size);
 		if (!data)
 			die(_("could not read object %s for symlink %s"),
 				oid_to_hex(oid), path);
@@ -321,10 +322,10 @@ static int checkout_path(unsigned mode, struct object_id *oid,
 	struct cache_entry *ce;
 	int ret;
 
-	ce = make_cache_entry(mode, oid->hash, path, 0, 0);
+	ce = make_transient_cache_entry(mode, oid, path, 0);
 	ret = checkout_entry(ce, state, NULL);
 
-	free(ce);
+	discard_cache_entry(ce);
 	return ret;
 }
 
@@ -437,7 +438,7 @@ static int run_dir_diff(const char *extcmd, int symlinks, const char *prefix,
 			strbuf_reset(&buf);
 			strbuf_addf(&buf, "Subproject commit %s",
 				    oid_to_hex(&roid));
-			if (!oidcmp(&loid, &roid))
+			if (oideq(&loid, &roid))
 				strbuf_addstr(&buf, "-dirty");
 			add_left_or_right(&submodules, dst_path, buf.buf, 1);
 			continue;
@@ -488,7 +489,7 @@ static int run_dir_diff(const char *extcmd, int symlinks, const char *prefix,
 				 * index.
 				 */
 				struct cache_entry *ce2 =
-					make_cache_entry(rmode, roid.hash,
+					make_cache_entry(&wtindex, rmode, &roid,
 							 dst_path, 0, 0);
 
 				add_index_entry(&wtindex, ce2,
@@ -610,7 +611,7 @@ static int run_dir_diff(const char *extcmd, int symlinks, const char *prefix,
 			continue;
 
 		if (!indices_loaded) {
-			static struct lock_file lock;
+			struct lock_file lock = LOCK_INIT;
 			strbuf_reset(&buf);
 			strbuf_addf(&buf, "%s/wtindex", tmpdir);
 			if (hold_lock_file_for_update(&lock, buf.buf, 0) < 0 ||
@@ -695,15 +696,14 @@ int cmd_difftool(int argc, const char **argv, const char *prefix)
 			 N_("use `diff.guitool` instead of `diff.tool`")),
 		OPT_BOOL('d', "dir-diff", &dir_diff,
 			 N_("perform a full-directory diff")),
-		{ OPTION_SET_INT, 'y', "no-prompt", &prompt, NULL,
+		OPT_SET_INT_F('y', "no-prompt", &prompt,
 			N_("do not prompt before launching a diff tool"),
-			PARSE_OPT_NOARG | PARSE_OPT_NONEG, NULL, 0},
-		{ OPTION_SET_INT, 0, "prompt", &prompt, NULL, NULL,
-			PARSE_OPT_NOARG | PARSE_OPT_NONEG | PARSE_OPT_HIDDEN,
-			NULL, 1 },
+			0, PARSE_OPT_NONEG),
+		OPT_SET_INT_F(0, "prompt", &prompt, NULL,
+			1, PARSE_OPT_NONEG | PARSE_OPT_HIDDEN),
 		OPT_BOOL(0, "symlinks", &symlinks,
 			 N_("use symlinks in dir-diff mode")),
-		OPT_STRING('t', "tool", &difftool_cmd, N_("<tool>"),
+		OPT_STRING('t', "tool", &difftool_cmd, N_("tool"),
 			   N_("use the specified diff tool")),
 		OPT_BOOL(0, "tool-help", &tool_help,
 			 N_("print a list of diff tools that may be used with "
@@ -711,7 +711,7 @@ int cmd_difftool(int argc, const char **argv, const char *prefix)
 		OPT_BOOL(0, "trust-exit-code", &trust_exit_code,
 			 N_("make 'git-difftool' exit when an invoked diff "
 			    "tool returns a non - zero exit code")),
-		OPT_STRING('x', "extcmd", &extcmd, N_("<command>"),
+		OPT_STRING('x', "extcmd", &extcmd, N_("command"),
 			   N_("specify a custom command for viewing diffs")),
 		OPT_END()
 	};
