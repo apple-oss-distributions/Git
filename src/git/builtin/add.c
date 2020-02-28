@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2006 Linus Torvalds
  */
+#define USE_THE_INDEX_COMPATIBILITY_MACROS
 #include "cache.h"
 #include "config.h"
 #include "builtin.h"
@@ -137,7 +138,7 @@ static int renormalize_tracked_files(const struct pathspec *pathspec, int flags)
 			continue; /* do not touch non blobs */
 		if (pathspec && !ce_path_match(&the_index, ce, pathspec, NULL))
 			continue;
-		retval |= add_file_to_cache(ce->name, flags | HASH_RENORMALIZE);
+		retval |= add_file_to_cache(ce->name, flags | ADD_CACHE_RENORMALIZE);
 	}
 
 	return retval;
@@ -176,7 +177,7 @@ static void refresh(int verbose, const struct pathspec *pathspec)
 			die(_("pathspec '%s' did not match any files"),
 			    pathspec->items[i].match);
 	}
-        free(seen);
+	free(seen);
 }
 
 int run_add_interactive(const char *revision, const char *patch_mode,
@@ -239,7 +240,7 @@ static int edit_patch(int argc, const char **argv, const char *prefix)
 	rev.diffopt.output_format = DIFF_FORMAT_PATCH;
 	rev.diffopt.use_color = 0;
 	rev.diffopt.flags.ignore_dirty_submodules = 1;
-	out = open(file, O_CREAT | O_WRONLY, 0666);
+	out = open(file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
 	if (out < 0)
 		die(_("Could not open '%s' for writing."), file);
 	rev.diffopt.file = xfdopen(out, "w");

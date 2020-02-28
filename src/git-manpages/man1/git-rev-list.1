@@ -2,12 +2,12 @@
 .\"     Title: git-rev-list
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 12/09/2018
+.\"      Date: 02/24/2019
 .\"    Manual: Git Manual
-.\"    Source: Git 2.20.0
+.\"    Source: Git 2.21.0
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-LIST" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
+.TH "GIT\-REV\-LIST" "1" "02/24/2019" "Git 2\&.21\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -1305,7 +1305,7 @@ similarly uses a sparse\-checkout specification contained in <path>\&.
 .sp
 The form
 \fI\-\-filter=tree:<depth>\fR
-omits all blobs and trees whose depth from the root tree is >= <depth> (minimum depth if an object is located at multiple depths in the commits traversed)\&. Currently, only <depth>=0 is supported, which omits all blobs and trees\&.
+omits all blobs and trees whose depth from the root tree is >= <depth> (minimum depth if an object is located at multiple depths in the commits traversed)\&. <depth>=0 will not include any trees or blobs unless included explicitly in the command\-line (or standard input when \-\-stdin is used)\&. <depth>=1 will include only the tree and blobs which are referenced directly by a commit reachable from <commit> or an explicitly\-given object\&. <depth>=2 is like <depth>=1 while also including trees and blobs one more level removed from an explicitly\-given commit or tree\&.
 .RE
 .PP
 \-\-no\-filter
@@ -1543,6 +1543,9 @@ with four digits; the first two are hours, and the second two are minutes)\&. I\
 \fBstrftime("%s %z")\fR)\&. Note that the
 \fB\-local\fR
 option does not affect the seconds\-since\-epoch value (which is always measured in UTC), but does switch the accompanying timezone value\&.
+.sp
+\fB\-\-date=human\fR
+shows the timezone if the timezone does not match the current time\-zone, and doesn\(cqt print the whole date if that matches (ie skip printing year for dates that are "this year", but also skip the whole date itself if it\(cqs in the last few days and we can just say what weekday it was)\&. For older dates the hour and minute is also omitted\&.
 .sp
 \fB\-\-date=unix\fR
 shows the date as a Unix epoch timestamp (seconds since 1970)\&. As with
@@ -2296,6 +2299,19 @@ or
 .sp -1
 .IP \(bu 2.3
 .\}
+\fI%S\fR: ref name given on the command line by which the commit was reached (like
+\fBgit log \-\-source\fR), only works with
+\fBgit log\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fI%e\fR: encoding
 .RE
 .sp
@@ -2568,7 +2584,9 @@ settings of the former if we are going to a terminal)\&.
 \fB%C(auto,\&.\&.\&.)\fR
 is accepted as a historical synonym for the default (e\&.g\&.,
 \fB%C(auto,red)\fR)\&. Specifying
-\fB%C(always,\&.\&.\&.) will show the colors even when color is not otherwise enabled (though consider just using `\-\-color=always\fR
+\fB%C(always,\&.\&.\&.)\fR
+will show the colors even when color is not otherwise enabled (though consider just using
+\fB\-\-color=always\fR
 to enable color for the whole output, including this format and anything else git might color)\&.
 \fBauto\fR
 alone (i\&.e\&.

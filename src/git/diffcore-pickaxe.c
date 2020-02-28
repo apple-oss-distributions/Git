@@ -140,8 +140,8 @@ static int pickaxe_match(struct diff_filepair *p, struct diff_options *o,
 		return 0;
 
 	if (o->flags.allow_textconv) {
-		textconv_one = get_textconv(o->repo->index, p->one);
-		textconv_two = get_textconv(o->repo->index, p->two);
+		textconv_one = get_textconv(o->repo, p->one);
+		textconv_two = get_textconv(o->repo, p->two);
 	}
 
 	/*
@@ -152,6 +152,12 @@ static int pickaxe_match(struct diff_filepair *p, struct diff_options *o,
 	 * for each side, which might generate different content).
 	 */
 	if (textconv_one == textconv_two && diff_unmodified_pair(p))
+		return 0;
+
+	if ((o->pickaxe_opts & DIFF_PICKAXE_KIND_G) &&
+	    !o->flags.text &&
+	    ((!textconv_one && diff_filespec_is_binary(o->repo, p->one)) ||
+	     (!textconv_two && diff_filespec_is_binary(o->repo, p->two))))
 		return 0;
 
 	mf1.size = fill_textconv(o->repo, textconv_one, p->one, &mf1.ptr);

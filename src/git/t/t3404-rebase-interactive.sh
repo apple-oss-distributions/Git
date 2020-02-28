@@ -147,6 +147,28 @@ test_expect_success 'rebase -i with the exec command checks tree cleanness' '
 	git rebase --continue
 '
 
+test_expect_success 'rebase -x with empty command fails' '
+	test_when_finished "git rebase --abort ||:" &&
+	test_must_fail env GIT_TEST_REBASE_USE_BUILTIN=true \
+		git rebase -x "" @ 2>actual &&
+	test_write_lines "error: empty exec command" >expected &&
+	test_i18ncmp expected actual &&
+	test_must_fail env GIT_TEST_REBASE_USE_BUILTIN=true \
+		git rebase -x " " @ 2>actual &&
+	test_i18ncmp expected actual
+'
+
+LF='
+'
+test_expect_success 'rebase -x with newline in command fails' '
+	test_when_finished "git rebase --abort ||:" &&
+	test_must_fail env GIT_TEST_REBASE_USE_BUILTIN=true \
+		git rebase -x "a${LF}b" @ 2>actual &&
+	test_write_lines "error: exec commands cannot contain newlines" \
+			 >expected &&
+	test_i18ncmp expected actual
+'
+
 test_expect_success 'rebase -i with exec of inexistent command' '
 	git checkout master &&
 	test_when_finished "git rebase --abort" &&
@@ -154,6 +176,11 @@ test_expect_success 'rebase -i with exec of inexistent command' '
 	test_must_fail env FAKE_LINES="exec_this-command-does-not-exist 1" \
 	git rebase -i HEAD^ >actual 2>&1 &&
 	! grep "Maybe git-rebase is broken" actual
+'
+
+test_expect_success 'implicit interactive rebase does not invoke sequence editor' '
+	test_when_finished "git rebase --abort ||:" &&
+	GIT_SEQUENCE_EDITOR="echo bad >" git rebase -x"echo one" @^
 '
 
 test_expect_success 'no changes are a nop' '

@@ -1229,17 +1229,34 @@ dimmed-zebra
 </div></div>
 </dd>
 <dt class="hdlist1">
+--no-color-moved
+</dt>
+<dd>
+<p>
+        Turn off move detection. This can be used to override configuration
+        settings. It is the same as <code>--color-moved=no</code>.
+</p>
+</dd>
+<dt class="hdlist1">
 --color-moved-ws=&lt;modes&gt;
 </dt>
 <dd>
 <p>
-        This configures how white spaces are ignored when performing the
+        This configures how whitespace is ignored when performing the
         move detection for <code>--color-moved</code>.
         These modes can be given as a comma separated list:
 </p>
 <div class="openblock">
 <div class="content">
 <div class="dlist"><dl>
+<dt class="hdlist1">
+no
+</dt>
+<dd>
+<p>
+        Do not ignore whitespace when performing move detection.
+</p>
+</dd>
 <dt class="hdlist1">
 ignore-space-at-eol
 </dt>
@@ -1272,7 +1289,7 @@ allow-indentation-change
 </dt>
 <dd>
 <p>
-        Initially ignore any white spaces in the move detection, then
+        Initially ignore any whitespace in the move detection, then
         group the moved code blocks only into a block if the change in
         whitespace is the same per line. This is incompatible with the
         other modes.
@@ -1280,6 +1297,16 @@ allow-indentation-change
 </dd>
 </dl></div>
 </div></div>
+</dd>
+<dt class="hdlist1">
+--no-color-moved-ws
+</dt>
+<dd>
+<p>
+        Do not ignore whitespace when performing move detection. This can be
+        used to override configuration settings. It is the same as
+        <code>--color-moved-ws=no</code>.
+</p>
 </dd>
 <dt class="hdlist1">
 --word-diff[=&lt;mode&gt;]
@@ -1584,6 +1611,7 @@ struct), and want to know the history of that block since it first
 came into being: use the feature iteratively to feed the interesting
 block in the preimage back into <code>-S</code>, and keep going until you get the
 very first version of the block.</p></div>
+<div class="paragraph"><p>Binary files are searched as well.</p></div>
 </dd>
 <dt class="hdlist1">
 -G&lt;regex&gt;
@@ -1605,6 +1633,8 @@ file:</p></div>
 <div class="paragraph"><p>While <code>git log -G"regexec\(regexp"</code> will show this commit, <code>git log
 -S"regexec\(regexp" --pickaxe-regex</code> will not (because the number of
 occurrences of that string did not change).</p></div>
+<div class="paragraph"><p>Unless <code>--text</code> is supplied patches of binary files without a textconv
+filter will be ignored.</p></div>
 <div class="paragraph"><p>See the <em>pickaxe</em> entry in <a href="gitdiffcore.html">gitdiffcore(7)</a> for more
 information.</p></div>
 </dd>
@@ -1931,10 +1961,7 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 <dd>
 <p>
         If provided, the results are limited to a subset of files
-        matching one of these prefix strings.
-        i.e., file matches <code>/^&lt;pattern1&gt;|&lt;pattern2&gt;|.../</code>
-        Note that this parameter does not provide any wildcard or regexp
-        features.
+        matching one of the provided pathspecs.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2506,6 +2533,12 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
+<em>%S</em>: ref name given on the command line by which the commit was reached
+  (like <code>git log --source</code>), only works with <code>git log</code>
+</p>
+</li>
+<li>
+<p>
 <em>%e</em>: encoding
 </p>
 </li>
@@ -2643,9 +2676,9 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
   <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code>
   settings of the former if we are going to a terminal). <code>%C(auto,...)</code>
   is accepted as a historical synonym for the default (e.g.,
-  <code>%C(auto,red)</code>). Specifying <code>%C(always,...) will show the colors
+  <code>%C(auto,red)</code>). Specifying <code>%C(always,...)</code> will show the colors
   even when color is not otherwise enabled (though consider
-  just using `--color=always</code> to enable color for the whole output,
+  just using <code>--color=always</code> to enable color for the whole output,
   including this format and anything else git might color).  <code>auto</code>
   alone (i.e. <code>%C(auto)</code>) will turn on auto coloring on the next
   placeholders until the color is switched again.
@@ -2781,50 +2814,6 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 </div></div>
 </li>
 </ul></div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_limiting_output">LIMITING OUTPUT</h2>
-<div class="sectionbody">
-<div class="paragraph"><p>If you&#8217;re only interested in differences in a subset of files, for
-example some architecture-specific files, you might do:</p></div>
-<div class="literalblock">
-<div class="content">
-<pre><code>git diff-tree -r &lt;tree-ish&gt; &lt;tree-ish&gt; arch/ia64 include/asm-ia64</code></pre>
-</div></div>
-<div class="paragraph"><p>and it will only show you what changed in those two directories.</p></div>
-<div class="paragraph"><p>Or if you are searching for what changed in just <code>kernel/sched.c</code>, just do</p></div>
-<div class="literalblock">
-<div class="content">
-<pre><code>git diff-tree -r &lt;tree-ish&gt; &lt;tree-ish&gt; kernel/sched.c</code></pre>
-</div></div>
-<div class="paragraph"><p>and it will ignore all differences to other files.</p></div>
-<div class="paragraph"><p>The pattern is always the prefix, and is matched exactly.  There are no
-wildcards.  Even stricter, it has to match a complete path component.
-I.e. "foo" does not pick up <code>foobar.h</code>.  "foo" does match <code>foo/bar.h</code>
-so it can be used to name subdirectories.</p></div>
-<div class="paragraph"><p>An example of normal usage is:</p></div>
-<div class="literalblock">
-<div class="content">
-<pre><code>torvalds@ppc970:~/git&gt; git diff-tree --abbrev 5319e4
-:100664 100664 ac348b... a01513...    git-fsck-objects.c</code></pre>
-</div></div>
-<div class="paragraph"><p>which tells you that the last commit changed just one file (it&#8217;s from
-this one:</p></div>
-<div class="listingblock">
-<div class="content">
-<pre><code>commit 3c6f7ca19ad4043e9e72fa94106f352897e651a8
-tree 5319e4d609cdd282069cc4dce33c1db559539b03
-parent b4e628ea30d5ab3606119d2ea5caeab141d38df7
-author Linus Torvalds &lt;torvalds@ppc970.osdl.org&gt; Sat Apr 9 12:02:30 2005
-committer Linus Torvalds &lt;torvalds@ppc970.osdl.org&gt; Sat Apr 9 12:02:30 2005
-
-Make "git-fsck-objects" print out all the root commits it finds.
-
-Once I do the reference tracking, I'll also make it print out all the
-HEAD commits it finds, which is even more interesting.</code></pre>
-</div></div>
-<div class="paragraph"><p>in case you care).</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -3404,7 +3393,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-05-23 16:06:29 JST
+ 2019-02-06 23:17:45 PST
 </div>
 </div>
 </body>

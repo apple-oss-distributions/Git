@@ -338,16 +338,16 @@ static struct stream_vtbl loose_vtbl = {
 
 static open_method_decl(loose)
 {
-	st->u.loose.mapped = map_sha1_file(the_repository,
-					   oid->hash, &st->u.loose.mapsize);
+	st->u.loose.mapped = map_loose_object(the_repository,
+					      oid, &st->u.loose.mapsize);
 	if (!st->u.loose.mapped)
 		return -1;
-	if ((unpack_sha1_header(&st->z,
-				st->u.loose.mapped,
-				st->u.loose.mapsize,
-				st->u.loose.hdr,
-				sizeof(st->u.loose.hdr)) < 0) ||
-	    (parse_sha1_header(st->u.loose.hdr, &st->size) < 0)) {
+	if ((unpack_loose_header(&st->z,
+				 st->u.loose.mapped,
+				 st->u.loose.mapsize,
+				 st->u.loose.hdr,
+				 sizeof(st->u.loose.hdr)) < 0) ||
+	    (parse_loose_header(st->u.loose.hdr, &st->size) < 0)) {
 		git_inflate_end(&st->z);
 		munmap(st->u.loose.mapped, st->u.loose.mapsize);
 		return -1;
@@ -499,7 +499,7 @@ static struct stream_vtbl incore_vtbl = {
 
 static open_method_decl(incore)
 {
-	st->u.incore.buf = read_object_file_extended(oid, type, &st->size, 0);
+	st->u.incore.buf = read_object_file_extended(the_repository, oid, type, &st->size, 0);
 	st->u.incore.read_ptr = 0;
 	st->vtbl = &incore_vtbl;
 

@@ -2,12 +2,12 @@
 .\"     Title: git-checkout
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 12/09/2018
+.\"      Date: 02/24/2019
 .\"    Manual: Git Manual
-.\"    Source: Git 2.20.0
+.\"    Source: Git 2.21.0
 .\"  Language: English
 .\"
-.TH "GIT\-CHECKOUT" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
+.TH "GIT\-CHECKOUT" "1" "02/24/2019" "Git 2\&.21\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -304,6 +304,11 @@ is used\&. If nothing (or \-\-no\-recurse\-submodules) is used, the work trees o
 \fBgit-submodule\fR(1), this will detach the submodules HEAD\&.
 .RE
 .PP
+\-\-no\-guess
+.RS 4
+Do not attempt to create a branch if a remote tracking branch of the same name exists\&.
+.RE
+.PP
 <branch>
 .RS 4
 Branch to checkout; if it refers to a branch (i\&.e\&., a name that, when prepended with "refs/heads/", is a valid ref), then that branch is checked out\&. Otherwise, if it refers to a valid commit, your HEAD becomes "detached" and you are no longer on any branch (see below for details)\&.
@@ -313,7 +318,7 @@ You can use the
 syntax to refer to the N\-th last branch/commit checked out using "git checkout" operation\&. You may also specify
 \fB\-\fR
 which is synonymous to
-\fB"@{\-1}\fR\&.
+\fB"@{\-1}"\fR\&.
 .sp
 As a special case, you may use
 \fB"A\&.\&.\&.B"\fR

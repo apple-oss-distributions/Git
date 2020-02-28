@@ -31,7 +31,15 @@ test_expect_success 'run_command can run a command' '
 	test_must_be_empty err
 '
 
-test_expect_success 'run_command is restricted to PATH' '
+
+test_lazy_prereq RUNS_COMMANDS_FROM_PWD '
+	write_script runs-commands-from-pwd <<-\EOF &&
+	true
+	EOF
+	runs-commands-from-pwd >/dev/null 2>&1
+'
+
+test_expect_success !RUNS_COMMANDS_FROM_PWD 'run_command is restricted to PATH' '
 	write_script should-not-run <<-\EOF &&
 	echo yikes
 	EOF
@@ -158,7 +166,8 @@ test_trace () {
 	expect="$1"
 	shift
 	GIT_TRACE=1 test-tool run-command "$@" run-command true 2>&1 >/dev/null | \
-		sed -e 's/.* run_command: //' -e '/trace: .*/d' >actual &&
+		sed -e 's/.* run_command: //' -e '/trace: .*/d' \
+			-e '/RUNTIME_PREFIX requested/d' >actual &&
 	echo "$expect true" >expect &&
 	test_cmp expect actual
 }
@@ -189,6 +198,16 @@ test_expect_success 'GIT_TRACE with environment variables' '
 		abc=1 && export abc &&
 		test_trace "unset abc;" env abc=2 env abc
 	)
+'
+
+test_expect_success MINGW 'verify curlies are quoted properly' '
+	: force the rev-parse through the MSYS2 Bash &&
+	git -c alias.r="!git rev-parse" r -- a{b}c >actual &&
+	cat >expect <<-\EOF &&
+	--
+	a{b}c
+	EOF
+	test_cmp expect actual
 '
 
 test_done

@@ -317,7 +317,7 @@ static void add_repack_all_option(struct string_list *keep_pack)
 
 static void add_repack_incremental_option(void)
 {
-       argv_array_push(&repack, "--no-write-bitmap-index");
+	argv_array_push(&repack, "--no-write-bitmap-index");
 }
 
 static int need_to_gc(void)
@@ -659,8 +659,10 @@ int cmd_gc(int argc, const char **argv, const char *prefix)
 
 	report_garbage = report_pack_garbage;
 	reprepare_packed_git(the_repository);
-	if (pack_garbage.nr > 0)
+	if (pack_garbage.nr > 0) {
+		close_all_packs(the_repository->objects);
 		clean_pack_garbage();
+	}
 
 	if (gc_write_commit_graph)
 		write_commit_graph_reachable(get_object_directory(), 0,

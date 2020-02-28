@@ -1129,6 +1129,15 @@ section of <a href="git-add.html">git-add(1)</a> to learn how to operate the <co
 </p>
 </dd>
 <dt class="hdlist1">
+--no-guess
+</dt>
+<dd>
+<p>
+        Do not attempt to create a branch if a remote tracking branch
+        of the same name exists.
+</p>
+</dd>
+<dt class="hdlist1">
 &lt;branch&gt;
 </dt>
 <dd>
@@ -1141,7 +1150,7 @@ section of <a href="git-add.html">git-add(1)</a> to learn how to operate the <co
 </p>
 <div class="paragraph"><p>You can use the <code>"@{-N}"</code> syntax to refer to the N-th last
 branch/commit checked out using "git checkout" operation. You may
-also specify <code>-</code> which is synonymous to <code>"@{-1}</code>.</p></div>
+also specify <code>-</code> which is synonymous to <code>"@{-1}"</code>.</p></div>
 <div class="paragraph"><p>As a special case, you may use <code>"A...B"</code> as a shortcut for the
 merge base of <code>A</code> and <code>B</code> if there is exactly one merge base. You can
 leave out at most one of <code>A</code> and <code>B</code>, in which case it defaults to <code>HEAD</code>.</p></div>
@@ -1288,20 +1297,20 @@ $ git tag foo           <b>&lt;3&gt;</b></code></pre>
 <li>
 <p>
 creates a new branch <em>foo</em>, which refers to commit <em>f</em>, and then
-updates HEAD to refer to branch <em>foo</em>. In other words, we&#8217;ll no longer
-be in detached HEAD state after this command.
+    updates HEAD to refer to branch <em>foo</em>. In other words, we&#8217;ll no longer
+    be in detached HEAD state after this command.
 </p>
 </li>
 <li>
 <p>
 similarly creates a new branch <em>foo</em>, which refers to commit <em>f</em>,
-but leaves HEAD detached.
+    but leaves HEAD detached.
 </p>
 </li>
 <li>
 <p>
 creates a new tag <em>foo</em>, which refers to commit <em>f</em>,
-leaving HEAD detached.
+    leaving HEAD detached.
 </p>
 </li>
 </ol></div>
@@ -1336,8 +1345,8 @@ to checkout these paths out of the index.</p></div>
 <li>
 <p>
 The following sequence checks out the <code>master</code> branch, reverts
-the <code>Makefile</code> to two revisions back, deletes hello.c by
-mistake, and gets it back from the index.
+  the <code>Makefile</code> to two revisions back, deletes hello.c by
+  mistake, and gets it back from the index.
 </p>
 <div class="listingblock">
 <div class="content">
@@ -1384,7 +1393,7 @@ You should instead write:</p></div>
 <li>
 <p>
 After working in the wrong branch, switching to the correct
-branch would be done using:
+  branch would be done using:
 </p>
 <div class="listingblock">
 <div class="content">
@@ -1412,7 +1421,7 @@ changes you made since the tip of the new branch.</p></div>
 <li>
 <p>
 When a merge conflict happens during switching branches with
-the <code>-m</code> option, you would see something like this:
+  the <code>-m</code> option, you would see something like this:
 </p>
 <div class="listingblock">
 <div class="content">
@@ -1445,7 +1454,7 @@ $ git add frotz</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-10-30 16:33:48 JST
+ 2019-02-24 08:31:33 PST
 </div>
 </div>
 </body>

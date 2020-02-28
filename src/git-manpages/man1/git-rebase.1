@@ -2,12 +2,12 @@
 .\"     Title: git-rebase
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 12/09/2018
+.\"      Date: 02/24/2019
 .\"    Manual: Git Manual
-.\"    Source: Git 2.20.0
+.\"    Source: Git 2.21.0
 .\"  Language: English
 .\"
-.TH "GIT\-REBASE" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
+.TH "GIT\-REBASE" "1" "02/24/2019" "Git 2\&.21\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -390,6 +390,17 @@ instead of:
 .sp
 Defaults to false\&.
 .RE
+.PP
+rebase\&.rescheduleFailedExec
+.RS 4
+Automatically reschedule
+\fBexec\fR
+commands that failed\&. This only makes sense in interactive mode (or when an
+\fB\-\-exec\fR
+option was provided)\&. This is the same as specifying the
+\fB\-\-reschedule\-failed\-exec\fR
+option\&.
+.RE
 .SH "OPTIONS"
 .PP
 \-\-onto <newbase>
@@ -739,48 +750,18 @@ See also INCOMPATIBLE OPTIONS below\&.
 .RS 4
 Automatically create a temporary stash entry before the operation begins, and apply it after the operation ends\&. This means that you can run rebase on a dirty worktree\&. However, use with care: the final stash application after a successful rebase might result in non\-trivial conflicts\&.
 .RE
+.PP
+\-\-reschedule\-failed\-exec, \-\-no\-reschedule\-failed\-exec
+.RS 4
+Automatically reschedule
+\fBexec\fR
+commands that failed\&. This only makes sense in interactive mode (or when an
+\fB\-\-exec\fR
+option was provided)\&.
+.RE
 .SH "INCOMPATIBLE OPTIONS"
 .sp
-git\-rebase has many flags that are incompatible with each other, predominantly due to the fact that it has three different underlying implementations:
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-one based on
-\fBgit-am\fR(1)
-(the default)
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-one based on git\-merge\-recursive (merge backend)
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-one based on
-\fBgit-cherry-pick\fR(1)
-(interactive backend)
-.RE
-.sp
-Flags only understood by the am backend:
+The following options:
 .sp
 .RS 4
 .ie n \{\
@@ -837,7 +818,7 @@ Flags only understood by the am backend:
 \-C
 .RE
 .sp
-Flags understood by both merge and interactive backends:
+are incompatible with the following options:
 .sp
 .RS 4
 .ie n \{\
@@ -882,8 +863,6 @@ Flags understood by both merge and interactive backends:
 .\}
 \-\-allow\-empty\-message
 .RE
-.sp
-Flags only understood by the interactive backend:
 .sp
 .RS 4
 .ie n \{\
@@ -959,17 +938,6 @@ Flags only understood by the interactive backend:
 .sp -1
 .IP \(bu 2.3
 .\}
-\-\-autosquash
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
 \-\-edit\-todo
 .RE
 .sp
@@ -984,7 +952,7 @@ Flags only understood by the interactive backend:
 \-\-root when used in combination with \-\-onto
 .RE
 .sp
-Other incompatible flag pairs:
+In addition, the following pairs of options are incompatible:
 .sp
 .RS 4
 .ie n \{\
@@ -1047,12 +1015,10 @@ There are some subtle differences how the backends behave\&.
 .sp
 The am backend drops any "empty" commits, regardless of whether the commit started empty (had no changes relative to its parent to start with) or ended empty (all changes were already applied upstream in other commits)\&.
 .sp
-The merge backend does the same\&.
-.sp
 The interactive backend drops commits by default that started empty and halts if it hits a commit that ended up empty\&. The \fB\-\-keep\-empty\fR option exists for the interactive backend to allow it to keep commits that started empty\&.
 .SS "Directory rename detection"
 .sp
-The merge and interactive backends work fine with directory rename detection\&. The am backend sometimes does not\&.
+Directory rename heuristics are enabled in the merge and interactive backends\&. Due to the lack of accurate tree information, directory rename detection is disabled in the am backend\&.
 .SH "MERGE STRATEGIES"
 .sp
 The merge mechanism (\fBgit merge\fR and \fBgit pull\fR commands) allows the backend \fImerge strategies\fR to be chosen with \fB\-s\fR option\&. Some strategies can also take their own options, which can be passed by giving \fB\-X<option>\fR arguments to \fBgit merge\fR and/or \fBgit pull\fR\&.
@@ -1824,7 +1790,7 @@ The \fBmerge\fR command will merge the specified revision(s) into whatever is HE
 .sp
 If a \fBmerge\fR command fails for any reason other than merge conflicts (i\&.e\&. when the merge operation did not even start), it is rescheduled immediately\&.
 .sp
-At this time, the \fBmerge\fR command will \fBalways\fR use the \fBrecursive\fR merge strategy for regular merges, and \fBoctopus\fR for octopus merges, strategy, with no way to choose a different one\&. To work around this, an \fBexec\fR command can be used to call \fBgit merge\fR explicitly, using the fact that the labels are worktree\-local refs (the ref \fBrefs/rewritten/onto\fR would correspond to the label \fBonto\fR, for example)\&.
+At this time, the \fBmerge\fR command will \fBalways\fR use the \fBrecursive\fR merge strategy for regular merges, and \fBoctopus\fR for octopus merges, with no way to choose a different one\&. To work around this, an \fBexec\fR command can be used to call \fBgit merge\fR explicitly, using the fact that the labels are worktree\-local refs (the ref \fBrefs/rewritten/onto\fR would correspond to the label \fBonto\fR, for example)\&.
 .sp
 Note: the first command (\fBlabel onto\fR) labels the revision onto which the commits are rebased; The name \fBonto\fR is just a convention, as a nod to the \fB\-\-onto\fR option\&.
 .sp

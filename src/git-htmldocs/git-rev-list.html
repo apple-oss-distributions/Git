@@ -862,8 +862,6 @@ with <code>--grep=&lt;pattern&gt;</code> further limits to commits whose log mes
 has a line that matches <code>&lt;pattern&gt;</code>), unless otherwise noted.</p></div>
 <div class="paragraph"><p>Note that these are applied before commit
 ordering and formatting options, such as <code>--reverse</code>.</p></div>
-<div class="openblock">
-<div class="content">
 <div class="dlist"><dl>
 <dt class="hdlist1">
 -&lt;number&gt;
@@ -1316,19 +1314,19 @@ depending on a few rules:</p></div>
 <li>
 <p>
 If the starting point is specified as <code>ref@{Nth}</code>, show the index
-format.
+   format.
 </p>
 </li>
 <li>
 <p>
 If the starting point was specified as <code>ref@{now}</code>, show the
-timestamp format.
+   timestamp format.
 </p>
 </li>
 <li>
 <p>
 If neither was used, but <code>--date</code> was given on the command line, show
-the timestamp in the format requested by <code>--date</code>.
+   the timestamp in the format requested by <code>--date</code>.
 </p>
 </li>
 <li>
@@ -1381,7 +1379,6 @@ See also <a href="git-reflog.html">git-reflog(1)</a>.</p></div>
 </p>
 </dd>
 </dl></div>
-</div></div>
 </div>
 <div class="sect2">
 <h3 id="_history_simplification">History Simplification</h3>
@@ -1969,8 +1966,13 @@ the requested refs.</p></div>
 specification contained in &lt;path&gt;.</p></div>
 <div class="paragraph"><p>The form <em>--filter=tree:&lt;depth&gt;</em> omits all blobs and trees whose depth
 from the root tree is &gt;= &lt;depth&gt; (minimum depth if an object is located
-at multiple depths in the commits traversed). Currently, only &lt;depth&gt;=0
-is supported, which omits all blobs and trees.</p></div>
+at multiple depths in the commits traversed). &lt;depth&gt;=0 will not include
+any trees or blobs unless included explicitly in the command-line (or
+standard input when --stdin is used). &lt;depth&gt;=1 will include only the
+tree and blobs which are referenced directly by a commit reachable from
+&lt;commit&gt; or an explicitly-given object. &lt;depth&gt;=2 is like &lt;depth&gt;=1
+while also including trees and blobs one more level removed from an
+explicitly-given commit or tree.</p></div>
 </dd>
 <dt class="hdlist1">
 --no-filter
@@ -2204,6 +2206,12 @@ with <code>strftime("%s %z")</code>).
 Note that the <code>-local</code> option does not affect the seconds-since-epoch
 value (which is always measured in UTC), but does switch the accompanying
 timezone value.</p></div>
+<div class="paragraph"><p><code>--date=human</code> shows the timezone if the timezone does not match the
+current time-zone, and doesn&#8217;t print the whole date if that matches
+(ie skip printing year for dates that are "this year", but also skip
+the whole date itself if it&#8217;s in the last few days and we can just say
+what weekday it was).  For older dates the hour and minute is also
+omitted.</p></div>
 <div class="paragraph"><p><code>--date=unix</code> shows the date as a Unix epoch timestamp (seconds since
 1970).  As with <code>--raw</code>, this is always in UTC and therefore <code>-local</code>
 has no effect.</p></div>
@@ -2635,6 +2643,12 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
 </li>
 <li>
 <p>
+<em>%S</em>: ref name given on the command line by which the commit was reached
+  (like <code>git log --source</code>), only works with <code>git log</code>
+</p>
+</li>
+<li>
+<p>
 <em>%e</em>: encoding
 </p>
 </li>
@@ -2767,9 +2781,9 @@ The title was &gt;&gt;t4119: test autocomputing -p&lt;n&gt; for traditional diff
   <code>color.diff</code>, <code>color.ui</code>, or <code>--color</code>, and respecting the <code>auto</code>
   settings of the former if we are going to a terminal). <code>%C(auto,...)</code>
   is accepted as a historical synonym for the default (e.g.,
-  <code>%C(auto,red)</code>). Specifying <code>%C(always,...) will show the colors
+  <code>%C(auto,red)</code>). Specifying <code>%C(always,...)</code> will show the colors
   even when color is not otherwise enabled (though consider
-  just using `--color=always</code> to enable color for the whole output,
+  just using <code>--color=always</code> to enable color for the whole output,
   including this format and anything else git might color).  <code>auto</code>
   alone (i.e. <code>%C(auto)</code>) will turn on auto coloring on the next
   placeholders until the color is switched again.
@@ -2918,7 +2932,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-27 08:11:04 JST
+ 2018-01-26 15:11:04 PST
 </div>
 </div>
 </body>

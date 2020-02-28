@@ -27,6 +27,7 @@
 #include "commit-reach.h"
 #include "commit-graph.h"
 #include "prio-queue.h"
+#include "hashmap.h"
 
 volatile show_early_output_fn_t show_early_output;
 
@@ -67,10 +68,10 @@ static void mark_tree_contents_uninteresting(struct repository *r,
 	while (tree_entry(&desc, &entry)) {
 		switch (object_type(entry.mode)) {
 		case OBJ_TREE:
-			mark_tree_uninteresting(r, lookup_tree(r, entry.oid));
+			mark_tree_uninteresting(r, lookup_tree(r, &entry.oid));
 			break;
 		case OBJ_BLOB:
-			mark_blob_uninteresting(lookup_blob(r, entry.oid));
+			mark_blob_uninteresting(lookup_blob(r, &entry.oid));
 			break;
 		default:
 			/* Subproject commit - not in this repository */
@@ -97,6 +98,148 @@ void mark_tree_uninteresting(struct repository *r, struct tree *tree)
 		return;
 	obj->flags |= UNINTERESTING;
 	mark_tree_contents_uninteresting(r, tree);
+}
+
+struct path_and_oids_entry {
+	struct hashmap_entry ent;
+	char *path;
+	struct oidset trees;
+};
+
+static int path_and_oids_cmp(const void *hashmap_cmp_fn_data,
+			     const struct path_and_oids_entry *e1,
+			     const struct path_and_oids_entry *e2,
+			     const void *keydata)
+{
+	return strcmp(e1->path, e2->path);
+}
+
+static void paths_and_oids_init(struct hashmap *map)
+{
+	hashmap_init(map, (hashmap_cmp_fn) path_and_oids_cmp, NULL, 0);
+}
+
+static void paths_and_oids_clear(struct hashmap *map)
+{
+	struct hashmap_iter iter;
+	struct path_and_oids_entry *entry;
+	hashmap_iter_init(map, &iter);
+
+	while ((entry = (struct path_and_oids_entry *)hashmap_iter_next(&iter))) {
+		oidset_clear(&entry->trees);
+		free(entry->path);
+	}
+
+	hashmap_free(map, 1);
+}
+
+static void paths_and_oids_insert(struct hashmap *map,
+				  const char *path,
+				  const struct object_id *oid)
+{
+	int hash = strhash(path);
+	struct path_and_oids_entry key;
+	struct path_and_oids_entry *entry;
+
+	hashmap_entry_init(&key, hash);
+
+	/* use a shallow copy for the lookup */
+	key.path = (char *)path;
+	oidset_init(&key.trees, 0);
+
+	if (!(entry = (struct path_and_oids_entry *)hashmap_get(map, &key, NULL))) {
+		entry = xcalloc(1, sizeof(struct path_and_oids_entry));
+		hashmap_entry_init(entry, hash);
+		entry->path = xstrdup(key.path);
+		oidset_init(&entry->trees, 16);
+		hashmap_put(map, entry);
+	}
+
+	oidset_insert(&entry->trees, oid);
+}
+
+static void add_children_by_path(struct repository *r,
+				 struct tree *tree,
+				 struct hashmap *map)
+{
+	struct tree_desc desc;
+	struct name_entry entry;
+
+	if (!tree)
+		return;
+
+	if (parse_tree_gently(tree, 1) < 0)
+		return;
+
+	init_tree_desc(&desc, tree->buffer, tree->size);
+	while (tree_entry(&desc, &entry)) {
+		switch (object_type(entry.mode)) {
+		case OBJ_TREE:
+			paths_and_oids_insert(map, entry.path, &entry.oid);
+
+			if (tree->object.flags & UNINTERESTING) {
+				struct tree *child = lookup_tree(r, &entry.oid);
+				if (child)
+					child->object.flags |= UNINTERESTING;
+			}
+			break;
+		case OBJ_BLOB:
+			if (tree->object.flags & UNINTERESTING) {
+				struct blob *child = lookup_blob(r, &entry.oid);
+				if (child)
+					child->object.flags |= UNINTERESTING;
+			}
+			break;
+		default:
+			/* Subproject commit - not in this repository */
+			break;
+		}
+	}
+
+	free_tree_buffer(tree);
+}
+
+void mark_trees_uninteresting_sparse(struct repository *r,
+				     struct oidset *trees)
+{
+	unsigned has_interesting = 0, has_uninteresting = 0;
+	struct hashmap map;
+	struct hashmap_iter map_iter;
+	struct path_and_oids_entry *entry;
+	struct object_id *oid;
+	struct oidset_iter iter;
+
+	oidset_iter_init(trees, &iter);
+	while ((!has_interesting || !has_uninteresting) &&
+	       (oid = oidset_iter_next(&iter))) {
+		struct tree *tree = lookup_tree(r, oid);
+
+		if (!tree)
+			continue;
+
+		if (tree->object.flags & UNINTERESTING)
+			has_uninteresting = 1;
+		else
+			has_interesting = 1;
+	}
+
+	/* Do not walk unless we have both types of trees. */
+	if (!has_uninteresting || !has_interesting)
+		return;
+
+	paths_and_oids_init(&map);
+
+	oidset_iter_init(trees, &iter);
+	while ((oid = oidset_iter_next(&iter))) {
+		struct tree *tree = lookup_tree(r, oid);
+		add_children_by_path(r, tree, &map);
+	}
+
+	hashmap_iter_init(&map, &map_iter);
+	while ((entry = hashmap_iter_next(&map_iter)))
+		mark_trees_uninteresting_sparse(r, &entry->trees);
+
+	paths_and_oids_clear(&map);
 }
 
 struct commit_stack {
@@ -213,7 +356,20 @@ static struct object *get_reference(struct rev_info *revs, const char *name,
 {
 	struct object *object;
 
-	object = parse_object(revs->repo, oid);
+	/*
+	 * If the repository has commit graphs, repo_parse_commit() avoids
+	 * reading the object buffer, so use it whenever possible.
+	 */
+	if (oid_object_info(revs->repo, oid, NULL) == OBJ_COMMIT) {
+		struct commit *c = lookup_commit(revs->repo, oid);
+		if (!repo_parse_commit(revs->repo, c))
+			object = (struct object *) c;
+		else
+			object = NULL;
+	} else {
+		object = parse_object(revs->repo, oid);
+	}
+
 	if (!object) {
 		if (revs->ignore_missing)
 			return object;
@@ -1384,7 +1540,7 @@ void add_index_objects_to_pending(struct rev_info *revs, unsigned int flags)
 {
 	struct worktree **worktrees, **p;
 
-	read_index(revs->repo->index);
+	repo_read_index(revs->repo);
 	do_add_index_objects_to_pending(revs, revs->repo->index, flags);
 
 	if (revs->single_worktree)
@@ -1463,6 +1619,7 @@ void repo_init_revisions(struct repository *r,
 	revs->abbrev = DEFAULT_ABBREV;
 	revs->ignore_merges = 1;
 	revs->simplify_history = 1;
+	revs->pruning.repo = r;
 	revs->pruning.flags.recursive = 1;
 	revs->pruning.flags.quick = 1;
 	revs->pruning.add_remove = file_add_remove;
@@ -1495,8 +1652,8 @@ void repo_init_revisions(struct repository *r,
 }
 
 static void add_pending_commit_list(struct rev_info *revs,
-                                    struct commit_list *commit_list,
-                                    unsigned int flags)
+				    struct commit_list *commit_list,
+				    unsigned int flags)
 {
 	while (commit_list) {
 		struct object *object = &commit_list->item->object;
@@ -1530,7 +1687,7 @@ static void prepare_show_merge(struct rev_info *revs)
 	head->object.flags |= SYMMETRIC_LEFT;
 
 	if (!istate->cache_nr)
-		read_index(istate);
+		repo_read_index(revs->repo);
 	for (i = 0; i < istate->cache_nr; i++) {
 		const struct cache_entry *ce = istate->cache[i];
 		if (!ce_stage(ce))
@@ -1589,8 +1746,8 @@ static int handle_dotdot_1(const char *arg, char *dotdot,
 	if (!*b_name)
 		b_name = "HEAD";
 
-	if (get_oid_with_context(a_name, oc_flags, &a_oid, a_oc) ||
-	    get_oid_with_context(b_name, oc_flags, &b_oid, b_oc))
+	if (get_oid_with_context(revs->repo, a_name, oc_flags, &a_oid, a_oc) ||
+	    get_oid_with_context(revs->repo, b_name, oc_flags, &b_oid, b_oc))
 		return -1;
 
 	if (!cant_be_filename) {
@@ -1724,11 +1881,13 @@ int handle_revision_arg(const char *arg_, struct rev_info *revs, int flags, unsi
 	if (revarg_opt & REVARG_COMMITTISH)
 		get_sha1_flags |= GET_OID_COMMITTISH;
 
-	if (get_oid_with_context(arg, get_sha1_flags, &oid, &oc))
+	if (get_oid_with_context(revs->repo, arg, get_sha1_flags, &oid, &oc))
 		return revs->ignore_missing ? 0 : -1;
 	if (!cant_be_filename)
 		verify_non_filename(revs->prefix, arg);
 	object = get_reference(revs, arg, &oid, flags ^ local_flags);
+	if (!object)
+		return revs->ignore_missing ? 0 : -1;
 	add_rev_cmdline(revs, object, arg_, REV_CMD_REV, flags ^ local_flags);
 	add_pending_object_with_path(revs, object, arg, oc.mode, oc.path);
 	free(oc.path);
@@ -1791,7 +1950,8 @@ static void add_message_grep(struct rev_info *revs, const char *pattern)
 }
 
 static int handle_revision_opt(struct rev_info *revs, int argc, const char **argv,
-			       int *unkc, const char **unkv)
+			       int *unkc, const char **unkv,
+			       const struct setup_revision_opt* opt)
 {
 	const char *arg = argv[0];
 	const char *optarg;
@@ -2151,7 +2311,7 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->limited = 1;
 	} else if (!strcmp(arg, "--ignore-missing")) {
 		revs->ignore_missing = 1;
-	} else if (revs->allow_exclude_promisor_objects_opt &&
+	} else if (opt && opt->allow_exclude_promisor_objects &&
 		   !strcmp(arg, "--exclude-promisor-objects")) {
 		if (fetch_if_missing)
 			BUG("exclude_promisor_objects can only be used when fetch_if_missing is 0");
@@ -2173,7 +2333,7 @@ void parse_revision_opt(struct rev_info *revs, struct parse_opt_ctx_t *ctx,
 			const char * const usagestr[])
 {
 	int n = handle_revision_opt(revs, ctx->argc, ctx->argv,
-				    &ctx->cpidx, ctx->out);
+				    &ctx->cpidx, ctx->out, NULL);
 	if (n <= 0) {
 		error("unknown option `%s'", ctx->argv[0]);
 		usage_with_options(usagestr, options);
@@ -2391,7 +2551,8 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
 				continue;
 			}
 
-			opts = handle_revision_opt(revs, argc - i, argv + i, &left, argv);
+			opts = handle_revision_opt(revs, argc - i, argv + i,
+						   &left, argv, opt);
 			if (opts > 0) {
 				i += opts - 1;
 				continue;
@@ -2453,7 +2614,7 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
 		struct object_id oid;
 		struct object *object;
 		struct object_context oc;
-		if (get_oid_with_context(revs->def, 0, &oid, &oc))
+		if (get_oid_with_context(revs->repo, revs->def, 0, &oid, &oc))
 			diagnose_missing_default(revs->def);
 		object = get_reference(revs, revs->def, &oid, 0);
 		add_pending_object_with_mode(revs, object, revs->def, oc.mode);

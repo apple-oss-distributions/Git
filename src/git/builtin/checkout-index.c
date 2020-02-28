@@ -4,6 +4,7 @@
  * Copyright (C) 2005 Linus Torvalds
  *
  */
+#define USE_THE_INDEX_COMPATIBILITY_MACROS
 #include "builtin.h"
 #include "config.h"
 #include "lockfile.h"
@@ -67,7 +68,8 @@ static int checkout_file(const char *name, const char *prefix)
 			continue;
 		did_checkout = 1;
 		if (checkout_entry(ce, &state,
-		    to_tempfile ? topath[ce_stage(ce)] : NULL) < 0)
+				   to_tempfile ? topath[ce_stage(ce)] : NULL,
+				   NULL) < 0)
 			errs++;
 	}
 
@@ -111,7 +113,8 @@ static void checkout_all(const char *prefix, int prefix_length)
 				write_tempfile_record(last_ce->name, prefix);
 		}
 		if (checkout_entry(ce, &state,
-		    to_tempfile ? topath[ce_stage(ce)] : NULL) < 0)
+				   to_tempfile ? topath[ce_stage(ce)] : NULL,
+				   NULL) < 0)
 			errs++;
 		last_ce = ce;
 	}

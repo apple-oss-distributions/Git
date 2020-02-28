@@ -146,7 +146,6 @@ extern char *get_remote_object_url(const char *url, const char *hex,
 /* Options for http_get_*() */
 struct http_get_options {
 	unsigned no_cache:1,
-		 keep_error:1,
 		 initial_request:1;
 
 	/* If non-NULL, returns the content-type of the response. */
@@ -224,8 +223,8 @@ struct http_object_request {
 	CURLcode curl_result;
 	char errorstr[CURL_ERROR_SIZE];
 	long http_code;
-	unsigned char sha1[20];
-	unsigned char real_sha1[20];
+	struct object_id oid;
+	struct object_id real_oid;
 	git_SHA_CTX c;
 	git_zstream stream;
 	int zret;
@@ -234,7 +233,7 @@ struct http_object_request {
 };
 
 extern struct http_object_request *new_http_object_request(
-	const char *base_url, unsigned char *sha1);
+	const char *base_url, const struct object_id *oid);
 extern void process_http_object_request(struct http_object_request *freq);
 extern int finish_http_object_request(struct http_object_request *freq);
 extern void abort_http_object_request(struct http_object_request *freq);

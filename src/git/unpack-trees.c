@@ -1,4 +1,3 @@
-#define NO_THE_INDEX_COMPATIBILITY_MACROS
 #include "cache.h"
 #include "argv-array.h"
 #include "repository.h"
@@ -294,7 +293,7 @@ static void load_gitmodules_file(struct index_state *index,
 			repo_read_gitmodules(the_repository);
 		} else if (state && (ce->ce_flags & CE_UPDATE)) {
 			submodule_free(the_repository);
-			checkout_entry(ce, state, NULL);
+			checkout_entry(ce, state, NULL, NULL);
 			repo_read_gitmodules(the_repository);
 		}
 	}
@@ -450,12 +449,12 @@ static int check_updates(struct unpack_trees_options *o)
 			display_progress(progress, ++cnt);
 			ce->ce_flags &= ~CE_UPDATE;
 			if (o->update && !o->dry_run) {
-				errs |= checkout_entry(ce, &state, NULL);
+				errs |= checkout_entry(ce, &state, NULL, NULL);
 			}
 		}
 	}
 	stop_progress(&progress);
-	errs |= finish_delayed_checkout(&state);
+	errs |= finish_delayed_checkout(&state, NULL);
 	if (o->update)
 		git_attr_set_direction(GIT_ATTR_CHECKIN);
 
@@ -679,7 +678,7 @@ static int switch_cache_bottom(struct traverse_info *info)
 
 static inline int are_same_oid(struct name_entry *name_j, struct name_entry *name_k)
 {
-	return name_j->oid && name_k->oid && oideq(name_j->oid, name_k->oid);
+	return !is_null_oid(&name_j->oid) && !is_null_oid(&name_k->oid) && oideq(&name_j->oid, &name_k->oid);
 }
 
 static int all_trees_same_as_cache_tree(int n, unsigned long dirmask,
@@ -794,6 +793,7 @@ static int traverse_trees_recursive(int n, unsigned long dirmask,
 				    struct name_entry *names,
 				    struct traverse_info *info)
 {
+	struct unpack_trees_options *o = info->data;
 	int i, ret, bottom;
 	int nr_buf = 0;
 	struct tree_desc t[MAX_UNPACK_TREES];
@@ -804,7 +804,6 @@ static int traverse_trees_recursive(int n, unsigned long dirmask,
 
 	nr_entries = all_trees_same_as_cache_tree(n, dirmask, names, info);
 	if (nr_entries > 0) {
-		struct unpack_trees_options *o = info->data;
 		int pos = index_pos_by_traverse_info(names, info);
 
 		if (!o->merge || df_conflicts)
@@ -857,13 +856,13 @@ static int traverse_trees_recursive(int n, unsigned long dirmask,
 		else {
 			const struct object_id *oid = NULL;
 			if (dirmask & 1)
-				oid = names[i].oid;
+				oid = &names[i].oid;
 			buf[nr_buf++] = fill_tree_descriptor(t + i, oid);
 		}
 	}
 
 	bottom = switch_cache_bottom(&newinfo);
-	ret = traverse_trees(n, t, &newinfo);
+	ret = traverse_trees(o->src_index, n, t, &newinfo);
 	restore_cache_bottom(&newinfo, bottom);
 
 	for (i = 0; i < nr_buf; i++)
@@ -981,7 +980,7 @@ static struct cache_entry *create_ce_entry(const struct traverse_info *info,
 	ce->ce_mode = create_ce_mode(n->mode);
 	ce->ce_flags = create_ce_flags(stage);
 	ce->ce_namelen = len;
-	oidcpy(&ce->oid, n->oid);
+	oidcpy(&ce->oid, &n->oid);
 	make_traverse_path(ce->name, info, n);
 
 	return ce;
@@ -1550,7 +1549,7 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options 
 		}
 
 		trace_performance_enter();
-		ret = traverse_trees(len, t, &info);
+		ret = traverse_trees(o->src_index, len, t, &info);
 		trace_performance_leave("traverse_trees");
 		if (ret < 0)
 			goto return_failed;
@@ -1630,7 +1629,7 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options 
 		move_index_extensions(&o->result, o->src_index);
 		if (!ret) {
 			if (git_env_bool("GIT_TEST_CHECK_CACHE_TREE", 0))
-				cache_tree_verify(&o->result);
+				cache_tree_verify(the_repository, &o->result);
 			if (!o->result.cache_tree)
 				o->result.cache_tree = cache_tree();
 			if (!cache_tree_fully_valid(o->result.cache_tree))

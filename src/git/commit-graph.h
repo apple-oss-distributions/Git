@@ -49,10 +49,13 @@ struct commit_graph {
 	const uint32_t *chunk_oid_fanout;
 	const unsigned char *chunk_oid_lookup;
 	const unsigned char *chunk_commit_data;
-	const unsigned char *chunk_large_edges;
+	const unsigned char *chunk_extra_edges;
 };
 
 struct commit_graph *load_commit_graph_one(const char *graph_file);
+
+struct commit_graph *parse_commit_graph(void *graph_map, int fd,
+					size_t graph_size);
 
 /*
  * Return 1 if and only if the repository has a commit-graph

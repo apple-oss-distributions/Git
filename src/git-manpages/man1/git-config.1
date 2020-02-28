@@ -2,12 +2,12 @@
 .\"     Title: git-config
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 12/09/2018
+.\"      Date: 02/24/2019
 .\"    Manual: Git Manual
-.\"    Source: Git 2.20.0
+.\"    Source: Git 2.21.0
 .\"  Language: English
 .\"
-.TH "GIT\-CONFIG" "1" "12/09/2018" "Git 2\&.20\&.0" "Git Manual"
+.TH "GIT\-CONFIG" "1" "02/24/2019" "Git 2\&.21\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -1245,6 +1245,13 @@ Shown when
 rejects an update that tries to overwrite a remote ref that points at an object that is not a commit\-ish, or make the remote ref point at an object that is not a commit\-ish\&.
 .RE
 .PP
+pushUnqualifiedRefname
+.RS 4
+Shown when
+\fBgit-push\fR(1)
+gives up trying to guess based on the source and destination refs what remote ref namespace the source belongs in, but where we can still suggest that the user push to either refs/heads/* or refs/tags/* based on the type of the source object\&.
+.RE
+.PP
 statusHints
 .RS 4
 Show directions on how to proceed from the current state in the output of
@@ -1462,16 +1469,23 @@ option\&. The default value is true\&.
 .PP
 core\&.eol
 .RS 4
-Sets the line ending type to use in the working directory for files that have the
+Sets the line ending type to use in the working directory for files that are marked as text (either by having the
 \fBtext\fR
-property set when core\&.autocrlf is false\&. Alternatives are
+attribute set, or by having
+\fBtext=auto\fR
+and Git auto\-detecting the contents as text)\&. Alternatives are
 \fIlf\fR,
 \fIcrlf\fR
 and
 \fInative\fR, which uses the platform\(cqs native line ending\&. The default value is
 \fBnative\fR\&. See
 \fBgitattributes\fR(5)
-for more information on end\-of\-line conversion\&.
+for more information on end\-of\-line conversion\&. Note that this value is ignored if
+\fBcore\&.autocrlf\fR
+is set to
+\fBtrue\fR
+or
+\fBinput\fR\&.
 .RE
 .PP
 core\&.safecrlf
@@ -4604,6 +4618,33 @@ http\&.saveCookies
 If set, store cookies received during requests to the file specified by http\&.cookieFile\&. Has no effect if http\&.cookieFile is unset\&.
 .RE
 .PP
+http\&.version
+.RS 4
+Use the specified HTTP protocol version when communicating with a server\&. If you want to force the default\&. The available and default version depend on libcurl\&. Actually the possible values of this option are:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+HTTP/2
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+HTTP/1\&.1
+.RE
+.RE
+.PP
 http\&.sslVersion
 .RS 4
 The SSL version to use when negotiating an SSL connection, if you want to force the default\&. The available and default version depend on whether libcurl was built against NSS or OpenSSL and the particular configuration of the crypto library in use\&. Internally this sets the
@@ -5874,6 +5915,17 @@ pack\&.useBitmaps
 When true, git will use pack bitmaps (if available) when packing to stdout (e\&.g\&., during the server side of a fetch)\&. Defaults to true\&. You should not generally need to turn this off unless you are debugging pack bitmaps\&.
 .RE
 .PP
+pack\&.useSparse
+.RS 4
+When true, git will default to using the
+\fI\-\-sparse\fR
+option in
+\fIgit pack\-objects\fR
+when the
+\fI\-\-revs\fR
+option is present\&. This algorithm only walks trees that appear in paths that introduce new objects\&. This can have significant performance benefits when computing a pack to send a small change\&. However, it is possible that extra objects are added to the pack\-file if the included commits contain certain types of direct renames\&.
+.RE
+.PP
 pack\&.writeBitmaps (deprecated)
 .RS 4
 This is a deprecated synonym for
@@ -6383,6 +6435,17 @@ instead of:
 .\}
 .sp
 Defaults to false\&.
+.RE
+.PP
+rebase\&.rescheduleFailedExec
+.RS 4
+Automatically reschedule
+\fBexec\fR
+commands that failed\&. This only makes sense in interactive mode (or when an
+\fB\-\-exec\fR
+option was provided)\&. This is the same as specifying the
+\fB\-\-reschedule\-failed\-exec\fR
+option\&.
 .RE
 .PP
 receive\&.advertiseAtomic
@@ -7455,14 +7518,15 @@ may use it\&.
 .PP
 worktree\&.guessRemote
 .RS 4
-With
-\fBadd\fR, if no branch argument, and neither of
+If no branch is specified and neither
 \fB\-b\fR
 nor
 \fB\-B\fR
 nor
 \fB\-\-detach\fR
-are given, the command defaults to creating a new branch from HEAD\&. If
+is used, then
+\fBgit worktree add\fR
+defaults to creating a new branch from HEAD\&. If
 \fBworktree\&.guessRemote\fR
 is set to true,
 \fBworktree add\fR

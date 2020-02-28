@@ -1339,11 +1339,20 @@ dimmed-zebra
 </div></div>
 </dd>
 <dt class="hdlist1">
+--no-color-moved
+</dt>
+<dd>
+<p>
+        Turn off move detection. This can be used to override configuration
+        settings. It is the same as <code>--color-moved=no</code>.
+</p>
+</dd>
+<dt class="hdlist1">
 --color-moved-ws=&lt;modes&gt;
 </dt>
 <dd>
 <p>
-        This configures how white spaces are ignored when performing the
+        This configures how whitespace is ignored when performing the
         move detection for <code>--color-moved</code>.
         It can be set by the <code>diff.colorMovedWS</code> configuration setting.
         These modes can be given as a comma separated list:
@@ -1351,6 +1360,14 @@ dimmed-zebra
 <div class="openblock">
 <div class="content">
 <div class="dlist"><dl>
+<dt class="hdlist1">
+no
+</dt>
+<dd>
+<p>
+        Do not ignore whitespace when performing move detection.
+</p>
+</dd>
 <dt class="hdlist1">
 ignore-space-at-eol
 </dt>
@@ -1383,7 +1400,7 @@ allow-indentation-change
 </dt>
 <dd>
 <p>
-        Initially ignore any white spaces in the move detection, then
+        Initially ignore any whitespace in the move detection, then
         group the moved code blocks only into a block if the change in
         whitespace is the same per line. This is incompatible with the
         other modes.
@@ -1391,6 +1408,16 @@ allow-indentation-change
 </dd>
 </dl></div>
 </div></div>
+</dd>
+<dt class="hdlist1">
+--no-color-moved-ws
+</dt>
+<dd>
+<p>
+        Do not ignore whitespace when performing move detection. This can be
+        used to override configuration settings. It is the same as
+        <code>--color-moved-ws=no</code>.
+</p>
 </dd>
 <dt class="hdlist1">
 --word-diff[=&lt;mode&gt;]
@@ -1695,6 +1722,7 @@ struct), and want to know the history of that block since it first
 came into being: use the feature iteratively to feed the interesting
 block in the preimage back into <code>-S</code>, and keep going until you get the
 very first version of the block.</p></div>
+<div class="paragraph"><p>Binary files are searched as well.</p></div>
 </dd>
 <dt class="hdlist1">
 -G&lt;regex&gt;
@@ -1716,6 +1744,8 @@ file:</p></div>
 <div class="paragraph"><p>While <code>git log -G"regexec\(regexp"</code> will show this commit, <code>git log
 -S"regexec\(regexp" --pickaxe-regex</code> will not (because the number of
 occurrences of that string did not change).</p></div>
+<div class="paragraph"><p>Unless <code>--text</code> is supplied patches of binary files without a textconv
+filter will be ignored.</p></div>
 <div class="paragraph"><p>See the <em>pickaxe</em> entry in <a href="gitdiffcore.html">gitdiffcore(7)</a> for more
 information.</p></div>
 </dd>
@@ -2658,13 +2688,13 @@ Changes in the working tree not yet staged for the next commit.
 <li>
 <p>
 Changes between the index and your last commit; what you
-would be committing if you run "git commit" without "-a" option.
+    would be committing if you run "git commit" without "-a" option.
 </p>
 </li>
 <li>
 <p>
 Changes in the working tree since your last commit; what you
-would be committing if you run "git commit -a"
+    would be committing if you run "git commit -a"
 </p>
 </li>
 </ol></div>
@@ -2683,14 +2713,14 @@ $ git diff HEAD^ HEAD      <b>&lt;3&gt;</b></code></pre>
 <li>
 <p>
 Instead of using the tip of the current branch, compare with the
-tip of "test" branch.
+    tip of "test" branch.
 </p>
 </li>
 <li>
 <p>
 Instead of comparing with the tip of "test" branch, compare with
-the tip of the current branch, but limit the comparison to the
-file "test".
+    the tip of the current branch, but limit the comparison to the
+    file "test".
 </p>
 </li>
 <li>
@@ -2724,7 +2754,7 @@ Same as above.
 <li>
 <p>
 Changes that occurred on the master branch since when the topic
-branch was started off it.
+    branch was started off it.
 </p>
 </li>
 </ol></div>
@@ -2743,13 +2773,13 @@ $ git diff arch/i386 include/asm-i386   <b>&lt;3&gt;</b></code></pre>
 <li>
 <p>
 Show only modification, rename, and copy, but not addition
-or deletion.
+    or deletion.
 </p>
 </li>
 <li>
 <p>
 Show only names and the nature of change, but not actual
-diff output.
+    diff output.
 </p>
 </li>
 <li>
@@ -2772,7 +2802,7 @@ $ git diff -R                          <b>&lt;2&gt;</b></code></pre>
 <li>
 <p>
 Spend extra cycles to find renames, copies and complete
-rewrites (very expensive).
+    rewrites (very expensive).
 </p>
 </li>
 <li>
@@ -2807,7 +2837,7 @@ Output diff in reverse.
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-10-26 15:36:57 JST
+ 2019-02-05 15:33:20 PST
 </div>
 </div>
 </body>

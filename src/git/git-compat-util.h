@@ -193,10 +193,11 @@
 #endif
 
 #if defined(__CYGWIN__)
-#include "compat/cygwin.h"
+#include "compat/win32/path-utils.h"
 #endif
 #if defined(__MINGW32__)
 /* pull in Windows compatibility stuff */
+#include "compat/win32/path-utils.h"
 #include "compat/mingw.h"
 #elif defined(_MSC_VER)
 #include "compat/msvc.h"
@@ -395,6 +396,19 @@ static inline char *git_find_last_dir_sep(const char *path)
 
 #ifndef query_user_email
 #define query_user_email() NULL
+#endif
+
+#ifdef __TANDEM
+#include <floss.h(floss_execl,floss_execlp,floss_execv,floss_execvp)>
+#include <floss.h(floss_getpwuid)>
+#ifndef NSIG
+/*
+ * NonStop NSE and NSX do not provide NSIG. SIGGUARDIAN(99) is the highest
+ * known, by detective work using kill -l as a list is all signals
+ * instead of signal.h where it should be.
+ */
+# define NSIG 100
+#endif
 #endif
 
 #if defined(__HP_cc) && (__HP_cc >= 61000)
@@ -721,7 +735,7 @@ extern const char *githstrerror(int herror);
 #ifdef NO_MEMMEM
 #define memmem gitmemmem
 void *gitmemmem(const void *haystack, size_t haystacklen,
-                const void *needle, size_t needlelen);
+		const void *needle, size_t needlelen);
 #endif
 
 #ifdef OVERRIDE_STRDUP
@@ -1218,6 +1232,14 @@ struct tm *git_gmtime_r(const time_t *, struct tm *);
 #define flockfile(fh)
 #define funlockfile(fh)
 #define getc_unlocked(fh) getc(fh)
+#endif
+
+#ifdef FILENO_IS_A_MACRO
+int git_fileno(FILE *stream);
+# ifndef COMPAT_CODE
+#  undef fileno
+#  define fileno(p) git_fileno(p)
+# endif
 #endif
 
 /*

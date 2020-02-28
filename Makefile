@@ -21,13 +21,21 @@ ifndef DEVELOPER_DIR
 DEVELOPER_DIR := $(shell xcode-select -p)
 endif
 
+ifndef DEVELOPER_INSTALL_DIR
+DEVELOPER_INSTALL_DIR := $(shell xcode-select -p)
+endif
+
+ifndef CLTOOLS_INSTALL_DIR
+CLTOOLS_INSTALL_DIR=/Library/Developer/CommandLineTools
+endif
+
 ifndef LIBRESSL_PREFIX
 LIBRESSL_PREFIX := /usr/local/libressl-macOS$(MACOSX_DEPLOYMENT_TARGET)
 endif
 
 include $(DEVELOPER_DIR)/AppleInternal/Makefiles/DT_Signing.mk
 
-.PHONY: all build install installsrc installhdrs root merge \
+.PHONY: all info build install installsrc installhdrs root merge \
   install-bin install-man
 
 export SRCROOT ?= $(CURDIR)
@@ -35,7 +43,7 @@ export OBJROOT ?= $(CURDIR)/roots/obj
 export SYMROOT ?= $(CURDIR)/roots/sym
 export DSTROOT ?= $(CURDIR)/roots/dst
 
-PREFIX=$(DEVELOPER_DIR)/usr
+PREFIX=$(DEVELOPER_INSTALL_DIR)/usr
 
 ifndef SDKROOT
 SDKROOT := $(shell xcrun --sdk macosx.internal --show-sdk-path)
@@ -63,7 +71,7 @@ $(foreach arch,$(RC_ARCHS),$(eval cflags := $(subst $(cflags),-arch $(arch),)))
 export RC_CFLAGS := $(cflags)
 export RC_ARCHFLAGS := $(foreach arch,$(RC_ARCHS),-arch $(arch) )
 
-CFLAGS = -g3 -gdwarf-2 -Os -pipe -Wall -Wformat-security -D_FORTIFY_SOURCE=2 -isysroot $(SDKROOT) -iwithsysroot $(LIBRESSL_PREFIX)/include $(RC_CFLAGS)
+CFLAGS = -g3 -gdwarf-2 -Os -pipe -Wall -Wformat-security -D_FORTIFY_SOURCE=2 -isysroot $(SDKROOT) -iwithsysroot $(LIBRESSL_PREFIX)/include $(RC_NONARCH_CFLAGS)
 LDFLAGS = -sectcreate __TEXT __info_plist $(OBJROOT)/Info.plist -isysroot $(SDKROOT) -L$(SDKROOT)$(LIBRESSL_PREFIX)/lib
 
 STRIP := strip -S
@@ -86,7 +94,18 @@ submakevars := -j`sysctl -n hw.activecpu` prefix=$(PREFIX) \
 objarch   := $(foreach arch,$(RC_ARCHS),$(OBJROOT)/$(arch))
 firstarch := $(firstword $(objarch))
 
-all: build
+all: info build
+
+info:
+	@echo "Git Build Configuration:"
+	@echo "    RC_ProjectSourceVersion: $(RC_ProjectSourceVersion)"
+	@echo "    RC_ARCHS: $(RC_ARCHS)"
+	@echo "    RC_ARCHFLAGS: $(RC_ARCHFLAGS)"
+	@echo "    RC_NONARCH_CFLAGS: $(RC_NONARCH_CFLAGS)"
+	@echo "    RC_CFLAGS: $(RC_CFLAGS)"
+	@echo "    CFLAGS: $(CFLAGS)"
+	@echo "    LDFLAGS: $(LDFLAGS)"
+	@echo "    objarch: $(objarch)"
 
 ifeq ($(realpath $(SRCROOT)), $(realpath $(srcdir)))
 installsrc:
@@ -102,7 +121,7 @@ installhdrs:
 
 build: $(OBJROOT)/dsyms.timestamp $(OBJROOT)/codesign.timestamp
 
-install: install-bin install-man install-contrib
+install: info install-bin install-man install-contrib
 	rm -rf "$(DSTROOT)$(PREFIX)/share/git-gui"
 	rm -f "$(DSTROOT)$(PREFIX)/libexec/git-core/git-gui"
 	rm -f "$(DSTROOT)$(PREFIX)/libexec/git-core/git-citool"
@@ -120,6 +139,8 @@ install: install-bin install-man install-contrib
 	install -o root -g wheel -m 0644 $(SRCROOT)/Git.plist $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitconfig $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitattributes $(DSTROOT)$(PREFIX)/share/git-core
+	install -m 0755 -d $(DSTROOT)$(CLTOOLS_INSTALL_DIR)
+	ditto $(DSTROOT)$(DEVELOPER_INSTALL_DIR) $(DSTROOT)$(CLTOOLS_INSTALL_DIR)
 
 install-contrib:
 	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/share/git-core

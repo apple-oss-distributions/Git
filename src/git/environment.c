@@ -107,7 +107,7 @@ char *git_work_tree_cfg;
 
 static char *git_namespace;
 
-static const char *super_prefix;
+static char *super_prefix;
 
 /*
  * Repository-local GIT_* environment variables; see cache.h for details.
@@ -240,7 +240,7 @@ const char *get_super_prefix(void)
 {
 	static int initialized;
 	if (!initialized) {
-		super_prefix = getenv(GIT_SUPER_PREFIX_ENVIRONMENT);
+		super_prefix = xstrdup_or_null(getenv(GIT_SUPER_PREFIX_ENVIRONMENT));
 		initialized = 1;
 	}
 	return super_prefix;
@@ -274,9 +274,9 @@ const char *get_git_work_tree(void)
 
 char *get_object_directory(void)
 {
-	if (!the_repository->objects->objectdir)
+	if (!the_repository->objects->odb)
 		BUG("git environment hasn't been setup");
-	return the_repository->objects->objectdir;
+	return the_repository->objects->odb->path;
 }
 
 int odb_mkstemp(struct strbuf *temp_filename, const char *pattern)

@@ -291,7 +291,7 @@ static int parse_color_moved(const char *arg)
 		return error(_("color moved setting must be one of 'no', 'default', 'blocks', 'zebra', 'dimmed-zebra', 'plain'"));
 }
 
-static int parse_color_moved_ws(const char *arg)
+static unsigned parse_color_moved_ws(const char *arg)
 {
 	int ret = 0;
 	struct string_list l = STRING_LIST_INIT_DUP;
@@ -304,7 +304,9 @@ static int parse_color_moved_ws(const char *arg)
 		strbuf_addstr(&sb, i->string);
 		strbuf_trim(&sb);
 
-		if (!strcmp(sb.buf, "ignore-space-change"))
+		if (!strcmp(sb.buf, "no"))
+			ret = 0;
+		else if (!strcmp(sb.buf, "ignore-space-change"))
 			ret |= XDF_IGNORE_WHITESPACE_CHANGE;
 		else if (!strcmp(sb.buf, "ignore-space-at-eol"))
 			ret |= XDF_IGNORE_WHITESPACE_AT_EOL;
@@ -312,15 +314,19 @@ static int parse_color_moved_ws(const char *arg)
 			ret |= XDF_IGNORE_WHITESPACE;
 		else if (!strcmp(sb.buf, "allow-indentation-change"))
 			ret |= COLOR_MOVED_WS_ALLOW_INDENTATION_CHANGE;
-		else
-			error(_("ignoring unknown color-moved-ws mode '%s'"), sb.buf);
+		else {
+			ret |= COLOR_MOVED_WS_ERROR;
+			error(_("unknown color-moved-ws mode '%s', possible values are 'ignore-space-change', 'ignore-space-at-eol', 'ignore-all-space', 'allow-indentation-change'"), sb.buf);
+		}
 
 		strbuf_release(&sb);
 	}
 
 	if ((ret & COLOR_MOVED_WS_ALLOW_INDENTATION_CHANGE) &&
-	    (ret & XDF_WHITESPACE_FLAGS))
-		die(_("color-moved-ws: allow-indentation-change cannot be combined with other white space modes"));
+	    (ret & XDF_WHITESPACE_FLAGS)) {
+		error(_("color-moved-ws: allow-indentation-change cannot be combined with other whitespace modes"));
+		ret |= COLOR_MOVED_WS_ERROR;
+	}
 
 	string_list_clear(&l, 0);
 
@@ -341,8 +347,8 @@ int git_diff_ui_config(const char *var, const char *value, void *cb)
 		return 0;
 	}
 	if (!strcmp(var, "diff.colormovedws")) {
-		int cm = parse_color_moved_ws(value);
-		if (cm < 0)
+		unsigned cm = parse_color_moved_ws(value);
+		if (cm & COLOR_MOVED_WS_ERROR)
 			return -1;
 		diff_color_moved_ws_default = cm;
 		return 0;
@@ -489,7 +495,7 @@ static const char *external_diff(void)
 
 	if (done_preparing)
 		return external_diff_cmd;
-	external_diff_cmd = getenv("GIT_EXTERNAL_DIFF");
+	external_diff_cmd = xstrdup_or_null(getenv("GIT_EXTERNAL_DIFF"));
 	if (!external_diff_cmd)
 		external_diff_cmd = external_diff_cmd_cfg;
 	done_preparing = 1;
@@ -750,6 +756,8 @@ struct emitted_diff_symbol {
 	const char *line;
 	int len;
 	int flags;
+	int indent_off;   /* Offset to first non-whitespace character */
+	int indent_width; /* The visual width of the indentation */
 	enum diff_symbol s;
 };
 #define EMITTED_DIFF_SYMBOL_INIT {NULL}
@@ -780,44 +788,85 @@ struct moved_entry {
 	struct moved_entry *next_line;
 };
 
-/**
- * The struct ws_delta holds white space differences between moved lines, i.e.
- * between '+' and '-' lines that have been detected to be a move.
- * The string contains the difference in leading white spaces, before the
- * rest of the line is compared using the white space config for move
- * coloring. The current_longer indicates if the first string in the
- * comparision is longer than the second.
- */
-struct ws_delta {
-	char *string;
-	unsigned int current_longer : 1;
-};
-#define WS_DELTA_INIT { NULL, 0 }
-
 struct moved_block {
 	struct moved_entry *match;
-	struct ws_delta wsd;
+	int wsd; /* The whitespace delta of this block */
 };
 
 static void moved_block_clear(struct moved_block *b)
 {
-	FREE_AND_NULL(b->wsd.string);
-	b->match = NULL;
+	memset(b, 0, sizeof(*b));
+}
+
+#define INDENT_BLANKLINE INT_MIN
+
+static void fill_es_indent_data(struct emitted_diff_symbol *es)
+{
+	unsigned int off = 0, i;
+	int width = 0, tab_width = es->flags & WS_TAB_WIDTH_MASK;
+	const char *s = es->line;
+	const int len = es->len;
+
+	/* skip any \v \f \r at start of indentation */
+	while (s[off] == '\f' || s[off] == '\v' ||
+	       (s[off] == '\r' && off < len - 1))
+		off++;
+
+	/* calculate the visual width of indentation */
+	while(1) {
+		if (s[off] == ' ') {
+			width++;
+			off++;
+		} else if (s[off] == '\t') {
+			width += tab_width - (width % tab_width);
+			while (s[++off] == '\t')
+				width += tab_width;
+		} else {
+			break;
+		}
+	}
+
+	/* check if this line is blank */
+	for (i = off; i < len; i++)
+		if (!isspace(s[i]))
+		    break;
+
+	if (i == len) {
+		es->indent_width = INDENT_BLANKLINE;
+		es->indent_off = len;
+	} else {
+		es->indent_off = off;
+		es->indent_width = width;
+	}
 }
 
 static int compute_ws_delta(const struct emitted_diff_symbol *a,
-			     const struct emitted_diff_symbol *b,
-			     struct ws_delta *out)
+			    const struct emitted_diff_symbol *b,
+			    int *out)
 {
-	const struct emitted_diff_symbol *longer =  a->len > b->len ? a : b;
-	const struct emitted_diff_symbol *shorter = a->len > b->len ? b : a;
-	int d = longer->len - shorter->len;
+	int a_len = a->len,
+	    b_len = b->len,
+	    a_off = a->indent_off,
+	    a_width = a->indent_width,
+	    b_off = b->indent_off,
+	    b_width = b->indent_width;
+	int delta;
 
-	if (strncmp(longer->line + d, shorter->line, shorter->len))
+	if (a_width == INDENT_BLANKLINE && b_width == INDENT_BLANKLINE) {
+		*out = INDENT_BLANKLINE;
+		return 1;
+	}
+
+	if (a->s == DIFF_SYMBOL_PLUS)
+		delta = a_width - b_width;
+	else
+		delta = b_width - a_width;
+
+	if (a_len - a_off != b_len - b_off ||
+	    memcmp(a->line + a_off, b->line + b_off, a_len - a_off))
 		return 0;
 
-	out->string = xmemdupz(longer->line, d);
-	out->current_longer = (a == longer);
+	*out = delta;
 
 	return 1;
 }
@@ -829,51 +878,53 @@ static int cmp_in_block_with_wsd(const struct diff_options *o,
 				 int n)
 {
 	struct emitted_diff_symbol *l = &o->emitted_symbols->buf[n];
-	int al = cur->es->len, cl = l->len;
+	int al = cur->es->len, bl = match->es->len, cl = l->len;
 	const char *a = cur->es->line,
 		   *b = match->es->line,
 		   *c = l->line;
-
-	int wslen;
-
-	/*
-	 * We need to check if 'cur' is equal to 'match'.
-	 * As those are from the same (+/-) side, we do not need to adjust for
-	 * indent changes. However these were found using fuzzy matching
-	 * so we do have to check if they are equal.
-	 */
-	if (strcmp(a, b))
-		return 1;
-
-	if (!pmb->wsd.string)
-		/*
-		 * The white space delta is not active? This can happen
-		 * when we exit early in this function.
-		 */
-		return 1;
+	int a_off = cur->es->indent_off,
+	    a_width = cur->es->indent_width,
+	    c_off = l->indent_off,
+	    c_width = l->indent_width;
+	int delta;
 
 	/*
-	 * The indent changes of the block are known and stored in
-	 * pmb->wsd; however we need to check if the indent changes of the
-	 * current line are still the same as before.
-	 *
-	 * To do so we need to compare 'l' to 'cur', adjusting the
-	 * one of them for the white spaces, depending which was longer.
+	 * We need to check if 'cur' is equal to 'match'.  As those
+	 * are from the same (+/-) side, we do not need to adjust for
+	 * indent changes. However these were found using fuzzy
+	 * matching so we do have to check if they are equal. Here we
+	 * just check the lengths. We delay calling memcmp() to check
+	 * the contents until later as if the length comparison for a
+	 * and c fails we can avoid the call all together.
 	 */
-
-	wslen = strlen(pmb->wsd.string);
-	if (pmb->wsd.current_longer) {
-		c += wslen;
-		cl -= wslen;
-	} else {
-		a += wslen;
-		al -= wslen;
-	}
-
-	if (al != cl || memcmp(a, c, al))
+	if (al != bl)
 		return 1;
 
-	return 0;
+	/* If 'l' and 'cur' are both blank then they match. */
+	if (a_width == INDENT_BLANKLINE && c_width == INDENT_BLANKLINE)
+		return 0;
+
+	/*
+	 * The indent changes of the block are known and stored in pmb->wsd;
+	 * however we need to check if the indent changes of the current line
+	 * match those of the current block and that the text of 'l' and 'cur'
+	 * after the indentation match.
+	 */
+	if (cur->es->s == DIFF_SYMBOL_PLUS)
+		delta = a_width - c_width;
+	else
+		delta = c_width - a_width;
+
+	/*
+	 * If the previous lines of this block were all blank then set its
+	 * whitespace delta.
+	 */
+	if (pmb->wsd == INDENT_BLANKLINE)
+		pmb->wsd = delta;
+
+	return !(delta == pmb->wsd && al - a_off == cl - c_off &&
+		 !memcmp(a, b, al) && !
+		 memcmp(a + a_off, c + c_off, al - a_off));
 }
 
 static int moved_entry_cmp(const void *hashmap_cmp_fn_data,
@@ -939,6 +990,9 @@ static void add_lines_to_move_detection(struct diff_options *o,
 			continue;
 		}
 
+		if (o->color_moved_ws_handling &
+		    COLOR_MOVED_WS_ALLOW_INDENTATION_CHANGE)
+			fill_es_indent_data(&o->emitted_symbols->buf[n]);
 		key = prepare_entry(o, n);
 		if (prev_line && prev_line->es->s == o->emitted_symbols->buf[n].s)
 			prev_line->next_line = key;
@@ -1017,8 +1071,7 @@ static int shrink_potential_moved_blocks(struct moved_block *pmb,
 
 		if (lp < pmb_nr && rp > -1 && lp < rp) {
 			pmb[lp] = pmb[rp];
-			pmb[rp].match = NULL;
-			pmb[rp].wsd.string = NULL;
+			memset(&pmb[rp], 0, sizeof(pmb[rp]));
 			rp--;
 			lp++;
 		}
@@ -1038,14 +1091,17 @@ static int shrink_potential_moved_blocks(struct moved_block *pmb,
  * The last block consists of the (n - block_length)'th line up to but not
  * including the nth line.
  *
+ * Returns 0 if the last block is empty or is unset by this function, non zero
+ * otherwise.
+ *
  * NEEDSWORK: This uses the same heuristic as blame_entry_score() in blame.c.
  * Think of a way to unify them.
  */
-static void adjust_last_block(struct diff_options *o, int n, int block_length)
+static int adjust_last_block(struct diff_options *o, int n, int block_length)
 {
 	int i, alnum_count = 0;
 	if (o->color_moved == COLOR_MOVED_PLAIN)
-		return;
+		return block_length;
 	for (i = 1; i < block_length + 1; i++) {
 		const char *c = o->emitted_symbols->buf[n - i].line;
 		for (; *c; c++) {
@@ -1053,11 +1109,12 @@ static void adjust_last_block(struct diff_options *o, int n, int block_length)
 				continue;
 			alnum_count++;
 			if (alnum_count >= COLOR_MOVED_MIN_ALNUM_COUNT)
-				return;
+				return 1;
 		}
 	}
 	for (i = 1; i < block_length + 1; i++)
 		o->emitted_symbols->buf[n - i].flags &= ~DIFF_SYMBOL_MOVED_LINE;
+	return 0;
 }
 
 /* Find blocks of moved code, delegate actual coloring decision to helper */
@@ -1067,7 +1124,7 @@ static void mark_color_as_moved(struct diff_options *o,
 {
 	struct moved_block *pmb = NULL; /* potentially moved blocks */
 	int pmb_nr = 0, pmb_alloc = 0;
-	int n, flipped_block = 1, block_length = 0;
+	int n, flipped_block = 0, block_length = 0;
 
 
 	for (n = 0; n < o->emitted_symbols->nr; n++) {
@@ -1075,6 +1132,7 @@ static void mark_color_as_moved(struct diff_options *o,
 		struct moved_entry *key;
 		struct moved_entry *match = NULL;
 		struct emitted_diff_symbol *l = &o->emitted_symbols->buf[n];
+		enum diff_symbol last_symbol = 0;
 
 		switch (l->s) {
 		case DIFF_SYMBOL_PLUS:
@@ -1090,7 +1148,7 @@ static void mark_color_as_moved(struct diff_options *o,
 			free(key);
 			break;
 		default:
-			flipped_block = 1;
+			flipped_block = 0;
 		}
 
 		if (!match) {
@@ -1101,13 +1159,16 @@ static void mark_color_as_moved(struct diff_options *o,
 				moved_block_clear(&pmb[i]);
 			pmb_nr = 0;
 			block_length = 0;
+			flipped_block = 0;
+			last_symbol = l->s;
 			continue;
 		}
 
-		l->flags |= DIFF_SYMBOL_MOVED_LINE;
-
-		if (o->color_moved == COLOR_MOVED_PLAIN)
+		if (o->color_moved == COLOR_MOVED_PLAIN) {
+			last_symbol = l->s;
+			l->flags |= DIFF_SYMBOL_MOVED_LINE;
 			continue;
+		}
 
 		if (o->color_moved_ws_handling &
 		    COLOR_MOVED_WS_ALLOW_INDENTATION_CHANGE)
@@ -1130,21 +1191,27 @@ static void mark_color_as_moved(struct diff_options *o,
 							     &pmb[pmb_nr].wsd))
 						pmb[pmb_nr++].match = match;
 				} else {
-					pmb[pmb_nr].wsd.string = NULL;
+					pmb[pmb_nr].wsd = 0;
 					pmb[pmb_nr++].match = match;
 				}
 			}
 
-			flipped_block = (flipped_block + 1) % 2;
+			if (adjust_last_block(o, n, block_length) &&
+			    pmb_nr && last_symbol != l->s)
+				flipped_block = (flipped_block + 1) % 2;
+			else
+				flipped_block = 0;
 
-			adjust_last_block(o, n, block_length);
 			block_length = 0;
 		}
 
-		block_length++;
-
-		if (flipped_block && o->color_moved != COLOR_MOVED_BLOCKS)
-			l->flags |= DIFF_SYMBOL_MOVED_LINE_ALT;
+		if (pmb_nr) {
+			block_length++;
+			l->flags |= DIFF_SYMBOL_MOVED_LINE;
+			if (flipped_block && o->color_moved != COLOR_MOVED_BLOCKS)
+				l->flags |= DIFF_SYMBOL_MOVED_LINE_ALT;
+		}
+		last_symbol = l->s;
 	}
 	adjust_last_block(o, n, block_length);
 
@@ -1488,7 +1555,7 @@ static void emit_diff_symbol_from_struct(struct diff_options *o,
 static void emit_diff_symbol(struct diff_options *o, enum diff_symbol s,
 			     const char *line, int len, unsigned flags)
 {
-	struct emitted_diff_symbol e = {line, len, flags, s};
+	struct emitted_diff_symbol e = {line, len, flags, 0, 0, s};
 
 	if (o->emitted_symbols)
 		append_emitted_diff_symbol(o, &e);
@@ -1637,7 +1704,8 @@ static void emit_hunk_header(struct emit_callback *ecbdata,
 	strbuf_release(&msgbuf);
 }
 
-static struct diff_tempfile *claim_diff_tempfile(void) {
+static struct diff_tempfile *claim_diff_tempfile(void)
+{
 	int i;
 	for (i = 0; i < ARRAY_SIZE(diff_temp); i++)
 		if (!diff_temp[i].name)
@@ -3313,14 +3381,14 @@ void diff_set_mnemonic_prefix(struct diff_options *options, const char *a, const
 		options->b_prefix = b;
 }
 
-struct userdiff_driver *get_textconv(struct index_state *istate,
+struct userdiff_driver *get_textconv(struct repository *r,
 				     struct diff_filespec *one)
 {
 	if (!DIFF_FILE_VALID(one))
 		return NULL;
 
-	diff_filespec_load_driver(one, istate);
-	return userdiff_get_textconv(one->driver);
+	diff_filespec_load_driver(one, r->index);
+	return userdiff_get_textconv(r, one->driver);
 }
 
 static void builtin_diff(const char *name_a,
@@ -3369,8 +3437,8 @@ static void builtin_diff(const char *name_a,
 	}
 
 	if (o->flags.allow_textconv) {
-		textconv_one = get_textconv(o->repo->index, one);
-		textconv_two = get_textconv(o->repo->index, two);
+		textconv_one = get_textconv(o->repo, one);
+		textconv_two = get_textconv(o->repo, two);
 	}
 
 	/* Never use a non-valid filename anywhere if at all possible */
@@ -3476,7 +3544,7 @@ static void builtin_diff(const char *name_a,
 		o->found_changes = 1;
 	} else {
 		/* Crazy xdl interfaces.. */
-		const char *diffopts = getenv("GIT_DIFF_OPTS");
+		const char *diffopts;
 		const char *v;
 		xpparam_t xpp;
 		xdemitconf_t xecfg;
@@ -3519,12 +3587,15 @@ static void builtin_diff(const char *name_a,
 			xecfg.flags |= XDL_EMIT_FUNCCONTEXT;
 		if (pe)
 			xdiff_set_find_func(&xecfg, pe->pattern, pe->cflags);
+
+		diffopts = getenv("GIT_DIFF_OPTS");
 		if (!diffopts)
 			;
 		else if (skip_prefix(diffopts, "--unified=", &v))
 			xecfg.ctxlen = strtoul(v, NULL, 10);
 		else if (skip_prefix(diffopts, "-u", &v))
 			xecfg.ctxlen = strtoul(v, NULL, 10);
+
 		if (o->word_diff)
 			init_diff_words_data(&ecbdata, o, one, two);
 		if (xdi_diff_outf(&mf1, &mf2, NULL, fn_out_consume,
@@ -4819,7 +4890,8 @@ static int parse_diff_filter_opt(const char *optarg, struct diff_options *opt)
 	return 0;
 }
 
-static void enable_patch_output(int *fmt) {
+static void enable_patch_output(int *fmt)
+{
 	*fmt &= ~DIFF_FORMAT_NO_OUTPUT;
 	*fmt |= DIFF_FORMAT_PATCH;
 }
@@ -5034,10 +5106,15 @@ int diff_opt_parse(struct diff_options *options,
 	else if (skip_prefix(arg, "--color-moved=", &arg)) {
 		int cm = parse_color_moved(arg);
 		if (cm < 0)
-			die("bad --color-moved argument: %s", arg);
+			return error("bad --color-moved argument: %s", arg);
 		options->color_moved = cm;
+	} else if (!strcmp(arg, "--no-color-moved-ws")) {
+		options->color_moved_ws_handling = 0;
 	} else if (skip_prefix(arg, "--color-moved-ws=", &arg)) {
-		options->color_moved_ws_handling = parse_color_moved_ws(arg);
+		unsigned cm = parse_color_moved_ws(arg);
+		if (cm & COLOR_MOVED_WS_ERROR)
+			return -1;
+		options->color_moved_ws_handling = cm;
 	} else if (skip_to_optional_arg_default(arg, "--color-words", &options->word_regex, NULL)) {
 		options->use_color = 1;
 		options->word_diff = DIFF_WORDS_COLOR;
@@ -5885,8 +5962,10 @@ static void diff_flush_patch_all_file_pairs(struct diff_options *o)
 
 		for (i = 0; i < esm.nr; i++)
 			free((void *)esm.buf[i].line);
+		esm.nr = 0;
+
+		o->emitted_symbols = NULL;
 	}
-	esm.nr = 0;
 }
 
 void diff_flush(struct diff_options *options)
@@ -6434,7 +6513,7 @@ int textconv_object(struct repository *r,
 
 	df = alloc_filespec(path);
 	fill_filespec(df, oid, oid_valid, mode);
-	textconv = get_textconv(r->index, df);
+	textconv = get_textconv(r, df);
 	if (!textconv) {
 		free_filespec(df);
 		return 0;

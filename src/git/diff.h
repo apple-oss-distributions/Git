@@ -225,7 +225,8 @@ struct diff_options {
 
 	/* XDF_WHITESPACE_FLAGS regarding block detection are set at 2, 3, 4 */
 	#define COLOR_MOVED_WS_ALLOW_INDENTATION_CHANGE (1<<5)
-	int color_moved_ws_handling;
+	#define COLOR_MOVED_WS_ERROR (1<<0)
+	unsigned color_moved_ws_handling;
 
 	struct repository *repo;
 };
@@ -436,7 +437,8 @@ int diff_result_code(struct diff_options *, int);
 
 void diff_no_index(struct repository *, struct rev_info *, int, const char **);
 
-int index_differs_from(const char *def, const struct diff_flags *flags,
+int index_differs_from(struct repository *r, const char *def,
+		       const struct diff_flags *flags,
 		       int ita_invisible_in_index);
 
 /*
@@ -460,7 +462,7 @@ size_t fill_textconv(struct repository *r,
  * and only if it has textconv enabled (otherwise return NULL). The result
  * can be passed to fill_textconv().
  */
-struct userdiff_driver *get_textconv(struct index_state *istate,
+struct userdiff_driver *get_textconv(struct repository *r,
 				     struct diff_filespec *one);
 
 /*
