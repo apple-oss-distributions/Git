@@ -1074,7 +1074,7 @@ void http_init(struct remote *remote, const char *url, int proactive_auth)
 	git_config(urlmatch_config_entry, &config);
 	free(normalized_url);
 
-#if LIBCURL_VERSION_NUM >= 0x073800
+#if LIBCURL_VERSION_NUM >= 0x073800 && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101500
 	if (http_ssl_backend) {
 		const curl_ssl_backend **backends;
 		struct strbuf buf = STRBUF_INIT;
