@@ -115,10 +115,13 @@ static struct common_dir common_list[] = {
 	{ 1, 1, 0, "logs" },
 	{ 1, 1, 1, "logs/HEAD" },
 	{ 0, 1, 1, "logs/refs/bisect" },
+	{ 0, 1, 1, "logs/refs/rewritten" },
+	{ 0, 1, 1, "logs/refs/worktree" },
 	{ 0, 1, 0, "lost-found" },
 	{ 0, 1, 0, "objects" },
 	{ 0, 1, 0, "refs" },
 	{ 0, 1, 1, "refs/bisect" },
+	{ 0, 1, 1, "refs/rewritten" },
 	{ 0, 1, 1, "refs/worktree" },
 	{ 0, 1, 0, "remotes" },
 	{ 0, 1, 0, "worktrees" },
@@ -1218,31 +1221,52 @@ static inline int chomp_trailing_dir_sep(const char *path, int len)
 }
 
 /*
+ * If path ends with suffix (complete path components), returns the offset of
+ * the last character in the path before the suffix (sans trailing directory
+ * separators), and -1 otherwise.
+ */
+static ssize_t stripped_path_suffix_offset(const char *path, const char *suffix)
+{
+	int path_len = strlen(path), suffix_len = strlen(suffix);
+
+	while (suffix_len) {
+		if (!path_len)
+			return -1;
+
+		if (is_dir_sep(path[path_len - 1])) {
+			if (!is_dir_sep(suffix[suffix_len - 1]))
+				return -1;
+			path_len = chomp_trailing_dir_sep(path, path_len);
+			suffix_len = chomp_trailing_dir_sep(suffix, suffix_len);
+		}
+		else if (path[--path_len] != suffix[--suffix_len])
+			return -1;
+	}
+
+	if (path_len && !is_dir_sep(path[path_len - 1]))
+		return -1;
+	return chomp_trailing_dir_sep(path, path_len);
+}
+
+/*
+ * Returns true if the path ends with components, considering only complete path
+ * components, and false otherwise.
+ */
+int ends_with_path_components(const char *path, const char *components)
+{
+	return stripped_path_suffix_offset(path, components) != -1;
+}
+
+/*
  * If path ends with suffix (complete path components), returns the
  * part before suffix (sans trailing directory separators).
  * Otherwise returns NULL.
  */
 char *strip_path_suffix(const char *path, const char *suffix)
 {
-	int path_len = strlen(path), suffix_len = strlen(suffix);
+	ssize_t offset = stripped_path_suffix_offset(path, suffix);
 
-	while (suffix_len) {
-		if (!path_len)
-			return NULL;
-
-		if (is_dir_sep(path[path_len - 1])) {
-			if (!is_dir_sep(suffix[suffix_len - 1]))
-				return NULL;
-			path_len = chomp_trailing_dir_sep(path, path_len);
-			suffix_len = chomp_trailing_dir_sep(suffix, suffix_len);
-		}
-		else if (path[--path_len] != suffix[--suffix_len])
-			return NULL;
-	}
-
-	if (path_len && !is_dir_sep(path[path_len - 1]))
-		return NULL;
-	return xstrndup(path, chomp_trailing_dir_sep(path, path_len));
+	return offset == -1 ? NULL : xstrndup(path, offset);
 }
 
 int daemon_avoid_alias(const char *p)
@@ -1292,37 +1316,77 @@ int daemon_avoid_alias(const char *p)
 	}
 }
 
-static int only_spaces_and_periods(const char *path, size_t len, size_t skip)
-{
-	if (len < skip)
-		return 0;
-	len -= skip;
-	path += skip;
-	while (len-- > 0) {
-		char c = *(path++);
-		if (c != ' ' && c != '.')
-			return 0;
-	}
-	return 1;
-}
-
+/*
+ * On NTFS, we need to be careful to disallow certain synonyms of the `.git/`
+ * directory:
+ *
+ * - For historical reasons, file names that end in spaces or periods are
+ *   automatically trimmed. Therefore, `.git . . ./` is a valid way to refer
+ *   to `.git/`.
+ *
+ * - For other historical reasons, file names that do not conform to the 8.3
+ *   format (up to eight characters for the basename, three for the file
+ *   extension, certain characters not allowed such as `+`, etc) are associated
+ *   with a so-called "short name", at least on the `C:` drive by default.
+ *   Which means that `git~1/` is a valid way to refer to `.git/`.
+ *
+ *   Note: Technically, `.git/` could receive the short name `git~2` if the
+ *   short name `git~1` were already used. In Git, however, we guarantee that
+ *   `.git` is the first item in a directory, therefore it will be associated
+ *   with the short name `git~1` (unless short names are disabled).
+ *
+ * - For yet other historical reasons, NTFS supports so-called "Alternate Data
+ *   Streams", i.e. metadata associated with a given file, referred to via
+ *   `<filename>:<stream-name>:<stream-type>`. There exists a default stream
+ *   type for directories, allowing `.git/` to be accessed via
+ *   `.git::$INDEX_ALLOCATION/`.
+ *
+ * When this function returns 1, it indicates that the specified file/directory
+ * name refers to a `.git` file or directory, or to any of these synonyms, and
+ * Git should therefore not track it.
+ *
+ * For performance reasons, _all_ Alternate Data Streams of `.git/` are
+ * forbidden, not just `::$INDEX_ALLOCATION`.
+ *
+ * This function is intended to be used by `git fsck` even on platforms where
+ * the backslash is a regular filename character, therefore it needs to handle
+ * backlash characters in the provided `name` specially: they are interpreted
+ * as directory separators.
+ */
 int is_ntfs_dotgit(const char *name)
 {
-	size_t len;
+	char c;
 
-	for (len = 0; ; len++)
-		if (!name[len] || name[len] == '\\' || is_dir_sep(name[len])) {
-			if (only_spaces_and_periods(name, len, 4) &&
-					!strncasecmp(name, ".git", 4))
-				return 1;
-			if (only_spaces_and_periods(name, len, 5) &&
-					!strncasecmp(name, "git~1", 5))
-				return 1;
-			if (name[len] != '\\')
-				return 0;
-			name += len + 1;
-			len = -1;
-		}
+	/*
+	 * Note that when we don't find `.git` or `git~1` we end up with `name`
+	 * advanced partway through the string. That's okay, though, as we
+	 * return immediately in those cases, without looking at `name` any
+	 * further.
+	 */
+	c = *(name++);
+	if (c == '.') {
+		/* .git */
+		if (((c = *(name++)) != 'g' && c != 'G') ||
+		    ((c = *(name++)) != 'i' && c != 'I') ||
+		    ((c = *(name++)) != 't' && c != 'T'))
+			return 0;
+	} else if (c == 'g' || c == 'G') {
+		/* git ~1 */
+		if (((c = *(name++)) != 'i' && c != 'I') ||
+		    ((c = *(name++)) != 't' && c != 'T') ||
+		    *(name++) != '~' ||
+		    *(name++) != '1')
+			return 0;
+	} else
+		return 0;
+
+	for (;;) {
+		c = *(name++);
+		if (!c || c == '\\' || c == '/' || c == ':')
+			return 1;
+		if (c != '.' && c != ' ')
+			return 0;
+	}
 }
 
 static int is_ntfs_dot_generic(const char *name,
@@ -1338,7 +1402,7 @@ static int is_ntfs_dot_generic(const char *name,
 only_spaces_and_periods:
 		for (;;) {
 			char c = name[i++];
-			if (!c)
+			if (!c || c == ':')
 				return 1;
 			if (c != ' ' && c != '.')
 				return 0;

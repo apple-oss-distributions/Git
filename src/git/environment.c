@@ -31,8 +31,6 @@ int warn_ambiguous_refs = 1;
 int warn_on_object_refname_ambiguity = 1;
 int ref_paranoia = -1;
 int repository_format_precious_objects;
-char *repository_format_partial_clone;
-const char *core_partial_clone_filter_default;
 int repository_format_worktree_config;
 const char *git_commit_encoding;
 const char *git_log_output_encoding;
@@ -80,7 +78,7 @@ enum log_refs_config log_all_ref_updates = LOG_REFS_UNSET;
 int protect_hfs = PROTECT_HFS_DEFAULT;
 
 #ifndef PROTECT_NTFS_DEFAULT
-#define PROTECT_NTFS_DEFAULT 0
+#define PROTECT_NTFS_DEFAULT 1
 #endif
 int protect_ntfs = PROTECT_NTFS_DEFAULT;
 const char *core_fsmonitor;
