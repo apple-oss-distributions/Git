@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -753,7 +753,7 @@ git(1) Manual Page
     [--exec-path[=&lt;path&gt;]] [--html-path] [--man-path] [--info-path]
     [-p|--paginate|-P|--no-pager] [--no-replace-objects] [--bare]
     [--git-dir=&lt;path&gt;] [--work-tree=&lt;path&gt;] [--namespace=&lt;name&gt;]
-    [--super-prefix=&lt;path&gt;]
+    [--super-prefix=&lt;path&gt;] [--config-env &lt;name&gt;=&lt;envvar&gt;]
     &lt;command&gt; [&lt;args&gt;]</pre>
 <div class="attribution">
 </div></div>
@@ -843,6 +843,31 @@ foo.bar= ...</code>) sets <code>foo.bar</code> to the empty string which <code>g
 --type=bool</code> will convert to <code>false</code>.</p></div>
 </dd>
 <dt class="hdlist1">
+--config-env=&lt;name&gt;=&lt;envvar&gt;
+</dt>
+<dd>
+<p>
+        Like <code>-c &lt;name&gt;=&lt;value&gt;</code>, give configuration variable
+        <em>&lt;name&gt;</em> a value, where &lt;envvar&gt; is the name of an
+        environment variable from which to retrieve the value. Unlike
+        <code>-c</code> there is no shortcut for directly setting the value to an
+        empty string, instead the environment variable itself must be
+        set to the empty string.  It is an error if the <code>&lt;envvar&gt;</code> does not exist
+        in the environment. <code>&lt;envvar&gt;</code> may not contain an equals sign
+        to avoid ambiguity with `&lt;name&gt;`s which contain one.
+</p>
+<div class="paragraph"><p>This is useful for cases where you want to pass transitory
+configuration options to git, but are doing so on OS&#8217;s where
+other processes might be able to read your cmdline
+(e.g. <code>/proc/self/cmdline</code>), but not your environ
+(e.g. <code>/proc/self/environ</code>). That behavior is the default on
+Linux, but may not be on your system.</p></div>
+<div class="paragraph"><p>Note that this might add security for variables such as
+<code>http.extraHeader</code> where the sensitive information is part of
+the value, but not e.g. <code>url.&lt;base&gt;.insteadOf</code> where the
+sensitive information can be part of the key.</p></div>
+</dd>
+<dt class="hdlist1">
 --exec-path[=&lt;path&gt;]
 </dt>
 <dd>
@@ -910,10 +935,22 @@ foo.bar= ...</code>) sets <code>foo.bar</code> to the empty string which <code>g
 </dt>
 <dd>
 <p>
-        Set the path to the repository. This can also be controlled by
-        setting the <code>GIT_DIR</code> environment variable. It can be an absolute
-        path or relative path to current working directory.
+        Set the path to the repository (".git" directory). This can also be
+        controlled by setting the <code>GIT_DIR</code> environment variable. It can be
+        an absolute path or relative path to current working directory.
 </p>
+<div class="paragraph"><p>Specifying the location of the ".git" directory using this
+option (or <code>GIT_DIR</code> environment variable) turns off the
+repository discovery that tries to find a directory with
+".git" subdirectory (which is how the repository and the
+top-level of the working tree are discovered), and tells Git
+that you are at the top level of the working tree.  If you
+are not at the top-level directory of the working tree, you
+should tell Git where the top-level of the working tree is,
+with the <code>--work-tree=&lt;path&gt;</code> option (or <code>GIT_WORK_TREE</code>
+environment variable)</p></div>
+<div class="paragraph"><p>If you just want to run git as if it was started in <code>&lt;path&gt;</code> then use
+<code>git -C &lt;path&gt;</code>.</p></div>
 </dd>
 <dt class="hdlist1">
 --work-tree=&lt;path&gt;
@@ -1219,6 +1256,14 @@ ancillary user utilities.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<a href="git-maintenance.html">git-maintenance(1)</a>
+</dt>
+<dd>
+<p>
+        Run tasks to optimize Git repository data.
+</p>
+</dd>
+<dt class="hdlist1">
 <a href="git-merge.html">git-merge(1)</a>
 </dt>
 <dd>
@@ -1320,6 +1365,14 @@ ancillary user utilities.</p></div>
 <dd>
 <p>
         Show various types of objects.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="git-sparse-checkout.html">git-sparse-checkout(1)</a>
+</dt>
+<dd>
+<p>
+        Initialize and modify the sparse-checkout.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1489,6 +1542,14 @@ ancillary user utilities.</p></div>
 <dd>
 <p>
         Show what revision and author last modified each line of a file.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="git-bugreport.html">git-bugreport(1)</a>
+</dt>
+<dd>
+<p>
+        Collect information for user to file a bug report.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1799,7 +1860,7 @@ repositories.</p></div>
 </dt>
 <dd>
 <p>
-        Creates a tag object.
+        Creates a tag object with extra validation.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1936,6 +1997,14 @@ repositories.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<a href="git-for-each-repo.html">git-for-each-repo(1)</a>
+</dt>
+<dd>
+<p>
+        Run a Git command on a list of repositories.
+</p>
+</dd>
+<dt class="hdlist1">
 <a href="git-get-tar-commit-id.html">git-get-tar-commit-id(1)</a>
 </dt>
 <dd>
@@ -2052,7 +2121,7 @@ repositories.</p></div>
 the working tree.</p></div>
 </div>
 <div class="sect2">
-<h3 id="_synching_repositories">Synching repositories</h3>
+<h3 id="_syncing_repositories">Syncing repositories</h3>
 <div class="dlist"><dl>
 <dt class="hdlist1">
 <a href="git-daemon.html">git-daemon(1)</a>
@@ -2112,14 +2181,6 @@ typically do not use them directly.</p></div>
 <dd>
 <p>
         Push objects over HTTP/DAV to another repository.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="git-parse-remote.html">git-parse-remote(1)</a>
-</dt>
-<dd>
-<p>
-        Routines to help parsing remote repository access parameters.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2299,6 +2360,182 @@ users typically do not use them directly.</p></div>
 </dd>
 </dl></div>
 </div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_guides">Guides</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>The following documentation pages are guides about Git concepts.</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+<a href="gitattributes.html">gitattributes(5)</a>
+</dt>
+<dd>
+<p>
+        Defining attributes per path.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitcli.html">gitcli(7)</a>
+</dt>
+<dd>
+<p>
+        Git command-line interface and conventions.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitcore-tutorial.html">gitcore-tutorial(7)</a>
+</dt>
+<dd>
+<p>
+        A Git core tutorial for developers.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitcredentials.html">gitcredentials(7)</a>
+</dt>
+<dd>
+<p>
+        Providing usernames and passwords to Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitcvs-migration.html">gitcvs-migration(7)</a>
+</dt>
+<dd>
+<p>
+        Git for CVS users.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitdiffcore.html">gitdiffcore(7)</a>
+</dt>
+<dd>
+<p>
+        Tweaking diff output.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="giteveryday.html">giteveryday(7)</a>
+</dt>
+<dd>
+<p>
+        A useful minimum set of commands for Everyday Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitfaq.html">gitfaq(7)</a>
+</dt>
+<dd>
+<p>
+        Frequently asked questions about using Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitglossary.html">gitglossary(7)</a>
+</dt>
+<dd>
+<p>
+        A Git Glossary.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="githooks.html">githooks(5)</a>
+</dt>
+<dd>
+<p>
+        Hooks used by Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitignore.html">gitignore(5)</a>
+</dt>
+<dd>
+<p>
+        Specifies intentionally untracked files to ignore.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitmailmap.html">gitmailmap(5)</a>
+</dt>
+<dd>
+<p>
+        Map author/committer names and/or E-Mail addresses.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitmodules.html">gitmodules(5)</a>
+</dt>
+<dd>
+<p>
+        Defining submodule properties.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitnamespaces.html">gitnamespaces(7)</a>
+</dt>
+<dd>
+<p>
+        Git namespaces.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitremote-helpers.html">gitremote-helpers(7)</a>
+</dt>
+<dd>
+<p>
+        Helper programs to interact with remote repositories.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitrepository-layout.html">gitrepository-layout(5)</a>
+</dt>
+<dd>
+<p>
+        Git Repository Layout.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitrevisions.html">gitrevisions(7)</a>
+</dt>
+<dd>
+<p>
+        Specifying revisions and ranges for Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitsubmodules.html">gitsubmodules(7)</a>
+</dt>
+<dd>
+<p>
+        Mounting one repository inside another.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gittutorial.html">gittutorial(7)</a>
+</dt>
+<dd>
+<p>
+        A tutorial introduction to Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gittutorial-2.html">gittutorial-2(7)</a>
+</dt>
+<dd>
+<p>
+        A tutorial introduction to Git: part two.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitworkflows.html">gitworkflows(7)</a>
+</dt>
+<dd>
+<p>
+        An overview of recommended workflows with Git.
+</p>
+</dd>
+</dl></div>
 </div>
 </div>
 <div class="sect1">
@@ -2597,6 +2834,18 @@ double-quotes and respecting backslash escapes. E.g., the value
         variables such as GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY&#8230;
 </p>
 </dd>
+<dt class="hdlist1">
+<code>GIT_DEFAULT_HASH</code>
+</dt>
+<dd>
+<p>
+        If this variable is set, the default hash algorithm for new
+        repositories will be set to this value. This value is currently
+        ignored when cloning; the setting of the remote repository
+        is used instead. The default is "sha1". THIS VARIABLE IS
+        EXPERIMENTAL! See <code>--object-format</code> in <a href="git-init.html">git-init(1)</a>.
+</p>
+</dd>
 </dl></div>
 </div>
 <div class="sect2">
@@ -2605,27 +2854,68 @@ double-quotes and respecting backslash escapes. E.g., the value
 <dt class="hdlist1">
 <code>GIT_AUTHOR_NAME</code>
 </dt>
+<dd>
+<p>
+        The human-readable name used in the author identity when creating commit or
+        tag objects, or when writing reflogs. Overrides the <code>user.name</code> and
+        <code>author.name</code> configuration settings.
+</p>
+</dd>
 <dt class="hdlist1">
 <code>GIT_AUTHOR_EMAIL</code>
 </dt>
+<dd>
+<p>
+        The email address used in the author identity when creating commit or
+        tag objects, or when writing reflogs. Overrides the <code>user.email</code> and
+        <code>author.email</code> configuration settings.
+</p>
+</dd>
 <dt class="hdlist1">
 <code>GIT_AUTHOR_DATE</code>
 </dt>
+<dd>
+<p>
+        The date used for the author identity when creating commit or tag objects, or
+        when writing reflogs. See <a href="git-commit.html">git-commit(1)</a> for valid formats.
+</p>
+</dd>
 <dt class="hdlist1">
 <code>GIT_COMMITTER_NAME</code>
 </dt>
+<dd>
+<p>
+        The human-readable name used in the committer identity when creating commit or
+        tag objects, or when writing reflogs. Overrides the <code>user.name</code> and
+        <code>committer.name</code> configuration settings.
+</p>
+</dd>
 <dt class="hdlist1">
 <code>GIT_COMMITTER_EMAIL</code>
 </dt>
+<dd>
+<p>
+        The email address used in the author identity when creating commit or
+        tag objects, or when writing reflogs. Overrides the <code>user.email</code> and
+        <code>committer.email</code> configuration settings.
+</p>
+</dd>
 <dt class="hdlist1">
 <code>GIT_COMMITTER_DATE</code>
 </dt>
+<dd>
+<p>
+        The date used for the committer identity when creating commit or tag objects, or
+        when writing reflogs. See <a href="git-commit.html">git-commit(1)</a> for valid formats.
+</p>
+</dd>
 <dt class="hdlist1">
-<em>EMAIL</em>
+<code>EMAIL</code>
 </dt>
 <dd>
 <p>
-        see <a href="git-commit-tree.html">git-commit-tree(1)</a>
+        The email address used in the author and committer identities if no other
+        relevant environment variable or configuration setting has been set.
 </p>
 </dd>
 </dl></div>
@@ -2650,8 +2940,9 @@ double-quotes and respecting backslash escapes. E.g., the value
 <dd>
 <p>
         When the environment variable <code>GIT_EXTERNAL_DIFF</code> is set, the
-        program named by it is called, instead of the diff invocation
-        described above.  For a path that is added, removed, or modified,
+        program named by it is called to generate diffs, and Git
+        does not use its builtin diff machinery.
+        For a path that is added, removed, or modified,
         <code>GIT_EXTERNAL_DIFF</code> is called with 7 parameters:
 </p>
 <div class="literalblock">
@@ -2737,6 +3028,15 @@ parameter, &lt;path&gt;.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<code>GIT_PROGRESS_DELAY</code>
+</dt>
+<dd>
+<p>
+        A number controlling how many seconds to delay before showing
+        optional progress indicators. Defaults to 2.
+</p>
+</dd>
+<dt class="hdlist1">
 <code>GIT_EDITOR</code>
 </dt>
 <dd>
@@ -2745,6 +3045,17 @@ parameter, &lt;path&gt;.</p></div>
         It is used by several Git commands when, on interactive mode,
         an editor is to be launched. See also <a href="git-var.html">git-var(1)</a>
         and the <code>core.editor</code> option in <a href="git-config.html">git-config(1)</a>.
+</p>
+</dd>
+<dt class="hdlist1">
+<code>GIT_SEQUENCE_EDITOR</code>
+</dt>
+<dd>
+<p>
+        This environment variable overrides the configured Git editor
+        when editing the todo list of an interactive rebase. See also
+        <a href="git-rebase.html">git-rebase(1)</a> and the <code>sequence.editor</code> option in
+        <a href="git-config.html">git-config(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2913,6 +3224,15 @@ of clones and fetches.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<code>GIT_TRACE_REFS</code>
+</dt>
+<dd>
+<p>
+        Enables trace messages for operations on the ref database.
+        See <code>GIT_TRACE</code> for available trace output options.
+</p>
+</dd>
+<dt class="hdlist1">
 <code>GIT_TRACE_SETUP</code>
 </dt>
 <dd>
@@ -2940,8 +3260,6 @@ of clones and fetches.</p></div>
         Enables a curl full trace dump of all incoming and outgoing data,
         including descriptive information, of the git transport protocol.
         This is similar to doing curl <code>--trace-ascii</code> on the command line.
-        This option overrides setting the <code>GIT_CURL_VERBOSE</code> environment
-        variable.
         See <code>GIT_TRACE</code> for available trace output options.
 </p>
 </dd>
@@ -3011,14 +3329,13 @@ for full details.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
-<code>GIT_REDACT_COOKIES</code>
+<code>GIT_TRACE_REDACT</code>
 </dt>
 <dd>
 <p>
-        This can be set to a comma-separated list of strings. When a curl trace
-        is enabled (see <code>GIT_TRACE_CURL</code> above), whenever a "Cookies:" header
-        sent by the client is dumped, values of cookies whose key is in that
-        list (case-sensitive) are redacted.
+        By default, when tracing is activated, Git redacts the values of
+        cookies, the "Authorization:" header, and the "Proxy-Authorization:"
+        header. Set this variable to <code>0</code> to prevent this redaction.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3269,7 +3586,7 @@ the authors for specific parts of the project.</p></div>
 <div class="paragraph"><p>Report bugs to the Git mailing list &lt;<a href="mailto:git@vger.kernel.org">git@vger.kernel.org</a>&gt; where the
 development and maintenance is primarily done.  You do not have to be
 subscribed to the list to send a message there.  See the list archive
-at <a href="https://public-inbox.org/git">https://public-inbox.org/git</a> for previous bug reports and other
+at <a href="https://lore.kernel.org/git">https://lore.kernel.org/git</a> for previous bug reports and other
 discussions.</p></div>
 <div class="paragraph"><p>Issues which are security relevant should be disclosed privately to
 the Git Security mailing list &lt;<a href="mailto:git-security@googlegroups.com">git-security@googlegroups.com</a>&gt;.</p></div>
@@ -3296,7 +3613,7 @@ the Git Security mailing list &lt;<a href="mailto:git-security@googlegroups.com"
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-07-13 05:29:16 JST
+ 2021-01-25 15:29:19 PST
 </div>
 </div>
 </body>

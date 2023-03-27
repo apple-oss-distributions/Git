@@ -29,7 +29,7 @@ test_expect_success 'ceiling' '
 		cd sub &&
 		test-tool config read_early_config early.config
 	) >output &&
-	test -z "$(cat output)"
+	test_must_be_empty output
 '
 
 test_expect_success 'ceiling #2' '
@@ -91,11 +91,11 @@ test_expect_failure 'ignore .git/ with invalid config' '
 
 test_expect_success 'early config and onbranch' '
 	echo "[broken" >broken &&
-	test_with_config "[includeif \"onbranch:master\"]path=../broken"
+	test_with_config "[includeif \"onbranch:topic\"]path=../broken"
 '
 
 test_expect_success 'onbranch config outside of git repo' '
-	test_config_global includeIf.onbranch:master.path non-existent &&
+	test_config_global includeIf.onbranch:topic.path non-existent &&
 	nongit git help
 '
 

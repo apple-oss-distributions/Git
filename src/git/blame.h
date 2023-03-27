@@ -16,6 +16,8 @@
 #define BLAME_DEFAULT_MOVE_SCORE	20
 #define BLAME_DEFAULT_COPY_SCORE	40
 
+struct fingerprint;
+
 /*
  * One blob in a commit that is being suspected
  */
@@ -52,7 +54,7 @@ struct blame_origin {
 	struct blame_entry *suspects;
 	mmfile_t file;
 	int num_lines;
-	void *fingerprints;
+	struct fingerprint *fingerprints;
 	struct object_id blob_oid;
 	unsigned short mode;
 	/* guilty gets set when shipping any suspects to the final
@@ -97,6 +99,8 @@ struct blame_entry {
 	int ignored;
 	int unblamable;
 };
+
+struct blame_bloom_data;
 
 /*
  * The current state of the blame assignment.
@@ -154,6 +158,7 @@ struct blame_scoreboard {
 	void(*found_guilty_entry)(struct blame_entry *, void *);
 
 	void *found_guilty_entry_data;
+	struct blame_bloom_data *bloom_data;
 };
 
 /*
@@ -176,8 +181,9 @@ const char *blame_nth_line(struct blame_scoreboard *sb, long lno);
 
 void init_scoreboard(struct blame_scoreboard *sb);
 void setup_scoreboard(struct blame_scoreboard *sb,
-		      const char *path,
 		      struct blame_origin **orig);
+void setup_blame_bloom_data(struct blame_scoreboard *sb);
+void cleanup_scoreboard(struct blame_scoreboard *sb);
 
 struct blame_entry *blame_entry_prepend(struct blame_entry *head,
 					long start, long end,

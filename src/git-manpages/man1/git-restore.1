@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-restore
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-RESTORE" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-RESTORE" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,8 +32,9 @@ git-restore \- Restore working tree files
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit restore\fR [<options>] [\-\-source=<tree>] [\-\-staged] [\-\-worktree] <pathspec>\&...
-\fIgit restore\fR (\-p|\-\-patch) [<options>] [\-\-source=<tree>] [\-\-staged] [\-\-worktree] [<pathspec>\&...]
+\fIgit restore\fR [<options>] [\-\-source=<tree>] [\-\-staged] [\-\-worktree] [\-\-] <pathspec>\&...
+\fIgit restore\fR [<options>] [\-\-source=<tree>] [\-\-staged] [\-\-worktree] \-\-pathspec\-from\-file=<file> [\-\-pathspec\-file\-nul]
+\fIgit restore\fR (\-p|\-\-patch) [<options>] [\-\-source=<tree>] [\-\-staged] [\-\-worktree] [\-\-] [<pathspec>\&...]
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -42,7 +43,7 @@ Restore specified paths in the working tree with some contents from a restore so
 .sp
 The command can also be used to restore the content in the index with \fB\-\-staged\fR, or restore both the working tree and the index with \fB\-\-staged \-\-worktree\fR\&.
 .sp
-By default, the restore sources for working tree and the index are the index and \fBHEAD\fR respectively\&. \fB\-\-source\fR could be used to specify a commit as the restore source\&.
+By default, if \fB\-\-staged\fR is given, the contents are restored from \fBHEAD\fR, otherwise from the index\&. Use \fB\-\-source\fR to restore from a different commit\&.
 .sp
 See "Reset, restore and revert" in \fBgit\fR(1) for the differences between the three commands\&.
 .sp
@@ -53,14 +54,23 @@ THIS COMMAND IS EXPERIMENTAL\&. THE BEHAVIOR MAY CHANGE\&.
 .RS 4
 Restore the working tree files with the content from the given tree\&. It is common to specify the source tree by naming a commit, branch or tag associated with it\&.
 .sp
-If not specified, the default restore source for the working tree is the index, and the default restore source for the index is
-\fBHEAD\fR\&. When both
+If not specified, the contents are restored from
+\fBHEAD\fR
+if
 \fB\-\-staged\fR
+is given, otherwise from the index\&.
+.sp
+As a special case, you may use
+\fB"A\&.\&.\&.B"\fR
+as a shortcut for the merge base of
+\fBA\fR
 and
-\fB\-\-worktree\fR
-are specified,
-\fB\-\-source\fR
-must also be specified\&.
+\fBB\fR
+if there is exactly one merge base\&. You can leave out at most one of
+\fBA\fR
+and
+\fBB\fR, in which case it defaults to
+\fBHEAD\fR\&.
 .RE
 .PP
 \-p, \-\-patch
@@ -146,6 +156,17 @@ and sparse patterns in $GIT_DIR/info/sparse\-checkout\&. This option ignores the
 \fB<pathspec>\fR\&.
 .RE
 .PP
+\-\-recurse\-submodules, \-\-no\-recurse\-submodules
+.RS 4
+If
+\fB<pathspec>\fR
+names an active submodule and the restore location includes the working tree, the submodule will only be updated if this option is given, in which case its working tree will be restored to the commit recorded in the superproject, and any local modifications overwritten\&. If nothing (or
+\fB\-\-no\-recurse\-submodules\fR) is used, submodules working trees will not be updated\&. Just like
+\fBgit-checkout\fR(1), this will detach
+\fBHEAD\fR
+of the submodule\&.
+.RE
+.PP
 \-\-overlay, \-\-no\-overlay
 .RS 4
 In overlay mode, the command never removes files when restoring\&. In no\-overlay mode, tracked files that do not appear in the
@@ -153,6 +174,44 @@ In overlay mode, the command never removes files when restoring\&. In no\-overla
 tree are removed, to make them match
 \fB<tree>\fR
 exactly\&. The default is no\-overlay mode\&.
+.RE
+.PP
+\-\-pathspec\-from\-file=<file>
+.RS 4
+Pathspec is passed in
+\fB<file>\fR
+instead of commandline args\&. If
+\fB<file>\fR
+is exactly
+\fB\-\fR
+then standard input is used\&. Pathspec elements are separated by LF or CR/LF\&. Pathspec elements can be quoted as explained for the configuration variable
+\fBcore\&.quotePath\fR
+(see
+\fBgit-config\fR(1))\&. See also
+\fB\-\-pathspec\-file\-nul\fR
+and global
+\fB\-\-literal\-pathspecs\fR\&.
+.RE
+.PP
+\-\-pathspec\-file\-nul
+.RS 4
+Only meaningful with
+\fB\-\-pathspec\-from\-file\fR\&. Pathspec elements are separated with NUL character and all other characters are taken literally (including newlines and quotes)\&.
+.RE
+.PP
+\-\-
+.RS 4
+Do not interpret any more arguments as options\&.
+.RE
+.PP
+<pathspec>\&...
+.RS 4
+Limits the paths affected by the operation\&.
+.sp
+For more details, see the
+\fIpathspec\fR
+entry in
+\fBgitglossary\fR(7)\&.
 .RE
 .SH "EXAMPLES"
 .sp

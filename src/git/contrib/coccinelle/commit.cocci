@@ -20,7 +20,7 @@ expression s;
 + set_commit_tree(c, s)
   ...>}
 
-// These excluded functions must access c->maybe_tree direcly.
+// These excluded functions must access c->maybe_tree directly.
 // Note that if c->maybe_tree is written somewhere outside of these
 // functions, then the recommended transformation will be bogus with
 // repo_get_commit_tree() on the LHS.
@@ -32,3 +32,21 @@ expression c;
 - c->maybe_tree
 + repo_get_commit_tree(specify_the_right_repo_here, c)
   ...>}
+
+@@
+struct commit *c;
+expression E;
+@@
+(
+- c->generation = E;
++ commit_graph_data_at(c)->generation = E;
+|
+- c->graph_pos = E;
++ commit_graph_data_at(c)->graph_pos = E;
+|
+- c->generation
++ commit_graph_generation(c)
+|
+- c->graph_pos
++ commit_graph_position(c)
+)

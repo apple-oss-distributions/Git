@@ -265,6 +265,32 @@ test_expect_success 'internal getpass does not ask for known username' '
 	EOF
 '
 
+test_expect_success 'git-credential respects core.askPass' '
+	write_script alternate-askpass <<-\EOF &&
+	echo >&2 "alternate askpass invoked"
+	echo alternate-value
+	EOF
+	test_config core.askpass "$PWD/alternate-askpass" &&
+	(
+		# unset GIT_ASKPASS set by lib-credential.sh which would
+		# override our config, but do so in a subshell so that we do
+		# not interfere with other tests
+		sane_unset GIT_ASKPASS &&
+		check fill <<-\EOF
+		protocol=http
+		host=example.com
+		--
+		protocol=http
+		host=example.com
+		username=alternate-value
+		password=alternate-value
+		--
+		alternate askpass invoked
+		alternate askpass invoked
+		EOF
+	)
+'
+
 HELPER="!f() {
 		cat >/dev/null
 		echo username=foo
@@ -315,6 +341,102 @@ test_expect_success 'do not match configured credential' '
 	EOF
 '
 
+test_expect_success 'match multiple configured helpers' '
+	test_config credential.helper "verbatim \"\" \"\"" &&
+	test_config credential.https://example.com.helper "$HELPER" &&
+	check fill <<-\EOF
+	protocol=https
+	host=example.com
+	path=repo.git
+	--
+	protocol=https
+	host=example.com
+	username=foo
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	EOF
+'
+
+test_expect_success 'match multiple configured helpers with URLs' '
+	test_config credential.https://example.com/repo.git.helper "verbatim \"\" \"\"" &&
+	test_config credential.https://example.com.helper "$HELPER" &&
+	check fill <<-\EOF
+	protocol=https
+	host=example.com
+	path=repo.git
+	--
+	protocol=https
+	host=example.com
+	username=foo
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	EOF
+'
+
+test_expect_success 'match percent-encoded values' '
+	test_config credential.https://example.com/%2566.git.helper "$HELPER" &&
+	check fill <<-\EOF
+	url=https://example.com/%2566.git
+	--
+	protocol=https
+	host=example.com
+	username=foo
+	password=bar
+	--
+	EOF
+'
+
+test_expect_success 'match percent-encoded UTF-8 values in path' '
+	test_config credential.https://example.com.useHttpPath true &&
+	test_config credential.https://example.com/perú.git.helper "$HELPER" &&
+	check fill <<-\EOF
+	url=https://example.com/per%C3%BA.git
+	--
+	protocol=https
+	host=example.com
+	path=perú.git
+	username=foo
+	password=bar
+	--
+	EOF
+'
+
+test_expect_success 'match percent-encoded values in username' '
+	test_config credential.https://user%2fname@example.com/foo/bar.git.helper "$HELPER" &&
+	check fill <<-\EOF
+	url=https://user%2fname@example.com/foo/bar.git
+	--
+	protocol=https
+	host=example.com
+	username=foo
+	password=bar
+	--
+	EOF
+'
+
+test_expect_success 'fetch with multiple path components' '
+	test_unconfig credential.helper &&
+	test_config credential.https://example.com/foo/repo.git.helper "verbatim foo bar" &&
+	check fill <<-\EOF
+	url=https://example.com/foo/repo.git
+	--
+	protocol=https
+	host=example.com
+	username=foo
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	EOF
+'
+
 test_expect_success 'pull username from config' '
 	test_config credential.https://example.com.username foo &&
 	check fill <<-\EOF
@@ -327,6 +449,63 @@ test_expect_success 'pull username from config' '
 	password=askpass-password
 	--
 	askpass: Password for '\''https://foo@example.com'\'':
+	EOF
+'
+
+test_expect_success 'honors username from URL over helper (URL)' '
+	test_config credential.https://example.com.username bob &&
+	test_config credential.https://example.com.helper "verbatim \"\" bar" &&
+	check fill <<-\EOF
+	url=https://alice@example.com
+	--
+	protocol=https
+	host=example.com
+	username=alice
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	verbatim: username=alice
+	EOF
+'
+
+test_expect_success 'honors username from URL over helper (components)' '
+	test_config credential.https://example.com.username bob &&
+	test_config credential.https://example.com.helper "verbatim \"\" bar" &&
+	check fill <<-\EOF
+	protocol=https
+	host=example.com
+	username=alice
+	--
+	protocol=https
+	host=example.com
+	username=alice
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	verbatim: username=alice
+	EOF
+'
+
+test_expect_success 'last matching username wins' '
+	test_config credential.https://example.com/path.git.username bob &&
+	test_config credential.https://example.com.username alice &&
+	test_config credential.https://example.com.helper "verbatim \"\" bar" &&
+	check fill <<-\EOF
+	url=https://example.com/path.git
+	--
+	protocol=https
+	host=example.com
+	username=alice
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	verbatim: username=alice
 	EOF
 '
 
@@ -360,6 +539,26 @@ test_expect_success 'http paths can be part of context' '
 	verbatim: get
 	verbatim: protocol=https
 	verbatim: host=example.com
+	verbatim: path=foo.git
+	EOF
+'
+
+test_expect_success 'context uses urlmatch' '
+	test_config "credential.https://*.org.useHttpPath" true &&
+	check fill "verbatim foo bar" <<-\EOF
+	protocol=https
+	host=example.org
+	path=foo.git
+	--
+	protocol=https
+	host=example.org
+	path=foo.git
+	username=foo
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.org
 	verbatim: path=foo.git
 	EOF
 '
@@ -404,7 +603,7 @@ test_expect_success 'url parser rejects embedded newlines' '
 	url=https://one.example.com?%0ahost=two.example.com/
 	EOF
 	cat >expect <<-\EOF &&
-	warning: url contains a newline in its host component: https://one.example.com?%0ahost=two.example.com/
+	warning: url contains a newline in its path component: https://one.example.com?%0ahost=two.example.com/
 	fatal: credential url cannot be parsed: https://one.example.com?%0ahost=two.example.com/
 	EOF
 	test_i18ncmp expect stderr
@@ -445,6 +644,78 @@ test_expect_success 'credential system refuses to work with missing protocol' '
 	fatal: refusing to work with credential missing protocol field
 	EOF
 	test_i18ncmp expect stderr
+'
+
+# usage: check_host_and_path <url> <expected-host> <expected-path>
+check_host_and_path () {
+	# we always parse the path component, but we need this to make sure it
+	# is passed to the helper
+	test_config credential.useHTTPPath true &&
+	check fill "verbatim user pass" <<-EOF
+	url=$1
+	--
+	protocol=https
+	host=$2
+	path=$3
+	username=user
+	password=pass
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=$2
+	verbatim: path=$3
+	EOF
+}
+
+test_expect_success 'url parser handles bare query marker' '
+	check_host_and_path https://example.com?foo.git example.com ?foo.git
+'
+
+test_expect_success 'url parser handles bare fragment marker' '
+	check_host_and_path https://example.com#foo.git example.com "#foo.git"
+'
+
+test_expect_success 'url parser not confused by encoded markers' '
+	check_host_and_path https://example.com%23%3f%2f/foo.git \
+		"example.com#?/" foo.git
+'
+
+test_expect_success 'credential config with partial URLs' '
+	echo "echo password=yep" | write_script git-credential-yep &&
+	test_write_lines url=https://user@example.com/repo.git >stdin &&
+	for partial in \
+		example.com \
+		user@example.com \
+		https:// \
+		https://example.com \
+		https://example.com/ \
+		https://user@example.com \
+		https://user@example.com/ \
+		https://example.com/repo.git \
+		https://user@example.com/repo.git \
+		/repo.git
+	do
+		git -c credential.$partial.helper=yep \
+			credential fill <stdin >stdout &&
+		grep yep stdout ||
+		return 1
+	done &&
+
+	for partial in \
+		dont.use.this \
+		http:// \
+		/repo
+	do
+		git -c credential.$partial.helper=yep \
+			credential fill <stdin >stdout &&
+		! grep yep stdout ||
+		return 1
+	done &&
+
+	git -c credential.$partial.helper=yep \
+		-c credential.with%0anewline.username=uh-oh \
+		credential fill <stdin >stdout 2>stderr &&
+	test_i18ngrep "skipping credential lookup for key" stderr
 '
 
 test_done

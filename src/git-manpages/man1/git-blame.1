@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-blame
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-BLAME" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-BLAME" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -86,11 +86,28 @@ Include additional statistics at the end of blame output\&.
 .PP
 \-L <start>,<end>, \-L :<funcname>
 .RS 4
-Annotate only the given line range\&. May be specified multiple times\&. Overlapping ranges are allowed\&.
+Annotate only the line range given by
+\fI<start>,<end>\fR, or by the function name regex
+\fI<funcname>\fR\&. May be specified multiple times\&. Overlapping ranges are allowed\&.
 .sp
-<start> and <end> are optional\&. \(lq\-L <start>\(rq or \(lq\-L <start>,\(rq spans from <start> to end of file\&. \(lq\-L ,<end>\(rq spans from start of file to <end>\&.
+\fI<start>\fR
+and
+\fI<end>\fR
+are optional\&.
+\fB\-L <start>\fR
+or
+\fB\-L <start>,\fR
+spans from
+\fI<start>\fR
+to end of file\&.
+\fB\-L ,<end>\fR
+spans from start of file to
+\fI<end>\fR\&.
 .sp
-<start> and <end> can take one of these forms:
+\fI<start>\fR
+and
+\fI<end>\fR
+can take one of these forms:
 .sp
 .RS 4
 .ie n \{\
@@ -102,7 +119,11 @@ Annotate only the given line range\&. May be specified multiple times\&. Overlap
 .\}
 number
 .sp
-If <start> or <end> is a number, it specifies an absolute line number (lines count from 1)\&.
+If
+\fI<start>\fR
+or
+\fI<end>\fR
+is a number, it specifies an absolute line number (lines count from 1)\&.
 .RE
 .sp
 .RS 4
@@ -113,11 +134,19 @@ If <start> or <end> is a number, it specifies an absolute line number (lines cou
 .sp -1
 .IP \(bu 2.3
 .\}
-/regex/
+\fB/regex/\fR
 .sp
-This form will use the first line matching the given POSIX regex\&. If <start> is a regex, it will search from the end of the previous
+This form will use the first line matching the given POSIX regex\&. If
+\fI<start>\fR
+is a regex, it will search from the end of the previous
 \fB\-L\fR
-range, if any, otherwise from the start of file\&. If <start> is \(lq^/regex/\(rq, it will search from the start of file\&. If <end> is a regex, it will search starting at the line given by <start>\&.
+range, if any, otherwise from the start of file\&. If
+\fI<start>\fR
+is
+\fB^/regex/\fR, it will search from the start of file\&. If
+\fI<end>\fR
+is a regex, it will search starting at the line given by
+\fI<start>\fR\&.
 .RE
 .sp
 .RS 4
@@ -130,12 +159,30 @@ range, if any, otherwise from the start of file\&. If <start> is \(lq^/regex/\(r
 .\}
 +offset or \-offset
 .sp
-This is only valid for <end> and will specify a number of lines before or after the line given by <start>\&.
+This is only valid for
+\fI<end>\fR
+and will specify a number of lines before or after the line given by
+\fI<start>\fR\&.
 .RE
 .sp
-If \(lq:<funcname>\(rq is given in place of <start> and <end>, it is a regular expression that denotes the range from the first funcname line that matches <funcname>, up to the next funcname line\&. \(lq:<funcname>\(rq searches from the end of the previous
+If
+\fB:<funcname>\fR
+is given in place of
+\fI<start>\fR
+and
+\fI<end>\fR, it is a regular expression that denotes the range from the first funcname line that matches
+\fI<funcname>\fR, up to the next funcname line\&.
+\fB:<funcname>\fR
+searches from the end of the previous
 \fB\-L\fR
-range, if any, otherwise from the start of file\&. \(lq^:<funcname>\(rq searches from the start of file\&.
+range, if any, otherwise from the start of file\&.
+\fB^:<funcname>\fR
+searches from the start of file\&. The function names are determined in the same way as
+\fBgit diff\fR
+works out patch hunk headers (see
+\fIDefining a custom hunk\-header\fR
+in
+\fBgitattributes\fR(5))\&.
 .RE
 .PP
 \-l
@@ -161,6 +208,11 @@ Walk history forward instead of backward\&. Instead of showing the revision in w
 is taken as
 \fBgit blame \-\-reverse START\&.\&.HEAD\fR
 for convenience\&.
+.RE
+.PP
+\-\-first\-parent
+.RS 4
+Follow only the first parent commit upon seeing a merge commit\&. This option can be used to determine when a line was introduced to a particular integration branch, rather than when it was introduced to the history overall\&.
 .RE
 .PP
 \-p, \-\-porcelain
@@ -303,7 +355,7 @@ Ignore whitespace when comparing the parent\(cqs version and the child\(cqs to f
 .PP
 \-\-abbrev=<n>
 .RS 4
-Instead of using the default 7+1 hexadecimal digits as the abbreviated object name, use <n>+1 digits\&. Note that 1 column is used for a caret to mark the boundary commit\&.
+Instead of using the default 7+1 hexadecimal digits as the abbreviated object name, use <m>+1 digits, where <m> is at least <n> but ensures the commit object names are unique\&. Note that 1 column is used for a caret to mark the boundary commit\&.
 .RE
 .SH "THE PORCELAIN FORMAT"
 .sp
@@ -552,127 +604,7 @@ For people who do parsing: to make it more robust, just ignore any lines between
 .RE
 .SH "MAPPING AUTHORS"
 .sp
-If the file \fB\&.mailmap\fR exists at the toplevel of the repository, or at the location pointed to by the mailmap\&.file or mailmap\&.blob configuration options, it is used to map author and committer names and email addresses to canonical real names and email addresses\&.
-.sp
-In the simple form, each line in the file consists of the canonical real name of an author, whitespace, and an email address used in the commit (enclosed by \fI<\fR and \fI>\fR) to map to the name\&. For example:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-Proper Name <commit@email\&.xx>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-The more complex forms are:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-<proper@email\&.xx> <commit@email\&.xx>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-which allows mailmap to replace only the email part of a commit, and:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-Proper Name <proper@email\&.xx> <commit@email\&.xx>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-which allows mailmap to replace both the name and the email of a commit matching the specified commit email address, and:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-Proper Name <proper@email\&.xx> Commit Name <commit@email\&.xx>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-which allows mailmap to replace both the name and the email of a commit matching both the specified commit name and email address\&.
-.sp
-Example 1: Your history contains commits by two authors, Jane and Joe, whose names appear in the repository under several forms:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-Joe Developer <joe@example\&.com>
-Joe R\&. Developer <joe@example\&.com>
-Jane Doe <jane@example\&.com>
-Jane Doe <jane@laptop\&.(none)>
-Jane D\&. <jane@desktop\&.(none)>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.sp
-Now suppose that Joe wants his middle name initial used, and Jane prefers her family name fully spelled out\&. A proper \fB\&.mailmap\fR file would look like:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-Jane Doe         <jane@desktop\&.(none)>
-Joe R\&. Developer <joe@example\&.com>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.sp
-Note how there is no need for an entry for \fB<jane@laptop\&.(none)>\fR, because the real name of that author is already correct\&.
-.sp
-Example 2: Your repository contains commits from the following authors:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-nick1 <bugs@company\&.xx>
-nick2 <bugs@company\&.xx>
-nick2 <nick2@company\&.xx>
-santa <me@company\&.xx>
-claus <me@company\&.xx>
-CTO <cto@coompany\&.xx>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.sp
-Then you might want a \fB\&.mailmap\fR file that looks like:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-<cto@company\&.xx>                       <cto@coompany\&.xx>
-Some Dude <some@dude\&.xx>         nick1 <bugs@company\&.xx>
-Other Author <other@author\&.xx>   nick2 <bugs@company\&.xx>
-Other Author <other@author\&.xx>         <nick2@company\&.xx>
-Santa Claus <santa\&.claus@northpole\&.xx> <me@company\&.xx>
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.sp
-Use hash \fI#\fR for comments that are either on their own line, or after the email address\&.
+See \fBgitmailmap\fR(5)\&.
 .SH "SEE ALSO"
 .sp
 \fBgit-annotate\fR(1)

@@ -74,14 +74,22 @@ rev_list_tests() {
 		test_cmp expect actual
 	'
 
-	test_expect_success "enumerate --objects ($state)" '
-		git rev-list --objects --use-bitmap-index HEAD >tmp &&
-		cut -d" " -f1 <tmp >tmp2 &&
-		sort <tmp2 >actual &&
-		git rev-list --objects HEAD >tmp &&
-		cut -d" " -f1 <tmp >tmp2 &&
-		sort <tmp2 >expect &&
+	test_expect_success "counting objects via bitmap ($state)" '
+		git rev-list --count --objects HEAD >expect &&
+		git rev-list --use-bitmap-index --count --objects HEAD >actual &&
 		test_cmp expect actual
+	'
+
+	test_expect_success "enumerate commits ($state)" '
+		git rev-list --use-bitmap-index HEAD >actual &&
+		git rev-list HEAD >expect &&
+		test_bitmap_traversal --no-confirm-bitmaps expect actual
+	'
+
+	test_expect_success "enumerate --objects ($state)" '
+		git rev-list --objects --use-bitmap-index HEAD >actual &&
+		git rev-list --objects HEAD >expect &&
+		test_bitmap_traversal expect actual
 	'
 
 	test_expect_success "bitmap --objects handles non-commit objects ($state)" '
@@ -97,6 +105,20 @@ test_expect_success 'clone from bitmapped repository' '
 	git rev-parse HEAD >expect &&
 	git --git-dir=clone.git rev-parse HEAD >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success 'partial clone from bitmapped repository' '
+	test_config uploadpack.allowfilter true &&
+	git clone --no-local --bare --filter=blob:none . partial-clone.git &&
+	(
+		cd partial-clone.git &&
+		pack=$(echo objects/pack/*.pack) &&
+		git verify-pack -v "$pack" >have &&
+		awk "/blob/ { print \$1 }" <have >blobs &&
+		# we expect this single blob because of the direct ref
+		git rev-parse refs/tags/tagged-blob >expect &&
+		test_cmp expect blobs
+	)
 '
 
 test_expect_success 'setup further non-bitmapped commits' '
@@ -255,7 +277,7 @@ test_expect_success 'pack with missing parent' '
 	git pack-objects --stdout --revs <revs >/dev/null
 '
 
-test_expect_success JGIT 'we can read jgit bitmaps' '
+test_expect_success JGIT,SHA1 'we can read jgit bitmaps' '
 	git clone --bare . compat-jgit.git &&
 	(
 		cd compat-jgit.git &&
@@ -265,7 +287,7 @@ test_expect_success JGIT 'we can read jgit bitmaps' '
 	)
 '
 
-test_expect_success JGIT 'jgit can read our bitmaps' '
+test_expect_success JGIT,SHA1 'jgit can read our bitmaps' '
 	git clone --bare . compat-us.git &&
 	(
 		cd compat-us.git &&

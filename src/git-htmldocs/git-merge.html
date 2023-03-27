@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-merge(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -854,7 +854,7 @@ set to <code>no</code> at the beginning of them.</p></div>
 <dd>
 <p>
         This option determines how the merge message will be cleaned up before
-        commiting. See <a href="git-commit.html">git-commit(1)</a> for more details. In addition, if
+        committing. See <a href="git-commit.html">git-commit(1)</a> for more details. In addition, if
         the <em>&lt;mode&gt;</em> is given a value of <code>scissors</code>, scissors will be appended
         to <code>MERGE_MSG</code> before being passed on to the commit machinery in the
         case of a merge conflict.
@@ -892,11 +892,16 @@ When not possible, refuse to merge and exit with a non-zero status.</p></div>
 <dt class="hdlist1">
 --gpg-sign[=&lt;keyid&gt;]
 </dt>
+<dt class="hdlist1">
+--no-gpg-sign
+</dt>
 <dd>
 <p>
         GPG-sign the resulting merge commit. The <code>keyid</code> argument is
         optional and defaults to the committer identity; if specified,
-        it must be stuck to the option without a space.
+        it must be stuck to the option without a space. <code>--no-gpg-sign</code>
+        is useful to countermand both <code>commit.gpgSign</code> configuration variable,
+        and earlier <code>--gpg-sign</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -922,14 +927,19 @@ actual commits being merged.</p></div>
 </dt>
 <dd>
 <p>
-        Add Signed-off-by line by the committer at the end of the commit
-        log message.  The meaning of a signoff depends on the project,
-        but it typically certifies that committer has
-        the rights to submit this work under the same license and
-        agrees to a Developer Certificate of Origin
-        (see <a href="http://developercertificate.org/">http://developercertificate.org/</a> for more information).
+        Add a <code>Signed-off-by</code> trailer by the committer at the end of the commit
+        log message.  The meaning of a signoff depends on the project
+        to which you&#8217;re committing.  For example, it may certify that
+        the committer has the rights to submit the work under the
+        project&#8217;s license or agrees to some contributor representation,
+        such as a Developer Certificate of Origin.
+        (See <a href="http://developercertificate.org">http://developercertificate.org</a> for the one used by the
+        Linux kernel and Git projects.)  Consult the documentation or
+        leadership of the project to which you&#8217;re contributing to
+        understand how the signoffs are used in that project.
 </p>
-<div class="paragraph"><p>With --no-signoff do not add a Signed-off-by line.</p></div>
+<div class="paragraph"><p>The --no-signoff option can be used to countermand an earlier --signoff
+option on the command line.</p></div>
 </dd>
 <dt class="hdlist1">
 --stat
@@ -1068,6 +1078,21 @@ option can be used to override --squash.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--autostash
+</dt>
+<dt class="hdlist1">
+--no-autostash
+</dt>
+<dd>
+<p>
+        Automatically create a temporary stash entry before the operation
+        begins, and apply it after the operation ends.  This means
+        that you can run the operation on a dirty worktree.  However, use
+        with care: the final stash application after a successful
+        merge might result in non-trivial conflicts.
+</p>
+</dd>
+<dt class="hdlist1">
 --allow-unrelated-histories
 </dt>
 <dd>
@@ -1138,14 +1163,18 @@ will be appended to the specified message.</p></div>
 <dd>
 <p>
         Abort the current conflict resolution process, and
-        try to reconstruct the pre-merge state.
+        try to reconstruct the pre-merge state. If an autostash entry is
+        present, apply it to the worktree.
 </p>
 <div class="paragraph"><p>If there were uncommitted worktree changes present when the merge
 started, <em>git merge --abort</em> will in some cases be unable to
 reconstruct these changes. It is therefore recommended to always
 commit or stash your changes before running <em>git merge</em>.</p></div>
 <div class="paragraph"><p><em>git merge --abort</em> is equivalent to <em>git reset --merge</em> when
-<code>MERGE_HEAD</code> is present.</p></div>
+<code>MERGE_HEAD</code> is present unless <code>MERGE_AUTOSTASH</code> is also present in
+which case <em>git merge --abort</em> applies the stash entry to the worktree
+whereas <em>git reset --merge</em> will save the stashed changes in the stash
+list.</p></div>
 </dd>
 <dt class="hdlist1">
 --quit
@@ -1153,7 +1182,8 @@ commit or stash your changes before running <em>git merge</em>.</p></div>
 <dd>
 <p>
         Forget about the current merge in progress. Leave the index
-        and the working tree as-is.
+        and the working tree as-is. If <code>MERGE_AUTOSTASH</code> is present, the
+        stash entry will be saved to the stash list.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1494,7 +1524,7 @@ ours
 <p>
         This option forces conflicting hunks to be auto-resolved cleanly by
         favoring <em>our</em> version.  Changes from the other tree that do not
-        conflict with our side are reflected to the merge result.
+        conflict with our side are reflected in the merge result.
         For a binary file, the entire contents are taken from our side.
 </p>
 <div class="paragraph"><p>This should not be confused with the <em>ours</em> merge strategy, which does not
@@ -1763,6 +1793,22 @@ merge.log
 </p>
 </dd>
 <dt class="hdlist1">
+merge.suppressDest
+</dt>
+<dd>
+<p>
+        By adding a glob that matches the names of integration
+        branches to this multi-valued configuration variable, the
+        default merge message computed for merges into these
+        integration branches will omit "into &lt;branch name&gt;" from
+        its title.
+</p>
+<div class="paragraph"><p>An element with an empty value can be used to clear the list
+of globs accumulated from previous configuration entries.
+When there is no <code>merge.suppressDest</code> variable defined, the
+default value of <code>master</code> is used for backward compatibility.</p></div>
+</dd>
+<dt class="hdlist1">
 merge.renameLimit
 </dt>
 <dd>
@@ -1826,6 +1872,21 @@ merge.stat
 </p>
 </dd>
 <dt class="hdlist1">
+merge.autoStash
+</dt>
+<dd>
+<p>
+        When set to true, automatically create a temporary stash entry
+        before the operation begins, and apply it after the operation
+        ends.  This means that you can run merge on a dirty worktree.
+        However, use with care: the final stash application after a
+        successful merge might result in non-trivial conflicts.
+        This option can be overridden by the <code>--no-autostash</code> and
+        <code>--autostash</code> options of <a href="git-merge.html">git-merge(1)</a>.
+        Defaults to false.
+</p>
+</dd>
+<dt class="hdlist1">
 merge.tool
 </dt>
 <dd>
@@ -1860,6 +1921,11 @@ bc
 <li>
 <p>
 bc3
+</p>
+</li>
+<li>
+<p>
+bc4
 </p>
 </li>
 <li>
@@ -1925,6 +1991,21 @@ kdiff3
 <li>
 <p>
 meld
+</p>
+</li>
+<li>
+<p>
+nvimdiff
+</p>
+</li>
+<li>
+<p>
+nvimdiff2
+</p>
+</li>
+<li>
+<p>
+nvimdiff3
 </p>
 </li>
 <li>
@@ -2055,7 +2136,7 @@ branch.&lt;name&gt;.mergeOptions
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-09-19 04:25:17 JST
+ 2020-05-08 15:24:24 PDT
 </div>
 </div>
 </body>

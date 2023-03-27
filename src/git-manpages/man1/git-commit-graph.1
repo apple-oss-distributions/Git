@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-commit-graph
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-COMMIT\-GRAPH" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-COMMIT\-GRAPH" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,6 @@ git-commit-graph \- Write and verify Git commit\-graph files
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit commit\-graph read\fR [\-\-object\-dir <dir>]
 \fIgit commit\-graph verify\fR [\-\-object\-dir <dir>] [\-\-shallow] [\-\-[no\-]progress]
 \fIgit commit\-graph write\fR <options> [\-\-object\-dir <dir>] [\-\-[no\-]progress]
 .fi
@@ -49,7 +48,9 @@ Use given directory for the location of packfiles and commit\-graph file\&. This
 directory\&. The commit\-graph file is expected to be in the
 \fB<dir>/info\fR
 directory and the packfiles are expected to be in
-\fB<dir>/pack\fR\&.
+\fB<dir>/pack\fR\&. If the directory could not be made into an absolute path, or does not match any known object directory,
+\fBgit commit\-graph \&.\&.\&.\fR
+will exit with non\-zero status\&.
 .RE
 .PP
 \-\-[no\-]progress
@@ -60,7 +61,9 @@ Turn progress on/off explicitly\&. If neither is specified, progress is shown if
 .PP
 \fIwrite\fR
 .RS 4
-Write a commit\-graph file based on the commits found in packfiles\&.
+Write a commit\-graph file based on the commits found in packfiles\&. If the config option
+\fBcore\&.commitGraph\fR
+is disabled, then this command will output a warning, then return success without writing a commit\-graph file\&.
 .sp
 With the
 \fB\-\-stdin\-packs\fR
@@ -71,7 +74,7 @@ or
 .sp
 With the
 \fB\-\-stdin\-commits\fR
-option, generate the new commit graph by walking commits starting at the commits specified in stdin as a list of OIDs in hex, one OID per line\&. (Cannot be combined with
+option, generate the new commit graph by walking commits starting at the commits specified in stdin as a list of OIDs in hex, one OID per line\&. OIDs that resolve to non\-commits (either directly, or by peeling tags) are silently ignored\&. OIDs that are malformed, or do not exist generate an error\&. (Cannot be combined with
 \fB\-\-stdin\-packs\fR
 or
 \fB\-\-reachable\fR\&.)
@@ -88,9 +91,47 @@ With the
 option, include all commits that are present in the existing commit\-graph file\&.
 .sp
 With the
-\fB\-\-split\fR
+\fB\-\-changed\-paths\fR
+option, compute and write information about the paths changed between a commit and its first parent\&. This operation can take a while on large repositories\&. It provides significant performance gains for getting history of a directory or a file with
+\fBgit log \-\- <path>\fR\&. If this option is given, future commit\-graph writes will automatically assume that this option was intended\&. Use
+\fB\-\-no\-changed\-paths\fR
+to stop storing this data\&.
+.sp
+With the
+\fB\-\-max\-new\-filters=<n>\fR
+option, generate at most
+\fBn\fR
+new Bloom filters (if
+\fB\-\-changed\-paths\fR
+is specified)\&. If
+\fBn\fR
+is
+\fB\-1\fR, no limit is enforced\&. Only commits present in the new layer count against this limit\&. To retroactively compute Bloom filters over earlier layers, it is advised to use
+\fB\-\-split=replace\fR\&. Overrides the
+\fBcommitGraph\&.maxNewFilters\fR
+configuration\&.
+.sp
+With the
+\fB\-\-split[=<strategy>]\fR
 option, write the commit\-graph as a chain of multiple commit\-graph files stored in
-\fB<dir>/info/commit\-graphs\fR\&. The new commits not already in the commit\-graph are added in a new "tip" file\&. This file is merged with the existing file if the following merge conditions are met:
+\fB<dir>/info/commit\-graphs\fR\&. Commit\-graph layers are merged based on the strategy and other splitting options\&. The new commits not already in the commit\-graph are added in a new "tip" file\&. This file is merged with the existing file if the following merge conditions are met:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+If
+\fB\-\-split=no\-merge\fR
+is specified, a merge is never performed, and the remaining options are ignored\&.
+\fB\-\-split=replace\fR
+overwrites the existing chain with a new one\&. A bare
+\fB\-\-split\fR
+defers to the remaining options\&. (Note that merging a chain of commit graphs replaces the existing chain with a length\-1 chain where the first and only incremental holds the entire graph)\&.
+.RE
 .sp
 .RS 4
 .ie n \{\
@@ -139,11 +180,6 @@ is not specified, let
 be the current time\&. After writing the split commit\-graph, delete all unused commit\-graph whose modified times are older than
 \fBdatetime\fR\&.
 .RE
-.RE
-.PP
-\fIread\fR
-.RS 4
-Read the commit\-graph file and output basic details about it\&. Used for debugging purposes\&.
 .RE
 .PP
 \fIverify\fR
@@ -241,28 +277,6 @@ Write a commit\-graph file containing all commits in the current commit\-graph f
 .\}
 .nf
 $ git rev\-parse HEAD | git commit\-graph write \-\-stdin\-commits \-\-append
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-Read basic information from the commit\-graph file\&.
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-$ git commit\-graph read
 .fi
 .if n \{\
 .RE

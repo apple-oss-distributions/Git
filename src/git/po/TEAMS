@@ -42,10 +42,13 @@ Leader:		Gwan-gyeong Mun <elongbug@gmail.com>
 Members:	Changwoo Ryu <cwryu@debian.org>
 		Sihyeon Jang <uneedsihyeon@gmail.com>
 
+Language:	pl (Polish)
+Repository:	https://github.com/Arusekk/git-po
+Leader:		Arusekk <arek_koz@o2.pl>
+
 Language:	pt_PT (Portuguese - Portugal)
-Repository:	https://github.com/vascool/git-po-pt/
-Leader:		Vasco Almeida <vascomalmeida@sapo.pt>
-Members:	Marco Sousa <marcomsousa AT gmail.com>
+Repository:	https://github.com/git-l10n-pt-PT/git-po/
+Leader:		Daniel Santos <hello@brighterdan.com>
 
 Language:	ru (Russian)
 Repository:	https://github.com/DJm00n/git-po-ru/
@@ -55,6 +58,10 @@ Members:	insolor <insolor AT gmail.com>
 Language:	sv (Swedish)
 Repository:	https://github.com/nafmo/git-l10n-sv/
 Leader:		Peter Krefting <peter@softwolves.pp.se>
+
+Language:	tr (Turkish)
+Repository:	https://github.com/bitigchi/git-po/
+Leader:		Emir SARI <bitigchi@me.com>
 
 Language:	vi (Vietnamese)
 Repository:	https://github.com/vnwildman/git/
@@ -67,3 +74,8 @@ Leader:		Jiang Xin <worldhello.net AT gmail.com>
 Members:	Ray Chen <oldsharp AT gmail.com>
 		依云 <lilydjwg AT gmail.com>
 		Fangyi Zhou <me AT fangyi.io>
+
+Language:	zh_TW (Traditional Chinese)
+Respository:	https://github.com/l10n-tw/git-po
+Leader: 	Yi-Jyun Pan <pan93412 AT gmail.com>
+Members:	Franklin Weng <franklin AT goodhorse.idv.tw>

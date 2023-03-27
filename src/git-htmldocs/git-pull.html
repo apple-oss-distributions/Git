@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-pull(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -839,8 +839,9 @@ pulling or stash them away with <a href="git-stash.html">git-stash(1)</a>.</p></
 </dt>
 <dd>
 <p>
-        This option controls if new commits of all populated submodules should
-        be fetched and updated, too (see <a href="git-config.html">git-config(1)</a> and
+        This option controls if new commits of populated submodules should
+        be fetched, and if the working trees of active submodules should be
+        updated, too (see <a href="git-fetch.html">git-fetch(1)</a>, <a href="git-config.html">git-config(1)</a> and
         <a href="gitmodules.html">gitmodules(5)</a>).
 </p>
 <div class="paragraph"><p>If the checkout is done via rebase, local submodule commits are rebased as well.</p></div>
@@ -898,7 +899,7 @@ set to <code>no</code> at the beginning of them.</p></div>
 <dd>
 <p>
         This option determines how the merge message will be cleaned up before
-        commiting. See <a href="git-commit.html">git-commit(1)</a> for more details. In addition, if
+        committing. See <a href="git-commit.html">git-commit(1)</a> for more details. In addition, if
         the <em>&lt;mode&gt;</em> is given a value of <code>scissors</code>, scissors will be appended
         to <code>MERGE_MSG</code> before being passed on to the commit machinery in the
         case of a merge conflict.
@@ -936,11 +937,16 @@ When not possible, refuse to merge and exit with a non-zero status.</p></div>
 <dt class="hdlist1">
 --gpg-sign[=&lt;keyid&gt;]
 </dt>
+<dt class="hdlist1">
+--no-gpg-sign
+</dt>
 <dd>
 <p>
         GPG-sign the resulting merge commit. The <code>keyid</code> argument is
         optional and defaults to the committer identity; if specified,
-        it must be stuck to the option without a space.
+        it must be stuck to the option without a space. <code>--no-gpg-sign</code>
+        is useful to countermand both <code>commit.gpgSign</code> configuration variable,
+        and earlier <code>--gpg-sign</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -966,14 +972,19 @@ actual commits being merged.</p></div>
 </dt>
 <dd>
 <p>
-        Add Signed-off-by line by the committer at the end of the commit
-        log message.  The meaning of a signoff depends on the project,
-        but it typically certifies that committer has
-        the rights to submit this work under the same license and
-        agrees to a Developer Certificate of Origin
-        (see <a href="http://developercertificate.org/">http://developercertificate.org/</a> for more information).
+        Add a <code>Signed-off-by</code> trailer by the committer at the end of the commit
+        log message.  The meaning of a signoff depends on the project
+        to which you&#8217;re committing.  For example, it may certify that
+        the committer has the rights to submit the work under the
+        project&#8217;s license or agrees to some contributor representation,
+        such as a Developer Certificate of Origin.
+        (See <a href="http://developercertificate.org">http://developercertificate.org</a> for the one used by the
+        Linux kernel and Git projects.)  Consult the documentation or
+        leadership of the project to which you&#8217;re contributing to
+        understand how the signoffs are used in that project.
 </p>
-<div class="paragraph"><p>With --no-signoff do not add a Signed-off-by line.</p></div>
+<div class="paragraph"><p>The --no-signoff option can be used to countermand an earlier --signoff
+option on the command line.</p></div>
 </dd>
 <dt class="hdlist1">
 --stat
@@ -1076,6 +1087,21 @@ option can be used to override --squash.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--autostash
+</dt>
+<dt class="hdlist1">
+--no-autostash
+</dt>
+<dd>
+<p>
+        Automatically create a temporary stash entry before the operation
+        begins, and apply it after the operation ends.  This means
+        that you can run the operation on a dirty worktree.  However, use
+        with care: the final stash application after a successful
+        merge might result in non-trivial conflicts.
+</p>
+</dd>
+<dt class="hdlist1">
 --allow-unrelated-histories
 </dt>
 <dd>
@@ -1133,21 +1159,6 @@ unless you have read <a href="git-rebase.html">git-rebase(1)</a> carefully.</td>
         Override earlier --rebase.
 </p>
 </dd>
-<dt class="hdlist1">
---autostash
-</dt>
-<dt class="hdlist1">
---no-autostash
-</dt>
-<dd>
-<p>
-        Before starting rebase, stash local modifications away (see
-        <a href="git-stash.html">git-stash(1)</a>) if needed, and apply the stash entry when
-        done. <code>--no-autostash</code> is useful to override the <code>rebase.autoStash</code>
-        configuration variable (see <a href="git-config.html">git-config(1)</a>).
-</p>
-<div class="paragraph"><p>This option is only valid when "--rebase" is used.</p></div>
-</dd>
 </dl></div>
 </div>
 <div class="sect2">
@@ -1172,6 +1183,15 @@ unless you have read <a href="git-rebase.html">git-rebase(1)</a> carefully.</td>
         Append ref names and object names of fetched refs to the
         existing contents of <code>.git/FETCH_HEAD</code>.  Without this
         option old data in <code>.git/FETCH_HEAD</code> will be overwritten.
+</p>
+</dd>
+<dt class="hdlist1">
+--atomic
+</dt>
+<dd>
+<p>
+        Use an atomic transaction to update local refs. Either all refs are
+        updated, or on error, no refs are updated.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1260,6 +1280,14 @@ this option multiple times, one for each matching ref name.</p></div>
 documented in <a href="git-config.html">git-config(1)</a>.</p></div>
 </dd>
 <dt class="hdlist1">
+--dry-run
+</dt>
+<dd>
+<p>
+        Show what would be done, without making any changes.
+</p>
+</dd>
+<dt class="hdlist1">
 -f
 </dt>
 <dt class="hdlist1">
@@ -1286,6 +1314,25 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+-p
+</dt>
+<dt class="hdlist1">
+--prune
+</dt>
+<dd>
+<p>
+        Before fetching, remove any remote-tracking references that no
+        longer exist on the remote.  Tags are not subject to pruning
+        if they are fetched only because of the default tag
+        auto-following or due to a --tags option.  However, if tags
+        are fetched due to an explicit refspec (either on the command
+        line or in the remote configuration, for example if the remote
+        was cloned with the --mirror option), then they are also
+        subject to pruning. Supplying <code>--prune-tags</code> is a shorthand for
+        providing the tag refspec.
+</p>
+</dd>
+<dt class="hdlist1">
 --no-tags
 </dt>
 <dd>
@@ -1298,19 +1345,64 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
--u
-</dt>
-<dt class="hdlist1">
---update-head-ok
+--refmap=&lt;refspec&gt;
 </dt>
 <dd>
 <p>
-        By default <em>git fetch</em> refuses to update the head which
-        corresponds to the current branch.  This flag disables the
-        check.  This is purely for the internal use for <em>git pull</em>
-        to communicate with <em>git fetch</em>, and unless you are
-        implementing your own Porcelain you are not supposed to
-        use it.
+        When fetching refs listed on the command line, use the
+        specified refspec (can be given more than once) to map the
+        refs to remote-tracking branches, instead of the values of
+        <code>remote.*.fetch</code> configuration variables for the remote
+        repository.  Providing an empty <code>&lt;refspec&gt;</code> to the
+        <code>--refmap</code> option causes Git to ignore the configured
+        refspecs and rely entirely on the refspecs supplied as
+        command-line arguments. See section on "Configured Remote-tracking
+        Branches" for details.
+</p>
+</dd>
+<dt class="hdlist1">
+-t
+</dt>
+<dt class="hdlist1">
+--tags
+</dt>
+<dd>
+<p>
+        Fetch all tags from the remote (i.e., fetch remote tags
+        <code>refs/tags/*</code> into local tags with the same name), in addition
+        to whatever else would otherwise be fetched.  Using this
+        option alone does not subject tags to pruning, even if --prune
+        is used (though tags may be pruned anyway if they are also the
+        destination of an explicit refspec; see <code>--prune</code>).
+</p>
+</dd>
+<dt class="hdlist1">
+-j
+</dt>
+<dt class="hdlist1">
+--jobs=&lt;n&gt;
+</dt>
+<dd>
+<p>
+        Number of parallel children to be used for all forms of fetching.
+</p>
+<div class="paragraph"><p>If the <code>--multiple</code> option was specified, the different remotes will be fetched
+in parallel. If multiple submodules are fetched, they will be fetched in
+parallel. To control them independently, use the config settings
+<code>fetch.parallel</code> and <code>submodule.fetchJobs</code> (see <a href="git-config.html">git-config(1)</a>).</p></div>
+<div class="paragraph"><p>Typically, parallel recursive and multi-remote fetches will be faster. By
+default fetches are performed sequentially, not in parallel.</p></div>
+</dd>
+<dt class="hdlist1">
+--set-upstream
+</dt>
+<dd>
+<p>
+        If the remote is fetched successfully, add upstream
+        (tracking) reference, used by argument-less
+        <a href="git-pull.html">git-pull(1)</a> and other commands. For more information,
+        see <code>branch.&lt;name&gt;.merge</code> and <code>branch.&lt;name&gt;.remote</code> in
+        <a href="git-config.html">git-config(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1415,7 +1507,8 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
         Specifies which refs to fetch and which local refs to update.
         When no &lt;refspec&gt;s appear on the command line, the refs to fetch
         are read from <code>remote.&lt;repository&gt;.fetch</code> variables instead
-        (see <a href="git-fetch.html">git-fetch(1)</a>).
+        (see the section "CONFIGURED REMOTE-TRACKING BRANCHES"
+        in <a href="git-fetch.html">git-fetch(1)</a>).
 </p>
 <div class="paragraph"><p>The format of a &lt;refspec&gt; parameter is an optional plus
 <code>+</code>, followed by the source &lt;src&gt;, followed
@@ -1423,6 +1516,20 @@ by a colon <code>:</code>, followed by the destination ref &lt;dst&gt;.
 The colon can be omitted when &lt;dst&gt; is empty.  &lt;src&gt; is
 typically a ref, but it can also be a fully spelled hex object
 name.</p></div>
+<div class="paragraph"><p>A &lt;refspec&gt; may contain a <code>*</code> in its &lt;src&gt; to indicate a simple pattern
+match. Such a refspec functions like a glob that matches any ref with the
+same prefix. A pattern &lt;refspec&gt; must have a <code>*</code> in both the &lt;src&gt; and
+&lt;dst&gt;. It will map refs to the destination by replacing the <code>*</code> with the
+contents matched from the source.</p></div>
+<div class="paragraph"><p>If a refspec is prefixed by <code>^</code>, it will be interpreted as a negative
+refspec. Rather than specifying which refs to fetch or which local refs to
+update, such a refspec will instead specify refs to exclude. A ref will be
+considered to match if it matches at least one positive refspec, and does
+not match any negative refspec. Negative refspecs can be useful to restrict
+the scope of a pattern refspec so that it will not include specific refs.
+Negative refspecs can themselves be pattern refspecs. However, they may only
+contain a &lt;src&gt; and do not specify a &lt;dst&gt;. Fully spelled out hex object
+names are also not supported.</p></div>
 <div class="paragraph"><p><code>tag &lt;tag&gt;</code> means the same as <code>refs/tags/&lt;tag&gt;:refs/tags/&lt;tag&gt;</code>;
 it requests fetching everything up to the given tag.</p></div>
 <div class="paragraph"><p>The remote ref that matches &lt;src&gt;
@@ -1584,6 +1691,8 @@ file:///path/to/repo.git/
 <div class="paragraph"><p>These two syntaxes are mostly equivalent, except when cloning, when
 the former implies --local option. See <a href="git-clone.html">git-clone(1)</a> for
 details.</p></div>
+<div class="paragraph"><p><em>git clone</em>, <em>git fetch</em> and <em>git pull</em>, but not <em>git push</em>, will also
+accept a suitable bundle file. See <a href="git-bundle.html">git-bundle(1)</a>.</p></div>
 <div class="paragraph"><p>When Git doesn&#8217;t know how to handle a certain transport protocol, it
 attempts to use the <em>remote-&lt;transport&gt;</em> remote helper, if one
 exists. To explicitly request a remote helper, the following syntax
@@ -1772,7 +1881,7 @@ ours
 <p>
         This option forces conflicting hunks to be auto-resolved cleanly by
         favoring <em>our</em> version.  Changes from the other tree that do not
-        conflict with our side are reflected to the merge result.
+        conflict with our side are reflected in the merge result.
         For a binary file, the entire contents are taken from our side.
 </p>
 <div class="paragraph"><p>This should not be confused with the <em>ours</em> merge strategy, which does not
@@ -2049,9 +2158,9 @@ Merge into the current branch the remote branch <code>next</code>:
 <div class="content">
 <pre><code>$ git pull origin next</code></pre>
 </div></div>
-<div class="paragraph"><p>This leaves a copy of <code>next</code> temporarily in FETCH_HEAD, but
-does not update any remote-tracking branches. Using remote-tracking
-branches, the same can be done by invoking fetch and merge:</p></div>
+<div class="paragraph"><p>This leaves a copy of <code>next</code> temporarily in FETCH_HEAD, and
+updates the remote-tracking branch <code>origin/next</code>.
+The same can be done by invoking fetch and merge:</p></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>$ git fetch origin
@@ -2131,7 +2240,7 @@ version.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-08-09 06:41:52 JST
+ 2020-04-29 16:59:10 PDT
 </div>
 </div>
 </body>

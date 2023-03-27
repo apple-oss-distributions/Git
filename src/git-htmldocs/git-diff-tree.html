@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-diff-tree(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -750,7 +750,7 @@ git-diff-tree(1) Manual Page
 <div class="sectionbody">
 <div class="verseblock">
 <pre class="content"><em>git diff-tree</em> [--stdin] [-m] [-s] [-v] [--no-commit-id] [--pretty]
-              [-t] [-r] [-c | --cc] [--combined-all-paths] [--root]
+              [-t] [-r] [-c | --cc] [--combined-all-paths] [--root] [--merge-base]
               [&lt;common diff options&gt;] &lt;tree-ish&gt; [&lt;tree-ish&gt;] [&lt;path&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
@@ -804,8 +804,8 @@ git-diff-tree(1) Manual Page
 <dd>
 <p>
         Generate diffs with &lt;n&gt; lines of context instead of
-        the usual three. Implies <code>--patch</code>.
-        Implies <code>-p</code>.
+        the usual three.
+        Implies <code>--patch</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1503,7 +1503,8 @@ override configuration settings.</p></div>
 <dd>
 <p>
         In addition to <code>--full-index</code>, output a binary diff that
-        can be applied with <code>git-apply</code>. Implies <code>--patch</code>.
+        can be applied with <code>git-apply</code>.
+        Implies <code>--patch</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1513,10 +1514,12 @@ override configuration settings.</p></div>
 <p>
         Instead of showing the full 40-byte hexadecimal object
         name in diff-raw format output and diff-tree header
-        lines, show only a partial prefix.  This is
-        independent of the <code>--full-index</code> option above, which controls
-        the diff-patch output format.  Non default number of
-        digits can be specified with <code>--abbrev=&lt;n&gt;</code>.
+        lines, show the shortest prefix that is at least <em>&lt;n&gt;</em>
+        hexdigits long that uniquely refers the object.
+        In diff-patch output format, <code>--full-index</code> takes higher
+        precedence, i.e. if <code>--full-index</code> is specified, full blob
+        names will be shown regardless of <code>--abbrev</code>.
+        Non default number of digits can be specified with <code>--abbrev=&lt;n&gt;</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1677,12 +1680,12 @@ very first version of the block.</p></div>
 file:</p></div>
 <div class="listingblock">
 <div class="content">
-<pre><code>+    return !regexec(regexp, two-&gt;ptr, 1, &amp;regmatch, 0);
+<pre><code>+    return frotz(nitfol, two-&gt;ptr, 1, 0);
 ...
--    hit = !regexec(regexp, mf2.ptr, 1, &amp;regmatch, 0);</code></pre>
+-    hit = frotz(nitfol, mf2.ptr, 1, 0);</code></pre>
 </div></div>
-<div class="paragraph"><p>While <code>git log -G"regexec\(regexp"</code> will show this commit, <code>git log
--S"regexec\(regexp" --pickaxe-regex</code> will not (because the number of
+<div class="paragraph"><p>While <code>git log -G"frotz\(nitfol"</code> will show this commit, <code>git log
+-S"frotz\(nitfol" --pickaxe-regex</code> will not (because the number of
 occurrences of that string did not change).</p></div>
 <div class="paragraph"><p>Unless <code>--text</code> is supplied patches of binary files without a textconv
 filter will be ignored.</p></div>
@@ -1784,6 +1787,9 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 <dt class="hdlist1">
 --relative[=&lt;path&gt;]
 </dt>
+<dt class="hdlist1">
+--no-relative
+</dt>
 <dd>
 <p>
         When run from a subdirectory of the project, it can be
@@ -1792,6 +1798,8 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
         not in a subdirectory (e.g. in a bare repository), you
         can name which subdirectory to make the output relative
         to by giving a &lt;path&gt; as an argument.
+        <code>--no-relative</code> can be used to countermand both <code>diff.relative</code> config
+        option and previous <code>--relative</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1856,6 +1864,18 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </p>
 </dd>
 <dt class="hdlist1">
+-I&lt;regex&gt;
+</dt>
+<dt class="hdlist1">
+--ignore-matching-lines=&lt;regex&gt;
+</dt>
+<dd>
+<p>
+        Ignore changes whose all lines match &lt;regex&gt;.  This option may
+        be specified more than once.
+</p>
+</dd>
+<dt class="hdlist1">
 --inter-hunk-context=&lt;lines&gt;
 </dt>
 <dd>
@@ -1874,7 +1894,10 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </dt>
 <dd>
 <p>
-        Show whole surrounding functions of changes.
+        Show whole function as context lines for each change.
+        The function names are determined in the same way as
+        <code>git diff</code> works out patch hunk headers (see <em>Defining a
+        custom hunk-header</em> in <a href="gitattributes.html">gitattributes(5)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2041,6 +2064,16 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </p>
 </dd>
 <dt class="hdlist1">
+--merge-base
+</dt>
+<dd>
+<p>
+        Instead of comparing the &lt;tree-ish&gt;s directly, use the merge
+        base between the two &lt;tree-ish&gt;s as the "before" side.  There
+        must be two &lt;tree-ish&gt;s given and they must both be commits.
+</p>
+</dd>
+<dt class="hdlist1">
 --stdin
 </dt>
 <dd>
@@ -2103,7 +2136,7 @@ commits (but not trees).</p></div>
 <p>
         Pretty-print the contents of the commit logs in a given format,
         where <em>&lt;format&gt;</em> can be one of <em>oneline</em>, <em>short</em>, <em>medium</em>,
-        <em>full</em>, <em>fuller</em>, <em>email</em>, <em>raw</em>, <em>format:&lt;string&gt;</em>
+        <em>full</em>, <em>fuller</em>, <em>reference</em>, <em>email</em>, <em>raw</em>, <em>format:&lt;string&gt;</em>
         and <em>tformat:&lt;string&gt;</em>.  When <em>&lt;format&gt;</em> is none of the above,
         and has <em>%placeholder</em> in it, it acts as if
         <em>--pretty=tformat:&lt;format&gt;</em> were given.
@@ -2119,9 +2152,9 @@ configuration (see <a href="git-config.html">git-config(1)</a>).</p></div>
 <dd>
 <p>
         Instead of showing the full 40-byte hexadecimal commit object
-        name, show only a partial prefix.  Non default number of
-        digits can be specified with "--abbrev=&lt;n&gt;" (which also modifies
-        diff output, if it is displayed).
+        name, show a prefix that names the object uniquely.
+        "--abbrev=&lt;n&gt;" (which also modifies diff output, if it is displayed)
+        option can be used to specify the minimum length of the prefix.
 </p>
 <div class="paragraph"><p>This should make "--pretty=oneline" a whole lot more readable for
 people using 80-column terminals.</p></div>
@@ -2132,8 +2165,8 @@ people using 80-column terminals.</p></div>
 <dd>
 <p>
         Show the full 40-byte hexadecimal commit object name. This negates
-        <code>--abbrev-commit</code> and those options which imply it such as
-        "--oneline". It also overrides the <code>log.abbrevCommit</code> variable.
+        <code>--abbrev-commit</code>, either explicit or implied by other options such
+        as "--oneline". It also overrides the <code>log.abbrevCommit</code> variable.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2183,7 +2216,7 @@ message by 4 spaces (i.e.  <em>medium</em>, which is the default, <em>full</em>,
 and <em>fuller</em>).</p></div>
 </dd>
 <dt class="hdlist1">
---notes[=&lt;treeish&gt;]
+--notes[=&lt;ref&gt;]
 </dt>
 <dd>
 <p>
@@ -2196,8 +2229,8 @@ and <em>fuller</em>).</p></div>
 <div class="paragraph"><p>By default, the notes shown are from the notes refs listed in the
 <code>core.notesRef</code> and <code>notes.displayRef</code> variables (or corresponding
 environment overrides). See <a href="git-config.html">git-config(1)</a> for more details.</p></div>
-<div class="paragraph"><p>With an optional <em>&lt;treeish&gt;</em> argument, use the treeish to find the notes
-to display.  The treeish can specify the full refname when it begins
+<div class="paragraph"><p>With an optional <em>&lt;ref&gt;</em> argument, use the ref to find the notes
+to display.  The ref can specify the full refname when it begins
 with <code>refs/notes/</code>; when it begins with <code>notes/</code>, <code>refs/</code> and otherwise
 <code>refs/notes/</code> is prefixed to form a full name of the ref.</p></div>
 <div class="paragraph"><p>Multiple --notes options can be combined to control which notes are
@@ -2218,7 +2251,7 @@ being displayed. Examples: "--notes=foo" will show only notes from
 </p>
 </dd>
 <dt class="hdlist1">
---show-notes[=&lt;treeish&gt;]
+--show-notes[=&lt;ref&gt;]
 </dt>
 <dt class="hdlist1">
 --[no-]standard-notes
@@ -2307,7 +2340,7 @@ being displayed. Examples: "--notes=foo" will show only notes from
 <div class="paragraph"><p>If the commit is a merge, and if the pretty-format
 is not <em>oneline</em>, <em>email</em> or <em>raw</em>, an additional line is
 inserted before the <em>Author:</em> line.  This line begins with
-"Merge: " and the sha1s of ancestral commits are printed,
+"Merge: " and the hashes of ancestral commits are printed,
 separated by spaces.  Note that the listed commits may not
 necessarily be the list of the <strong>direct</strong> parent commits if you
 have limited your view of history: for example, if you are
@@ -2326,7 +2359,7 @@ built-in formats:</p></div>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;sha1&gt; &lt;title line&gt;</code></pre>
+<pre><code>&lt;hash&gt; &lt;title line&gt;</code></pre>
 </div></div>
 <div class="paragraph"><p>This is designed to be as compact as possible.</p></div>
 </li>
@@ -2336,7 +2369,7 @@ built-in formats:</p></div>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>commit &lt;sha1&gt;
+<pre><code>commit &lt;hash&gt;
 Author: &lt;author&gt;</code></pre>
 </div></div>
 <div class="literalblock">
@@ -2350,7 +2383,7 @@ Author: &lt;author&gt;</code></pre>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>commit &lt;sha1&gt;
+<pre><code>commit &lt;hash&gt;
 Author: &lt;author&gt;
 Date:   &lt;author date&gt;</code></pre>
 </div></div>
@@ -2369,7 +2402,7 @@ Date:   &lt;author date&gt;</code></pre>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>commit &lt;sha1&gt;
+<pre><code>commit &lt;hash&gt;
 Author: &lt;author&gt;
 Commit: &lt;committer&gt;</code></pre>
 </div></div>
@@ -2388,7 +2421,7 @@ Commit: &lt;committer&gt;</code></pre>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>commit &lt;sha1&gt;
+<pre><code>commit &lt;hash&gt;
 Author:     &lt;author&gt;
 AuthorDate: &lt;author date&gt;
 Commit:     &lt;committer&gt;
@@ -2405,11 +2438,26 @@ CommitDate: &lt;committer date&gt;</code></pre>
 </li>
 <li>
 <p>
+<em>reference</em>
+</p>
+<div class="literalblock">
+<div class="content">
+<pre><code>&lt;abbrev hash&gt; (&lt;title line&gt;, &lt;short author date&gt;)</code></pre>
+</div></div>
+<div class="paragraph"><p>This format is used to refer to another commit in a commit message and
+is the same as <code>--pretty='format:%C(auto)%h (%s, %ad)'</code>.  By default,
+the date is formatted with <code>--date=short</code> unless another <code>--date</code> option
+is explicitly specified.  As with any <code>format:</code> with format
+placeholders, its output is not affected by other options like
+<code>--decorate</code> and <code>--walk-reflogs</code>.</p></div>
+</li>
+<li>
+<p>
 <em>email</em>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>From &lt;sha1&gt; &lt;date&gt;
+<pre><code>From &lt;hash&gt; &lt;date&gt;
 From: &lt;author&gt;
 Date: &lt;author date&gt;
 Subject: [PATCH] &lt;title line&gt;</code></pre>
@@ -2421,10 +2469,18 @@ Subject: [PATCH] &lt;title line&gt;</code></pre>
 </li>
 <li>
 <p>
+<em>mboxrd</em>
+</p>
+<div class="paragraph"><p>Like <em>email</em>, but lines in the commit message starting with "From "
+(preceded by zero or more "&gt;") are quoted with "&gt;" so they aren&#8217;t
+confused as starting a new commit.</p></div>
+</li>
+<li>
+<p>
 <em>raw</em>
 </p>
 <div class="paragraph"><p>The <em>raw</em> format shows the entire commit exactly as
-stored in the commit object.  Notably, the SHA-1s are
+stored in the commit object.  Notably, the hashes are
 displayed in full, regardless of whether --abbrev or
 --no-abbrev are used, and <em>parents</em> information show the
 true parent commits, without taking grafts or history
@@ -2701,6 +2757,23 @@ author email (respecting .mailmap, see <a href="git-shortlog.html">git-shortlog(
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%al</em>
+</dt>
+<dd>
+<p>
+author email local-part (the part before the <em>@</em> sign)
+</p>
+</dd>
+<dt class="hdlist1">
+<em>%aL</em>
+</dt>
+<dd>
+<p>
+author local-part (see <em>%al</em>) respecting .mailmap, see
+        <a href="git-shortlog.html">git-shortlog(1)</a> or <a href="git-blame.html">git-blame(1)</a>)
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%ad</em>
 </dt>
 <dd>
@@ -2749,6 +2822,14 @@ author date, strict ISO 8601 format
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%as</em>
+</dt>
+<dd>
+<p>
+author date, short format (<code>YYYY-MM-DD</code>)
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%cn</em>
 </dt>
 <dd>
@@ -2779,6 +2860,23 @@ committer email
 <dd>
 <p>
 committer email (respecting .mailmap, see
+        <a href="git-shortlog.html">git-shortlog(1)</a> or <a href="git-blame.html">git-blame(1)</a>)
+</p>
+</dd>
+<dt class="hdlist1">
+<em>%cl</em>
+</dt>
+<dd>
+<p>
+committer email local-part (the part before the <em>@</em> sign)
+</p>
+</dd>
+<dt class="hdlist1">
+<em>%cL</em>
+</dt>
+<dd>
+<p>
+committer local-part (see <em>%cl</em>) respecting .mailmap, see
         <a href="git-shortlog.html">git-shortlog(1)</a> or <a href="git-blame.html">git-blame(1)</a>)
 </p>
 </dd>
@@ -2828,6 +2926,14 @@ committer date, ISO 8601-like format
 <dd>
 <p>
 committer date, strict ISO 8601 format
+</p>
+</dd>
+<dt class="hdlist1">
+<em>%cs</em>
+</dt>
+<dd>
+<p>
+committer date, short format (<code>YYYY-MM-DD</code>)
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2960,6 +3066,14 @@ show the fingerprint of the primary key whose subkey was used
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%GT</em>
+</dt>
+<dd>
+<p>
+show the trust level for the key used to sign a signed commit
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%gD</em>
 </dt>
 <dd>
@@ -3032,8 +3146,14 @@ display the trailers of the body as
                           interpreted by
                           <a href="git-interpret-trailers.html">git-interpret-trailers(1)</a>. The
                           <code>trailers</code> string may be followed by a colon
-                          and zero or more comma-separated options:
+                          and zero or more comma-separated options.
+                          If any option is provided multiple times the
+                          last occurance wins.
 </p>
+<div class="paragraph"><p>The boolean options accept an optional value <code>[=&lt;BOOL&gt;]</code>. The values
+<code>true</code>, <code>false</code>, <code>on</code>, <code>off</code> etc. are all accepted. See the "boolean"
+sub-section in "EXAMPLES" in <a href="git-config.html">git-config(1)</a>. If a boolean
+option is given with no value, it&#8217;s enabled.</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
@@ -3049,12 +3169,8 @@ display the trailers of the body as
 </li>
 <li>
 <p>
-<em>only[=val]</em>: select whether non-trailer lines from the trailer
-   block should be included. The <code>only</code> keyword may optionally be
-   followed by an equal sign and one of <code>true</code>, <code>on</code>, <code>yes</code> to omit or
-   <code>false</code>, <code>off</code>, <code>no</code> to show the non-trailer lines. If option is
-   given without value it is enabled. If given multiple times the last
-   value is used.
+<em>only[=&lt;BOOL&gt;]</em>: select whether non-trailer lines from the trailer
+   block should be included.
 </p>
 </li>
 <li>
@@ -3064,24 +3180,34 @@ display the trailers of the body as
    terminated with a line feed character. The string SEP may contain
    the literal formatting codes described above. To use comma as
    separator one must use <code>%x2C</code> as it would otherwise be parsed as
-   next option. If separator option is given multiple times only the
-   last one is used. E.g., <code>%(trailers:key=Ticket,separator=%x2C )</code>
+   next option. E.g., <code>%(trailers:key=Ticket,separator=%x2C )</code>
    shows all trailer lines whose key is "Ticket" separated by a comma
    and a space.
 </p>
 </li>
 <li>
 <p>
-<em>unfold[=val]</em>: make it behave as if interpret-trailer&#8217;s <code>--unfold</code>
-   option was given. In same way as to for <code>only</code> it can be followed
-   by an equal sign and explicit value. E.g.,
+<em>unfold[=&lt;BOOL&gt;]</em>: make it behave as if interpret-trailer&#8217;s <code>--unfold</code>
+   option was given. E.g.,
    <code>%(trailers:only,unfold=true)</code> unfolds and shows all trailer lines.
 </p>
 </li>
 <li>
 <p>
-<em>valueonly[=val]</em>: skip over the key part of the trailer line and only
-   show the value part. Also this optionally allows explicit value.
+<em>keyonly[=&lt;BOOL&gt;]</em>: only show the key part of the trailer.
+</p>
+</li>
+<li>
+<p>
+<em>valueonly[=&lt;BOOL&gt;]</em>: only show the value part of the trailer.
+</p>
+</li>
+<li>
+<p>
+<em>key_value_separator=&lt;SEP&gt;</em>: specify a separator inserted between
+   trailer lines. When this option is not given each trailer key-value
+   pair is separated by ": ". Otherwise it shares the same semantics
+   as <em>separator=&lt;SEP&gt;</em> above.
 </p>
 </li>
 </ul></div>
@@ -3316,7 +3442,7 @@ T: change in the type of the file
 <li>
 <p>
 U: file is unmerged (you must complete the merge before it can
-be committed)
+  be committed)
 </p>
 </li>
 <li>
@@ -3410,7 +3536,8 @@ all parents.</p></div>
 <a href="git-diff-files.html">git-diff-files(1)</a>
 with the <code>-p</code> option produces patch text.
 You can customize the creation of patch text via the
-<code>GIT_EXTERNAL_DIFF</code> and the <code>GIT_DIFF_OPTS</code> environment variables.</p></div>
+<code>GIT_EXTERNAL_DIFF</code> and the <code>GIT_DIFF_OPTS</code> environment variables
+(see <a href="git.html">git(1)</a>).</p></div>
 <div class="paragraph"><p>What the -p option produces is slightly different from the traditional
 diff format:</p></div>
 <div class="olist arabic"><ol class="arabic">
@@ -3493,9 +3620,9 @@ rename to a</code></pre>
 <div class="paragraph"><p>Any diff-generating command can take the <code>-c</code> or <code>--cc</code> option to
 produce a <em>combined diff</em> when showing a merge. This is the default
 format when showing merges with <a href="git-diff.html">git-diff(1)</a> or
-<a href="git-show.html">git-show(1)</a>. Note also that you can give the <code>-m</code> option to any
-of these commands to force generation of diffs with individual parents
-of a merge.</p></div>
+<a href="git-show.html">git-show(1)</a>. Note also that you can give suitable
+<code>--diff-merges</code> option to any of these commands to force generation of
+diffs in specific format.</p></div>
 <div class="paragraph"><p>A "combined diff" format looks like this:</p></div>
 <div class="listingblock">
 <div class="content">
@@ -3756,7 +3883,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-04-22 12:35:42 JST
+ 2020-11-02 14:02:22 PST
 </div>
 </div>
 </body>

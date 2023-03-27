@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-fast-import
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-FAST\-IMPORT" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-FAST\-IMPORT" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -59,6 +59,32 @@ directives), the corresponding messages will still be shown\&.
 \-\-stats
 .RS 4
 Display some basic statistics about the objects fast\-import has created, the packfiles they were stored into, and the memory used by fast\-import during this run\&. Showing this output is currently the default, but can be disabled with \-\-quiet\&.
+.RE
+.PP
+\-\-allow\-unsafe\-features
+.RS 4
+Many command\-line options can be provided as part of the fast\-import stream itself by using the
+\fBfeature\fR
+or
+\fBoption\fR
+commands\&. However, some of these options are unsafe (e\&.g\&., allowing fast\-import to access the filesystem outside of the repository)\&. These options are disabled by default, but can be allowed by providing this option on the command line\&. This currently impacts only the
+\fBexport\-marks\fR,
+\fBimport\-marks\fR, and
+\fBimport\-marks\-if\-exists\fR
+feature commands\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+Only enable this option if you trust the program generating the
+fast\-import stream! This option is enabled automatically for
+remote\-helpers that use the `import` capability, as they are
+already trusted to run their own code\&.
+.fi
+.if n \{\
+.RE
+.\}
 .RE
 .SS "Options for Frontends"
 .PP
@@ -113,6 +139,19 @@ Like \-\-import\-marks but instead of erroring out, silently skips the file if i
 After specifying \-\-relative\-marks the paths specified with \-\-import\-marks= and \-\-export\-marks= are relative to an internal directory in the current repository\&. In git\-fast\-import this means that the paths are relative to the \&.git/info/fast\-import directory\&. However, other importers may use a different location\&.
 .sp
 Relative and non\-relative marks may be combined by interweaving \-\-(no\-)\-relative\-marks with the \-\-(import|export)\-marks= options\&.
+.RE
+.SS "Submodule Rewriting"
+.PP
+\-\-rewrite\-submodules\-from=<name>:<file>, \-\-rewrite\-submodules\-to=<name>:<file>
+.RS 4
+Rewrite the object IDs for the submodule specified by <name> from the values used in the from <file> to those used in the to <file>\&. The from marks should have been created by
+\fBgit fast\-export\fR, and the to marks should have been created by
+\fBgit fast\-import\fR
+when importing that same submodule\&.
+.sp
+<name> may be any arbitrary string not containing a colon character, but the same value must be used with both options when specifying corresponding marks\&. Multiple submodules may be specified with different values for <name>\&. It is an error not to use these options in corresponding pairs\&.
+.sp
+These options are primarily useful when converting a repository from one hash algorithm to another; without them, fast\-import will fail if it encounters a submodule because it has no way of writing the object ID into the new hash algorithm\&.
 .RE
 .SS "Performance and Compression Tuning"
 .PP
@@ -199,7 +238,14 @@ If the local offset is not available in the source material, use \(lq+0000\(rq, 
 .sp
 Unlike the
 \fBrfc2822\fR
-format, this format is very strict\&. Any variation in formatting will cause fast\-import to reject the value\&.
+format, this format is very strict\&. Any variation in formatting will cause fast\-import to reject the value, and some sanity checks on the numeric values may also be performed\&.
+.RE
+.PP
+\fBraw\-permissive\fR
+.RS 4
+This is the same as
+\fBraw\fR
+except that no sanity checks on the numeric epoch and local offset are performed\&. This can be useful when trying to filter or import an existing history with e\&.g\&. bogus timezone values\&.
 .RE
 .PP
 \fBrfc2822\fR
@@ -904,7 +950,7 @@ Provides the name of the object in the original source control system\&. fast\-i
 .RE
 .\}
 .sp
-where \fB<object\-identifer>\fR is any string not containing LF\&.
+where \fB<object\-identifier>\fR is any string not containing LF\&.
 .SS "\fBtag\fR"
 .sp
 Creates an annotated tag referring to a specific commit\&. To create lightweight (non\-annotated) tags see the \fBreset\fR command below\&.

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-am
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-AM" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-AM" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,7 +39,7 @@ git-am \- Apply a series of patches from a mailbox
          [\-\-exclude=<path>] [\-\-include=<path>] [\-\-reject] [\-q | \-\-quiet]
          [\-\-[no\-]scissors] [\-S[<keyid>]] [\-\-patch\-format=<format>]
          [(<mbox> | <Maildir>)\&...]
-\fIgit am\fR (\-\-continue | \-\-skip | \-\-abort | \-\-quit | \-\-show\-current\-patch)
+\fIgit am\fR (\-\-continue | \-\-skip | \-\-abort | \-\-quit | \-\-show\-current\-patch[=(diff|raw)])
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -55,8 +55,8 @@ The list of mailbox files to read patches from\&. If you do not supply this argu
 \-s, \-\-signoff
 .RS 4
 Add a
-\fBSigned\-off\-by:\fR
-line to the commit message, using the committer identity of yourself\&. See the signoff option in
+\fBSigned\-off\-by\fR
+trailer to the commit message, using the committer identity of yourself\&. See the signoff option in
 \fBgit-commit\fR(1)
 for more information\&.
 .RE
@@ -206,11 +206,16 @@ By default the command records the date from the e\-mail message as the commit a
 Skip the current patch\&. This is only meaningful when restarting an aborted patch\&.
 .RE
 .PP
-\-S[<keyid>], \-\-gpg\-sign[=<keyid>]
+\-S[<keyid>], \-\-gpg\-sign[=<keyid>], \-\-no\-gpg\-sign
 .RS 4
 GPG\-sign commits\&. The
 \fBkeyid\fR
 argument is optional and defaults to the committer identity; if specified, it must be stuck to the option without a space\&.
+\fB\-\-no\-gpg\-sign\fR
+is useful to countermand both
+\fBcommit\&.gpgSign\fR
+configuration variable, and earlier
+\fB\-\-gpg\-sign\fR\&.
 .RE
 .PP
 \-\-continue, \-r, \-\-resolved
@@ -240,15 +245,21 @@ Restore the original branch and abort the patching operation\&.
 Abort the patching operation but keep HEAD and the index untouched\&.
 .RE
 .PP
-\-\-show\-current\-patch
+\-\-show\-current\-patch[=(diff|raw)]
 .RS 4
-Show the patch being applied when "git am" is stopped because of conflicts\&.
+Show the message at which
+\fBgit am\fR
+has stopped due to conflicts\&. If
+\fBraw\fR
+is specified, show the raw contents of the e\-mail message; if
+\fBdiff\fR, show the diff portion only\&. Defaults to
+\fBraw\fR\&.
 .RE
 .SH "DISCUSSION"
 .sp
 The commit author name is taken from the "From: " line of the message, and commit author date is taken from the "Date: " line of the message\&. The "Subject: " line is used as the title of the commit, after stripping common prefix "[PATCH <anything>]"\&. The "Subject: " line is supposed to concisely describe what the commit is about in one line of text\&.
 .sp
-"From: " and "Subject: " lines starting the body override the respective commit author name and title values taken from the headers\&.
+"From: ", "Date: ", and "Subject: " lines starting the body override the respective commit author name and title values taken from the headers\&.
 .sp
 The commit message is formed by the title taken from the "Subject: ", a blank line and the body of the message up to where the patch begins\&. Excess whitespace at the end of each line is automatically stripped\&.
 .sp

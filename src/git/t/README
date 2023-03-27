@@ -1,7 +1,7 @@
-Core GIT Tests
+Core Git Tests
 ==============
 
-This directory holds many test scripts for core GIT tools.  The
+This directory holds many test scripts for core Git tools.  The
 first part of this short document describes how to run the tests
 and read their output.
 
@@ -69,7 +69,8 @@ You can also run each test individually from command line, like this:
 
 You can pass --verbose (or -v), --debug (or -d), and --immediate
 (or -i) command line argument to the test, or by setting GIT_TEST_OPTS
-appropriately before running "make".
+appropriately before running "make". Short options can be bundled, i.e.
+'-d -v' is the same as '-dv'.
 
 -v::
 --verbose::
@@ -257,25 +258,27 @@ For an individual test suite --run could be used to specify that
 only some tests should be run or that some tests should be
 excluded from a run.
 
-The argument for --run is a list of individual test numbers or
-ranges with an optional negation prefix that define what tests in
-a test suite to include in the run.  A range is two numbers
-separated with a dash and matches a range of tests with both ends
-been included.  You may omit the first or the second number to
-mean "from the first test" or "up to the very last test"
-respectively.
+The argument for --run, <test-selector>, is a list of description
+substrings or globs or individual test numbers or ranges with an
+optional negation prefix (of '!') that define what tests in a test
+suite to include (or exclude, if negated) in the run.  A range is two
+numbers separated with a dash and matches a range of tests with both
+ends been included.  You may omit the first or the second number to
+mean "from the first test" or "up to the very last test" respectively.
 
-Optional prefix of '!' means that the test or a range of tests
-should be excluded from the run.
+The argument to --run is split on commas into separate strings,
+numbers, and ranges, and picks all tests that match any of the
+individual selection criteria.  If the substring of the description
+text that you want to match includes a comma, use the glob character
+'?' instead.  For example --run='rebase,merge?cherry-pick' would match
+on all tests that match either the glob *rebase* or the glob
+*merge?cherry-pick*.
 
 If --run starts with an unprefixed number or range the initial
 set of tests to run is empty. If the first item starts with '!'
 all the tests are added to the initial set.  After initial set is
 determined every test number or range is added or excluded from
 the set one by one, from left to right.
-
-Individual numbers or ranges could be separated either by a space
-or a comma.
 
 For example, to run only tests up to a specific test (21), one
 could do this:
@@ -289,7 +292,7 @@ or this:
 Common case is to run several setup tests (1, 2, 3) and then a
 specific test (21) that relies on that setup:
 
-    $ sh ./t9200-git-cvsexport-commit.sh --run='1 2 3 21'
+    $ sh ./t9200-git-cvsexport-commit.sh --run='1,2,3,21'
 
 or:
 
@@ -297,17 +300,17 @@ or:
 
 or:
 
-    $ sh ./t9200-git-cvsexport-commit.sh --run='-3 21'
+    $ sh ./t9200-git-cvsexport-commit.sh --run='-3,21'
 
 As noted above, the test set is built by going through the items
 from left to right, so this:
 
-    $ sh ./t9200-git-cvsexport-commit.sh --run='1-4 !3'
+    $ sh ./t9200-git-cvsexport-commit.sh --run='1-4,!3'
 
 will run tests 1, 2, and 4.  Items that come later have higher
 precedence.  It means that this:
 
-    $ sh ./t9200-git-cvsexport-commit.sh --run='!3 1-4'
+    $ sh ./t9200-git-cvsexport-commit.sh --run='!3,1-4'
 
 would just run tests from 1 to 4, including 3.
 
@@ -315,6 +318,18 @@ You may use negation with ranges.  The following will run all
 test in the test suite except from 7 up to 11:
 
     $ sh ./t9200-git-cvsexport-commit.sh --run='!7-11'
+
+Sometimes there may be multiple tests with e.g. "setup" in their name
+that are needed and rather than figuring out the number for all of them
+we can just use "setup" as a substring/glob to match against the test
+description:
+
+    $ sh ./t0050-filesystem.sh --run=setup,9-11
+
+or one could select both the setup tests and the rename ones (assuming all
+relevant tests had those words in their descriptions):
+
+    $ sh ./t0050-filesystem.sh --run=setup,rename
 
 Some tests in a test suite rely on the previous tests performing
 certain actions, specifically some tests are designated as
@@ -352,8 +367,8 @@ details.
 GIT_TEST_SPLIT_INDEX=<boolean> forces split-index mode on the whole
 test suite. Accept any boolean values that are accepted by git-config.
 
-GIT_TEST_PROTOCOL_VERSION=<n>, when set, overrides the
-'protocol.version' setting to n if it is less than n.
+GIT_TEST_PROTOCOL_VERSION=<n>, when set, makes 'protocol.version'
+default to n.
 
 GIT_TEST_FULL_IN_PACK_ARRAY=<boolean> exercises the uncommon
 pack-objects code path where there are more than 1024 packs even if
@@ -378,6 +393,11 @@ GIT_TEST_COMMIT_GRAPH=<boolean>, when true, forces the commit-graph to
 be written after every 'git commit' command, and overrides the
 'core.commitGraph' setting to true.
 
+GIT_TEST_COMMIT_GRAPH_CHANGED_PATHS=<boolean>, when true, forces
+commit-graph write to compute and write changed path Bloom filters for
+every 'git commit-graph write', as if the `--changed-paths` option was
+passed in.
+
 GIT_TEST_FSMONITOR=$PWD/t7519/fsmonitor-all exercises the fsmonitor
 code path for utilizing a file system monitor to speed up detecting
 new or changed files.
@@ -386,15 +406,15 @@ GIT_TEST_INDEX_VERSION=<n> exercises the index read/write code path
 for the index version specified.  Can be set to any valid version
 (currently 2, 3, or 4).
 
-GIT_TEST_PACK_SPARSE=<boolean> if enabled will default the pack-objects
-builtin to use the sparse object walk. This can still be overridden by
-the --no-sparse command-line argument.
+GIT_TEST_PACK_SPARSE=<boolean> if disabled will default the pack-objects
+builtin to use the non-sparse object walk. This can still be overridden by
+the --sparse command-line argument.
 
 GIT_TEST_PRELOAD_INDEX=<boolean> exercises the preload-index code path
 by overriding the minimum number of cache entries required per thread.
 
-GIT_TEST_STASH_USE_BUILTIN=<boolean>, when false, disables the
-built-in version of git-stash. See 'stash.useBuiltin' in
+GIT_TEST_ADD_I_USE_BUILTIN=<boolean>, when true, enables the
+built-in version of git add -i. See 'add.interactive.useBuiltin' in
 git-config(1).
 
 GIT_TEST_INDEX_THREADS=<n> enables exercising the multi-threaded loading
@@ -414,6 +434,10 @@ sideband-all).
 GIT_TEST_DISALLOW_ABBREVIATED_OPTIONS=<boolean>, when true (which is
 the default when running tests), errors out when an abbreviated option
 is used.
+
+GIT_TEST_DEFAULT_HASH=<hash-algo> specifies which hash algorithm to
+use in the test scripts. Recognized values for <hash-algo> are "sha1"
+and "sha256".
 
 Naming Tests
 ------------
@@ -545,6 +569,41 @@ Here are the "do's:"
    standard error streams are discarded, and the test harness only
    reports "ok" or "not ok" to the end user running the tests. Under
    --verbose, they are shown to help debug the tests.
+
+ - Be careful when you loop
+
+   You may need to verify multiple things in a loop, but the
+   following does not work correctly:
+
+	test_expect_success 'test three things' '
+	    for i in one two three
+	    do
+		test_something "$i"
+	    done &&
+	    test_something_else
+	'
+
+   Because the status of the loop itself is the exit status of the
+   test_something in the last round, the loop does not fail when
+   "test_something" for "one" or "two" fails.  This is not what you
+   want.
+
+   Instead, you can break out of the loop immediately when you see a
+   failure.  Because all test_expect_* snippets are executed inside
+   a function, "return 1" can be used to fail the test immediately
+   upon a failure:
+
+	test_expect_success 'test three things' '
+	    for i in one two three
+	    do
+		test_something "$i" || return 1
+	    done &&
+	    test_something_else
+	'
+
+   Note that we still &&-chain the loop to propagate failures from
+   earlier commands.
+
 
 And here are the "don'ts:"
 
@@ -978,6 +1037,15 @@ library for your script to use.
    output to the downstream---unlike the real version, it generates
    only up to 99 lines.
 
+ - test_bool_env <env-variable-name> <default-value>
+
+   Given the name of an environment variable with a bool value,
+   normalize its value to a 0 (true) or 1 (false or empty string)
+   return code.  Return with code corresponding to the given default
+   value if the variable is unset.
+   Abort the test script if either the value of the variable or the
+   default are not valid bool values.
+
 
 Prerequisites
 -------------
@@ -1067,21 +1135,21 @@ Tips for Writing Tests
 As with any programming projects, existing programs are the best
 source of the information.  However, do _not_ emulate
 t0000-basic.sh when writing your tests.  The test is special in
-that it tries to validate the very core of GIT.  For example, it
+that it tries to validate the very core of Git.  For example, it
 knows that there will be 256 subdirectories under .git/objects/,
 and it knows that the object ID of an empty tree is a certain
 40-byte string.  This is deliberately done so in t0000-basic.sh
 because the things the very basic core test tries to achieve is
-to serve as a basis for people who are changing the GIT internal
+to serve as a basis for people who are changing the Git internals
 drastically.  For these people, after making certain changes,
 not seeing failures from the basic test _is_ a failure.  And
-such drastic changes to the core GIT that even changes these
+such drastic changes to the core Git that even changes these
 otherwise supposedly stable object IDs should be accompanied by
 an update to t0000-basic.sh.
 
 However, other tests that simply rely on basic parts of the core
-GIT working properly should not have that level of intimate
-knowledge of the core GIT internals.  If all the test scripts
+Git working properly should not have that level of intimate
+knowledge of the core Git internals.  If all the test scripts
 hardcoded the object IDs like t0000-basic.sh does, that defeats
 the purpose of t0000-basic.sh, which is to isolate that level of
 validation in one place.  Your test also ends up needing

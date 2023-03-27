@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-grep(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -828,8 +828,8 @@ grep.threads
 </dt>
 <dd>
 <p>
-        Number of grep worker threads to use.  If unset (or set to 0),
-        8 threads are used by default (for now).
+        Number of grep worker threads to use. If unset (or set to 0), Git will
+        use as many threads as the number of logical cores available.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -906,10 +906,11 @@ grep.fallbackToNoIndex
 </dt>
 <dd>
 <p>
-        Recursively search in each submodule that has been initialized and
+        Recursively search in each submodule that is active and
         checked out in the repository.  When used in combination with the
         &lt;tree&gt; option the prefix of all submodule output will be the name of
-        the parent project&#8217;s &lt;tree&gt; object.
+        the parent project&#8217;s &lt;tree&gt; object. This option has no effect
+        if <code>--no-index</code> is given.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1153,8 +1154,10 @@ providing this option will cause it to die.</p></div>
 </dt>
 <dd>
 <p>
-        Output \0 instead of the character that normally follows a
-        file name.
+        Use \0 as the delimiter for pathnames in the output, and print
+        them verbatim. Without this option, pathnames with "unusual"
+        characters are quoted as explained for the configuration
+        variable core.quotePath (see <a href="git-config.html">git-config(1)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1227,7 +1230,7 @@ providing this option will cause it to die.</p></div>
 <p>
         Show the preceding line that contains the function name of
         the match, unless the matching line is a function name itself.
-        The name is determined in the same way as <em>git diff</em> works out
+        The name is determined in the same way as <code>git diff</code> works out
         patch hunk headers (see <em>Defining a custom hunk-header</em> in
         <a href="gitattributes.html">gitattributes(5)</a>).
 </p>
@@ -1282,7 +1285,9 @@ providing this option will cause it to die.</p></div>
         Show the surrounding text from the previous line containing a
         function name up to the one before the next function name,
         effectively showing the whole function in which the match was
-        found.
+        found. The function names are determined in the same way as
+        <code>git diff</code> works out patch hunk headers (see <em>Defining a
+        custom hunk-header</em> in <a href="gitattributes.html">gitattributes(5)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1443,6 +1448,17 @@ in <a href="gitglossary.html">gitglossary(7)</a>.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_notes_on_threads">NOTES ON THREADS</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>The <code>--threads</code> option (and the grep.threads configuration) will be ignored when
+<code>--open-files-in-pager</code> is used, forcing a single-threaded execution.</p></div>
+<div class="paragraph"><p>When grepping the object store (with <code>--cached</code> or giving tree objects), running
+with multiple threads might perform slower than single threaded if <code>--textconv</code>
+is given and there&#8217;re too many text conversions. So if you experience low
+performance in this case, it might be desirable to use <code>--threads=1</code>.</p></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_git">GIT</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Part of the <a href="git.html">git(1)</a> suite</p></div>
@@ -1453,7 +1469,7 @@ in <a href="gitglossary.html">gitglossary(7)</a>.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-10-11 16:25:30 JST
+ 2020-11-18 14:12:24 PST
 </div>
 </div>
 </body>

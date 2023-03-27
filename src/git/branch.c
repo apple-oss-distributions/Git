@@ -281,7 +281,7 @@ void create_branch(struct repository *r,
 		die(_("Not a valid object name: '%s'."), start_name);
 	}
 
-	switch (dwim_ref(start_name, strlen(start_name), &oid, &real_ref)) {
+	switch (dwim_ref(start_name, strlen(start_name), &oid, &real_ref, 0)) {
 	case 0:
 		/* Not branching from any existing branch */
 		if (explicit_tracking)
@@ -344,6 +344,7 @@ void remove_merge_branch_state(struct repository *r)
 	unlink(git_path_merge_rr(r));
 	unlink(git_path_merge_msg(r));
 	unlink(git_path_merge_mode(r));
+	save_autostash(git_path_merge_autostash(r));
 }
 
 void remove_branch_state(struct repository *r, int verbose)
@@ -369,7 +370,7 @@ int replace_each_worktree_head_symref(const char *oldref, const char *newref,
 				      const char *logmsg)
 {
 	int ret = 0;
-	struct worktree **worktrees = get_worktrees(0);
+	struct worktree **worktrees = get_worktrees();
 	int i;
 
 	for (i = 0; worktrees[i]; i++) {

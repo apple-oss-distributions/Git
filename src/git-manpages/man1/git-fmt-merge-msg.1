@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-fmt-merge-msg
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-FMT\-MERGE\-MSG" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-FMT\-MERGE\-MSG" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -80,6 +80,17 @@ In addition to branch names, populate the log message with the branch descriptio
 merge\&.log
 .RS 4
 In addition to branch names, populate the log message with at most the specified number of one\-line descriptions from the actual commits that are being merged\&. Defaults to false, and true is a synonym for 20\&.
+.RE
+.PP
+merge\&.suppressDest
+.RS 4
+By adding a glob that matches the names of integration branches to this multi\-valued configuration variable, the default merge message computed for merges into these integration branches will omit "into <branch name>" from its title\&.
+.sp
+An element with an empty value can be used to clear the list of globs accumulated from previous configuration entries\&. When there is no
+\fBmerge\&.suppressDest\fR
+variable defined, the default value of
+\fBmaster\fR
+is used for backward compatibility\&.
 .RE
 .PP
 merge\&.summary

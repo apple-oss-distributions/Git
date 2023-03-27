@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>gitattributes(5)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -1079,10 +1079,10 @@ built-in Git text processing tools (e.g. <em>git diff</em>) as well as most Git
 web front ends do not visualize the contents of these files by default.</p></div>
 <div class="paragraph"><p>In these cases you can tell Git the encoding of a file in the working
 directory with the <code>working-tree-encoding</code> attribute. If a file with this
-attribute is added to Git, then Git reencodes the content from the
+attribute is added to Git, then Git re-encodes the content from the
 specified encoding to UTF-8. Finally, Git stores the UTF-8 encoded
 content in its internal data structure (called "the index"). On checkout
-the content is reencoded back to the specified encoding.</p></div>
+the content is re-encoded back to the specified encoding.</p></div>
 <div class="paragraph"><p>Please note that using the <code>working-tree-encoding</code> attribute may have a
 number of pitfalls:</p></div>
 <div class="ulist"><ul>
@@ -1268,7 +1268,7 @@ command. This is achieved by using the long-running process protocol
 <div class="paragraph"><p>When Git encounters the first file that needs to be cleaned or smudged,
 it starts the filter and performs the handshake. In the handshake, the
 welcome message sent by Git is "git-filter-client", only version 2 is
-suppported, and the supported capabilities are "clean", "smudge", and
+supported, and the supported capabilities are "clean", "smudge", and
 "delay".</p></div>
 <div class="paragraph"><p>Afterwards Git sends a list of "key=value" pairs terminated with
 a flush packet. The list will contain at least the filter command
@@ -1571,6 +1571,12 @@ patterns are available:</p></div>
 </li>
 <li>
 <p>
+<code>bash</code> suitable for source code in the Bourne-Again SHell language.
+  Covers a superset of POSIX shell function definitions.
+</p>
+</li>
+<li>
+<p>
 <code>bibtex</code> suitable for files with BibTeX coded references.
 </p>
 </li>
@@ -1596,6 +1602,11 @@ patterns are available:</p></div>
 </li>
 <li>
 <p>
+<code>elixir</code> suitable for source code in the Elixir language.
+</p>
+</li>
+<li>
+<p>
 <code>fortran</code> suitable for source code in the Fortran language.
 </p>
 </li>
@@ -1617,6 +1628,11 @@ patterns are available:</p></div>
 <li>
 <p>
 <code>java</code> suitable for source code in the Java language.
+</p>
+</li>
+<li>
+<p>
+<code>markdown</code> suitable for Markdown documents.
 </p>
 </li>
 <li>
@@ -2165,7 +2181,7 @@ frotz   unspecified</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-09-19 04:25:17 JST
+ 2020-11-02 14:02:22 PST
 </div>
 </div>
 </body>

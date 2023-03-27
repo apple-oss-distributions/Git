@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-bisect(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -761,8 +761,8 @@ git-bisect(1) Manual Page
 on the subcommand:</p></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>git bisect start [--term-{old,good}=&lt;term&gt; --term-{new,bad}=&lt;term&gt;]
-                 [--no-checkout] [&lt;bad&gt; [&lt;good&gt;...]] [--] [&lt;paths&gt;...]
+<pre><code>git bisect start [--term-{new,bad}=&lt;term&gt; --term-{old,good}=&lt;term&gt;]
+                 [--no-checkout] [--first-parent] [&lt;bad&gt; [&lt;good&gt;...]] [--] [&lt;paths&gt;...]
 git bisect (bad|new|&lt;term-new&gt;) [&lt;rev&gt;]
 git bisect (good|old|&lt;term-old&gt;) [&lt;rev&gt;...]
 git bisect terms [--term-good | --term-bad]
@@ -1065,6 +1065,17 @@ it point to the commit that should be tested.</p></div>
 does not require a checked out tree.</p></div>
 <div class="paragraph"><p>If the repository is bare, <code>--no-checkout</code> is assumed.</p></div>
 </dd>
+<dt class="hdlist1">
+--first-parent
+</dt>
+<dd>
+<div class="paragraph"><p>Follow only the first parent commit upon seeing a merge commit.</p></div>
+<div class="paragraph"><p>In detecting regressions introduced through the merging of a branch, the merge
+commit will be identified as introduction of the bug and its ancestors will be
+ignored.</p></div>
+<div class="paragraph"><p>This option is particularly useful in avoiding false positives when a merged
+branch contained broken or non-buildable commits, but the merge itself was OK.</p></div>
+</dd>
 </dl></div>
 </div>
 </div>
@@ -1127,7 +1138,7 @@ Automatically bisect with temporary modifications (hot-fix):
 
 # tweak the working tree by merging the hot-fix branch
 # and then attempt a build
-if      git merge --no-commit hot-fix &amp;&amp;
+if      git merge --no-commit --no-ff hot-fix &amp;&amp;
         make
 then
         # run project specific test and report its status
@@ -1229,7 +1240,7 @@ help</code> or <code>git bisect -h</code> to get a long usage description.</p></
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-04-25 17:24:48 JST
+ 2020-09-03 13:19:53 PDT
 </div>
 </div>
 </body>

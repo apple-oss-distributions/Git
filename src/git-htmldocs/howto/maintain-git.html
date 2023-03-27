@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>How to maintain Git</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -831,7 +831,7 @@ Maintenance releases are numbered as vX.Y.Z and are meant
 </li>
 <li>
 <p>
-<em>pu</em> branch is used to publish other proposed changes that do
+<em>seen</em> branch is used to publish other proposed changes that do
    not yet pass the criteria set for <em>next</em>.
 </p>
 </li>
@@ -847,7 +847,7 @@ The tips of <em>master</em> and <em>maint</em> branches will not be rewound to
 <li>
 <p>
 Usually <em>master</em> contains all of <em>maint</em> and <em>next</em> contains all
-   of <em>master</em>.  <em>pu</em> contains all the topics merged to <em>next</em>, but
+   of <em>master</em>.  <em>seen</em> contains all the topics merged to <em>next</em>, but
    is rebuilt directly on <em>master</em>.
 </p>
 </li>
@@ -974,7 +974,8 @@ Handle the remaining patches:
 Anything unobvious that is applicable to <em>master</em> (in other
      words, does not depend on anything that is still in <em>next</em>
      and not in <em>master</em>) is applied to a new topic branch that
-     is forked from the tip of <em>master</em>.  This includes both
+     is forked from the tip of <em>master</em> (or the last feature release,
+     which is a bit older than <em>master</em>).  This includes both
      enhancements and unobvious fixes to <em>master</em>.  A topic
      branch is named as ai/topic where "ai" is two-letter string
      named after author&#8217;s initial and "topic" is a descriptive name
@@ -984,8 +985,9 @@ Anything unobvious that is applicable to <em>master</em> (in other
 <li>
 <p>
 An unobvious fix meant for <em>maint</em> is applied to a new
-     topic branch that is forked from the tip of <em>maint</em>.  The
-     topic is named as ai/maint-topic.
+     topic branch that is forked from the tip of <em>maint</em> (or the
+     oldest and still relevant maintenance branch).  The
+     topic may be named as ai/maint-topic.
 </p>
 </li>
 <li>
@@ -1011,7 +1013,7 @@ Replacement patches to an existing topic are accepted only
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>The above except the "replacement" are all done with:</code></pre>
+<pre><code>The initial round is done with:</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1020,27 +1022,48 @@ $ git am -sc3 mailbox</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>while patch replacement is often done by:</code></pre>
+<pre><code>and replacing an existing topic with subsequent round is done with:</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ git format-patch ai/topic~$n..ai/topic ;# export existing</code></pre>
+<pre><code>$ git checkout master...ai/topic ;# try to reapply to the same base
+$ git am -sc3 mailbox</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>then replace some parts with the new patch, and reapplying:</code></pre>
+<pre><code>to prepare the new round on a detached HEAD, and then</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ git checkout ai/topic
-$ git reset --hard ai/topic~$n
-$ git am -sc3 -s 000*.txt</code></pre>
+<pre><code>$ git range-diff @{-1}...
+$ git diff @{-1}</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>The full test suite is always run for 'maint' and 'master'
-after patch application; for topic branches the tests are run
-as time permits.</code></pre>
+<pre><code>to double check what changed since the last round, and finally</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>$ git checkout -B @{-1}</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>to conclude (the last step is why a topic already in 'next' is
+not replaced but updated incrementally).</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>Whether it is the initial round or a subsequent round, the topic
+may not build even in isolation, or may break the build when
+merged to integration branches due to bugs.  There may already
+be obvious and trivial improvements suggested on the list.  The
+maintainer often adds an extra commit, with "SQUASH???" in its
+title, to fix things up, before publishing the integration
+branches to make it usable by other developers for testing.
+These changes are what the maintainer is not 100% committed to
+(trivial typofixes etc. are often squashed directly into the
+patches that need fixing, without being applied as a separate
+"SQUASH???" commit), so that they can be removed easily as needed.</code></pre>
 </div></div>
 </li>
 <li>
@@ -1076,16 +1099,16 @@ Review the last issue of "What&#8217;s cooking" again and see if topics
 <li>
 <p>
 Prepare <em>jch</em> branch, which is used to represent somewhere
-   between <em>master</em> and <em>pu</em> and often is slightly ahead of <em>next</em>.
+   between <em>master</em> and <em>seen</em> and often is slightly ahead of <em>next</em>.
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ Meta/Reintegrate master..pu &gt;Meta/redo-jch.sh</code></pre>
+<pre><code>$ Meta/Reintegrate master..seen &gt;Meta/redo-jch.sh</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
 <pre><code>The result is a script that lists topics to be merged in order to
-rebuild 'pu' as the input to Meta/Reintegrate script.  Remove
+rebuild 'seen' as the input to Meta/Reintegrate script.  Remove
 later topics that should not be in 'jch' yet.  Add a line that
 consists of '### match next' before the name of the first topic
 in the output that should be in 'jch' but not in 'next' yet.</code></pre>
@@ -1181,29 +1204,29 @@ add it again to the appropriate place when it happens.</code></pre>
 </li>
 <li>
 <p>
-Rebuild <em>pu</em>.
+Rebuild <em>seen</em>.
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ Meta/Reintegrate master..pu &gt;Meta/redo-pu.sh</code></pre>
+<pre><code>$ Meta/Reintegrate master..seen &gt;Meta/redo-seen.sh</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>Edit the result by adding new topics that are not still in 'pu'
+<pre><code>Edit the result by adding new topics that are not still in 'seen'
 in the script.  Then</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ git checkout -B pu jch
-$ sh Meta/redo-pu.sh</code></pre>
+<pre><code>$ git checkout -B seen jch
+$ sh Meta/redo-seen.sh</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>When all is well, clean up the redo-pu.sh script with</code></pre>
+<pre><code>When all is well, clean up the redo-seen.sh script with</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ sh Meta/redo-pu.sh -u</code></pre>
+<pre><code>$ sh Meta/redo-seen.sh -u</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1211,7 +1234,7 @@ $ sh Meta/redo-pu.sh</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ git branch --no-merged pu</code></pre>
+<pre><code>$ git branch --no-merged seen</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1221,7 +1244,7 @@ $ sh Meta/redo-pu.sh</code></pre>
 <div class="content">
 <pre><code>At this point, build-test the result for semantic conflicts, and
 if there are, prepare an appropriate merge-fix first (see
-appendix), and rebuild the 'pu' branch from scratch, starting at
+appendix), and rebuild the 'seen' branch from scratch, starting at
 the tip of 'jch'.</code></pre>
 </div></div>
 </li>
@@ -1240,14 +1263,14 @@ Update "What&#8217;s cooking" message to review the updates to
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>This script inspects the history between master..pu, finds tips
+<pre><code>This script inspects the history between master..seen, finds tips
 of topic branches, compares what it found with the current
 contents in Meta/whats-cooking.txt, and updates that file.
-Topics not listed in the file but are found in master..pu are
+Topics not listed in the file but are found in master..seen are
 added to the "New topics" section, topics listed in the file that
-are no longer found in master..pu are moved to the "Graduated to
+are no longer found in master..seen are moved to the "Graduated to
 master" section, and topics whose commits changed their states
-(e.g. used to be only in 'pu', now merged to 'next') are updated
+(e.g. used to be only in 'seen', now merged to 'next') are updated
 with change markers "&lt;&lt;" and "&gt;&gt;".</code></pre>
 </div></div>
 <div class="literalblock">
@@ -1298,7 +1321,7 @@ Push the integration branches out to public places; Meta/pushall
 <li>
 <p>
 Each topic is tested individually, and also together with other
-   topics cooking first in <em>pu</em>, then in <em>jch</em> and then in <em>next</em>.
+   topics cooking first in <em>seen</em>, then in <em>jch</em> and then in <em>next</em>.
    Until it matures, no part of it is merged to <em>master</em>.
 </p>
 </li>
@@ -1346,6 +1369,17 @@ Being in the <em>next</em> branch is not a guarantee for a topic to
    <em>master</em> branch typically is.
 </p>
 </li>
+<li>
+<p>
+Due to the nature of "SQUASH???" fix-ups, if the original author
+   agrees with the suggested changes, it is OK to squash them to
+   appropriate patches in the next round (when the suggested change
+   is small enough, the author should not even bother with
+   "Helped-by").  It is also OK to drop them from the next round
+   when the original author does not agree with the suggestion, but
+   the author is expected to say why somewhere in the discussion.
+</p>
+</li>
 </ul></div>
 </div>
 </div>
@@ -1360,7 +1394,7 @@ to rename an variable and all its uses, while another topic adds a
 new use of the variable under its old name. When these two topics
 are merged together, the reference to the variable newly added by
 the latter topic will still use the old name in the result.</p></div>
-<div class="paragraph"><p>The Meta/Reintegrate script that is used by redo-jch and redo-pu
+<div class="paragraph"><p>The Meta/Reintegrate script that is used by redo-jch and redo-seen
 scripts implements a crude but usable way to work this issue around.
 When the script merges branch $X, it checks if "refs/merge-fix/$X"
 exists, and if so, the effect of it is squashed into the result of
@@ -1381,15 +1415,15 @@ $ git commit --amend</code></pre>
 commit that can be squashed into a result of mechanical merge to
 correct semantic conflicts.</p></div>
 <div class="paragraph"><p>After finding that the result of merging branch "ai/topic" to an
-integration branch had such a semantic conflict, say pu~4, check the
+integration branch had such a semantic conflict, say seen~4, check the
 problematic merge out on a detached HEAD, edit the working tree to
 fix the semantic conflict, and make a separate commit to record the
 fix-up:</p></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ git checkout pu~4
+<pre><code>$ git checkout seen~4
 $ git show -s --pretty=%s ;# double check
-Merge branch 'ai/topic' to pu
+Merge branch 'ai/topic' to seen
 $ edit
 $ git commit -m 'merge-fix/ai/topic' -a</code></pre>
 </div></div>
@@ -1403,9 +1437,9 @@ result:</p></div>
 merge:</p></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ git checkout pu~5 ;# the parent of the problem merge
+<pre><code>$ git checkout seen~5 ;# the parent of the problem merge
 $ echo ai/topic | Meta/Reintegrate
-$ git diff pu~4</code></pre>
+$ git diff seen~4</code></pre>
 </div></div>
 <div class="paragraph"><p>This time, because you prepared refs/merge-fix/ai/topic, the
 resulting merge should have been tweaked to include the fix for the
@@ -1416,7 +1450,7 @@ branch needs this merge-fix is because another branch merged earlier
 to the integration branch changed the underlying assumption ai/topic
 branch made (e.g. ai/topic branch added a site to refer to a
 variable, while the other branch renamed that variable and adjusted
-existing use sites), and if you changed redo-jch (or redo-pu) script
+existing use sites), and if you changed redo-jch (or redo-seen) script
 to merge ai/topic branch before the other branch, then the above
 merge-fix should not be applied while merging ai/topic, but should
 instead be applied while merging the other branch.  You would need
@@ -1435,7 +1469,7 @@ $ git update-ref -d $mf/ai/topic</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-11-04 14:10:04 JST
+ 2021-02-08 15:30:03 PST
 </div>
 </div>
 </body>

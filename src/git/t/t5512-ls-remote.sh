@@ -4,6 +4,14 @@ test_description='git ls-remote'
 
 . ./test-lib.sh
 
+generate_references () {
+	for ref
+	do
+		oid=$(git rev-parse "$ref") &&
+		printf '%s\t%s\n' "$oid" "$ref" || return 1
+	done
+}
+
 test_expect_success setup '
 	>file &&
 	git add file &&
@@ -13,11 +21,11 @@ test_expect_success setup '
 	git tag mark1.1 &&
 	git tag mark1.2 &&
 	git tag mark1.10 &&
-	git show-ref --tags -d | sed -e "s/ /	/" >expected.tag &&
-	(
-		echo "$(git rev-parse HEAD)	HEAD" &&
-		git show-ref -d	| sed -e "s/ /	/"
-	) >expected.all &&
+	git show-ref --tags -d >expected.tag.raw &&
+	sed -e "s/ /	/" expected.tag.raw >expected.tag &&
+	generate_references HEAD >expected.all &&
+	git show-ref -d	>refs &&
+	sed -e "s/ /	/" refs >>expected.all &&
 
 	git remote add self "$(pwd)/.git"
 '
@@ -43,34 +51,31 @@ test_expect_success 'ls-remote self' '
 '
 
 test_expect_success 'ls-remote --sort="version:refname" --tags self' '
-	cat >expect <<-EOF &&
-	$(git rev-parse mark)	refs/tags/mark
-	$(git rev-parse mark1.1)	refs/tags/mark1.1
-	$(git rev-parse mark1.2)	refs/tags/mark1.2
-	$(git rev-parse mark1.10)	refs/tags/mark1.10
-	EOF
+	generate_references \
+		refs/tags/mark \
+		refs/tags/mark1.1 \
+		refs/tags/mark1.2 \
+		refs/tags/mark1.10 >expect &&
 	git ls-remote --sort="version:refname" --tags self >actual &&
 	test_cmp expect actual
 '
 
 test_expect_success 'ls-remote --sort="-version:refname" --tags self' '
-	cat >expect <<-EOF &&
-	$(git rev-parse mark1.10)	refs/tags/mark1.10
-	$(git rev-parse mark1.2)	refs/tags/mark1.2
-	$(git rev-parse mark1.1)	refs/tags/mark1.1
-	$(git rev-parse mark)	refs/tags/mark
-	EOF
+	generate_references \
+		refs/tags/mark1.10 \
+		refs/tags/mark1.2 \
+		refs/tags/mark1.1 \
+		refs/tags/mark >expect &&
 	git ls-remote --sort="-version:refname" --tags self >actual &&
 	test_cmp expect actual
 '
 
 test_expect_success 'ls-remote --sort="-refname" --tags self' '
-	cat >expect <<-EOF &&
-	$(git rev-parse mark1.2)	refs/tags/mark1.2
-	$(git rev-parse mark1.10)	refs/tags/mark1.10
-	$(git rev-parse mark1.1)	refs/tags/mark1.1
-	$(git rev-parse mark)	refs/tags/mark
-	EOF
+	generate_references \
+		refs/tags/mark1.2 \
+		refs/tags/mark1.10 \
+		refs/tags/mark1.1 \
+		refs/tags/mark >expect &&
 	git ls-remote --sort="-refname" --tags self >actual &&
 	test_cmp expect actual
 '
@@ -92,7 +97,7 @@ test_expect_success 'use "origin" when no remote specified' '
 
 test_expect_success 'suppress "From <url>" with -q' '
 	git ls-remote -q 2>actual_err &&
-	test_must_fail test_cmp exp_err actual_err
+	! test_cmp exp_err actual_err
 '
 
 test_expect_success 'use branch.<name>.remote if possible' '
@@ -180,8 +185,8 @@ do
 		test_config $configsection.hiderefs refs/tags &&
 		git ls-remote . >actual &&
 		test_unconfig $configsection.hiderefs &&
-		git ls-remote . |
-		sed -e "/	refs\/tags\//d" >expect &&
+		git ls-remote . >expect.raw &&
+		sed -e "/	refs\/tags\//d" expect.raw >expect &&
 		test_cmp expect actual
 	'
 
@@ -212,62 +217,64 @@ test_expect_success 'protocol v2 supports hiderefs' '
 
 test_expect_success 'ls-remote --symref' '
 	git fetch origin &&
-	cat >expect <<-EOF &&
-	ref: refs/heads/master	HEAD
-	$(git rev-parse HEAD)	HEAD
-	$(git rev-parse refs/heads/master)	refs/heads/master
-	$(git rev-parse HEAD)	refs/remotes/origin/HEAD
-	$(git rev-parse refs/remotes/origin/master)	refs/remotes/origin/master
-	$(git rev-parse refs/tags/mark)	refs/tags/mark
-	$(git rev-parse refs/tags/mark1.1)	refs/tags/mark1.1
-	$(git rev-parse refs/tags/mark1.10)	refs/tags/mark1.10
-	$(git rev-parse refs/tags/mark1.2)	refs/tags/mark1.2
-	EOF
+	echo "ref: refs/heads/master	HEAD" >expect &&
+	generate_references \
+		HEAD \
+		refs/heads/master >>expect &&
+	oid=$(git rev-parse HEAD) &&
+	echo "$oid	refs/remotes/origin/HEAD" >>expect &&
+	generate_references \
+		refs/remotes/origin/master \
+		refs/tags/mark \
+		refs/tags/mark1.1 \
+		refs/tags/mark1.10 \
+		refs/tags/mark1.2 >>expect &&
 	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
 	# protocol v0 here.
-	GIT_TEST_PROTOCOL_VERSION= git ls-remote --symref >actual &&
+	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref >actual &&
 	test_cmp expect actual
 '
 
 test_expect_success 'ls-remote with filtered symref (refname)' '
-	cat >expect <<-\EOF &&
+	rev=$(git rev-parse HEAD) &&
+	cat >expect <<-EOF &&
 	ref: refs/heads/master	HEAD
-	1bd44cb9d13204b0fe1958db0082f5028a16eb3a	HEAD
+	$rev	HEAD
 	EOF
 	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
 	# protocol v0 here.
-	GIT_TEST_PROTOCOL_VERSION= git ls-remote --symref . HEAD >actual &&
+	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref . HEAD >actual &&
 	test_cmp expect actual
 '
 
 test_expect_failure 'ls-remote with filtered symref (--heads)' '
 	git symbolic-ref refs/heads/foo refs/tags/mark &&
-	cat >expect <<-\EOF &&
+	cat >expect <<-EOF &&
 	ref: refs/tags/mark	refs/heads/foo
-	1bd44cb9d13204b0fe1958db0082f5028a16eb3a	refs/heads/foo
-	1bd44cb9d13204b0fe1958db0082f5028a16eb3a	refs/heads/master
+	$rev	refs/heads/foo
+	$rev	refs/heads/master
 	EOF
 	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
 	# protocol v0 here.
-	GIT_TEST_PROTOCOL_VERSION= git ls-remote --symref --heads . >actual &&
+	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref --heads . >actual &&
 	test_cmp expect actual
 '
 
 test_expect_success 'ls-remote --symref omits filtered-out matches' '
-	cat >expect <<-\EOF &&
-	1bd44cb9d13204b0fe1958db0082f5028a16eb3a	refs/heads/foo
-	1bd44cb9d13204b0fe1958db0082f5028a16eb3a	refs/heads/master
+	cat >expect <<-EOF &&
+	$rev	refs/heads/foo
+	$rev	refs/heads/master
 	EOF
 	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
 	# protocol v0 here.
-	GIT_TEST_PROTOCOL_VERSION= git ls-remote --symref --heads . >actual &&
+	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref --heads . >actual &&
 	test_cmp expect actual &&
-	GIT_TEST_PROTOCOL_VERSION= git ls-remote --symref . "refs/heads/*" >actual &&
+	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref . "refs/heads/*" >actual &&
 	test_cmp expect actual
 '
 
 test_lazy_prereq GIT_DAEMON '
-	git env--helper --type=bool --default=true --exit-code GIT_TEST_GIT_DAEMON
+	test_bool_env GIT_TEST_GIT_DAEMON true
 '
 
 # This test spawns a daemon, so run it only if the user would be OK with

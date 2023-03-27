@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-filter-branch
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-FILTER\-BRANCH" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-FILTER\-BRANCH" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -536,7 +536,15 @@ The performance of git\-filter\-branch is glacially slow; its design makes it im
 .sp -1
 .IP \(bu 2.3
 .\}
-In editing files, git\-filter\-branch by design checks out each and every commit as it existed in the original repo\&. If your repo has 10^5 files and 10^5 commits, but each commit only modifies 5 files, then git\-filter\-branch will make you do 10^10 modifications, despite only having (at most) 5*10^5 unique blobs\&.
+In editing files, git\-filter\-branch by design checks out each and every commit as it existed in the original repo\&. If your repo has
+\fB10^5\fR
+files and
+\fB10^5\fR
+commits, but each commit only modifies five files, then git\-filter\-branch will make you do
+\fB10^10\fR
+modifications, despite only having (at most)
+\fB5*10^5\fR
+unique blobs\&.
 .RE
 .sp
 .RS 4
@@ -629,7 +637,7 @@ argument could no longer be executed once at the beginning of the program but wo
 .RE
 .RE
 .sp
-The \m[blue]\fBgit filter\-repo\fR\m[]\&\s-2\u[1]\d\s+2 tool is an alternative to git\-filter\-branch which does not suffer from these performance problems or the safety problems (mentioned below)\&. For those with existing tooling which relies upon git\-filter\-branch, \fIgit repo\-filter\fR also provides \m[blue]\fBfilter\-lamely\fR\m[]\&\s-2\u[2]\d\s+2, a drop\-in git\-filter\-branch replacement (with a few caveats)\&. While filter\-lamely suffers from all the same safety issues as git\-filter\-branch, it at least ameloriates the performance issues a little\&.
+The \m[blue]\fBgit filter\-repo\fR\m[]\&\s-2\u[1]\d\s+2 tool is an alternative to git\-filter\-branch which does not suffer from these performance problems or the safety problems (mentioned below)\&. For those with existing tooling which relies upon git\-filter\-branch, \fIgit filter\-repo\fR also provides \m[blue]\fBfilter\-lamely\fR\m[]\&\s-2\u[2]\d\s+2, a drop\-in git\-filter\-branch replacement (with a few caveats)\&. While filter\-lamely suffers from all the same safety issues as git\-filter\-branch, it at least ameliorates the performance issues a little\&.
 .SH "SAFETY"
 .sp
 git\-filter\-branch is riddled with gotchas resulting in various ways to easily corrupt repos or end up with a mess worse than what you started with:
@@ -831,7 +839,7 @@ If \-\-prune\-empty is specified, then intentionally placed empty commits from b
 .sp -1
 .IP \(bu 2.3
 .\}
-If \-\-prune empty is specified, sometimes empty commits are missed and left around anyway (a somewhat rare bug, but it happens\&...)
+If \-\-prune\-empty is specified, sometimes empty commits are missed and left around anyway (a somewhat rare bug, but it happens\&...)
 .RE
 .sp
 .RS 4

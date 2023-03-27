@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-format-patch
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-FORMAT\-PATCH" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-FORMAT\-PATCH" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -42,13 +42,16 @@ git-format-patch \- Prepare patches for e\-mail submission
                    [\-\-start\-number <n>] [\-\-numbered\-files]
                    [\-\-in\-reply\-to=<message id>] [\-\-suffix=\&.<sfx>]
                    [\-\-ignore\-if\-in\-upstream]
+                   [\-\-cover\-from\-description=<mode>]
                    [\-\-rfc] [\-\-subject\-prefix=<subject prefix>]
                    [(\-\-reroll\-count|\-v) <n>]
                    [\-\-to=<email>] [\-\-cc=<email>]
                    [\-\-[no\-]cover\-letter] [\-\-quiet]
+                   [\-\-[no\-]encode\-email\-headers]
                    [\-\-no\-notes | \-\-notes[=<ref>]]
                    [\-\-interdiff=<previous>]
                    [\-\-range\-diff=<previous> [\-\-creation\-factor=<percent>]]
+                   [\-\-filename\-max\-length=<n>]
                    [\-\-progress]
                    [<common diff options>]
                    [ <since> | <revision range> ]
@@ -103,8 +106,7 @@ Generate plain patches without any diffstats\&.
 .PP
 \-U<n>, \-\-unified=<n>
 .RS 4
-Generate diffs with <n> lines of context instead of the usual three\&. Implies
-\fB\-\-patch\fR\&.
+Generate diffs with <n> lines of context instead of the usual three\&.
 .RE
 .PP
 \-\-output=<file>
@@ -314,15 +316,19 @@ Instead of the first handful of characters, show the full pre\- and post\-image 
 .RS 4
 In addition to
 \fB\-\-full\-index\fR, output a binary diff that can be applied with
-\fBgit\-apply\fR\&. Implies
-\fB\-\-patch\fR\&.
+\fBgit\-apply\fR\&.
 .RE
 .PP
 \-\-abbrev[=<n>]
 .RS 4
-Instead of showing the full 40\-byte hexadecimal object name in diff\-raw format output and diff\-tree header lines, show only a partial prefix\&. This is independent of the
+Instead of showing the full 40\-byte hexadecimal object name in diff\-raw format output and diff\-tree header lines, show the shortest prefix that is at least
+\fI<n>\fR
+hexdigits long that uniquely refers the object\&. In diff\-patch output format,
 \fB\-\-full\-index\fR
-option above, which controls the diff\-patch output format\&. Non default number of digits can be specified with
+takes higher precedence, i\&.e\&. if
+\fB\-\-full\-index\fR
+is specified, full blob names will be shown regardless of
+\fB\-\-abbrev\fR\&. Non default number of digits can be specified with
 \fB\-\-abbrev=<n>\fR\&.
 .RE
 .PP
@@ -449,6 +455,16 @@ Each other line contains a single pattern\&.
 Patterns have the same syntax and semantics as patterns used for fnmatch(3) without the FNM_PATHNAME flag, except a pathname also matches a pattern if removing any number of the final pathname components matches the pattern\&. For example, the pattern "\fBfoo*bar\fR" matches "\fBfooasdfbar\fR" and "\fBfoo/bar/baz/asdf\fR" but not "\fBfoobarx\fR"\&.
 .RE
 .PP
+\-\-relative[=<path>], \-\-no\-relative
+.RS 4
+When run from a subdirectory of the project, it can be told to exclude changes outside the directory and show pathnames relative to it with this option\&. When you are not in a subdirectory (e\&.g\&. in a bare repository), you can name which subdirectory to make the output relative to by giving a <path> as an argument\&.
+\fB\-\-no\-relative\fR
+can be used to countermand both
+\fBdiff\&.relative\fR
+config option and previous
+\fB\-\-relative\fR\&.
+.RE
+.PP
 \-a, \-\-text
 .RS 4
 Treat all files as text\&.
@@ -479,6 +495,11 @@ Ignore whitespace when comparing lines\&. This ignores differences even if one l
 Ignore changes whose lines are all blank\&.
 .RE
 .PP
+\-I<regex>, \-\-ignore\-matching\-lines=<regex>
+.RS 4
+Ignore changes whose all lines match <regex>\&. This option may be specified more than once\&.
+.RE
+.PP
 \-\-inter\-hunk\-context=<lines>
 .RS 4
 Show the context between diff hunks, up to the specified number of lines, thereby fusing hunks that are close to each other\&. Defaults to
@@ -488,7 +509,12 @@ or 0 if the config option is unset\&.
 .PP
 \-W, \-\-function\-context
 .RS 4
-Show whole surrounding functions of changes\&.
+Show whole function as context lines for each change\&. The function names are determined in the same way as
+\fBgit diff\fR
+works out patch hunk headers (see
+\fIDefining a custom hunk\-header\fR
+in
+\fBgitattributes\fR(5))\&.
 .RE
 .PP
 \-\-ext\-diff
@@ -597,9 +623,9 @@ from the first line of the commit log message\&.
 .PP
 \-s, \-\-signoff
 .RS 4
-Add
-\fBSigned\-off\-by:\fR
-line to the commit message, using the committer identity of yourself\&. See the signoff option in
+Add a
+\fBSigned\-off\-by\fR
+trailer to the commit message, using the committer identity of yourself\&. See the signoff option in
 \fBgit-commit\fR(1)
 for more information\&.
 .RE
@@ -675,6 +701,36 @@ Make the first mail (or all the mails with
 Do not include a patch that matches a commit in <until>\&.\&.<since>\&. This will examine all patches reachable from <since> but not from <until> and compare them with the patches being generated, and any patch that matches is ignored\&.
 .RE
 .PP
+\-\-cover\-from\-description=<mode>
+.RS 4
+Controls which parts of the cover letter will be automatically populated using the branch\(cqs description\&.
+.sp
+If
+\fB<mode>\fR
+is
+\fBmessage\fR
+or
+\fBdefault\fR, the cover letter subject will be populated with placeholder text\&. The body of the cover letter will be populated with the branch\(cqs description\&. This is the default mode when no configuration nor command line option is specified\&.
+.sp
+If
+\fB<mode>\fR
+is
+\fBsubject\fR, the first paragraph of the branch description will populate the cover letter subject\&. The remainder of the description will populate the body of the cover letter\&.
+.sp
+If
+\fB<mode>\fR
+is
+\fBauto\fR, if the first paragraph of the branch description is greater than 100 bytes, then the mode will be
+\fBmessage\fR, otherwise
+\fBsubject\fR
+will be used\&.
+.sp
+If
+\fB<mode>\fR
+is
+\fBnone\fR, both the cover letter subject and body will be populated with placeholder text\&.
+.RE
+.PP
 \-\-subject\-prefix=<subject prefix>
 .RS 4
 Instead of the standard
@@ -683,6 +739,15 @@ prefix in the subject line, instead use
 \fI[<subject prefix>]\fR\&. This allows for useful naming of a patch series, and can be combined with the
 \fB\-\-numbered\fR
 option\&.
+.RE
+.PP
+\-\-filename\-max\-length=<n>
+.RS 4
+Instead of the standard 64 bytes, chomp the generated output filenames at around
+\fI<n>\fR
+bytes (too short a value will be silently raised to a reasonable length)\&. Defaults to the value of the
+\fBformat\&.filenameMaxLength\fR
+configuration variable, or 64 if unconfigured\&.
 .RE
 .PP
 \-\-rfc
@@ -761,6 +826,13 @@ discards
 \-\-[no\-]cover\-letter
 .RS 4
 In addition to the patches, generate a cover letter file containing the branch description, shortlog and the overall diffstat\&. You can fill in a description in the file before sending it out\&.
+.RE
+.PP
+\-\-encode\-email\-headers, \-\-no\-encode\-email\-headers
+.RS 4
+Encode email headers that have non\-ASCII characters with "Q\-encoding" (described in RFC 2047), instead of outputting the headers verbatim\&. Defaults to the value of the
+\fBformat\&.encodeEmailHeaders\fR
+configuration variable\&.
 .RE
 .PP
 \-\-interdiff=<previous>
@@ -853,9 +925,13 @@ Do not output contents of changes in binary files, instead display a notice that
 Output an all\-zero hash in each patch\(cqs From header instead of the hash of the commit\&.
 .RE
 .PP
-\-\-base=<commit>
+\-\-[no\-]base[=<commit>]
 .RS 4
-Record the base tree information to identify the state the patch series applies to\&. See the BASE TREE INFORMATION section below for details\&. If <commit> is "auto", a base commit is automatically chosen\&.
+Record the base tree information to identify the state the patch series applies to\&. See the BASE TREE INFORMATION section below for details\&. If <commit> is "auto", a base commit is automatically chosen\&. The
+\fB\-\-no\-base\fR
+option overrides a
+\fBformat\&.useAutoBase\fR
+configuration\&.
 .RE
 .PP
 \-\-root
@@ -886,6 +962,7 @@ You can specify extra mail header lines to be added to each message, defaults fo
         signOff = true
         outputDirectory = <directory>
         coverLetter = auto
+        coverFromDescription = auto
 .fi
 .if n \{\
 .RE

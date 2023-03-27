@@ -54,7 +54,6 @@ check_dont_have () {
 }
 
 test_expect_success setup '
-	test_oid_init &&
 	mkdir -p A/B &&
 	echo rat >C &&
 	echo ox >A/D &&
@@ -195,7 +194,7 @@ test_expect_success 'delete' '
 
 	git reflog delete master@{1} &&
 	git reflog show master > output &&
-	test $(($master_entry_count - 1)) = $(wc -l < output) &&
+	test_line_count = $(($master_entry_count - 1)) output &&
 	test $HEAD_entry_count = $(git reflog | wc -l) &&
 	! grep ox < output &&
 
@@ -209,7 +208,7 @@ test_expect_success 'delete' '
 
 	git reflog delete master@{07.04.2005.15:15:00.-0700} &&
 	git reflog show master > output &&
-	test $(($master_entry_count - 1)) = $(wc -l < output) &&
+	test_line_count = $(($master_entry_count - 1)) output &&
 	! grep dragon < output
 
 '

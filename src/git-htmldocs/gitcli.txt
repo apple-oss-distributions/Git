@@ -126,6 +126,11 @@ usage: git describe [<options>] <commit-ish>*
     --long                always use long format
     --abbrev[=<n>]        use <n> digits to display SHA-1s
 ---------------------------------------------
++
+Note that some subcommand (e.g. `git grep`) may behave differently
+when there are things on the command line other than `-h`, but `git
+subcmd -h` without anything else on the command line is meant to
+consistently give the usage.
 
 --help-all::
 	Some Git commands take options that are only used for plumbing or that
@@ -211,8 +216,8 @@ only affects the files in the working tree, but with
 entries, and with `--cached`, it modifies only the index
 entries.
 
-See also http://marc.info/?l=git&m=116563135620359 and
-http://marc.info/?l=git&m=119150393620273 for further
+See also https://lore.kernel.org/git/7v64clg5u9.fsf@assigned-by-dhcp.cox.net/ and
+https://lore.kernel.org/git/7vy7ej9g38.fsf@gitster.siamese.dyndns.org/ for further
 information.
 
 Some other commands that also work on files in the working tree and/or

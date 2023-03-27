@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-diff-tree
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-DIFF\-TREE" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-DIFF\-TREE" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,7 +33,7 @@ git-diff-tree \- Compares the content and mode of blobs found via two tree objec
 .sp
 .nf
 \fIgit diff\-tree\fR [\-\-stdin] [\-m] [\-s] [\-v] [\-\-no\-commit\-id] [\-\-pretty]
-              [\-t] [\-r] [\-c | \-\-cc] [\-\-combined\-all\-paths] [\-\-root]
+              [\-t] [\-r] [\-c | \-\-cc] [\-\-combined\-all\-paths] [\-\-root] [\-\-merge\-base]
               [<common diff options>] <tree\-ish> [<tree\-ish>] [<path>\&...]
 .fi
 .sp
@@ -62,8 +62,7 @@ that show the patch by default, or to cancel the effect of
 \-U<n>, \-\-unified=<n>
 .RS 4
 Generate diffs with <n> lines of context instead of the usual three\&. Implies
-\fB\-\-patch\fR\&. Implies
-\fB\-p\fR\&.
+\fB\-\-patch\fR\&.
 .RE
 .PP
 \-\-output=<file>
@@ -562,9 +561,14 @@ In addition to
 .PP
 \-\-abbrev[=<n>]
 .RS 4
-Instead of showing the full 40\-byte hexadecimal object name in diff\-raw format output and diff\-tree header lines, show only a partial prefix\&. This is independent of the
+Instead of showing the full 40\-byte hexadecimal object name in diff\-raw format output and diff\-tree header lines, show the shortest prefix that is at least
+\fI<n>\fR
+hexdigits long that uniquely refers the object\&. In diff\-patch output format,
 \fB\-\-full\-index\fR
-option above, which controls the diff\-patch output format\&. Non default number of digits can be specified with
+takes higher precedence, i\&.e\&. if
+\fB\-\-full\-index\fR
+is specified, full blob names will be shown regardless of
+\fB\-\-abbrev\fR\&. Non default number of digits can be specified with
 \fB\-\-abbrev=<n>\fR\&.
 .RE
 .PP
@@ -678,18 +682,18 @@ and
 .RS 4
 .\}
 .nf
-+    return !regexec(regexp, two\->ptr, 1, &regmatch, 0);
++    return frotz(nitfol, two\->ptr, 1, 0);
 \&.\&.\&.
-\-    hit = !regexec(regexp, mf2\&.ptr, 1, &regmatch, 0);
+\-    hit = frotz(nitfol, mf2\&.ptr, 1, 0);
 .fi
 .if n \{\
 .RE
 .\}
 .sp
 While
-\fBgit log \-G"regexec\e(regexp"\fR
+\fBgit log \-G"frotz\e(nitfol"\fR
 will show this commit,
-\fBgit log \-S"regexec\e(regexp" \-\-pickaxe\-regex\fR
+\fBgit log \-S"frotz\e(nitfol" \-\-pickaxe\-regex\fR
 will not (because the number of occurrences of that string did not change)\&.
 .sp
 Unless
@@ -785,9 +789,14 @@ Patterns have the same syntax and semantics as patterns used for fnmatch(3) with
 Swap two inputs; that is, show differences from index or on\-disk file to tree contents\&.
 .RE
 .PP
-\-\-relative[=<path>]
+\-\-relative[=<path>], \-\-no\-relative
 .RS 4
 When run from a subdirectory of the project, it can be told to exclude changes outside the directory and show pathnames relative to it with this option\&. When you are not in a subdirectory (e\&.g\&. in a bare repository), you can name which subdirectory to make the output relative to by giving a <path> as an argument\&.
+\fB\-\-no\-relative\fR
+can be used to countermand both
+\fBdiff\&.relative\fR
+config option and previous
+\fB\-\-relative\fR\&.
 .RE
 .PP
 \-a, \-\-text
@@ -820,6 +829,11 @@ Ignore whitespace when comparing lines\&. This ignores differences even if one l
 Ignore changes whose lines are all blank\&.
 .RE
 .PP
+\-I<regex>, \-\-ignore\-matching\-lines=<regex>
+.RS 4
+Ignore changes whose all lines match <regex>\&. This option may be specified more than once\&.
+.RE
+.PP
 \-\-inter\-hunk\-context=<lines>
 .RS 4
 Show the context between diff hunks, up to the specified number of lines, thereby fusing hunks that are close to each other\&. Defaults to
@@ -829,7 +843,12 @@ or 0 if the config option is unset\&.
 .PP
 \-W, \-\-function\-context
 .RS 4
-Show whole surrounding functions of changes\&.
+Show whole function as context lines for each change\&. The function names are determined in the same way as
+\fBgit diff\fR
+works out patch hunk headers (see
+\fIDefining a custom hunk\-header\fR
+in
+\fBgitattributes\fR(5))\&.
 .RE
 .PP
 \-\-exit\-code
@@ -933,6 +952,11 @@ When
 is specified the initial commit will be shown as a big creation event\&. This is equivalent to a diff against the NULL tree\&.
 .RE
 .PP
+\-\-merge\-base
+.RS 4
+Instead of comparing the <tree\-ish>s directly, use the merge base between the two <tree\-ish>s as the "before" side\&. There must be two <tree\-ish>s given and they must both be commits\&.
+.RE
+.PP
 \-\-stdin
 .RS 4
 When
@@ -982,6 +1006,7 @@ can be one of
 \fImedium\fR,
 \fIfull\fR,
 \fIfuller\fR,
+\fIreference\fR,
 \fIemail\fR,
 \fIraw\fR,
 \fIformat:<string>\fR
@@ -1005,7 +1030,7 @@ Note: you can specify the default pretty format in the repository configuration 
 .PP
 \-\-abbrev\-commit
 .RS 4
-Instead of showing the full 40\-byte hexadecimal commit object name, show only a partial prefix\&. Non default number of digits can be specified with "\-\-abbrev=<n>" (which also modifies diff output, if it is displayed)\&.
+Instead of showing the full 40\-byte hexadecimal commit object name, show a prefix that names the object uniquely\&. "\-\-abbrev=<n>" (which also modifies diff output, if it is displayed) option can be used to specify the minimum length of the prefix\&.
 .sp
 This should make "\-\-pretty=oneline" a whole lot more readable for people using 80\-column terminals\&.
 .RE
@@ -1013,8 +1038,7 @@ This should make "\-\-pretty=oneline" a whole lot more readable for people using
 \-\-no\-abbrev\-commit
 .RS 4
 Show the full 40\-byte hexadecimal commit object name\&. This negates
-\fB\-\-abbrev\-commit\fR
-and those options which imply it such as "\-\-oneline"\&. It also overrides the
+\fB\-\-abbrev\-commit\fR, either explicit or implied by other options such as "\-\-oneline"\&. It also overrides the
 \fBlog\&.abbrevCommit\fR
 variable\&.
 .RE
@@ -1049,7 +1073,7 @@ By default, tabs are expanded in pretty formats that indent the log message by 4
 \fIfuller\fR)\&.
 .RE
 .PP
-\-\-notes[=<treeish>]
+\-\-notes[=<ref>]
 .RS 4
 Show the notes (see
 \fBgit-notes\fR(1)) that annotate the commit, when showing the commit log message\&. This is the default for
@@ -1072,8 +1096,8 @@ variables (or corresponding environment overrides)\&. See
 for more details\&.
 .sp
 With an optional
-\fI<treeish>\fR
-argument, use the treeish to find the notes to display\&. The treeish can specify the full refname when it begins with
+\fI<ref>\fR
+argument, use the ref to find the notes to display\&. The ref can specify the full refname when it begins with
 \fBrefs/notes/\fR; when it begins with
 \fBnotes/\fR,
 \fBrefs/\fR
@@ -1091,7 +1115,7 @@ Do not show notes\&. This negates the above
 option, by resetting the list of notes refs from which notes are shown\&. Options are parsed in the order given on the command line, so e\&.g\&. "\-\-notes \-\-notes=foo \-\-no\-notes \-\-notes=bar" will only show notes from "refs/notes/bar"\&.
 .RE
 .PP
-\-\-show\-notes[=<treeish>], \-\-[no\-]standard\-notes
+\-\-show\-notes[=<ref>], \-\-[no\-]standard\-notes
 .RS 4
 These options are deprecated\&. Use the above \-\-notes/\-\-no\-notes options instead\&.
 .RE
@@ -1139,7 +1163,7 @@ Show the commit itself and the commit log message even if the diff itself is emp
 .RE
 .SH "PRETTY FORMATS"
 .sp
-If the commit is a merge, and if the pretty\-format is not \fIoneline\fR, \fIemail\fR or \fIraw\fR, an additional line is inserted before the \fIAuthor:\fR line\&. This line begins with "Merge: " and the sha1s of ancestral commits are printed, separated by spaces\&. Note that the listed commits may not necessarily be the list of the \fBdirect\fR parent commits if you have limited your view of history: for example, if you are only interested in changes related to a certain directory or file\&.
+If the commit is a merge, and if the pretty\-format is not \fIoneline\fR, \fIemail\fR or \fIraw\fR, an additional line is inserted before the \fIAuthor:\fR line\&. This line begins with "Merge: " and the hashes of ancestral commits are printed, separated by spaces\&. Note that the listed commits may not necessarily be the list of the \fBdirect\fR parent commits if you have limited your view of history: for example, if you are only interested in changes related to a certain directory or file\&.
 .sp
 There are several built\-in formats, and you can define additional formats by setting a pretty\&.<name> config option to either another format name, or a \fIformat:\fR string, as described below (see \fBgit-config\fR(1))\&. Here are the details of the built\-in formats:
 .sp
@@ -1157,7 +1181,7 @@ There are several built\-in formats, and you can define additional formats by se
 .RS 4
 .\}
 .nf
-<sha1> <title line>
+<hash> <title line>
 .fi
 .if n \{\
 .RE
@@ -1180,7 +1204,7 @@ This is designed to be as compact as possible\&.
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author: <author>
 .fi
 .if n \{\
@@ -1212,7 +1236,7 @@ Author: <author>
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author: <author>
 Date:   <author date>
 .fi
@@ -1255,7 +1279,7 @@ Date:   <author date>
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author: <author>
 Commit: <committer>
 .fi
@@ -1298,7 +1322,7 @@ Commit: <committer>
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author:     <author>
 AuthorDate: <author date>
 Commit:     <committer>
@@ -1337,13 +1361,46 @@ CommitDate: <committer date>
 .sp -1
 .IP \(bu 2.3
 .\}
+\fIreference\fR
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+<abbrev hash> (<title line>, <short author date>)
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+This format is used to refer to another commit in a commit message and is the same as
+\fB\-\-pretty=\(aqformat:%C(auto)%h (%s, %ad)\(aq\fR\&. By default, the date is formatted with
+\fB\-\-date=short\fR
+unless another
+\fB\-\-date\fR
+option is explicitly specified\&. As with any
+\fBformat:\fR
+with format placeholders, its output is not affected by other options like
+\fB\-\-decorate\fR
+and
+\fB\-\-walk\-reflogs\fR\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fIemail\fR
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-From <sha1> <date>
+From <hash> <date>
 From: <author>
 Date: <author date>
 Subject: [PATCH] <title line>
@@ -1371,11 +1428,25 @@ Subject: [PATCH] <title line>
 .sp -1
 .IP \(bu 2.3
 .\}
+\fImboxrd\fR
+.sp
+Like
+\fIemail\fR, but lines in the commit message starting with "From " (preceded by zero or more ">") are quoted with ">" so they aren\(cqt confused as starting a new commit\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fIraw\fR
 .sp
 The
 \fIraw\fR
-format shows the entire commit exactly as stored in the commit object\&. Notably, the SHA\-1s are displayed in full, regardless of whether \-\-abbrev or \-\-no\-abbrev are used, and
+format shows the entire commit exactly as stored in the commit object\&. Notably, the hashes are displayed in full, regardless of whether \-\-abbrev or \-\-no\-abbrev are used, and
 \fIparents\fR
 information show the true parent commits, without taking grafts or history simplification into account\&. Note that this format affects the way commits are displayed, but not the way the diff is shown e\&.g\&. with
 \fBgit log \-\-raw\fR\&. To get full object names in a raw diff format, use
@@ -1606,6 +1677,22 @@ or
 \fBgit-blame\fR(1))
 .RE
 .PP
+\fI%al\fR
+.RS 4
+author email local\-part (the part before the
+\fI@\fR
+sign)
+.RE
+.PP
+\fI%aL\fR
+.RS 4
+author local\-part (see
+\fI%al\fR) respecting \&.mailmap, see
+\fBgit-shortlog\fR(1)
+or
+\fBgit-blame\fR(1))
+.RE
+.PP
 \fI%ad\fR
 .RS 4
 author date (format respects \-\-date= option)
@@ -1636,6 +1723,11 @@ author date, ISO 8601\-like format
 author date, strict ISO 8601 format
 .RE
 .PP
+\fI%as\fR
+.RS 4
+author date, short format (\fBYYYY\-MM\-DD\fR)
+.RE
+.PP
 \fI%cn\fR
 .RS 4
 committer name
@@ -1657,6 +1749,22 @@ committer email
 \fI%cE\fR
 .RS 4
 committer email (respecting \&.mailmap, see
+\fBgit-shortlog\fR(1)
+or
+\fBgit-blame\fR(1))
+.RE
+.PP
+\fI%cl\fR
+.RS 4
+committer email local\-part (the part before the
+\fI@\fR
+sign)
+.RE
+.PP
+\fI%cL\fR
+.RS 4
+committer local\-part (see
+\fI%cl\fR) respecting \&.mailmap, see
 \fBgit-shortlog\fR(1)
 or
 \fBgit-blame\fR(1))
@@ -1690,6 +1798,11 @@ committer date, ISO 8601\-like format
 \fI%cI\fR
 .RS 4
 committer date, strict ISO 8601 format
+.RE
+.PP
+\fI%cs\fR
+.RS 4
+committer date, short format (\fBYYYY\-MM\-DD\fR)
 .RE
 .PP
 \fI%d\fR
@@ -1770,6 +1883,11 @@ show the fingerprint of the key used to sign a signed commit
 show the fingerprint of the primary key whose subkey was used to sign a signed commit
 .RE
 .PP
+\fI%GT\fR
+.RS 4
+show the trust level for the key used to sign a signed commit
+.RE
+.PP
 \fI%gD\fR
 .RS 4
 reflog selector, e\&.g\&.,
@@ -1830,7 +1948,16 @@ reflog subject
 display the trailers of the body as interpreted by
 \fBgit-interpret-trailers\fR(1)\&. The
 \fBtrailers\fR
-string may be followed by a colon and zero or more comma\-separated options:
+string may be followed by a colon and zero or more comma\-separated options\&. If any option is provided multiple times the last occurance wins\&.
+.sp
+The boolean options accept an optional value
+\fB[=<BOOL>]\fR\&. The values
+\fBtrue\fR,
+\fBfalse\fR,
+\fBon\fR,
+\fBoff\fR
+etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in
+\fBgit-config\fR(1)\&. If a boolean option is given with no value, it\(cqs enabled\&.
 .sp
 .RS 4
 .ie n \{\
@@ -1857,17 +1984,7 @@ shows trailer lines with key
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIonly[=val]\fR: select whether non\-trailer lines from the trailer block should be included\&. The
-\fBonly\fR
-keyword may optionally be followed by an equal sign and one of
-\fBtrue\fR,
-\fBon\fR,
-\fByes\fR
-to omit or
-\fBfalse\fR,
-\fBoff\fR,
-\fBno\fR
-to show the non\-trailer lines\&. If option is given without value it is enabled\&. If given multiple times the last value is used\&.
+\fIonly[=<BOOL>]\fR: select whether non\-trailer lines from the trailer block should be included\&.
 .RE
 .sp
 .RS 4
@@ -1880,7 +1997,7 @@ to show the non\-trailer lines\&. If option is given without value it is enabled
 .\}
 \fIseparator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer line is terminated with a line feed character\&. The string SEP may contain the literal formatting codes described above\&. To use comma as separator one must use
 \fB%x2C\fR
-as it would otherwise be parsed as next option\&. If separator option is given multiple times only the last one is used\&. E\&.g\&.,
+as it would otherwise be parsed as next option\&. E\&.g\&.,
 \fB%(trailers:key=Ticket,separator=%x2C )\fR
 shows all trailer lines whose key is "Ticket" separated by a comma and a space\&.
 .RE
@@ -1893,11 +2010,9 @@ shows all trailer lines whose key is "Ticket" separated by a comma and a space\&
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIunfold[=val]\fR: make it behave as if interpret\-trailer\(cqs
+\fIunfold[=<BOOL>]\fR: make it behave as if interpret\-trailer\(cqs
 \fB\-\-unfold\fR
-option was given\&. In same way as to for
-\fBonly\fR
-it can be followed by an equal sign and explicit value\&. E\&.g\&.,
+option was given\&. E\&.g\&.,
 \fB%(trailers:only,unfold=true)\fR
 unfolds and shows all trailer lines\&.
 .RE
@@ -1910,7 +2025,31 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIvalueonly[=val]\fR: skip over the key part of the trailer line and only show the value part\&. Also this optionally allows explicit value\&.
+\fIkeyonly[=<BOOL>]\fR: only show the key part of the trailer\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIvalueonly[=<BOOL>]\fR: only show the value part of the trailer\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIkey_value_separator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer key\-value pair is separated by ": "\&. Otherwise it shares the same semantics as
+\fIseparator=<SEP>\fR
+above\&.
 .RE
 .RE
 .RE
@@ -2410,7 +2549,7 @@ Examples when \fB\-\-combined\-all\-paths\fR added to either \fB\-c\fR or \fB\-\
 Note that \fIcombined diff\fR lists only files which were modified from all parents\&.
 .SH "GENERATING PATCH TEXT WITH \-P"
 .sp
-Running \fBgit-diff\fR(1), \fBgit-log\fR(1), \fBgit-show\fR(1), \fBgit-diff-index\fR(1), \fBgit-diff-tree\fR(1), or \fBgit-diff-files\fR(1) with the \fB\-p\fR option produces patch text\&. You can customize the creation of patch text via the \fBGIT_EXTERNAL_DIFF\fR and the \fBGIT_DIFF_OPTS\fR environment variables\&.
+Running \fBgit-diff\fR(1), \fBgit-log\fR(1), \fBgit-show\fR(1), \fBgit-diff-index\fR(1), \fBgit-diff-tree\fR(1), or \fBgit-diff-files\fR(1) with the \fB\-p\fR option produces patch text\&. You can customize the creation of patch text via the \fBGIT_EXTERNAL_DIFF\fR and the \fBGIT_DIFF_OPTS\fR environment variables (see \fBgit\fR(1))\&.
 .sp
 What the \-p option produces is slightly different from the traditional diff format:
 .sp
@@ -2543,7 +2682,7 @@ rename to a
 .RE
 .SH "COMBINED DIFF FORMAT"
 .sp
-Any diff\-generating command can take the \fB\-c\fR or \fB\-\-cc\fR option to produce a \fIcombined diff\fR when showing a merge\&. This is the default format when showing merges with \fBgit-diff\fR(1) or \fBgit-show\fR(1)\&. Note also that you can give the \fB\-m\fR option to any of these commands to force generation of diffs with individual parents of a merge\&.
+Any diff\-generating command can take the \fB\-c\fR or \fB\-\-cc\fR option to produce a \fIcombined diff\fR when showing a merge\&. This is the default format when showing merges with \fBgit-diff\fR(1) or \fBgit-show\fR(1)\&. Note also that you can give suitable \fB\-\-diff\-merges\fR option to any of these commands to force generation of diffs in specific format\&.
 .sp
 A "combined diff" format looks like this:
 .sp

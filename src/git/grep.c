@@ -14,7 +14,31 @@ static int grep_source_load(struct grep_source *gs);
 static int grep_source_is_binary(struct grep_source *gs,
 				 struct index_state *istate);
 
-static struct grep_opt grep_defaults;
+static void std_output(struct grep_opt *opt, const void *buf, size_t size)
+{
+	fwrite(buf, size, 1, stdout);
+}
+
+static struct grep_opt grep_defaults = {
+	.relative = 1,
+	.pathname = 1,
+	.max_depth = -1,
+	.pattern_type_option = GREP_PATTERN_TYPE_UNSPECIFIED,
+	.colors = {
+		[GREP_COLOR_CONTEXT] = "",
+		[GREP_COLOR_FILENAME] = "",
+		[GREP_COLOR_FUNCTION] = "",
+		[GREP_COLOR_LINENO] = "",
+		[GREP_COLOR_COLUMNNO] = "",
+		[GREP_COLOR_MATCH_CONTEXT] = GIT_COLOR_BOLD_RED,
+		[GREP_COLOR_MATCH_SELECTED] = GIT_COLOR_BOLD_RED,
+		[GREP_COLOR_SELECTED] = "",
+		[GREP_COLOR_SEP] = GIT_COLOR_CYAN,
+	},
+	.only_matching = 0,
+	.color = -1,
+	.output = std_output,
+};
 
 #ifdef USE_LIBPCRE2
 static pcre2_general_context *pcre2_global_context;
@@ -26,7 +50,7 @@ static void *pcre2_malloc(PCRE2_SIZE size, MAYBE_UNUSED void *memory_data)
 
 static void pcre2_free(void *pointer, MAYBE_UNUSED void *memory_data)
 {
-	return free(pointer);
+	free(pointer);
 }
 #endif
 
@@ -41,50 +65,6 @@ static const char *color_grep_slots[] = {
 	[GREP_COLOR_SELECTED]	    = "selected",
 	[GREP_COLOR_SEP]	    = "separator",
 };
-
-static void std_output(struct grep_opt *opt, const void *buf, size_t size)
-{
-	fwrite(buf, size, 1, stdout);
-}
-
-static void color_set(char *dst, const char *color_bytes)
-{
-	xsnprintf(dst, COLOR_MAXLEN, "%s", color_bytes);
-}
-
-/*
- * Initialize the grep_defaults template with hardcoded defaults.
- * We could let the compiler do this, but without C99 initializers
- * the code gets unwieldy and unreadable, so...
- */
-void init_grep_defaults(struct repository *repo)
-{
-	struct grep_opt *opt = &grep_defaults;
-	static int run_once;
-
-	if (run_once)
-		return;
-	run_once++;
-
-	memset(opt, 0, sizeof(*opt));
-	opt->repo = repo;
-	opt->relative = 1;
-	opt->pathname = 1;
-	opt->max_depth = -1;
-	opt->pattern_type_option = GREP_PATTERN_TYPE_UNSPECIFIED;
-	color_set(opt->colors[GREP_COLOR_CONTEXT], "");
-	color_set(opt->colors[GREP_COLOR_FILENAME], "");
-	color_set(opt->colors[GREP_COLOR_FUNCTION], "");
-	color_set(opt->colors[GREP_COLOR_LINENO], "");
-	color_set(opt->colors[GREP_COLOR_COLUMNNO], "");
-	color_set(opt->colors[GREP_COLOR_MATCH_CONTEXT], GIT_COLOR_BOLD_RED);
-	color_set(opt->colors[GREP_COLOR_MATCH_SELECTED], GIT_COLOR_BOLD_RED);
-	color_set(opt->colors[GREP_COLOR_SELECTED], "");
-	color_set(opt->colors[GREP_COLOR_SEP], GIT_COLOR_CYAN);
-	opt->only_matching = 0;
-	opt->color = -1;
-	opt->output = std_output;
-}
 
 static int parse_pattern_type_arg(const char *opt, const char *arg)
 {
@@ -114,6 +94,14 @@ int grep_config(const char *var, const char *value, void *cb)
 
 	if (userdiff_config(var, value) < 0)
 		return -1;
+
+	/*
+	 * The instance of grep_opt that we set up here is copied by
+	 * grep_init() to be used by each individual invocation.
+	 * When populating a new field of this structure here, be
+	 * sure to think about ownership -- e.g., you might need to
+	 * override the shallow copy in grep_init() with a deep copy.
+	 */
 
 	if (!strcmp(var, "grep.extendedregexp")) {
 		opt->extended_regexp_option = git_config_bool(var, value);
@@ -172,9 +160,6 @@ int grep_config(const char *var, const char *value, void *cb)
  */
 void grep_init(struct grep_opt *opt, struct repository *repo, const char *prefix)
 {
-	struct grep_opt *def = &grep_defaults;
-	int i;
-
 #if defined(USE_LIBPCRE2)
 	if (!pcre2_global_context)
 		pcre2_global_context = pcre2_general_context_create(
@@ -186,26 +171,13 @@ void grep_init(struct grep_opt *opt, struct repository *repo, const char *prefix
 	pcre_free = free;
 #endif
 
-	memset(opt, 0, sizeof(*opt));
+	*opt = grep_defaults;
+
 	opt->repo = repo;
 	opt->prefix = prefix;
 	opt->prefix_length = (prefix && *prefix) ? strlen(prefix) : 0;
 	opt->pattern_tail = &opt->pattern_list;
 	opt->header_tail = &opt->header_list;
-
-	opt->only_matching = def->only_matching;
-	opt->color = def->color;
-	opt->extended_regexp_option = def->extended_regexp_option;
-	opt->pattern_type_option = def->pattern_type_option;
-	opt->linenum = def->linenum;
-	opt->columnnum = def->columnnum;
-	opt->max_depth = def->max_depth;
-	opt->pathname = def->pathname;
-	opt->relative = def->relative;
-	opt->output = def->output;
-
-	for (i = 0; i < NR_GREP_COLORS; i++)
-		color_set(opt->colors[i], def->colors[i]);
 }
 
 void grep_destroy(void)
@@ -1540,11 +1512,6 @@ static inline void grep_attr_unlock(void)
 		pthread_mutex_unlock(&grep_attr_mutex);
 }
 
-/*
- * Same as git_attr_mutex, but protecting the thread-unsafe object db access.
- */
-pthread_mutex_t grep_read_mutex;
-
 static int match_funcname(struct grep_opt *opt, struct grep_source *gs, char *bol, char *eol)
 {
 	xdemitconf_t *xecfg = opt->priv;
@@ -1741,13 +1708,20 @@ static int fill_textconv_grep(struct repository *r,
 	}
 
 	/*
-	 * fill_textconv is not remotely thread-safe; it may load objects
-	 * behind the scenes, and it modifies the global diff tempfile
-	 * structure.
+	 * fill_textconv is not remotely thread-safe; it modifies the global
+	 * diff tempfile structure, writes to the_repo's odb and might
+	 * internally call thread-unsafe functions such as the
+	 * prepare_packed_git() lazy-initializator. Because of the last two, we
+	 * must ensure mutual exclusion between this call and the object reading
+	 * API, thus we use obj_read_lock() here.
+	 *
+	 * TODO: allowing text conversion to run in parallel with object
+	 * reading operations might increase performance in the multithreaded
+	 * non-worktreee git-grep with --textconv.
 	 */
-	grep_read_lock();
+	obj_read_lock();
 	size = fill_textconv(r, driver, df, &buf);
-	grep_read_unlock();
+	obj_read_unlock();
 	free_filespec(df);
 
 	/*
@@ -1813,10 +1787,15 @@ static int grep_source_1(struct grep_opt *opt, struct grep_source *gs, int colle
 		grep_source_load_driver(gs, opt->repo->index);
 		/*
 		 * We might set up the shared textconv cache data here, which
-		 * is not thread-safe.
+		 * is not thread-safe. Also, get_oid_with_context() and
+		 * parse_object() might be internally called. As they are not
+		 * currently thread-safe and might be racy with object reading,
+		 * obj_read_lock() must be called.
 		 */
 		grep_attr_lock();
+		obj_read_lock();
 		textconv = userdiff_get_textconv(opt->repo, gs->driver);
+		obj_read_unlock();
 		grep_attr_unlock();
 	}
 
@@ -2116,10 +2095,7 @@ static int grep_source_load_oid(struct grep_source *gs)
 {
 	enum object_type type;
 
-	grep_read_lock();
 	gs->buf = read_object_file(gs->identifier, &type, &gs->size);
-	grep_read_unlock();
-
 	if (!gs->buf)
 		return error(_("'%s': unable to read %s"),
 			     gs->name,

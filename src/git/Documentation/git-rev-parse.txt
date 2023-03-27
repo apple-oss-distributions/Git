@@ -109,6 +109,10 @@ names an existing object that is a commit-ish (i.e. a commit, or an
 annotated tag that points at a commit).  To make sure that `$VAR`
 names an existing object of any type, `git rev-parse "$VAR^{object}"`
 can be used.
++
+Note that if you are verifying a name from an untrusted source, it is
+wise to use `--end-of-options` so that the name argument is not mistaken
+for another option.
 
 -q::
 --quiet::
@@ -262,7 +266,8 @@ print a message to stderr and exit with nonzero status.
 	directory.
 
 --show-toplevel::
-	Show the absolute path of the top-level directory.
+	Show the absolute path of the top-level directory of the working
+	tree. If there is no working tree, report an error.
 
 --show-superproject-working-tree::
 	Show the absolute path of the root of the superproject's
@@ -273,6 +278,13 @@ print a message to stderr and exit with nonzero status.
 --shared-index-path::
 	Show the path to the shared index file in split index mode, or
 	empty if not in split-index mode.
+
+--show-object-format[=(storage|input|output)]::
+	Show the object format (hash algorithm) used for the repository
+	for storage inside the `.git` directory, input, or output. For
+	input, multiple algorithms may be printed, space-separated.
+	If not specified, the default is "storage".
+
 
 Other Options
 ~~~~~~~~~~~~~
@@ -438,7 +450,7 @@ $ git rev-parse --verify HEAD
 * Print the commit object name from the revision in the $REV shell variable:
 +
 ------------
-$ git rev-parse --verify $REV^{commit}
+$ git rev-parse --verify --end-of-options $REV^{commit}
 ------------
 +
 This will error out if $REV is empty or not a valid revision.
@@ -446,7 +458,7 @@ This will error out if $REV is empty or not a valid revision.
 * Similar to above:
 +
 ------------
-$ git rev-parse --default master --verify $REV
+$ git rev-parse --default master --verify --end-of-options $REV
 ------------
 +
 but if $REV is empty, the commit object name from master will be printed.

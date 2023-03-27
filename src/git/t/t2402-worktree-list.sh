@@ -61,6 +61,16 @@ test_expect_success '"list" all worktrees --porcelain' '
 	test_cmp expect actual
 '
 
+test_expect_success '"list" all worktrees with locked annotation' '
+	test_when_finished "rm -rf locked unlocked out && git worktree prune" &&
+	git worktree add --detach locked master &&
+	git worktree add --detach unlocked master &&
+	git worktree lock locked &&
+	git worktree list >out &&
+	grep "/locked  *[0-9a-f].* locked$" out &&
+	! grep "/unlocked  *[0-9a-f].* locked$" out
+'
+
 test_expect_success 'bare repo setup' '
 	git init --bare bare1 &&
 	echo "data" >file1 &&
@@ -149,6 +159,12 @@ test_expect_success 'linked worktrees are sorted' '
 	worktree $(pwd)/sorted/second
 	EOF
 	test_cmp expected sorted/main/actual
+'
+
+test_expect_success 'worktree path when called in .git directory' '
+	git worktree list >list1 &&
+	git -C .git worktree list >list2 &&
+	test_cmp list1 list2
 '
 
 test_done

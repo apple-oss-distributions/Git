@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitcli
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GITCLI" "7" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GITCLI" "7" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -278,6 +278,11 @@ usage: git describe [<options>] <commit\-ish>*
 .RE
 .\}
 .sp
+Note that some subcommand (e\&.g\&.
+\fBgit grep\fR) may behave differently when there are things on the command line other than
+\fB\-h\fR, but
+\fBgit subcmd \-h\fR
+without anything else on the command line is meant to consistently give the usage\&.
 .RE
 .PP
 \-\-help\-all
@@ -368,7 +373,7 @@ option, it also merges changes to the index as well\&.
 .sp
 \fBgit apply\fR command can be used with \fB\-\-cached\fR and \fB\-\-index\fR (but not at the same time)\&. Usually the command only affects the files in the working tree, but with \fB\-\-index\fR, it patches both the files and their index entries, and with \fB\-\-cached\fR, it modifies only the index entries\&.
 .sp
-See also \m[blue]\fBhttp://marc\&.info/?l=git&m=116563135620359\fR\m[] and \m[blue]\fBhttp://marc\&.info/?l=git&m=119150393620273\fR\m[] for further information\&.
+See also \m[blue]\fBhttps://lore\&.kernel\&.org/git/7v64clg5u9\&.fsf@assigned\-by\-dhcp\&.cox\&.net/\fR\m[] and \m[blue]\fBhttps://lore\&.kernel\&.org/git/7vy7ej9g38\&.fsf@gitster\&.siamese\&.dyndns\&.org/\fR\m[] for further information\&.
 .sp
 Some other commands that also work on files in the working tree and/or in the index can take \fB\-\-staged\fR and/or \fB\-\-worktree\fR\&.
 .sp

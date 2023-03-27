@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-format-patch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -759,13 +759,16 @@ git-format-patch(1) Manual Page
                    [--start-number &lt;n&gt;] [--numbered-files]
                    [--in-reply-to=&lt;message id&gt;] [--suffix=.&lt;sfx&gt;]
                    [--ignore-if-in-upstream]
+                   [--cover-from-description=&lt;mode&gt;]
                    [--rfc] [--subject-prefix=&lt;subject prefix&gt;]
                    [(--reroll-count|-v) &lt;n&gt;]
                    [--to=&lt;email&gt;] [--cc=&lt;email&gt;]
                    [--[no-]cover-letter] [--quiet]
+                   [--[no-]encode-email-headers]
                    [--no-notes | --notes[=&lt;ref&gt;]]
                    [--interdiff=&lt;previous&gt;]
                    [--range-diff=&lt;previous&gt; [--creation-factor=&lt;percent&gt;]]
+                   [--filename-max-length=&lt;n&gt;]
                    [--progress]
                    [&lt;common diff options&gt;]
                    [ &lt;since&gt; | &lt;revision range&gt; ]</pre>
@@ -851,7 +854,7 @@ reference.</p></div>
 <dd>
 <p>
         Generate diffs with &lt;n&gt; lines of context instead of
-        the usual three. Implies <code>--patch</code>.
+        the usual three.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1181,7 +1184,7 @@ and accumulating child directory counts in the parent directories:
 <dd>
 <p>
         In addition to <code>--full-index</code>, output a binary diff that
-        can be applied with <code>git-apply</code>. Implies <code>--patch</code>.
+        can be applied with <code>git-apply</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1191,10 +1194,12 @@ and accumulating child directory counts in the parent directories:
 <p>
         Instead of showing the full 40-byte hexadecimal object
         name in diff-raw format output and diff-tree header
-        lines, show only a partial prefix.  This is
-        independent of the <code>--full-index</code> option above, which controls
-        the diff-patch output format.  Non default number of
-        digits can be specified with <code>--abbrev=&lt;n&gt;</code>.
+        lines, show the shortest prefix that is at least <em>&lt;n&gt;</em>
+        hexdigits long that uniquely refers the object.
+        In diff-patch output format, <code>--full-index</code> takes higher
+        precedence, i.e. if <code>--full-index</code> is specified, full blob
+        names will be shown regardless of <code>--abbrev</code>.
+        Non default number of digits can be specified with <code>--abbrev=&lt;n&gt;</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1354,6 +1359,24 @@ components matches the pattern.  For example, the pattern "<code>foo*bar</code>"
 matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<code>foobarx</code>".</p></div>
 </dd>
 <dt class="hdlist1">
+--relative[=&lt;path&gt;]
+</dt>
+<dt class="hdlist1">
+--no-relative
+</dt>
+<dd>
+<p>
+        When run from a subdirectory of the project, it can be
+        told to exclude changes outside the directory and show
+        pathnames relative to it with this option.  When you are
+        not in a subdirectory (e.g. in a bare repository), you
+        can name which subdirectory to make the output relative
+        to by giving a &lt;path&gt; as an argument.
+        <code>--no-relative</code> can be used to countermand both <code>diff.relative</code> config
+        option and previous <code>--relative</code>.
+</p>
+</dd>
+<dt class="hdlist1">
 -a
 </dt>
 <dt class="hdlist1">
@@ -1415,6 +1438,18 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </p>
 </dd>
 <dt class="hdlist1">
+-I&lt;regex&gt;
+</dt>
+<dt class="hdlist1">
+--ignore-matching-lines=&lt;regex&gt;
+</dt>
+<dd>
+<p>
+        Ignore changes whose all lines match &lt;regex&gt;.  This option may
+        be specified more than once.
+</p>
+</dd>
+<dt class="hdlist1">
 --inter-hunk-context=&lt;lines&gt;
 </dt>
 <dd>
@@ -1433,7 +1468,10 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </dt>
 <dd>
 <p>
-        Show whole surrounding functions of changes.
+        Show whole function as context lines for each change.
+        The function names are determined in the same way as
+        <code>git diff</code> works out patch hunk headers (see <em>Defining a
+        custom hunk-header</em> in <a href="gitattributes.html">gitattributes(5)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1618,7 +1656,7 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </dt>
 <dd>
 <p>
-        Add <code>Signed-off-by:</code> line to the commit message, using
+        Add a <code>Signed-off-by</code> trailer to the commit message, using
         the committer identity of yourself.
         See the signoff option in <a href="git-commit.html">git-commit(1)</a> for more information.
 </p>
@@ -1709,6 +1747,27 @@ will want to ensure that threading is disabled for <code>git send-email</code>.<
 </p>
 </dd>
 <dt class="hdlist1">
+--cover-from-description=&lt;mode&gt;
+</dt>
+<dd>
+<p>
+        Controls which parts of the cover letter will be automatically
+        populated using the branch&#8217;s description.
+</p>
+<div class="paragraph"><p>If <code>&lt;mode&gt;</code> is <code>message</code> or <code>default</code>, the cover letter subject will be
+populated with placeholder text. The body of the cover letter will be
+populated with the branch&#8217;s description. This is the default mode when
+no configuration nor command line option is specified.</p></div>
+<div class="paragraph"><p>If <code>&lt;mode&gt;</code> is <code>subject</code>, the first paragraph of the branch description will
+populate the cover letter subject. The remainder of the description will
+populate the body of the cover letter.</p></div>
+<div class="paragraph"><p>If <code>&lt;mode&gt;</code> is <code>auto</code>, if the first paragraph of the branch description
+is greater than 100 bytes, then the mode will be <code>message</code>, otherwise
+<code>subject</code> will be used.</p></div>
+<div class="paragraph"><p>If <code>&lt;mode&gt;</code> is <code>none</code>, both the cover letter subject and body will be
+populated with placeholder text.</p></div>
+</dd>
+<dt class="hdlist1">
 --subject-prefix=&lt;subject prefix&gt;
 </dt>
 <dd>
@@ -1717,6 +1776,18 @@ will want to ensure that threading is disabled for <code>git send-email</code>.<
         line, instead use <em>[&lt;subject prefix&gt;]</em>. This
         allows for useful naming of a patch series, and can be
         combined with the <code>--numbered</code> option.
+</p>
+</dd>
+<dt class="hdlist1">
+--filename-max-length=&lt;n&gt;
+</dt>
+<dd>
+<p>
+        Instead of the standard 64 bytes, chomp the generated output
+        filenames at around <em>&lt;n&gt;</em> bytes (too short a value will be
+        silently raised to a reasonable length).  Defaults to the
+        value of the <code>format.filenameMaxLength</code> configuration
+        variable, or 64 if unconfigured.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1809,6 +1880,20 @@ feeding the result to <code>git send-email</code>.</p></div>
         In addition to the patches, generate a cover letter file
         containing the branch description, shortlog and the overall diffstat.  You can
         fill in a description in the file before sending it out.
+</p>
+</dd>
+<dt class="hdlist1">
+--encode-email-headers
+</dt>
+<dt class="hdlist1">
+--no-encode-email-headers
+</dt>
+<dd>
+<p>
+        Encode email headers that have non-ASCII characters with
+        "Q-encoding" (described in RFC 2047), instead of outputting the
+        headers verbatim. Defaults to the value of the
+        <code>format.encodeEmailHeaders</code> configuration variable.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1942,14 +2027,15 @@ you can use <code>--suffix=-patch</code> to get <code>0001-description-of-my-cha
 </p>
 </dd>
 <dt class="hdlist1">
---base=&lt;commit&gt;
+--[no-]base[=&lt;commit&gt;]
 </dt>
 <dd>
 <p>
         Record the base tree information to identify the state the
         patch series applies to.  See the BASE TREE INFORMATION section
         below for details. If &lt;commit&gt; is "auto", a base commit is
-        automatically chosen.
+        automatically chosen. The <code>--no-base</code> option overrides a
+        <code>format.useAutoBase</code> configuration.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1995,7 +2081,8 @@ with configuration variables.</p></div>
         attach [ = mime-boundary-string ]
         signOff = true
         outputDirectory = &lt;directory&gt;
-        coverLetter = auto</code></pre>
+        coverLetter = auto
+        coverFromDescription = auto</code></pre>
 </div></div>
 </div>
 </div>
@@ -2421,7 +2508,7 @@ Extract three topmost commits from the current branch and format them
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-10-23 14:29:31 JST
+ 2020-11-23 11:57:47 PST
 </div>
 </div>
 </body>

@@ -81,6 +81,11 @@ enum signoff_type {
 	SIGNOFF_EXPLICIT /* --signoff was set on the command-line */
 };
 
+enum show_patch_type {
+	SHOW_PATCH_RAW = 0,
+	SHOW_PATCH_DIFF = 1,
+};
+
 struct am_state {
 	/* state directory path */
 	char *dir;
@@ -111,7 +116,7 @@ struct am_state {
 	int keep; /* enum keep_type */
 	int message_id;
 	int scissors; /* enum scissors_type */
-	struct argv_array git_apply_opts;
+	struct strvec git_apply_opts;
 	const char *resolvemsg;
 	int committer_date_is_author_date;
 	int ignore_date;
@@ -141,7 +146,7 @@ static void am_state_init(struct am_state *state)
 
 	state->scissors = SCISSORS_UNSET;
 
-	argv_array_init(&state->git_apply_opts);
+	strvec_init(&state->git_apply_opts);
 
 	if (!git_config_get_bool("commit.gpgsign", &gpgsign))
 		state->sign_commit = gpgsign ? "" : NULL;
@@ -157,7 +162,7 @@ static void am_state_release(struct am_state *state)
 	free(state->author_email);
 	free(state->author_date);
 	free(state->msg);
-	argv_array_clear(&state->git_apply_opts);
+	strvec_clear(&state->git_apply_opts);
 }
 
 /**
@@ -393,8 +398,8 @@ static void am_load(struct am_state *state)
 		state->scissors = SCISSORS_UNSET;
 
 	read_state_file(&sb, state, "apply-opt", 1);
-	argv_array_clear(&state->git_apply_opts);
-	if (sq_dequote_to_argv_array(sb.buf, &state->git_apply_opts) < 0)
+	strvec_clear(&state->git_apply_opts);
+	if (sq_dequote_to_strvec(sb.buf, &state->git_apply_opts) < 0)
 		die(_("could not parse %s"), am_path(state, "apply-opt"));
 
 	state->rebasing = !!file_exists(am_path(state, "rebasing"));
@@ -447,8 +452,8 @@ static int run_post_rewrite_hook(const struct am_state *state)
 	if (!hook)
 		return 0;
 
-	argv_array_push(&cp.args, hook);
-	argv_array_push(&cp.args, "rebase");
+	strvec_push(&cp.args, hook);
+	strvec_push(&cp.args, "rebase");
 
 	cp.in = xopen(am_path(state, "rewritten"), O_RDONLY);
 	cp.stdout_to_stderr = 1;
@@ -646,16 +651,16 @@ static int split_mail_mbox(struct am_state *state, const char **paths,
 	int ret;
 
 	cp.git_cmd = 1;
-	argv_array_push(&cp.args, "mailsplit");
-	argv_array_pushf(&cp.args, "-d%d", state->prec);
-	argv_array_pushf(&cp.args, "-o%s", state->dir);
-	argv_array_push(&cp.args, "-b");
+	strvec_push(&cp.args, "mailsplit");
+	strvec_pushf(&cp.args, "-d%d", state->prec);
+	strvec_pushf(&cp.args, "-o%s", state->dir);
+	strvec_push(&cp.args, "-b");
 	if (keep_cr)
-		argv_array_push(&cp.args, "--keep-cr");
+		strvec_push(&cp.args, "--keep-cr");
 	if (mboxrd)
-		argv_array_push(&cp.args, "--mboxrd");
-	argv_array_push(&cp.args, "--");
-	argv_array_pushv(&cp.args, paths);
+		strvec_push(&cp.args, "--mboxrd");
+	strvec_push(&cp.args, "--");
+	strvec_pushv(&cp.args, paths);
 
 	ret = capture_command(&cp, &last, 8);
 	if (ret)
@@ -782,7 +787,7 @@ static int split_mail_stgit_series(struct am_state *state, const char **paths,
 	const char *series_dir;
 	char *series_dir_buf;
 	FILE *fp;
-	struct argv_array patches = ARGV_ARRAY_INIT;
+	struct strvec patches = STRVEC_INIT;
 	struct strbuf sb = STRBUF_INIT;
 	int ret;
 
@@ -800,16 +805,16 @@ static int split_mail_stgit_series(struct am_state *state, const char **paths,
 		if (*sb.buf == '#')
 			continue; /* skip comment lines */
 
-		argv_array_push(&patches, mkpath("%s/%s", series_dir, sb.buf));
+		strvec_push(&patches, mkpath("%s/%s", series_dir, sb.buf));
 	}
 
 	fclose(fp);
 	strbuf_release(&sb);
 	free(series_dir_buf);
 
-	ret = split_mail_conv(stgit_patch_to_mail, state, patches.argv, keep_cr);
+	ret = split_mail_conv(stgit_patch_to_mail, state, patches.v, keep_cr);
 
-	argv_array_clear(&patches);
+	strvec_clear(&patches);
 	return ret;
 }
 
@@ -997,7 +1002,7 @@ static void am_setup(struct am_state *state, enum patch_format patch_format,
 	}
 	write_state_text(state, "scissors", str);
 
-	sq_quote_argv(&sb, state->git_apply_opts.argv);
+	sq_quote_argv(&sb, state->git_apply_opts.v);
 	write_state_text(state, "apply-opt", sb.buf);
 
 	if (state->rebasing)
@@ -1385,8 +1390,8 @@ static int parse_mail_rebase(struct am_state *state, const char *mail)
  */
 static int run_apply(const struct am_state *state, const char *index_file)
 {
-	struct argv_array apply_paths = ARGV_ARRAY_INIT;
-	struct argv_array apply_opts = ARGV_ARRAY_INIT;
+	struct strvec apply_paths = STRVEC_INIT;
+	struct strvec apply_opts = STRVEC_INIT;
 	struct apply_state apply_state;
 	int res, opts_left;
 	int force_apply = 0;
@@ -1395,10 +1400,10 @@ static int run_apply(const struct am_state *state, const char *index_file)
 	if (init_apply_state(&apply_state, the_repository, NULL))
 		BUG("init_apply_state() failed");
 
-	argv_array_push(&apply_opts, "apply");
-	argv_array_pushv(&apply_opts, state->git_apply_opts.argv);
+	strvec_push(&apply_opts, "apply");
+	strvec_pushv(&apply_opts, state->git_apply_opts.v);
 
-	opts_left = apply_parse_options(apply_opts.argc, apply_opts.argv,
+	opts_left = apply_parse_options(apply_opts.nr, apply_opts.v,
 					&apply_state, &force_apply, &options,
 					NULL);
 
@@ -1421,12 +1426,12 @@ static int run_apply(const struct am_state *state, const char *index_file)
 	if (check_apply_state(&apply_state, force_apply))
 		BUG("check_apply_state() failed");
 
-	argv_array_push(&apply_paths, am_path(state, "patch"));
+	strvec_push(&apply_paths, am_path(state, "patch"));
 
-	res = apply_all_patches(&apply_state, apply_paths.argc, apply_paths.argv, options);
+	res = apply_all_patches(&apply_state, apply_paths.nr, apply_paths.v, options);
 
-	argv_array_clear(&apply_paths);
-	argv_array_clear(&apply_opts);
+	strvec_clear(&apply_paths);
+	strvec_clear(&apply_opts);
 	clear_apply_state(&apply_state);
 
 	if (res)
@@ -1449,10 +1454,10 @@ static int build_fake_ancestor(const struct am_state *state, const char *index_f
 	struct child_process cp = CHILD_PROCESS_INIT;
 
 	cp.git_cmd = 1;
-	argv_array_push(&cp.args, "apply");
-	argv_array_pushv(&cp.args, state->git_apply_opts.argv);
-	argv_array_pushf(&cp.args, "--build-fake-ancestor=%s", index_file);
-	argv_array_push(&cp.args, am_path(state, "patch"));
+	strvec_push(&cp.args, "apply");
+	strvec_pushv(&cp.args, state->git_apply_opts.v);
+	strvec_pushf(&cp.args, "--build-fake-ancestor=%s", index_file);
+	strvec_push(&cp.args, am_path(state, "patch"));
 
 	if (run_command(&cp))
 		return -1;
@@ -1551,7 +1556,7 @@ static void do_commit(const struct am_state *state)
 	struct object_id tree, parent, commit;
 	const struct object_id *old_oid;
 	struct commit_list *parents = NULL;
-	const char *reflog_msg, *author;
+	const char *reflog_msg, *author, *committer = NULL;
 	struct strbuf sb = STRBUF_INIT;
 
 	if (run_hook_le(NULL, "pre-applypatch", NULL))
@@ -1575,11 +1580,16 @@ static void do_commit(const struct am_state *state)
 			IDENT_STRICT);
 
 	if (state->committer_date_is_author_date)
-		setenv("GIT_COMMITTER_DATE",
-			state->ignore_date ? "" : state->author_date, 1);
+		committer = fmt_ident(getenv("GIT_COMMITTER_NAME"),
+				      getenv("GIT_COMMITTER_EMAIL"),
+				      WANT_COMMITTER_IDENT,
+				      state->ignore_date ? NULL
+							 : state->author_date,
+				      IDENT_STRICT);
 
-	if (commit_tree(state->msg, state->msg_len, &tree, parents, &commit,
-			author, state->sign_commit))
+	if (commit_tree_extended(state->msg, state->msg_len, &tree, parents,
+				 &commit, author, committer, state->sign_commit,
+				 NULL))
 		die(_("failed to write commit object"));
 
 	reflog_msg = getenv("GIT_REFLOG_ACTION");
@@ -1671,7 +1681,7 @@ static int do_interactive(struct am_state *state)
 			if (!pager)
 				pager = "cat";
 			prepare_pager_args(&cp, pager);
-			argv_array_push(&cp.args, am_path(state, "patch"));
+			strvec_push(&cp.args, am_path(state, "patch"));
 			run_command(&cp);
 		}
 	}
@@ -1686,7 +1696,6 @@ static int do_interactive(struct am_state *state)
  */
 static void am_run(struct am_state *state, int resume)
 {
-	const char *argv_gc_auto[] = {"gc", "--auto", NULL};
 	struct strbuf sb = STRBUF_INIT;
 
 	unlink(am_path(state, "dirtyindex"));
@@ -1763,7 +1772,7 @@ static void am_run(struct am_state *state, int resume)
 				linelen(state->msg), state->msg);
 
 			if (advice_amworkdir)
-				advise(_("Use 'git am --show-current-patch' to see the failed patch"));
+				advise(_("Use 'git am --show-current-patch=diff' to see the failed patch"));
 
 			die_user_resolve(state);
 		}
@@ -1791,7 +1800,7 @@ next:
 	if (!state->rebasing) {
 		am_destroy(state);
 		close_object_store(the_repository->objects);
-		run_command_v_opt(argv_gc_auto, RUN_GIT_CMD);
+		run_auto_maintenance(state->quiet);
 	}
 }
 
@@ -2061,7 +2070,7 @@ static void am_abort(struct am_state *state)
 	am_destroy(state);
 }
 
-static int show_patch(struct am_state *state)
+static int show_patch(struct am_state *state, enum show_patch_type sub_mode)
 {
 	struct strbuf sb = STRBUF_INIT;
 	const char *patch_path;
@@ -2078,7 +2087,17 @@ static int show_patch(struct am_state *state)
 		return ret;
 	}
 
-	patch_path = am_path(state, msgnum(state));
+	switch (sub_mode) {
+	case SHOW_PATCH_RAW:
+		patch_path = am_path(state, msgnum(state));
+		break;
+	case SHOW_PATCH_DIFF:
+		patch_path = am_path(state, "patch");
+		break;
+	default:
+		BUG("invalid mode for --show-current-patch");
+	}
+
 	len = strbuf_read_file(&sb, patch_path, 0);
 	if (len < 0)
 		die_errno(_("failed to read '%s'"), patch_path);
@@ -2118,7 +2137,7 @@ static int parse_opt_patchformat(const struct option *opt, const char *arg, int 
 	return 0;
 }
 
-enum resume_mode {
+enum resume_type {
 	RESUME_FALSE = 0,
 	RESUME_APPLY,
 	RESUME_RESOLVED,
@@ -2127,6 +2146,47 @@ enum resume_mode {
 	RESUME_QUIT,
 	RESUME_SHOW_PATCH
 };
+
+struct resume_mode {
+	enum resume_type mode;
+	enum show_patch_type sub_mode;
+};
+
+static int parse_opt_show_current_patch(const struct option *opt, const char *arg, int unset)
+{
+	int *opt_value = opt->value;
+	struct resume_mode *resume = container_of(opt_value, struct resume_mode, mode);
+
+	/*
+	 * Please update $__git_showcurrentpatch in git-completion.bash
+	 * when you add new options
+	 */
+	const char *valid_modes[] = {
+		[SHOW_PATCH_DIFF] = "diff",
+		[SHOW_PATCH_RAW] = "raw"
+	};
+	int new_value = SHOW_PATCH_RAW;
+
+	BUG_ON_OPT_NEG(unset);
+
+	if (arg) {
+		for (new_value = 0; new_value < ARRAY_SIZE(valid_modes); new_value++) {
+			if (!strcmp(arg, valid_modes[new_value]))
+				break;
+		}
+		if (new_value >= ARRAY_SIZE(valid_modes))
+			return error(_("Invalid value for --show-current-patch: %s"), arg);
+	}
+
+	if (resume->mode == RESUME_SHOW_PATCH && new_value != resume->sub_mode)
+		return error(_("--show-current-patch=%s is incompatible with "
+			       "--show-current-patch=%s"),
+			     arg, valid_modes[resume->sub_mode]);
+
+	resume->mode = RESUME_SHOW_PATCH;
+	resume->sub_mode = new_value;
+	return 0;
+}
 
 static int git_am_config(const char *k, const char *v, void *cb)
 {
@@ -2145,7 +2205,7 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 	int binary = -1;
 	int keep_cr = -1;
 	int patch_format = PATCH_FORMAT_UNKNOWN;
-	enum resume_mode resume = RESUME_FALSE;
+	struct resume_mode resume = { .mode = RESUME_FALSE };
 	int in_progress;
 	int ret = 0;
 
@@ -2164,7 +2224,7 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 			N_("allow fall back on 3way merging if needed")),
 		OPT__QUIET(&state.quiet, N_("be quiet")),
 		OPT_SET_INT('s', "signoff", &state.signoff,
-			N_("add a Signed-off-by line to the commit message"),
+			N_("add a Signed-off-by trailer to the commit message"),
 			SIGNOFF_EXPLICIT),
 		OPT_BOOL('u', "utf8", &state.utf8,
 			N_("recode into utf8 (default)")),
@@ -2214,24 +2274,26 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 			PARSE_OPT_NOARG),
 		OPT_STRING(0, "resolvemsg", &state.resolvemsg, NULL,
 			N_("override error message when patch failure occurs")),
-		OPT_CMDMODE(0, "continue", &resume,
+		OPT_CMDMODE(0, "continue", &resume.mode,
 			N_("continue applying patches after resolving a conflict"),
 			RESUME_RESOLVED),
-		OPT_CMDMODE('r', "resolved", &resume,
+		OPT_CMDMODE('r', "resolved", &resume.mode,
 			N_("synonyms for --continue"),
 			RESUME_RESOLVED),
-		OPT_CMDMODE(0, "skip", &resume,
+		OPT_CMDMODE(0, "skip", &resume.mode,
 			N_("skip the current patch"),
 			RESUME_SKIP),
-		OPT_CMDMODE(0, "abort", &resume,
-			N_("restore the original branch and abort the patching operation."),
+		OPT_CMDMODE(0, "abort", &resume.mode,
+			N_("restore the original branch and abort the patching operation"),
 			RESUME_ABORT),
-		OPT_CMDMODE(0, "quit", &resume,
-			N_("abort the patching operation but keep HEAD where it is."),
+		OPT_CMDMODE(0, "quit", &resume.mode,
+			N_("abort the patching operation but keep HEAD where it is"),
 			RESUME_QUIT),
-		OPT_CMDMODE(0, "show-current-patch", &resume,
-			N_("show the patch being applied."),
-			RESUME_SHOW_PATCH),
+		{ OPTION_CALLBACK, 0, "show-current-patch", &resume.mode,
+		  "(diff|raw)",
+		  N_("show the patch being applied"),
+		  PARSE_OPT_CMDMODE | PARSE_OPT_OPTARG | PARSE_OPT_NONEG | PARSE_OPT_LITERAL_ARGHELP,
+		  parse_opt_show_current_patch, RESUME_SHOW_PATCH },
 		OPT_BOOL(0, "committer-date-is-author-date",
 			&state.committer_date_is_author_date,
 			N_("lie about committer date")),
@@ -2281,17 +2343,17 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 		 *    intend to feed us a patch but wanted to continue
 		 *    unattended.
 		 */
-		if (argc || (resume == RESUME_FALSE && !isatty(0)))
+		if (argc || (resume.mode == RESUME_FALSE && !isatty(0)))
 			die(_("previous rebase directory %s still exists but mbox given."),
 				state.dir);
 
-		if (resume == RESUME_FALSE)
-			resume = RESUME_APPLY;
+		if (resume.mode == RESUME_FALSE)
+			resume.mode = RESUME_APPLY;
 
 		if (state.signoff == SIGNOFF_EXPLICIT)
 			am_append_signoff(&state);
 	} else {
-		struct argv_array paths = ARGV_ARRAY_INIT;
+		struct strvec paths = STRVEC_INIT;
 		int i;
 
 		/*
@@ -2300,7 +2362,7 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 		 * stray directories.
 		 */
 		if (file_exists(state.dir) && !state.rebasing) {
-			if (resume == RESUME_ABORT || resume == RESUME_QUIT) {
+			if (resume.mode == RESUME_ABORT || resume.mode == RESUME_QUIT) {
 				am_destroy(&state);
 				am_state_release(&state);
 				return 0;
@@ -2311,25 +2373,25 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 				state.dir);
 		}
 
-		if (resume)
+		if (resume.mode)
 			die(_("Resolve operation not in progress, we are not resuming."));
 
 		for (i = 0; i < argc; i++) {
 			if (is_absolute_path(argv[i]) || !prefix)
-				argv_array_push(&paths, argv[i]);
+				strvec_push(&paths, argv[i]);
 			else
-				argv_array_push(&paths, mkpath("%s/%s", prefix, argv[i]));
+				strvec_push(&paths, mkpath("%s/%s", prefix, argv[i]));
 		}
 
-		if (state.interactive && !paths.argc)
+		if (state.interactive && !paths.nr)
 			die(_("interactive mode requires patches on the command line"));
 
-		am_setup(&state, patch_format, paths.argv, keep_cr);
+		am_setup(&state, patch_format, paths.v, keep_cr);
 
-		argv_array_clear(&paths);
+		strvec_clear(&paths);
 	}
 
-	switch (resume) {
+	switch (resume.mode) {
 	case RESUME_FALSE:
 		am_run(&state, 0);
 		break;
@@ -2350,7 +2412,7 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 		am_destroy(&state);
 		break;
 	case RESUME_SHOW_PATCH:
-		ret = show_patch(&state);
+		ret = show_patch(&state, resume.sub_mode);
 		break;
 	default:
 		BUG("invalid resume value");

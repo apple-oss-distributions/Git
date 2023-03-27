@@ -36,8 +36,6 @@ struct commit {
 	 * or get_commit_tree_oid().
 	 */
 	struct tree *maybe_tree;
-	uint32_t graph_pos;
-	uint32_t generation;
 	unsigned int index;
 };
 
@@ -97,7 +95,6 @@ static inline int parse_commit_no_graph(struct commit *commit)
 
 #ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
 #define parse_commit_internal(item, quiet, use) repo_parse_commit_internal(the_repository, item, quiet, use)
-#define parse_commit_gently(item, quiet) repo_parse_commit_gently(the_repository, item, quiet)
 #define parse_commit(item) repo_parse_commit(the_repository, item)
 #endif
 
@@ -132,7 +129,7 @@ const void *repo_get_commit_buffer(struct repository *r,
 #endif
 
 /*
- * Tell the commit subsytem that we are done with a particular commit buffer.
+ * Tell the commit subsystem that we are done with a particular commit buffer.
  * The commit and buffer should be the input and return value, respectively,
  * from an earlier call to get_commit_buffer.  The buffer may or may not be
  * freed by this call; callers should not access the memory afterwards.
@@ -236,6 +233,8 @@ struct commit_graft {
 typedef int (*each_commit_graft_fn)(const struct commit_graft *, void *);
 
 struct commit_graft *read_graft_line(struct strbuf *line);
+/* commit_graft_pos returns an index into r->parsed_objects->grafts. */
+int commit_graft_pos(struct repository *r, const unsigned char *sha1);
 int register_commit_graft(struct repository *r, struct commit_graft *, int);
 void prepare_commit_graft(struct repository *r);
 struct commit_graft *lookup_commit_graft(struct repository *r, const struct object_id *oid);
@@ -247,55 +246,9 @@ struct commit *get_fork_point(const char *refname, struct commit *commit);
 
 struct oid_array;
 struct ref;
-int register_shallow(struct repository *r, const struct object_id *oid);
-int unregister_shallow(const struct object_id *oid);
 int for_each_commit_graft(each_commit_graft_fn, void *);
-int is_repository_shallow(struct repository *r);
-struct commit_list *get_shallow_commits(struct object_array *heads,
-					int depth, int shallow_flag, int not_shallow_flag);
-struct commit_list *get_shallow_commits_by_rev_list(
-		int ac, const char **av, int shallow_flag, int not_shallow_flag);
-void set_alternate_shallow_file(struct repository *r, const char *path, int override);
-int write_shallow_commits(struct strbuf *out, int use_pack_protocol,
-			  const struct oid_array *extra);
-void setup_alternate_shallow(struct lock_file *shallow_lock,
-			     const char **alternate_shallow_file,
-			     const struct oid_array *extra);
-const char *setup_temporary_shallow(const struct oid_array *extra);
-void advertise_shallow_grafts(int);
 
-/*
- * Initialize with prepare_shallow_info() or zero-initialize (equivalent to
- * prepare_shallow_info with a NULL oid_array).
- */
-struct shallow_info {
-	struct oid_array *shallow;
-	int *ours, nr_ours;
-	int *theirs, nr_theirs;
-	struct oid_array *ref;
-
-	/* for receive-pack */
-	uint32_t **used_shallow;
-	int *need_reachability_test;
-	int *reachable;
-	int *shallow_ref;
-	struct commit **commits;
-	int nr_commits;
-};
-
-void prepare_shallow_info(struct shallow_info *, struct oid_array *);
-void clear_shallow_info(struct shallow_info *);
-void remove_nonexistent_theirs_shallow(struct shallow_info *);
-void assign_shallow_commits_to_refs(struct shallow_info *info,
-				    uint32_t **used,
-				    int *ref_status);
-int delayed_reachability_test(struct shallow_info *si, int c);
-#define PRUNE_SHOW_ONLY 1
-#define PRUNE_QUICK 2
-void prune_shallow(unsigned options);
-extern struct trace_key trace_shallow;
-
-int interactive_add(int argc, const char **argv, const char *prefix, int patch);
+int interactive_add(const char **argv, const char *prefix, int patch);
 int run_add_interactive(const char *revision, const char *patch_mode,
 			const struct pathspec *pathspec);
 
@@ -316,10 +269,9 @@ int commit_tree(const char *msg, size_t msg_len,
 
 int commit_tree_extended(const char *msg, size_t msg_len,
 			 const struct object_id *tree,
-			 struct commit_list *parents,
-			 struct object_id *ret, const char *author,
-			 const char *sign_commit,
-			 struct commit_extra_header *);
+			 struct commit_list *parents, struct object_id *ret,
+			 const char *author, const char *committer,
+			 const char *sign_commit, struct commit_extra_header *);
 
 struct commit_extra_header *read_commit_extra_headers(struct commit *, const char **);
 
@@ -383,8 +335,18 @@ int compare_commits_by_author_date(const void *a_, const void *b_, void *unused)
  * Verify a single commit with check_commit_signature() and die() if it is not
  * a good signature. This isn't really suitable for general use, but is a
  * helper to implement consistent logic for pull/merge --verify-signatures.
+ *
+ * The check_trust parameter is meant for backward-compatibility.  The GPG
+ * interface verifies key trust with a default trust level that is below the
+ * default trust level for merge operations.  Its value should be non-zero if
+ * the user hasn't set a minimum trust level explicitly in their configuration.
+ *
+ * If the user has set a minimum trust level, then that value should be obeyed
+ * and check_trust should be zero, even if the configured trust level is below
+ * the default trust level for merges.
  */
-void verify_merge_signature(struct commit *commit, int verbose);
+void verify_merge_signature(struct commit *commit, int verbose,
+			    int check_trust);
 
 int compare_commits_by_commit_date(const void *a_, const void *b_, void *unused);
 int compare_commits_by_gen_then_commit_date(const void *a_, const void *b_, void *unused);

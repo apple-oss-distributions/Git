@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>Submitting Patches</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -740,8 +740,9 @@ asciidoc.install();
 <div class="sect1">
 <h2 id="_guidelines">Guidelines</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Here are some guidelines for people who want to contribute their code
-to this software.</p></div>
+<div class="paragraph"><p>Here are some guidelines for people who want to contribute their code to this
+software. There is also a <a href="MyFirstContribution.html">step-by-step tutorial</a>
+available which covers many of these same guidelines.</p></div>
 <div class="sect2">
 <h3 id="base-branch">Decide what to base your work on.</h3>
 <div class="paragraph"><p>In general, always base your work on the oldest branch that your
@@ -758,7 +759,7 @@ A bugfix should be based on <code>maint</code> in general. If the bug is not
 <li>
 <p>
 A new feature should be based on <code>master</code> in general. If the new
-  feature depends on a topic that is in <code>pu</code>, but not in <code>master</code>,
+  feature depends on a topic that is in <code>seen</code>, but not in <code>master</code>,
   base your work on the tip of that topic.
 </p>
 </li>
@@ -773,7 +774,7 @@ Corrections and enhancements to a topic not yet in <code>master</code> should
 <li>
 <p>
 In the exceptional case that a new feature depends on several topics
-  not in <code>master</code>, start working on <code>next</code> or <code>pu</code> privately and send
+  not in <code>master</code>, start working on <code>next</code> or <code>seen</code> privately and send
   out patches for discussion. Before the final merge, you may have to
   wait until some of the dependent topics graduate to <code>master</code>, and
   rebase your work.
@@ -788,7 +789,7 @@ Some parts of the system have dedicated maintainers with their own
 </li>
 </ul></div>
 <div class="paragraph"><p>To find the tip of a topic branch, run <code>git log --first-parent
-master..pu</code> and look for the merge commit. The second parent of this
+master..seen</code> and look for the merge commit. The second parent of this
 commit is the tip of the topic branch.</p></div>
 </div>
 <div class="sect2">
@@ -892,18 +893,23 @@ its behavior.  Try to make sure your explanation can be understood
 without external resources. Instead of giving a URL to a mailing list
 archive, summarize the relevant points of the discussion.</p></div>
 <div class="paragraph" id="commit-reference"><p>If you want to reference a previous commit in the history of a stable
-branch, use the format "abbreviated sha1 (subject, date)",
-with the subject enclosed in a pair of double-quotes, like this:</p></div>
+branch, use the format "abbreviated hash (subject, date)", like this:</p></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>        Commit f86a374 ("pack-bitmap.c: fix a memleak", 2015-03-30)
+<pre><code>        Commit f86a374 (pack-bitmap.c: fix a memleak, 2015-03-30)
         noticed that ...</code></pre>
 </div></div>
 <div class="paragraph"><p>The "Copy commit summary" command of gitk can be used to obtain this
-format, or this invocation of <code>git show</code>:</p></div>
+format (with the subject enclosed in a pair of double-quotes), or this
+invocation of <code>git show</code>:</p></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>        git show -s --date=short --pretty='format:%h ("%s", %ad)' &lt;commit&gt;</code></pre>
+<pre><code>        git show -s --pretty=reference &lt;commit&gt;</code></pre>
+</div></div>
+<div class="paragraph"><p>or, on an older version of Git without support for --pretty=reference:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>        git show -s --date=short --pretty='format:%h (%s, %ad)' &lt;commit&gt;</code></pre>
 </div></div>
 </div>
 <div class="sect2">
@@ -940,7 +946,7 @@ thread to help readers find all parts of the series.  To that end,
 send them as replies to either an additional "cover letter" message
 (see below), the first patch, or the respective preceding patch.</p></div>
 <div class="paragraph"><p>If your log message (including your name on the
-Signed-off-by line) is not writable in ASCII, make sure that
+<code>Signed-off-by</code> trailer) is not writable in ASCII, make sure that
 you send off a message in the correct encoding.</p></div>
 <div class="admonitionblock">
 <table><tr>
@@ -964,7 +970,7 @@ previously sent.</p></div>
 <div class="paragraph"><p>The <code>git format-patch</code> command follows the best current practice to
 format the body of an e-mail message.  At the beginning of the
 patch should come your commit message, ending with the
-Signed-off-by: lines, and a line that consists of three dashes,
+<code>Signed-off-by</code> trailers, and a line that consists of three dashes,
 followed by the diffstat information and the patch itself.  If
 you are forwarding a patch from somebody else, optionally, at
 the beginning of the e-mail message just before the commit
@@ -1010,22 +1016,21 @@ people who are involved in the area you are touching (the <code>git
 contacts</code> command in <code>contrib/contacts/</code> can help to
 identify them), to solicit comments and reviews.</p></div>
 <div class="paragraph"><p>After the list reached a consensus that it is a good idea to apply the
-patch, re-send it with "To:" set to the maintainer<span class="footnote"><br />[The current maintainer: <a href="mailto:gitster@pobox.com">gitster@pobox.com</a>]<br /></span> and "cc:" the
-list<span class="footnote"><br />[The mailing list: <a href="mailto:git@vger.kernel.org">git@vger.kernel.org</a>]<br /></span> for inclusion.</p></div>
+patch, re-send it with "To:" set to the maintainer<span class="footnote"><br />[The current maintainer: <a href="mailto:gitster@pobox.com">gitster@pobox.com</a>]<br /></span>
+and "cc:" the list<span class="footnote"><br />[The mailing list: <a href="mailto:git@vger.kernel.org">git@vger.kernel.org</a>]<br /></span> for inclusion.  This is especially relevant
+when the maintainer did not heavily participate in the discussion and
+instead left the review to trusted others.</p></div>
 <div class="paragraph"><p>Do not forget to add trailers such as <code>Acked-by:</code>, <code>Reviewed-by:</code> and
 <code>Tested-by:</code> lines as necessary to credit people who helped your
-patch.</p></div>
+patch, and "cc:" them when sending such a final version for inclusion.</p></div>
 </div>
 <div class="sect2">
-<h3 id="sign-off">Certify your work by adding your "Signed-off-by: " line</h3>
-<div class="paragraph"><p>To improve tracking of who did what, we&#8217;ve borrowed the
-"sign-off" procedure from the Linux kernel project on patches
-that are being emailed around.  Although core Git is a lot
-smaller project it is a good discipline to follow it.</p></div>
-<div class="paragraph"><p>The sign-off is a simple line at the end of the explanation for
-the patch, which certifies that you wrote it or otherwise have
-the right to pass it on as an open-source patch.  The rules are
-pretty simple: if you can certify the below D-C-O:</p></div>
+<h3 id="sign-off">Certify your work by adding your <code>Signed-off-by</code> trailer</h3>
+<div class="paragraph"><p>To improve tracking of who did what, we ask you to certify that you
+wrote the patch or have the right to pass it on under the same license
+as ours, by "signing off" your patch.  Without sign-off, we cannot
+accept your patches.</p></div>
+<div class="paragraph"><p>If (and only if) you certify the below D-C-O:</p></div>
 <div class="quoteblock" id="dco">
 <div class="title">Developer&#8217;s Certificate of Origin 1.1</div>
 <div class="content">
@@ -1069,19 +1074,24 @@ I understand and agree that this project and the contribution
 </div>
 <div class="attribution">
 </div></div>
-<div class="paragraph"><p>then you just add a line saying</p></div>
+<div class="paragraph"><p>you add a "Signed-off-by" trailer to your commit, that looks like
+this:</p></div>
 <div class="literalblock">
 <div class="content">
 <pre><code>        Signed-off-by: Random J Developer &lt;random@developer.example.org&gt;</code></pre>
 </div></div>
-<div class="paragraph"><p>This line can be automatically added by Git if you run the git-commit
-command with the -s option.</p></div>
-<div class="paragraph"><p>Notice that you can place your own Signed-off-by: line when
+<div class="paragraph"><p>This line can be added by Git if you run the git-commit command with
+the -s option.</p></div>
+<div class="paragraph"><p>Notice that you can place your own <code>Signed-off-by</code> trailer when
 forwarding somebody else&#8217;s patch with the above rules for
 D-C-O.  Indeed you are encouraged to do so.  Do not forget to
 place an in-body "From: " line at the beginning to properly attribute
 the change to its true author (see (2) above).</p></div>
-<div class="paragraph" id="real-name"><p>Also notice that a real name is used in the Signed-off-by: line. Please
+<div class="paragraph"><p>This procedure originally came from the Linux kernel project, so our
+rule is quite similar to theirs, but what exactly it means to sign-off
+your patch differs from project to project, so it may be different
+from that of the project you are accustomed to.</p></div>
+<div class="paragraph" id="real-name"><p>Also notice that a real name is used in the <code>Signed-off-by</code> trailer. Please
 don&#8217;t hide your real name.</p></div>
 <div class="paragraph" id="commit-trailers"><p>If you like, you can put extra tags at the end:</p></div>
 <div class="olist arabic"><ol class="arabic">
@@ -1203,7 +1213,7 @@ A topic branch is created with the patch and is merged to <code>next</code>,
 </li>
 </ol></div>
 <div class="paragraph"><p>In any time between the (2)-(3) cycle, the maintainer may pick it up
-from the list and queue it to <code>pu</code>, in order to make it easier for
+from the list and queue it to <code>seen</code>, in order to make it easier for
 people play with it without having to pick up and apply the patch to
 their trees themselves.</p></div>
 </div>
@@ -1218,7 +1228,7 @@ You can use Git itself to find out when your patch is merged in
   master. <code>git pull --rebase</code> will automatically skip already-applied
   patches, and will let you know. This works only if you rebase on top
   of the branch in which your patch has been merged (i.e. it will not
-  tell you if your patch is merged in pu if you rebase on top of
+  tell you if your patch is merged in <code>seen</code> if you rebase on top of
   master).
 </p>
 </li>
@@ -1383,7 +1393,7 @@ this problem around.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-11-04 14:10:11 JST
+ 2021-01-25 15:29:28 PST
 </div>
 </div>
 </body>

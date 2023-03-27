@@ -294,9 +294,13 @@ test_git_path GIT_OBJECT_DIRECTORY=foo objects/foo foo/foo
 test_git_path GIT_OBJECT_DIRECTORY=foo objects2 .git/objects2
 test_expect_success 'setup common repository' 'git --git-dir=bar init'
 test_git_path GIT_COMMON_DIR=bar index                    .git/index
+test_git_path GIT_COMMON_DIR=bar index.lock               .git/index.lock
 test_git_path GIT_COMMON_DIR=bar HEAD                     .git/HEAD
 test_git_path GIT_COMMON_DIR=bar logs/HEAD                .git/logs/HEAD
+test_git_path GIT_COMMON_DIR=bar logs/HEAD.lock           .git/logs/HEAD.lock
 test_git_path GIT_COMMON_DIR=bar logs/refs/bisect/foo     .git/logs/refs/bisect/foo
+test_git_path GIT_COMMON_DIR=bar logs/refs                bar/logs/refs
+test_git_path GIT_COMMON_DIR=bar logs/refs/               bar/logs/refs/
 test_git_path GIT_COMMON_DIR=bar logs/refs/bisec/foo      bar/logs/refs/bisec/foo
 test_git_path GIT_COMMON_DIR=bar logs/refs/bisec          bar/logs/refs/bisec
 test_git_path GIT_COMMON_DIR=bar logs/refs/bisectfoo      bar/logs/refs/bisectfoo
@@ -465,11 +469,15 @@ test_expect_success 'match .gitmodules' '
 '
 
 test_expect_success MINGW 'is_valid_path() on Windows' '
-       test-tool path-utils is_valid_path \
+	test-tool path-utils is_valid_path \
 		win32 \
 		"win32 x" \
 		../hello.txt \
 		C:\\git \
+		comm \
+		conout.c \
+		com0.c \
+		lptN \
 		\
 		--not \
 		"win32 "  \
@@ -477,7 +485,14 @@ test_expect_success MINGW 'is_valid_path() on Windows' '
 		"win32."  \
 		"win32 . ." \
 		.../hello.txt \
-		colon:test
+		colon:test \
+		"AUX.c" \
+		"abc/conOut\$  .xyz/test" \
+		lpt8 \
+		com9.c \
+		"lpt*" \
+		Nul \
+		"PRN./abc"
 '
 
 test_done

@@ -51,8 +51,10 @@ test_expect_success 'setup' '
 	done &&
 	git commit-graph write --reachable &&
 	mv .git/objects/info/commit-graph commit-graph-full &&
+	chmod u+w commit-graph-full &&
 	git show-ref -s commit-5-5 | git commit-graph write --stdin-commits &&
 	mv .git/objects/info/commit-graph commit-graph-half &&
+	chmod u+w commit-graph-half &&
 	git config core.commitGraph true
 '
 
@@ -106,6 +108,36 @@ test_expect_success 'in_merge_bases:miss' '
 	EOF
 	echo "in_merge_bases(A,B):0" >expect &&
 	test_three_modes in_merge_bases
+'
+
+test_expect_success 'in_merge_bases_many:hit' '
+	cat >input <<-\EOF &&
+	A:commit-6-8
+	X:commit-6-9
+	X:commit-5-7
+	EOF
+	echo "in_merge_bases_many(A,X):1" >expect &&
+	test_three_modes in_merge_bases_many
+'
+
+test_expect_success 'in_merge_bases_many:miss' '
+	cat >input <<-\EOF &&
+	A:commit-6-8
+	X:commit-7-7
+	X:commit-8-6
+	EOF
+	echo "in_merge_bases_many(A,X):0" >expect &&
+	test_three_modes in_merge_bases_many
+'
+
+test_expect_success 'in_merge_bases_many:miss-heuristic' '
+	cat >input <<-\EOF &&
+	A:commit-6-8
+	X:commit-7-5
+	X:commit-6-6
+	EOF
+	echo "in_merge_bases_many(A,X):0" >expect &&
+	test_three_modes in_merge_bases_many
 '
 
 test_expect_success 'is_descendant_of:hit' '

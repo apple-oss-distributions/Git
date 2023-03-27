@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-ls-remote(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -784,7 +784,9 @@ commit IDs.</p></div>
         Limit to only refs/heads and refs/tags, respectively.
         These options are <em>not</em> mutually exclusive; when given
         both, references stored in refs/heads and refs/tags are
-        displayed.
+        displayed.  Note that <code>git ls-remote -h</code> used without
+        anything else on the command line gives help, consistent
+        with other git subcommands.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -914,9 +916,9 @@ f25a265a342aed6041ab0cc484224d9ca54b6f41        refs/tags/v0.99.1
 7ceca275d047c90c0c7d5afb13ab97efdf51bd6e        refs/tags/v0.99.3
 c5db5456ae3b0873fc659c19fafdde22313cc441        refs/tags/v0.99.2
 0918385dbd9656cab0d1d81ba7453d49bbc16250        refs/tags/junio-gpg-pub
-$ git ls-remote http://www.kernel.org/pub/scm/git/git.git master pu rc
+$ git ls-remote http://www.kernel.org/pub/scm/git/git.git master seen rc
 5fe978a5381f1fbad26a80e682ddd2a401966740        refs/heads/master
-c781a84b5204fb294c9ccc79f8b3baceeb32c061        refs/heads/pu
+c781a84b5204fb294c9ccc79f8b3baceeb32c061        refs/heads/seen
 $ git remote add korg http://www.kernel.org/pub/scm/git/git.git
 $ git ls-remote --tags korg v\*
 d6602ec5194c87b0fc87103ca4d67251c76f233a        refs/tags/v0.99
@@ -943,7 +945,7 @@ c5db5456ae3b0873fc659c19fafdde22313cc441        refs/tags/v0.99.2
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-10-09 14:51:03 JST
+ 2020-07-06 22:33:22 PDT
 </div>
 </div>
 </body>

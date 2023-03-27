@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>Multi-Pack-Index (MIDX) Design Notes</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -804,7 +804,7 @@ The MIDX is stored in a file named <em>multi-pack-index</em> in the
 </li>
 <li>
 <p>
-The pack.multiIndex config setting must be on to consume MIDX files.
+The core.multiPackIndex config setting must be on to consume MIDX files.
 </p>
 </li>
 <li>
@@ -848,13 +848,6 @@ The MIDX file format uses a chunk-based approach (similar to the
 <h2 id="_future_work">Future Work</h2>
 <div class="sectionbody">
 <div class="ulist"><ul>
-<li>
-<p>
-Add a <em>verify</em> subcommand to the <em>git midx</em> builtin to verify the
-  contents of the multi-pack-index file match the offsets listed in
-  the corresponding pack-indexes.
-</p>
-</li>
 <li>
 <p>
 The multi-pack-index allows many packfiles, especially in a context
@@ -908,9 +901,9 @@ The partial clone feature records special "promisor" packs that
 <div class="sectionbody">
 <div class="paragraph"><p>[0] <a href="https://bugs.chromium.org/p/git/issues/detail?id=6">https://bugs.chromium.org/p/git/issues/detail?id=6</a>
     Chromium work item for: Multi-Pack Index (MIDX)</p></div>
-<div class="paragraph"><p>[1] <a href="https://public-inbox.org/git/20180107181459.222909-1-dstolee@microsoft.com/">https://public-inbox.org/git/20180107181459.222909-1-dstolee@microsoft.com/</a>
+<div class="paragraph"><p>[1] <a href="https://lore.kernel.org/git/20180107181459.222909-1-dstolee@microsoft.com/">https://lore.kernel.org/git/20180107181459.222909-1-dstolee@microsoft.com/</a>
     An earlier RFC for the multi-pack-index feature</p></div>
-<div class="paragraph"><p>[2] <a href="https://public-inbox.org/git/alpine.DEB.2.20.1803091557510.23109@alexmv-linux/">https://public-inbox.org/git/alpine.DEB.2.20.1803091557510.23109@alexmv-linux/</a>
+<div class="paragraph"><p>[2] <a href="https://lore.kernel.org/git/alpine.DEB.2.20.1803091557510.23109@alexmv-linux/">https://lore.kernel.org/git/alpine.DEB.2.20.1803091557510.23109@alexmv-linux/</a>
     Git Merge 2018 Contributor&#8217;s summit notes (includes discussion of MIDX)</p></div>
 </div>
 </div>
@@ -919,7 +912,7 @@ The partial clone feature records special "promisor" packs that
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-09-18 07:45:24 JST
+ 2020-12-17 15:41:40 PST
 </div>
 </div>
 </body>

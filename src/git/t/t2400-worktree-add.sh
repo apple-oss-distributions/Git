@@ -438,7 +438,7 @@ test_expect_success 'git worktree add does not match remote' '
 		cd foo &&
 		test_must_fail git config "branch.foo.remote" &&
 		test_must_fail git config "branch.foo.merge" &&
-		! test_cmp_rev refs/remotes/repo_a/foo refs/heads/foo
+		test_cmp_rev ! refs/remotes/repo_a/foo refs/heads/foo
 	)
 '
 
@@ -483,7 +483,7 @@ test_expect_success 'git worktree --no-guess-remote option overrides config' '
 		cd foo &&
 		test_must_fail git config "branch.foo.remote" &&
 		test_must_fail git config "branch.foo.merge" &&
-		! test_cmp_rev refs/remotes/repo_a/foo refs/heads/foo
+		test_cmp_rev ! refs/remotes/repo_a/foo refs/heads/foo
 	)
 '
 
@@ -570,6 +570,15 @@ test_expect_success '"add" an existing locked but missing worktree' '
 	git worktree add --force --force --detach gnoo
 '
 
+test_expect_success '"add" not tripped up by magic worktree matching"' '
+	# if worktree "sub1/bar" exists, "git worktree add bar" in distinct
+	# directory `sub2` should not mistakenly complain that `bar` is an
+	# already-registered worktree
+	mkdir sub1 sub2 &&
+	git -C sub1 --git-dir=../.git worktree add --detach bozo &&
+	git -C sub2 --git-dir=../.git worktree add --detach bozo
+'
+
 test_expect_success FUNNYNAMES 'sanitize generated worktree name' '
 	git worktree add --detach ".  weird*..?.lock.lock" &&
 	test -d .git/worktrees/---weird-.-
@@ -585,6 +594,30 @@ test_expect_success '"add" should not fail because of another bad worktree' '
 		rm -rf sub &&
 		git worktree add second
 	)
+'
+
+test_expect_success '"add" with uninitialized submodule, with submodule.recurse unset' '
+	test_create_repo submodule &&
+	test_commit -C submodule first &&
+	test_create_repo project &&
+	git -C project submodule add ../submodule &&
+	git -C project add submodule &&
+	test_tick &&
+	git -C project commit -m add_sub &&
+	git clone project project-clone &&
+	git -C project-clone worktree add ../project-2
+'
+test_expect_success '"add" with uninitialized submodule, with submodule.recurse set' '
+	git -C project-clone -c submodule.recurse worktree add ../project-3
+'
+
+test_expect_success '"add" with initialized submodule, with submodule.recurse unset' '
+	git -C project-clone submodule update --init &&
+	git -C project-clone worktree add ../project-4
+'
+
+test_expect_success '"add" with initialized submodule, with submodule.recurse set' '
+	git -C project-clone -c submodule.recurse worktree add ../project-5
 '
 
 test_done

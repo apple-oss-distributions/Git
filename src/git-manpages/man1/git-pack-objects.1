@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-pack-objects
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-PACK\-OBJECTS" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-PACK\-OBJECTS" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -37,7 +37,7 @@ git-pack-objects \- Create a packed archive of objects
         [\-\-local] [\-\-incremental] [\-\-window=<n>] [\-\-depth=<n>]
         [\-\-revs [\-\-unpacked | \-\-all]] [\-\-keep\-pack=<pack\-name>]
         [\-\-stdout [\-\-filter=<filter\-spec>] | base\-name]
-        [\-\-shallow] [\-\-keep\-true\-parents] [\-\-sparse] < object\-list
+        [\-\-shallow] [\-\-keep\-true\-parents] [\-\-[no\-]sparse] < object\-list
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -186,9 +186,10 @@ This flag tells the command not to reuse existing object data at all, including 
 Specifies compression level for newly\-compressed data in the generated pack\&. If not specified, pack compression level is determined first by pack\&.compression, then by core\&.compression, and defaults to \-1, the zlib default, if neither is set\&. Add \-\-no\-reuse\-object if you want to force a uniform compression level on all data no matter the source\&.
 .RE
 .PP
-\-\-sparse
+\-\-[no\-]sparse
 .RS 4
-Use the "sparse" algorithm to determine which objects to include in the pack, when combined with the "\-\-revs" option\&. This algorithm only walks trees that appear in paths that introduce new objects\&. This can have significant performance benefits when computing a pack to send a small change\&. However, it is possible that extra objects are added to the pack\-file if the included commits contain certain types of direct renames\&.
+Toggle the "sparse" algorithm to determine which objects to include in the pack, when combined with the "\-\-revs" option\&. This algorithm only walks trees that appear in paths that introduce new objects\&. This can have significant performance benefits when computing a pack to send a small change\&. However, it is possible that extra objects are added to the pack\-file if the included commits contain certain types of direct renames\&. If this option is not included, it defaults to the value of
+\fBpack\&.useSparse\fR, which is true unless otherwise specified\&.
 .RE
 .PP
 \-\-thin
@@ -262,16 +263,16 @@ A debug option to help with future "partial clone" development\&. This option sp
 .sp
 The form
 \fI\-\-missing=error\fR
-requests that pack\-objects stop with an error if a missing object is encountered\&. This is the default action\&.
+requests that pack\-objects stop with an error if a missing object is encountered\&. If the repository is a partial clone, an attempt to fetch missing objects will be made before declaring them missing\&. This is the default action\&.
 .sp
 The form
 \fI\-\-missing=allow\-any\fR
-will allow object traversal to continue if a missing object is encountered\&. Missing objects will silently be omitted from the results\&.
+will allow object traversal to continue if a missing object is encountered\&. No fetch of a missing object will occur\&. Missing objects will silently be omitted from the results\&.
 .sp
 The form
 \fI\-\-missing=allow\-promisor\fR
 is like
-\fIallow\-any\fR, but will only allow object traversal to continue for EXPECTED promisor missing objects\&. Unexpected missing object will raise an error\&.
+\fIallow\-any\fR, but will only allow object traversal to continue for EXPECTED promisor missing objects\&. No fetch of a missing object will occur\&. An unexpected missing object will raise an error\&.
 .RE
 .PP
 \-\-exclude\-promisor\-objects

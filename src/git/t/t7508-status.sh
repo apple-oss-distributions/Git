@@ -814,6 +814,33 @@ test_expect_success 'status -s without relative paths' '
 
 '
 
+cat >expect <<\EOF
+ M dir1/modified
+A  dir2/added
+A  "file with spaces"
+?? dir1/untracked
+?? dir2/modified
+?? dir2/untracked
+?? "file with spaces 2"
+?? untracked
+EOF
+
+test_expect_success 'status -s without relative paths' '
+	test_when_finished "git rm --cached \"file with spaces\"; rm -f file*" &&
+	>"file with spaces" &&
+	>"file with spaces 2" &&
+	>"expect with spaces" &&
+	git add "file with spaces" &&
+
+	git status -s >output &&
+	test_cmp expect output &&
+
+	git status -s --ignored >output &&
+	grep "^!! \"expect with spaces\"$" output &&
+	grep -v "^!! " output >output-wo-ignored &&
+	test_cmp expect output-wo-ignored
+'
+
 test_expect_success 'dry-run of partial commit excluding new file in index' '
 	cat >expect <<EOF &&
 On branch master
@@ -837,13 +864,25 @@ EOF
 '
 
 cat >expect <<EOF
-:100644 100644 $EMPTY_BLOB 0000000000000000000000000000000000000000 M	dir1/modified
+:100644 100644 $EMPTY_BLOB $ZERO_OID M	dir1/modified
 EOF
 test_expect_success 'status refreshes the index' '
 	touch dir2/added &&
 	git status &&
 	git diff-files >output &&
 	test_cmp expect output
+'
+
+test_expect_success 'status shows detached HEAD properly after checking out non-local upstream branch' '
+	test_when_finished rm -rf upstream downstream actual &&
+
+	test_create_repo upstream &&
+	test_commit -C upstream foo &&
+
+	git clone upstream downstream &&
+	git -C downstream checkout @{u} &&
+	git -C downstream status >actual &&
+	test_i18ngrep "HEAD detached at [0-9a-f]\\+" actual
 '
 
 test_expect_success 'setup status submodule summary' '
@@ -1471,7 +1510,7 @@ test_expect_success '"status.branch=true" same as "-b"' '
 test_expect_success '"status.branch=true" different from "--no-branch"' '
 	git status -s --no-branch  >expected_nobranch &&
 	git -c status.branch=true status -s >actual &&
-	test_must_fail test_cmp expected_nobranch actual
+	! test_cmp expected_nobranch actual
 '
 
 test_expect_success '"status.branch=true" weaker than "--no-branch"' '
@@ -1571,7 +1610,7 @@ test_expect_success '"status.showStash=true" weaker than "--no-show-stash"' '
 	test_cmp expected_without_stash actual
 '
 
-test_expect_success 'no additionnal info if no stash entries' '
+test_expect_success 'no additional info if no stash entries' '
 	git stash clear &&
 	git -c status.showStash=true status >actual &&
 	test_cmp expected_without_stash actual

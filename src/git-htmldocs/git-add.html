@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-add(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -752,7 +752,8 @@ git-add(1) Manual Page
 <pre class="content"><em>git add</em> [--verbose | -v] [--dry-run | -n] [--force | -f] [--interactive | -i] [--patch | -p]
           [--edit | -e] [--[no-]all | --[no-]ignore-removal | [--update | -u]]
           [--intent-to-add | -N] [--refresh] [--ignore-errors] [--ignore-missing] [--renormalize]
-          [--chmod=(+|-)x] [--] [&lt;pathspec&gt;&#8230;]</pre>
+          [--chmod=(+|-)x] [--pathspec-from-file=&lt;file&gt; [--pathspec-file-nul]]
+          [--] [&lt;pathspec&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1028,6 +1029,29 @@ for "git add --no-all &lt;pathspec&gt;&#8230;", i.e. ignored removed files.</p><
         Override the executable bit of the added files.  The executable
         bit is only changed in the index, the files on disk are left
         unchanged.
+</p>
+</dd>
+<dt class="hdlist1">
+--pathspec-from-file=&lt;file&gt;
+</dt>
+<dd>
+<p>
+        Pathspec is passed in <code>&lt;file&gt;</code> instead of commandline args. If
+        <code>&lt;file&gt;</code> is exactly <code>-</code> then standard input is used. Pathspec
+        elements are separated by LF or CR/LF. Pathspec elements can be
+        quoted as explained for the configuration variable <code>core.quotePath</code>
+        (see <a href="git-config.html">git-config(1)</a>). See also <code>--pathspec-file-nul</code> and
+        global <code>--literal-pathspecs</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+--pathspec-file-nul
+</dt>
+<dd>
+<p>
+        Only meaningful with <code>--pathspec-from-file</code>. Pathspec elements are
+        separated with NUL character and all other characters are taken
+        literally (including newlines and quotes).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1351,7 +1375,7 @@ modifying the contents of context or removal lines
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-04-10 02:54:14 JST
+ 2020-03-10 08:03:13 PDT
 </div>
 </div>
 </body>

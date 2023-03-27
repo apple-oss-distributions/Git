@@ -17,6 +17,12 @@ enum list_objects_filter_choice {
 	LOFC__COUNT /* must be last */
 };
 
+/*
+ * Returns a configuration key suitable for describing the given object filter,
+ * e.g.: "blob:none", "combine", etc.
+ */
+const char *list_object_filter_config_name(enum list_objects_filter_choice c);
+
 struct list_objects_filter_options {
 	/*
 	 * 'filter_spec' is the raw argument value given on the command line
@@ -82,9 +88,9 @@ int opt_parse_list_objects_filter(const struct option *opt,
 				  const char *arg, int unset);
 
 #define OPT_PARSE_LIST_OBJECTS_FILTER(fo) \
-	{ OPTION_CALLBACK, 0, CL_ARG__FILTER, fo, N_("args"), \
-	  N_("object filtering"), 0, \
-	  opt_parse_list_objects_filter }
+	OPT_CALLBACK(0, CL_ARG__FILTER, fo, N_("args"), \
+	  N_("object filtering"), \
+	  opt_parse_list_objects_filter)
 
 /*
  * Translates abbreviated numbers in the filter's filter_spec into their

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-rev-list
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-LIST" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-REV\-LIST" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,7 +39,7 @@ git-rev-list \- Lists commit objects in reverse chronological order
 .sp
 List commits that are reachable by following the \fBparent\fR links from the given commit(s), but exclude commits that are reachable from the one(s) given with a \fI^\fR in front of them\&. The output is given in reverse chronological order by default\&.
 .sp
-You can think of this as a set operation\&. Commits given on the command line form a set of commits that are reachable from any of them, and then commits reachable from any of the ones given with \fI^\fR in front are subtracted from that set\&. The remaining commits are what comes out in the command\(cqs output\&. Various other options and paths parameters can be used to further limit the result\&.
+You can think of this as a set operation\&. Commits reachable from any of the commits given on the command line form a set, and then commits reachable from any of the ones given with \fI^\fR in front are subtracted from that set\&. The remaining commits are what comes out in the command\(cqs output\&. Various other options and paths parameters can be used to further limit the result\&.
 .sp
 Thus, the following command:
 .sp
@@ -47,7 +47,7 @@ Thus, the following command:
 .RS 4
 .\}
 .nf
-        $ git rev\-list foo bar ^baz
+$ git rev\-list foo bar ^baz
 .fi
 .if n \{\
 .RE
@@ -56,14 +56,14 @@ Thus, the following command:
 .sp
 means "list all the commits which are reachable from \fIfoo\fR or \fIbar\fR, but not from \fIbaz\fR"\&.
 .sp
-A special notation "\fI<commit1>\fR\&.\&.\fI<commit2>\fR" can be used as a short\-hand for "^\(aq<commit1>\(aq \fI<commit2>\fR"\&. For example, either of the following may be used interchangeably:
+A special notation "\fI<commit1>\fR\&.\&.\fI<commit2>\fR" can be used as a short\-hand for "^\fI<commit1>\fR \fI<commit2>\fR"\&. For example, either of the following may be used interchangeably:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-        $ git rev\-list origin\&.\&.HEAD
-        $ git rev\-list HEAD ^origin
+$ git rev\-list origin\&.\&.HEAD
+$ git rev\-list HEAD ^origin
 .fi
 .if n \{\
 .RE
@@ -76,8 +76,8 @@ Another special notation is "\fI<commit1>\fR\&...\fI<commit2>\fR" which is usefu
 .RS 4
 .\}
 .nf
-        $ git rev\-list A B \-\-not $(git merge\-base \-\-all A B)
-        $ git rev\-list A\&.\&.\&.B
+$ git rev\-list A B \-\-not $(git merge\-base \-\-all A B)
+$ git rev\-list A\&.\&.\&.B
 .fi
 .if n \{\
 .RE
@@ -225,7 +225,7 @@ reset these limits (to no limit) again\&. Equivalent forms are
 .PP
 \-\-first\-parent
 .RS 4
-Follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&. Cannot be combined with \-\-bisect\&.
+Follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&.
 .RE
 .PP
 \-\-not
@@ -451,6 +451,8 @@ With
 \fB\-\-pretty\fR
 format other than
 \fBoneline\fR
+and
+\fBreference\fR
 (for obvious reasons), this causes the output to have two extra lines of information taken from the reflog\&. The reflog designator in the output may be shown as
 \fBref@{Nth}\fR
 (where
@@ -512,6 +514,9 @@ Under
 \fB\-\-pretty=oneline\fR, the commit message is prefixed with this information on the same line\&. This option cannot be combined with
 \fB\-\-reverse\fR\&. See also
 \fBgit-reflog\fR(1)\&.
+.sp
+Under
+\fB\-\-pretty=reference\fR, this information will not be shown at all\&.
 .RE
 .PP
 \-\-merge
@@ -560,6 +565,11 @@ The following options affect the way the simplification is performed:
 Default mode
 .RS 4
 Simplifies the history to the simplest history explaining the final state of the tree\&. Simplest because it prunes some side branches if the end result is the same (i\&.e\&. merging branches with the same content)
+.RE
+.PP
+\-\-show\-pulls
+.RS 4
+Include all commits from the default mode, but also any merge commits that are not TREESAME to the first parent but are TREESAME to a later parent\&. This mode is helpful for showing the merge commits that "first introduced" a change to a branch\&.
 .RE
 .PP
 \-\-full\-history
@@ -994,7 +1004,7 @@ was then removed completely, because it had one parent and is TREESAME\&.
 .RE
 .RE
 .sp
-Finally, there is a fifth simplification mode available:
+There is another simplification mode available:
 .PP
 \-\-ancestry\-path
 .RS 4
@@ -1066,6 +1076,152 @@ range, it results in:
 .sp
 .RE
 .sp
+Before discussing another option, \fB\-\-show\-pulls\fR, we need to create a new example history\&.
+.sp
+A common problem users face when looking at simplified history is that a commit they know changed a file somehow does not appear in the file\(cqs simplified history\&. Let\(cqs demonstrate a new example and show how options such as \fB\-\-full\-history\fR and \fB\-\-simplify\-merges\fR works in that case:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+          \&.\-A\-\-\-M\-\-\-\-\-C\-\-N\-\-\-O\-\-\-P
+         /     / \e  \e  \e/   /   /
+        I     B   \e  R\-\(aq`\-Z\(aq   /
+         \e   /     \e/         /
+          \e /      /\e        /
+           `\-\-\-X\-\-\(aq  `\-\-\-Y\-\-\(aq
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+For this example, suppose \fBI\fR created \fBfile\&.txt\fR which was modified by \fBA\fR, \fBB\fR, and \fBX\fR in different ways\&. The single\-parent commits \fBC\fR, \fBZ\fR, and \fBY\fR do not change \fBfile\&.txt\fR\&. The merge commit \fBM\fR was created by resolving the merge conflict to include both changes from \fBA\fR and \fBB\fR and hence is not TREESAME to either\&. The merge commit \fBR\fR, however, was created by ignoring the contents of \fBfile\&.txt\fR at \fBM\fR and taking only the contents of \fBfile\&.txt\fR at \fBX\fR\&. Hence, \fBR\fR is TREESAME to \fBX\fR but not \fBM\fR\&. Finally, the natural merge resolution to create \fBN\fR is to take the contents of \fBfile\&.txt\fR at \fBR\fR, so \fBN\fR is TREESAME to \fBR\fR but not \fBC\fR\&. The merge commits \fBO\fR and \fBP\fR are TREESAME to their first parents, but not to their second parents, \fBZ\fR and \fBY\fR respectively\&.
+.sp
+When using the default mode, \fBN\fR and \fBR\fR both have a TREESAME parent, so those edges are walked and the others are ignored\&. The resulting history graph is:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+        I\-\-\-X
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+When using \fB\-\-full\-history\fR, Git walks every edge\&. This will discover the commits \fBA\fR and \fBB\fR and the merge \fBM\fR, but also will reveal the merge commits \fBO\fR and \fBP\fR\&. With parent rewriting, the resulting graph is:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+          \&.\-A\-\-\-M\-\-\-\-\-\-\-\-N\-\-\-O\-\-\-P
+         /     / \e  \e  \e/   /   /
+        I     B   \e  R\-\(aq`\-\-\(aq   /
+         \e   /     \e/         /
+          \e /      /\e        /
+           `\-\-\-X\-\-\(aq  `\-\-\-\-\-\-\(aq
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+Here, the merge commits \fBO\fR and \fBP\fR contribute extra noise, as they did not actually contribute a change to \fBfile\&.txt\fR\&. They only merged a topic that was based on an older version of \fBfile\&.txt\fR\&. This is a common issue in repositories using a workflow where many contributors work in parallel and merge their topic branches along a single trunk: manu unrelated merges appear in the \fB\-\-full\-history\fR results\&.
+.sp
+When using the \fB\-\-simplify\-merges\fR option, the commits \fBO\fR and \fBP\fR disappear from the results\&. This is because the rewritten second parents of \fBO\fR and \fBP\fR are reachable from their first parents\&. Those edges are removed and then the commits look like single\-parent commits that are TREESAME to their parent\&. This also happens to the commit \fBN\fR, resulting in a history view as follows:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+          \&.\-A\-\-\-M\-\-\&.
+         /     /    \e
+        I     B      R
+         \e   /      /
+          \e /      /
+           `\-\-\-X\-\-\(aq
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+In this view, we see all of the important single\-parent changes from \fBA\fR, \fBB\fR, and \fBX\fR\&. We also see the carefully\-resolved merge \fBM\fR and the not\-so\-carefully\-resolved merge \fBR\fR\&. This is usually enough information to determine why the commits \fBA\fR and \fBB\fR "disappeared" from history in the default view\&. However, there are a few issues with this approach\&.
+.sp
+The first issue is performance\&. Unlike any previous option, the \fB\-\-simplify\-merges\fR option requires walking the entire commit history before returning a single result\&. This can make the option difficult to use for very large repositories\&.
+.sp
+The second issue is one of auditing\&. When many contributors are working on the same repository, it is important which merge commits introduced a change into an important branch\&. The problematic merge \fBR\fR above is not likely to be the merge commit that was used to merge into an important branch\&. Instead, the merge \fBN\fR was used to merge \fBR\fR and \fBX\fR into the important branch\&. This commit may have information about why the change \fBX\fR came to override the changes from \fBA\fR and \fBB\fR in its commit message\&.
+.PP
+\-\-show\-pulls
+.RS 4
+In addition to the commits shown in the default history, show each merge commit that is not TREESAME to its first parent but is TREESAME to a later parent\&.
+.sp
+When a merge commit is included by
+\fB\-\-show\-pulls\fR, the merge is treated as if it "pulled" the change from another branch\&. When using
+\fB\-\-show\-pulls\fR
+on this example (and no other options) the resulting graph is:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+        I\-\-\-X\-\-\-R\-\-\-N
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Here, the merge commits
+\fBR\fR
+and
+\fBN\fR
+are included because they pulled the commits
+\fBX\fR
+and
+\fBR\fR
+into the base branch, respectively\&. These merges are the reason the commits
+\fBA\fR
+and
+\fBB\fR
+do not appear in the default history\&.
+.sp
+When
+\fB\-\-show\-pulls\fR
+is paired with
+\fB\-\-simplify\-merges\fR, the graph includes all of the necessary information:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+          \&.\-A\-\-\-M\-\-\&.   N
+         /     /    \e /
+        I     B      R
+         \e   /      /
+          \e /      /
+           `\-\-\-X\-\-\(aq
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Notice that since
+\fBM\fR
+is reachable from
+\fBR\fR, the edge from
+\fBN\fR
+to
+\fBM\fR
+was simplified away\&. However,
+\fBN\fR
+still appears in the history as an important commit because it "pulled" the change
+\fBR\fR
+into the main branch\&.
+.RE
+.sp
 The \fB\-\-simplify\-by\-decoration\fR option allows you to view only the big picture of the topology of the history, by omitting commits that are not referenced by tags\&. Commits are marked as !TREESAME (in other words, kept after history simplification rules described above) if (1) they are referenced by tags, or (2) they change the contents of the paths given on the command line\&. All other commits are marked as TREESAME (subject to be simplified away)\&.
 .SS "Bisection Helpers"
 .PP
@@ -1102,7 +1258,7 @@ outputs
 .RE
 .\}
 .sp
-would be of roughly the same length\&. Finding the change which introduces a regression is thus reduced to a binary search: repeatedly generate and test new \(aqmidpoint\(cqs until the commit chain is of length one\&. Cannot be combined with \-\-first\-parent\&.
+would be of roughly the same length\&. Finding the change which introduces a regression is thus reduced to a binary search: repeatedly generate and test new \(aqmidpoint\(cqs until the commit chain is of length one\&.
 .RE
 .PP
 \-\-bisect\-vars
@@ -1376,6 +1532,7 @@ can be one of
 \fImedium\fR,
 \fIfull\fR,
 \fIfuller\fR,
+\fIreference\fR,
 \fIemail\fR,
 \fIraw\fR,
 \fIformat:<string>\fR
@@ -1399,7 +1556,7 @@ Note: you can specify the default pretty format in the repository configuration 
 .PP
 \-\-abbrev\-commit
 .RS 4
-Instead of showing the full 40\-byte hexadecimal commit object name, show only a partial prefix\&. Non default number of digits can be specified with "\-\-abbrev=<n>" (which also modifies diff output, if it is displayed)\&.
+Instead of showing the full 40\-byte hexadecimal commit object name, show a prefix that names the object uniquely\&. "\-\-abbrev=<n>" (which also modifies diff output, if it is displayed) option can be used to specify the minimum length of the prefix\&.
 .sp
 This should make "\-\-pretty=oneline" a whole lot more readable for people using 80\-column terminals\&.
 .RE
@@ -1407,8 +1564,7 @@ This should make "\-\-pretty=oneline" a whole lot more readable for people using
 \-\-no\-abbrev\-commit
 .RS 4
 Show the full 40\-byte hexadecimal commit object name\&. This negates
-\fB\-\-abbrev\-commit\fR
-and those options which imply it such as "\-\-oneline"\&. It also overrides the
+\fB\-\-abbrev\-commit\fR, either explicit or implied by other options such as "\-\-oneline"\&. It also overrides the
 \fBlog\&.abbrevCommit\fR
 variable\&.
 .RE
@@ -1689,7 +1845,7 @@ Print a number stating how many commits would have been listed, and suppress all
 .RE
 .SH "PRETTY FORMATS"
 .sp
-If the commit is a merge, and if the pretty\-format is not \fIoneline\fR, \fIemail\fR or \fIraw\fR, an additional line is inserted before the \fIAuthor:\fR line\&. This line begins with "Merge: " and the sha1s of ancestral commits are printed, separated by spaces\&. Note that the listed commits may not necessarily be the list of the \fBdirect\fR parent commits if you have limited your view of history: for example, if you are only interested in changes related to a certain directory or file\&.
+If the commit is a merge, and if the pretty\-format is not \fIoneline\fR, \fIemail\fR or \fIraw\fR, an additional line is inserted before the \fIAuthor:\fR line\&. This line begins with "Merge: " and the hashes of ancestral commits are printed, separated by spaces\&. Note that the listed commits may not necessarily be the list of the \fBdirect\fR parent commits if you have limited your view of history: for example, if you are only interested in changes related to a certain directory or file\&.
 .sp
 There are several built\-in formats, and you can define additional formats by setting a pretty\&.<name> config option to either another format name, or a \fIformat:\fR string, as described below (see \fBgit-config\fR(1))\&. Here are the details of the built\-in formats:
 .sp
@@ -1707,7 +1863,7 @@ There are several built\-in formats, and you can define additional formats by se
 .RS 4
 .\}
 .nf
-<sha1> <title line>
+<hash> <title line>
 .fi
 .if n \{\
 .RE
@@ -1730,7 +1886,7 @@ This is designed to be as compact as possible\&.
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author: <author>
 .fi
 .if n \{\
@@ -1762,7 +1918,7 @@ Author: <author>
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author: <author>
 Date:   <author date>
 .fi
@@ -1805,7 +1961,7 @@ Date:   <author date>
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author: <author>
 Commit: <committer>
 .fi
@@ -1848,7 +2004,7 @@ Commit: <committer>
 .RS 4
 .\}
 .nf
-commit <sha1>
+commit <hash>
 Author:     <author>
 AuthorDate: <author date>
 Commit:     <committer>
@@ -1887,13 +2043,46 @@ CommitDate: <committer date>
 .sp -1
 .IP \(bu 2.3
 .\}
+\fIreference\fR
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+<abbrev hash> (<title line>, <short author date>)
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+This format is used to refer to another commit in a commit message and is the same as
+\fB\-\-pretty=\(aqformat:%C(auto)%h (%s, %ad)\(aq\fR\&. By default, the date is formatted with
+\fB\-\-date=short\fR
+unless another
+\fB\-\-date\fR
+option is explicitly specified\&. As with any
+\fBformat:\fR
+with format placeholders, its output is not affected by other options like
+\fB\-\-decorate\fR
+and
+\fB\-\-walk\-reflogs\fR\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fIemail\fR
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-From <sha1> <date>
+From <hash> <date>
 From: <author>
 Date: <author date>
 Subject: [PATCH] <title line>
@@ -1921,11 +2110,25 @@ Subject: [PATCH] <title line>
 .sp -1
 .IP \(bu 2.3
 .\}
+\fImboxrd\fR
+.sp
+Like
+\fIemail\fR, but lines in the commit message starting with "From " (preceded by zero or more ">") are quoted with ">" so they aren\(cqt confused as starting a new commit\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fIraw\fR
 .sp
 The
 \fIraw\fR
-format shows the entire commit exactly as stored in the commit object\&. Notably, the SHA\-1s are displayed in full, regardless of whether \-\-abbrev or \-\-no\-abbrev are used, and
+format shows the entire commit exactly as stored in the commit object\&. Notably, the hashes are displayed in full, regardless of whether \-\-abbrev or \-\-no\-abbrev are used, and
 \fIparents\fR
 information show the true parent commits, without taking grafts or history simplification into account\&. Note that this format affects the way commits are displayed, but not the way the diff is shown e\&.g\&. with
 \fBgit log \-\-raw\fR\&. To get full object names in a raw diff format, use
@@ -2156,6 +2359,22 @@ or
 \fBgit-blame\fR(1))
 .RE
 .PP
+\fI%al\fR
+.RS 4
+author email local\-part (the part before the
+\fI@\fR
+sign)
+.RE
+.PP
+\fI%aL\fR
+.RS 4
+author local\-part (see
+\fI%al\fR) respecting \&.mailmap, see
+\fBgit-shortlog\fR(1)
+or
+\fBgit-blame\fR(1))
+.RE
+.PP
 \fI%ad\fR
 .RS 4
 author date (format respects \-\-date= option)
@@ -2186,6 +2405,11 @@ author date, ISO 8601\-like format
 author date, strict ISO 8601 format
 .RE
 .PP
+\fI%as\fR
+.RS 4
+author date, short format (\fBYYYY\-MM\-DD\fR)
+.RE
+.PP
 \fI%cn\fR
 .RS 4
 committer name
@@ -2207,6 +2431,22 @@ committer email
 \fI%cE\fR
 .RS 4
 committer email (respecting \&.mailmap, see
+\fBgit-shortlog\fR(1)
+or
+\fBgit-blame\fR(1))
+.RE
+.PP
+\fI%cl\fR
+.RS 4
+committer email local\-part (the part before the
+\fI@\fR
+sign)
+.RE
+.PP
+\fI%cL\fR
+.RS 4
+committer local\-part (see
+\fI%cl\fR) respecting \&.mailmap, see
 \fBgit-shortlog\fR(1)
 or
 \fBgit-blame\fR(1))
@@ -2240,6 +2480,11 @@ committer date, ISO 8601\-like format
 \fI%cI\fR
 .RS 4
 committer date, strict ISO 8601 format
+.RE
+.PP
+\fI%cs\fR
+.RS 4
+committer date, short format (\fBYYYY\-MM\-DD\fR)
 .RE
 .PP
 \fI%d\fR
@@ -2315,6 +2560,11 @@ show the fingerprint of the key used to sign a signed commit
 show the fingerprint of the primary key whose subkey was used to sign a signed commit
 .RE
 .PP
+\fI%GT\fR
+.RS 4
+show the trust level for the key used to sign a signed commit
+.RE
+.PP
 \fI%gD\fR
 .RS 4
 reflog selector, e\&.g\&.,
@@ -2375,7 +2625,16 @@ reflog subject
 display the trailers of the body as interpreted by
 \fBgit-interpret-trailers\fR(1)\&. The
 \fBtrailers\fR
-string may be followed by a colon and zero or more comma\-separated options:
+string may be followed by a colon and zero or more comma\-separated options\&. If any option is provided multiple times the last occurance wins\&.
+.sp
+The boolean options accept an optional value
+\fB[=<BOOL>]\fR\&. The values
+\fBtrue\fR,
+\fBfalse\fR,
+\fBon\fR,
+\fBoff\fR
+etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in
+\fBgit-config\fR(1)\&. If a boolean option is given with no value, it\(cqs enabled\&.
 .sp
 .RS 4
 .ie n \{\
@@ -2402,17 +2661,7 @@ shows trailer lines with key
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIonly[=val]\fR: select whether non\-trailer lines from the trailer block should be included\&. The
-\fBonly\fR
-keyword may optionally be followed by an equal sign and one of
-\fBtrue\fR,
-\fBon\fR,
-\fByes\fR
-to omit or
-\fBfalse\fR,
-\fBoff\fR,
-\fBno\fR
-to show the non\-trailer lines\&. If option is given without value it is enabled\&. If given multiple times the last value is used\&.
+\fIonly[=<BOOL>]\fR: select whether non\-trailer lines from the trailer block should be included\&.
 .RE
 .sp
 .RS 4
@@ -2425,7 +2674,7 @@ to show the non\-trailer lines\&. If option is given without value it is enabled
 .\}
 \fIseparator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer line is terminated with a line feed character\&. The string SEP may contain the literal formatting codes described above\&. To use comma as separator one must use
 \fB%x2C\fR
-as it would otherwise be parsed as next option\&. If separator option is given multiple times only the last one is used\&. E\&.g\&.,
+as it would otherwise be parsed as next option\&. E\&.g\&.,
 \fB%(trailers:key=Ticket,separator=%x2C )\fR
 shows all trailer lines whose key is "Ticket" separated by a comma and a space\&.
 .RE
@@ -2438,11 +2687,9 @@ shows all trailer lines whose key is "Ticket" separated by a comma and a space\&
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIunfold[=val]\fR: make it behave as if interpret\-trailer\(cqs
+\fIunfold[=<BOOL>]\fR: make it behave as if interpret\-trailer\(cqs
 \fB\-\-unfold\fR
-option was given\&. In same way as to for
-\fBonly\fR
-it can be followed by an equal sign and explicit value\&. E\&.g\&.,
+option was given\&. E\&.g\&.,
 \fB%(trailers:only,unfold=true)\fR
 unfolds and shows all trailer lines\&.
 .RE
@@ -2455,7 +2702,31 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIvalueonly[=val]\fR: skip over the key part of the trailer line and only show the value part\&. Also this optionally allows explicit value\&.
+\fIkeyonly[=<BOOL>]\fR: only show the key part of the trailer\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIvalueonly[=<BOOL>]\fR: only show the value part of the trailer\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIkey_value_separator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer key\-value pair is separated by ": "\&. Otherwise it shares the same semantics as
+\fIseparator=<SEP>\fR
+above\&.
 .RE
 .RE
 .RE

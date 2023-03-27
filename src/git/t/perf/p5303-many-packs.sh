@@ -21,10 +21,14 @@ repack_into_n () {
 	mkdir staging &&
 
 	git rev-list --first-parent HEAD |
-	sed -n '1~5p' |
-	head -n "$1" |
-	perl -e 'print reverse <>' \
-	>pushes
+	perl -e '
+		my $n = shift;
+		while (<>) {
+			last unless @commits < $n;
+			push @commits, $_ if $. % 5 == 1;
+		}
+		print reverse @commits;
+	' "$1" >pushes
 
 	# create base packfile
 	head -n 1 pushes |
@@ -73,15 +77,38 @@ do
 		git rev-list --objects --all >/dev/null
 	'
 
+	test_perf "abbrev-commit ($nr_packs)" '
+		git rev-list --abbrev-commit HEAD >/dev/null
+	'
+
 	# This simulates the interesting part of the repack, which is the
 	# actual pack generation, without smudging the on-disk setup
 	# between trials.
 	test_perf "repack ($nr_packs)" '
+		GIT_TEST_FULL_IN_PACK_ARRAY=1 \
 		git pack-objects --keep-true-parents \
 		  --honor-pack-keep --non-empty --all \
 		  --reflog --indexed-objects --delta-base-offset \
 		  --stdout </dev/null >/dev/null
 	'
 done
+
+# Measure pack loading with 10,000 packs.
+test_expect_success 'generate lots of packs' '
+	for i in $(test_seq 10000); do
+		echo "blob"
+		echo "data <<EOF"
+		echo "blob $i"
+		echo "EOF"
+		echo "checkpoint"
+	done |
+	git -c fastimport.unpackLimit=0 fast-import
+'
+
+# The purpose of this test is to evaluate load time for a large number
+# of packs while doing as little other work as possible.
+test_perf "load 10,000 packs" '
+	git rev-parse --verify "HEAD^{commit}"
+'
 
 test_done

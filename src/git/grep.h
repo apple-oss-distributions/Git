@@ -170,7 +170,6 @@ struct grep_opt {
 	void *output_priv;
 };
 
-void init_grep_defaults(struct repository *);
 int grep_config(const char *var, const char *value, void *);
 void grep_init(struct grep_opt *, struct repository *repo, const char *prefix);
 void grep_destroy(void);
@@ -220,18 +219,5 @@ int grep_threads_ok(const struct grep_opt *opt);
  */
 extern int grep_use_locks;
 extern pthread_mutex_t grep_attr_mutex;
-extern pthread_mutex_t grep_read_mutex;
-
-static inline void grep_read_lock(void)
-{
-	if (grep_use_locks)
-		pthread_mutex_lock(&grep_read_mutex);
-}
-
-static inline void grep_read_unlock(void)
-{
-	if (grep_use_locks)
-		pthread_mutex_unlock(&grep_read_mutex);
-}
 
 #endif

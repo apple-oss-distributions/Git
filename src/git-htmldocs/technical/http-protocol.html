@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>HTTP transfer protocols</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -943,7 +943,7 @@ S:
 S: 001e# service=git-upload-pack\n
 S: 0000
 S: 004895dcfa3633004da0049d3d0fa03f80589cbcaf31 refs/heads/maint\0multi_ack\n
-S: 0042d049f6c27a2244e12041955e262a404c7faba355 refs/heads/master\n
+S: 003fd049f6c27a2244e12041955e262a404c7faba355 refs/heads/master\n
 S: 003c2cb58b79488a98d2721cea644875a8dd0026b115 refs/tags/v1.0\n
 S: 003fa3c2e2402b99163d1d59756e5f207ae21cccba4c refs/tags/v1.0^{}\n
 S: 0000</code></pre>
@@ -1132,8 +1132,9 @@ at all in the request stream:</p></div>
 </ul></div>
 <div class="paragraph"><p>The stream is terminated by a pkt-line flush (<code>0000</code>).</p></div>
 <div class="paragraph"><p>A single "want" or "have" command MUST have one hex formatted
-SHA-1 as its value.  Multiple SHA-1s MUST be sent by sending
-multiple commands.</p></div>
+object name as its value.  Multiple object names MUST be sent by sending
+multiple commands. Object names MUST be given using the object format
+negotiated through the <code>object-format</code> capability (default SHA-1).</p></div>
 <div class="paragraph"><p>The <code>have</code> list is created by popping the first 32 commits
 from <code>c_pending</code>.  Less can be supplied if <code>c_pending</code> empties.</p></div>
 <div class="paragraph"><p>If the client has sent 256 "have" commits and has not yet
@@ -1247,7 +1248,7 @@ link:technical/protocol-capabilities.html</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-08-18 07:20:20 JST
+ 2020-08-19 16:37:10 PDT
 </div>
 </div>
 </body>

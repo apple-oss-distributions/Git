@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-push(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -753,7 +753,7 @@ git-push(1) Manual Page
            [--repo=&lt;repository&gt;] [-f | --force] [-d | --delete] [--prune] [-v | --verbose]
            [-u | --set-upstream] [-o &lt;string&gt; | --push-option=&lt;string&gt;]
            [--[no-]signed|--signed=(true|false|if-asked)]
-           [--force-with-lease[=&lt;refname&gt;[:&lt;expect&gt;]]]
+           [--force-with-lease[=&lt;refname&gt;[:&lt;expect&gt;]] [--force-if-includes]]
            [--no-verify] [&lt;repository&gt; [&lt;refspec&gt;&#8230;]]</pre>
 <div class="attribution">
 </div></div>
@@ -1140,6 +1140,13 @@ seen and are willing to overwrite, then rewrite history, and finally
 force push changes to <code>master</code> if the remote version is still at
 <code>base</code>, regardless of what your local <code>remotes/origin/master</code> has been
 updated to in the background.</p></div>
+<div class="paragraph"><p>Alternatively, specifying <code>--force-if-includes</code> as an ancillary option
+along with <code>--force-with-lease[=&lt;refname&gt;]</code> (i.e., without saying what
+exact commit the ref on the remote side must be pointing at, or which
+refs on the remote side are being protected) at the time of "push" will
+verify if updates from the remote-tracking refs that may have been
+implicitly updated in the background are integrated locally before
+allowing a forced update.</p></div>
 </dd>
 <dt class="hdlist1">
 -f
@@ -1165,6 +1172,24 @@ strictly behind their remote counterpart).  To force a push to only
 one branch, use a <code>+</code> in front of the refspec to push (e.g <code>git push
 origin +master</code> to force a push to the <code>master</code> branch). See the
 <code>&lt;refspec&gt;...</code> section above for details.</p></div>
+</dd>
+<dt class="hdlist1">
+--[no-]force-if-includes
+</dt>
+<dd>
+<p>
+        Force an update only if the tip of the remote-tracking ref
+        has been integrated locally.
+</p>
+<div class="paragraph"><p>This option enables a check that verifies if the tip of the
+remote-tracking ref is reachable from one of the "reflog" entries of
+the local branch based in it for a rewrite. The check ensures that any
+updates from the remote have been incorporated locally by rejecting the
+forced update if that is not the case.</p></div>
+<div class="paragraph"><p>If the option is passed without specifying <code>--force-with-lease</code>, or
+specified along with <code>--force-with-lease=&lt;refname&gt;:&lt;expect&gt;</code>, it is
+a "no-op".</p></div>
+<div class="paragraph"><p>Specifying <code>--no-force-if-includes</code> disables this behavior.</p></div>
 </dd>
 <dt class="hdlist1">
 --repo=&lt;repository&gt;
@@ -1376,6 +1401,8 @@ file:///path/to/repo.git/
 <div class="paragraph"><p>These two syntaxes are mostly equivalent, except when cloning, when
 the former implies --local option. See <a href="git-clone.html">git-clone(1)</a> for
 details.</p></div>
+<div class="paragraph"><p><em>git clone</em>, <em>git fetch</em> and <em>git pull</em>, but not <em>git push</em>, will also
+accept a suitable bundle file. See <a href="git-bundle.html">git-bundle(1)</a>.</p></div>
 <div class="paragraph"><p>When Git doesn&#8217;t know how to handle a certain transport protocol, it
 attempts to use the <em>remote-&lt;transport&gt;</em> remote helper, if one
 exists. To explicitly request a remote helper, the following syntax
@@ -1944,7 +1971,7 @@ As in #1, the attacker chooses an object ID X to steal. The victim sends
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-08-13 02:43:45 JST
+ 2020-10-27 15:58:27 PDT
 </div>
 </div>
 </body>

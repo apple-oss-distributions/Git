@@ -99,6 +99,13 @@ void packet_delim(int fd)
 		die_errno(_("unable to write delim packet"));
 }
 
+void packet_response_end(int fd)
+{
+	packet_trace("0002", 4, 1);
+	if (write_in_full(fd, "0002", 4) < 0)
+		die_errno(_("unable to write stateless separator packet"));
+}
+
 int packet_flush_gently(int fd)
 {
 	packet_trace("0000", 4, 1);
@@ -306,10 +313,10 @@ static int get_packet_data(int fd, char **src_buf, size_t *src_size,
 	return ret;
 }
 
-static int packet_length(const char *linelen)
+int packet_length(const char lenbuf_hex[4])
 {
-	int val = hex2chr(linelen);
-	return (val < 0) ? val : (val << 8) | hex2chr(linelen + 2);
+	int val = hex2chr(lenbuf_hex);
+	return (val < 0) ? val : (val << 8) | hex2chr(lenbuf_hex + 2);
 }
 
 enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
@@ -337,6 +344,10 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 		packet_trace("0001", 4, 0);
 		*pktlen = 0;
 		return PACKET_READ_DELIM;
+	} else if (len == 2) {
+		packet_trace("0002", 4, 0);
+		*pktlen = 0;
+		return PACKET_READ_RESPONSE_END;
 	} else if (len < 4) {
 		die(_("protocol error: bad line length %d"), len);
 	}
@@ -450,9 +461,11 @@ int recv_sideband(const char *me, int in_stream, int out)
 	enum sideband_type sideband_type;
 
 	while (1) {
-		len = packet_read(in_stream, NULL, NULL, buf, LARGE_PACKET_MAX,
-				  0);
-		if (!demultiplex_sideband(me, buf, len, 0, &scratch,
+		int status = packet_read_with_status(in_stream, NULL, NULL,
+						     buf, LARGE_PACKET_MAX,
+						     &len,
+						     PACKET_READ_GENTLE_ON_EOF);
+		if (!demultiplex_sideband(me, status, buf, len, 0, &scratch,
 					  &sideband_type))
 			continue;
 		switch (sideband_type) {
@@ -460,6 +473,9 @@ int recv_sideband(const char *me, int in_stream, int out)
 			write_or_die(out, buf + 1, len - 1);
 			break;
 		default: /* errors: message already written */
+			if (scratch.len > 0)
+				BUG("unhandled incomplete sideband: '%s'",
+				    scratch.buf);
 			return sideband_type;
 		}
 	}
@@ -479,6 +495,7 @@ void packet_reader_init(struct packet_reader *reader, int fd,
 	reader->buffer_size = sizeof(packet_buffer);
 	reader->options = options;
 	reader->me = "git";
+	reader->hash_algo = &hash_algos[GIT_HASH_SHA1];
 }
 
 enum packet_read_status packet_reader_read(struct packet_reader *reader)
@@ -505,9 +522,9 @@ enum packet_read_status packet_reader_read(struct packet_reader *reader)
 							 reader->options);
 		if (!reader->use_sideband)
 			break;
-		if (demultiplex_sideband(reader->me, reader->buffer,
-					 reader->pktlen, 1, &scratch,
-					 &sideband_type))
+		if (demultiplex_sideband(reader->me, reader->status,
+					 reader->buffer, reader->pktlen, 1,
+					 &scratch, &sideband_type))
 			break;
 	}
 

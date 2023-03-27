@@ -436,70 +436,76 @@ test_expect_success 'push ref expression with non-existent, incomplete dest' '
 
 '
 
-test_expect_success 'push with HEAD' '
+for head in HEAD @
+do
 
-	mk_test testrepo heads/master &&
-	git checkout master &&
-	git push testrepo HEAD &&
-	check_push_result testrepo $the_commit heads/master
+	test_expect_success "push with $head" '
 
-'
+		mk_test testrepo heads/master &&
+		git checkout master &&
+		git push testrepo $head &&
+		check_push_result testrepo $the_commit heads/master
 
-test_expect_success 'push with HEAD nonexisting at remote' '
+	'
 
-	mk_test testrepo heads/master &&
-	git checkout -b local master &&
-	git push testrepo HEAD &&
-	check_push_result testrepo $the_commit heads/local
-'
+	test_expect_success "push with $head nonexisting at remote" '
 
-test_expect_success 'push with +HEAD' '
+		mk_test testrepo heads/master &&
+		git checkout -b local master &&
+		test_when_finished "git checkout master; git branch -D local" &&
+		git push testrepo $head &&
+		check_push_result testrepo $the_commit heads/local
+	'
 
-	mk_test testrepo heads/master &&
-	git checkout master &&
-	git branch -D local &&
-	git checkout -b local &&
-	git push testrepo master local &&
-	check_push_result testrepo $the_commit heads/master &&
-	check_push_result testrepo $the_commit heads/local &&
+	test_expect_success "push with +$head" '
 
-	# Without force rewinding should fail
-	git reset --hard HEAD^ &&
-	test_must_fail git push testrepo HEAD &&
-	check_push_result testrepo $the_commit heads/local &&
+		mk_test testrepo heads/master &&
+		git checkout -b local master &&
+		test_when_finished "git checkout master; git branch -D local" &&
+		git push testrepo master local &&
+		check_push_result testrepo $the_commit heads/master &&
+		check_push_result testrepo $the_commit heads/local &&
 
-	# With force rewinding should succeed
-	git push testrepo +HEAD &&
-	check_push_result testrepo $the_first_commit heads/local
+		# Without force rewinding should fail
+		git reset --hard $head^ &&
+		test_must_fail git push testrepo $head &&
+		check_push_result testrepo $the_commit heads/local &&
 
-'
+		# With force rewinding should succeed
+		git push testrepo +$head &&
+		check_push_result testrepo $the_first_commit heads/local
 
-test_expect_success 'push HEAD with non-existent, incomplete dest' '
+	'
 
-	mk_test testrepo &&
-	git checkout master &&
-	git push testrepo HEAD:branch &&
-	check_push_result testrepo $the_commit heads/branch
+	test_expect_success "push $head with non-existent, incomplete dest" '
 
-'
+		mk_test testrepo &&
+		git checkout master &&
+		git push testrepo $head:branch &&
+		check_push_result testrepo $the_commit heads/branch
 
-test_expect_success 'push with config remote.*.push = HEAD' '
+	'
 
-	mk_test testrepo heads/local &&
-	git checkout master &&
-	git branch -f local $the_commit &&
-	(
-		cd testrepo &&
-		git checkout local &&
-		git reset --hard $the_first_commit
-	) &&
-	test_config remote.there.url testrepo &&
-	test_config remote.there.push HEAD &&
-	test_config branch.master.remote there &&
-	git push &&
-	check_push_result testrepo $the_commit heads/master &&
-	check_push_result testrepo $the_first_commit heads/local
-'
+	test_expect_success "push with config remote.*.push = $head" '
+
+		mk_test testrepo heads/local &&
+		git checkout master &&
+		git branch -f local $the_commit &&
+		test_when_finished "git branch -D local" &&
+		(
+			cd testrepo &&
+			git checkout local &&
+			git reset --hard $the_first_commit
+		) &&
+		test_config remote.there.url testrepo &&
+		test_config remote.there.push $head &&
+		test_config branch.master.remote there &&
+		git push &&
+		check_push_result testrepo $the_commit heads/master &&
+		check_push_result testrepo $the_first_commit heads/local
+	'
+
+done
 
 test_expect_success 'push with remote.pushdefault' '
 	mk_test up_repo heads/master &&
@@ -747,42 +753,42 @@ test_expect_success 'deletion of a non-existent ref alone does trigger post-rece
 '
 
 test_expect_success 'mixed ref updates, deletes, invalid deletes trigger hooks with correct input' '
-	mk_test_with_hooks testrepo heads/master heads/next heads/pu &&
+	mk_test_with_hooks testrepo heads/master heads/next heads/seen &&
 	orgmaster=$(cd testrepo && git show-ref -s --verify refs/heads/master) &&
 	newmaster=$(git show-ref -s --verify refs/heads/master) &&
 	orgnext=$(cd testrepo && git show-ref -s --verify refs/heads/next) &&
 	newnext=$ZERO_OID &&
-	orgpu=$(cd testrepo && git show-ref -s --verify refs/heads/pu) &&
-	newpu=$(git show-ref -s --verify refs/heads/master) &&
+	orgseen=$(cd testrepo && git show-ref -s --verify refs/heads/seen) &&
+	newseen=$(git show-ref -s --verify refs/heads/master) &&
 	git push testrepo refs/heads/master:refs/heads/master \
-	    refs/heads/master:refs/heads/pu :refs/heads/next \
+	    refs/heads/master:refs/heads/seen :refs/heads/next \
 	    :refs/heads/nonexistent &&
 	(
 		cd testrepo/.git &&
 		cat >pre-receive.expect <<-EOF &&
 		$orgmaster $newmaster refs/heads/master
 		$orgnext $newnext refs/heads/next
-		$orgpu $newpu refs/heads/pu
+		$orgseen $newseen refs/heads/seen
 		$ZERO_OID $ZERO_OID refs/heads/nonexistent
 		EOF
 
 		cat >update.expect <<-EOF &&
 		refs/heads/master $orgmaster $newmaster
 		refs/heads/next $orgnext $newnext
-		refs/heads/pu $orgpu $newpu
+		refs/heads/seen $orgseen $newseen
 		refs/heads/nonexistent $ZERO_OID $ZERO_OID
 		EOF
 
 		cat >post-receive.expect <<-EOF &&
 		$orgmaster $newmaster refs/heads/master
 		$orgnext $newnext refs/heads/next
-		$orgpu $newpu refs/heads/pu
+		$orgseen $newseen refs/heads/seen
 		EOF
 
 		cat >post-update.expect <<-EOF &&
 		refs/heads/master
 		refs/heads/next
-		refs/heads/pu
+		refs/heads/seen
 		EOF
 
 		test_cmp pre-receive.expect pre-receive.actual &&
@@ -1039,7 +1045,7 @@ test_force_fetch_tag "annotated tag" "-f -a -m'tag message'"
 test_expect_success 'push --porcelain' '
 	mk_empty testrepo &&
 	echo >.git/foo  "To testrepo" &&
-	echo >>.git/foo "*	refs/heads/master:refs/remotes/origin/master	[new branch]"  &&
+	echo >>.git/foo "*	refs/heads/master:refs/remotes/origin/master	[new reference]"  &&
 	echo >>.git/foo "Done" &&
 	git push >.git/bar --porcelain  testrepo refs/heads/master:refs/remotes/origin/master &&
 	(
@@ -1066,6 +1072,7 @@ test_expect_success 'push --porcelain rejected' '
 
 	echo >.git/foo  "To testrepo"  &&
 	echo >>.git/foo "!	refs/heads/master:refs/heads/master	[remote rejected] (branch is currently checked out)" &&
+	echo >>.git/foo "Done" &&
 
 	test_must_fail git push >.git/bar --porcelain  testrepo refs/heads/master:refs/heads/master &&
 	test_cmp .git/foo .git/bar
@@ -1151,7 +1158,7 @@ test_expect_success 'fetch exact SHA1' '
 		# unadvertised objects, so restrict this test to v0.
 
 		# fetching the hidden object should fail by default
-		test_must_fail env GIT_TEST_PROTOCOL_VERSION= \
+		test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 \
 			git fetch -v ../testrepo $the_commit:refs/heads/copy 2>err &&
 		test_i18ngrep "Server does not allow request for unadvertised object" err &&
 		test_must_fail git rev-parse --verify refs/heads/copy &&
@@ -1210,7 +1217,7 @@ do
 			cd shallow &&
 			# Some protocol versions (e.g. 2) support fetching
 			# unadvertised objects, so restrict this test to v0.
-			test_must_fail env GIT_TEST_PROTOCOL_VERSION= \
+			test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 \
 				git fetch --depth=1 ../testrepo/.git $SHA1 &&
 			git --git-dir=../testrepo/.git config uploadpack.allowreachablesha1inwant true &&
 			git fetch --depth=1 ../testrepo/.git $SHA1 &&
@@ -1241,9 +1248,9 @@ do
 			cd shallow &&
 			# Some protocol versions (e.g. 2) support fetching
 			# unadvertised objects, so restrict this test to v0.
-			test_must_fail env GIT_TEST_PROTOCOL_VERSION= \
+			test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 \
 				git fetch ../testrepo/.git $SHA1_3 &&
-			test_must_fail env GIT_TEST_PROTOCOL_VERSION= \
+			test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 \
 				git fetch ../testrepo/.git $SHA1_1 &&
 			git --git-dir=../testrepo/.git config uploadpack.allowreachablesha1inwant true &&
 			git fetch ../testrepo/.git $SHA1_1 &&
@@ -1251,9 +1258,11 @@ do
 			test_must_fail git cat-file commit $SHA1_2 &&
 			git fetch ../testrepo/.git $SHA1_2 &&
 			git cat-file commit $SHA1_2 &&
-			test_must_fail env GIT_TEST_PROTOCOL_VERSION= \
+			test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 \
 				git fetch ../testrepo/.git $SHA1_3 2>err &&
-			test_i18ngrep "remote error:.*not our ref.*$SHA1_3\$" err
+			# ideally we would insist this be on a "remote error:"
+			# line, but it is racy; see the commit message
+			test_i18ngrep "not our ref.*$SHA1_3\$" err
 		)
 	'
 done
@@ -1291,7 +1300,7 @@ test_expect_success 'peeled advertisements are not considered ref tips' '
 	git -C testrepo commit --allow-empty -m two &&
 	git -C testrepo tag -m foo mytag HEAD^ &&
 	oid=$(git -C testrepo rev-parse mytag^{commit}) &&
-	test_must_fail env GIT_TEST_PROTOCOL_VERSION= \
+	test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 \
 		git fetch testrepo $oid 2>err &&
 	test_i18ngrep "Server does not allow request for unadvertised object" err
 '
@@ -1710,6 +1719,17 @@ test_expect_success 'updateInstead with push-to-checkout hook' '
 		git diff --cached --quiet &&
 		test $(git -C .. rev-parse HEAD) = $(git rev-parse HEAD)
 	)
+'
+
+test_expect_success 'denyCurrentBranch and worktrees' '
+	git worktree add new-wt &&
+	git clone . cloned &&
+	test_commit -C cloned first &&
+	test_config receive.denyCurrentBranch refuse &&
+	test_must_fail git -C cloned push origin HEAD:new-wt &&
+	test_config receive.denyCurrentBranch updateInstead &&
+	git -C cloned push origin HEAD:new-wt &&
+	test_must_fail git -C cloned push --delete origin new-wt
 '
 
 test_done

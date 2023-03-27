@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-ls-files
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-LS\-FILES" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-LS\-FILES" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -36,18 +36,19 @@ git-ls-files \- Show information about files in the index and the working tree
                 (\-\-[cached|deleted|others|ignored|stage|unmerged|killed|modified])*
                 (\-[c|d|o|i|s|u|k|m])*
                 [\-\-eol]
+                [\-\-deduplicate]
                 [\-x <pattern>|\-\-exclude=<pattern>]
                 [\-X <file>|\-\-exclude\-from=<file>]
                 [\-\-exclude\-per\-directory=<file>]
                 [\-\-exclude\-standard]
                 [\-\-error\-unmatch] [\-\-with\-tree=<tree\-ish>]
                 [\-\-full\-name] [\-\-recurse\-submodules]
-                [\-\-abbrev] [\-\-] [<file>\&...]
+                [\-\-abbrev[=<n>]] [\-\-] [<file>\&...]
 .fi
 .sp
 .SH "DESCRIPTION"
 .sp
-This merges the file listing in the directory cache index with the actual working directory list, and shows different combinations of the two\&.
+This merges the file listing in the index with the actual working directory list, and shows different combinations of the two\&.
 .sp
 One or more of the options below may be used to determine the files shown:
 .SH "OPTIONS"
@@ -107,6 +108,19 @@ Show files on the filesystem that need to be removed due to file/directory confl
 \-z
 .RS 4
 \e0 line termination on output and do not quote filenames\&. See OUTPUT below for more information\&.
+.RE
+.PP
+\-\-deduplicate
+.RS 4
+When only filenames are shown, suppress duplicates that may come from having multiple stages during a merge, or giving
+\fB\-\-deleted\fR
+and
+\fB\-\-modified\fR
+option at the same time\&. When any of the
+\fB\-t\fR,
+\fB\-\-unmerged\fR, or
+\fB\-\-stage\fR
+option is in use, this option has no effect\&.
 .RE
 .PP
 \-x <pattern>, \-\-exclude=<pattern>
@@ -222,12 +236,14 @@ When run from a subdirectory, the command usually outputs paths relative to the 
 .PP
 \-\-recurse\-submodules
 .RS 4
-Recursively calls ls\-files on each submodule in the repository\&. Currently there is only support for the \-\-cached mode\&.
+Recursively calls ls\-files on each active submodule in the repository\&. Currently there is only support for the \-\-cached mode\&.
 .RE
 .PP
 \-\-abbrev[=<n>]
 .RS 4
-Instead of showing the full 40\-byte hexadecimal object lines, show only a partial prefix\&. Non default number of digits can be specified with \-\-abbrev=<n>\&.
+Instead of showing the full 40\-byte hexadecimal object lines, show the shortest prefix that is at least
+\fI<n>\fR
+hexdigits long that uniquely refers the object\&. Non default number of digits can be specified with \-\-abbrev=<n>\&.
 .RE
 .PP
 \-\-debug

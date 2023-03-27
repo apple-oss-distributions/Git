@@ -58,7 +58,7 @@ endif::git-rev-list[]
 	`--all-match`).
 ifndef::git-rev-list[]
 +
-When `--show-notes` is in effect, the message from the notes is
+When `--notes` is in effect, the message from the notes is
 matched as if it were part of the log message.
 endif::git-rev-list[]
 
@@ -128,8 +128,7 @@ parents) and `--max-parents=-1` (negative numbers denote no upper limit).
 	because merges into a topic branch tend to be only about
 	adjusting to updated upstream from time to time, and
 	this option allows you to ignore the individual commits
-	brought in to your history by such a merge. Cannot be
-	combined with --bisect.
+	brought in to your history by such a merge.
 
 --not::
 	Reverses the meaning of the '{caret}' prefix (or lack thereof)
@@ -207,7 +206,7 @@ ifndef::git-rev-list[]
 	Pretend as if the bad bisection ref `refs/bisect/bad`
 	was listed and as if it was followed by `--not` and the good
 	bisection refs `refs/bisect/good-*` on the command
-	line. Cannot be combined with --first-parent.
+	line.
 endif::git-rev-list[]
 
 --stdin::
@@ -269,7 +268,7 @@ list.
 	exclude (that is, '{caret}commit', 'commit1..commit2',
 	and 'commit1\...commit2' notations cannot be used).
 +
-With `--pretty` format other than `oneline` (for obvious reasons),
+With `--pretty` format other than `oneline` and `reference` (for obvious reasons),
 this causes the output to have two extra lines of information
 taken from the reflog.  The reflog designator in the output may be shown
 as `ref@{Nth}` (where `Nth` is the reverse-chronological index in the
@@ -293,6 +292,8 @@ Under `--pretty=oneline`, the commit message is
 prefixed with this information on the same line.
 This option cannot be combined with `--reverse`.
 See also linkgit:git-reflog[1].
++
+Under `--pretty=reference`, this information will not be shown at all.
 
 --merge::
 	After a failed merge, show refs that touch files having a
@@ -339,6 +340,12 @@ Default mode::
 	final state of the tree. Simplest because it prunes some side
 	branches if the end result is the same (i.e. merging branches
 	with the same content)
+
+--show-pulls::
+	Include all commits from the default mode, but also any merge
+	commits that are not TREESAME to the first parent but are
+	TREESAME to a later parent. This mode is helpful for showing
+	the merge commits that "first introduced" a change to a branch.
 
 --full-history::
 	Same as the default mode, but does not prune some history.
@@ -532,7 +539,7 @@ Note the major differences in `N`, `P`, and `Q` over `--full-history`:
   parent and is TREESAME.
 --
 
-Finally, there is a fifth simplification mode available:
+There is another simplification mode available:
 
 --ancestry-path::
 	Limit the displayed commits to those directly on the ancestry
@@ -571,6 +578,135 @@ option does. Applied to the 'D..M' range, it results in:
 				L--M
 -----------------------------------------------------------------------
 
+Before discussing another option, `--show-pulls`, we need to
+create a new example history.
+
+A common problem users face when looking at simplified history is that a
+commit they know changed a file somehow does not appear in the file's
+simplified history. Let's demonstrate a new example and show how options
+such as `--full-history` and `--simplify-merges` works in that case:
+
+-----------------------------------------------------------------------
+	  .-A---M-----C--N---O---P
+	 /     / \  \  \/   /   /
+	I     B   \  R-'`-Z'   /
+	 \   /     \/         /
+	  \ /      /\        /
+	   `---X--'  `---Y--'
+-----------------------------------------------------------------------
+
+For this example, suppose `I` created `file.txt` which was modified by
+`A`, `B`, and `X` in different ways. The single-parent commits `C`, `Z`,
+and `Y` do not change `file.txt`. The merge commit `M` was created by
+resolving the merge conflict to include both changes from `A` and `B`
+and hence is not TREESAME to either. The merge commit `R`, however, was
+created by ignoring the contents of `file.txt` at `M` and taking only
+the contents of `file.txt` at `X`. Hence, `R` is TREESAME to `X` but not
+`M`. Finally, the natural merge resolution to create `N` is to take the
+contents of `file.txt` at `R`, so `N` is TREESAME to `R` but not `C`.
+The merge commits `O` and `P` are TREESAME to their first parents, but
+not to their second parents, `Z` and `Y` respectively.
+
+When using the default mode, `N` and `R` both have a TREESAME parent, so
+those edges are walked and the others are ignored. The resulting history
+graph is:
+
+-----------------------------------------------------------------------
+	I---X
+-----------------------------------------------------------------------
+
+When using `--full-history`, Git walks every edge. This will discover
+the commits `A` and `B` and the merge `M`, but also will reveal the
+merge commits `O` and `P`. With parent rewriting, the resulting graph is:
+
+-----------------------------------------------------------------------
+	  .-A---M--------N---O---P
+	 /     / \  \  \/   /   /
+	I     B   \  R-'`--'   /
+	 \   /     \/         /
+	  \ /      /\        /
+	   `---X--'  `------'
+-----------------------------------------------------------------------
+
+Here, the merge commits `O` and `P` contribute extra noise, as they did
+not actually contribute a change to `file.txt`. They only merged a topic
+that was based on an older version of `file.txt`. This is a common
+issue in repositories using a workflow where many contributors work in
+parallel and merge their topic branches along a single trunk: manu
+unrelated merges appear in the `--full-history` results.
+
+When using the `--simplify-merges` option, the commits `O` and `P`
+disappear from the results. This is because the rewritten second parents
+of `O` and `P` are reachable from their first parents. Those edges are
+removed and then the commits look like single-parent commits that are
+TREESAME to their parent. This also happens to the commit `N`, resulting
+in a history view as follows:
+
+-----------------------------------------------------------------------
+	  .-A---M--.
+	 /     /    \
+	I     B      R
+	 \   /      /
+	  \ /      /
+	   `---X--'
+-----------------------------------------------------------------------
+
+In this view, we see all of the important single-parent changes from
+`A`, `B`, and `X`. We also see the carefully-resolved merge `M` and the
+not-so-carefully-resolved merge `R`. This is usually enough information
+to determine why the commits `A` and `B` "disappeared" from history in
+the default view. However, there are a few issues with this approach.
+
+The first issue is performance. Unlike any previous option, the
+`--simplify-merges` option requires walking the entire commit history
+before returning a single result. This can make the option difficult to
+use for very large repositories.
+
+The second issue is one of auditing. When many contributors are working
+on the same repository, it is important which merge commits introduced
+a change into an important branch. The problematic merge `R` above is
+not likely to be the merge commit that was used to merge into an
+important branch. Instead, the merge `N` was used to merge `R` and `X`
+into the important branch. This commit may have information about why
+the change `X` came to override the changes from `A` and `B` in its
+commit message.
+
+--show-pulls::
+	In addition to the commits shown in the default history, show
+	each merge commit that is not TREESAME to its first parent but
+	is TREESAME to a later parent.
++
+When a merge commit is included by `--show-pulls`, the merge is
+treated as if it "pulled" the change from another branch. When using
+`--show-pulls` on this example (and no other options) the resulting
+graph is:
++
+-----------------------------------------------------------------------
+	I---X---R---N
+-----------------------------------------------------------------------
++
+Here, the merge commits `R` and `N` are included because they pulled
+the commits `X` and `R` into the base branch, respectively. These
+merges are the reason the commits `A` and `B` do not appear in the
+default history.
++
+When `--show-pulls` is paired with `--simplify-merges`, the
+graph includes all of the necessary information:
++
+-----------------------------------------------------------------------
+	  .-A---M--.   N
+	 /     /    \ /
+	I     B      R
+	 \   /      /
+	  \ /      /
+	   `---X--'
+-----------------------------------------------------------------------
++
+Notice that since `M` is reachable from `R`, the edge from `N` to `M`
+was simplified away. However, `N` still appears in the history as an
+important commit because it "pulled" the change `R` into the main
+branch.
+
 The `--simplify-by-decoration` option allows you to view only the
 big picture of the topology of the history, by omitting commits
 that are not referenced by tags.  Commits are marked as !TREESAME
@@ -579,6 +715,7 @@ above) if (1) they are referenced by tags, or (2) they change the
 contents of the paths given on the command line.  All other
 commits are marked as TREESAME (subject to be simplified away).
 
+ifndef::git-shortlog[]
 ifdef::git-rev-list[]
 Bisection Helpers
 ~~~~~~~~~~~~~~~~~
@@ -605,7 +742,7 @@ outputs 'midpoint', the output of the two commands
 would be of roughly the same length.  Finding the change which
 introduces a regression is thus reduced to a binary search: repeatedly
 generate and test new 'midpoint's until the commit chain is of length
-one. Cannot be combined with --first-parent.
+one.
 
 --bisect-vars::
 	This calculates the same as `--bisect`, except that refs in
@@ -634,8 +771,9 @@ This option can be used along with `--bisect-vars`, in this case,
 after all the sorted commit objects, there will be the same text as if
 `--bisect-vars` had been used alone.
 endif::git-rev-list[]
+endif::git-shortlog[]
 
-
+ifndef::git-shortlog[]
 Commit Ordering
 ~~~~~~~~~~~~~~~
 
@@ -677,7 +815,9 @@ together.
 	Output the commits chosen to be shown (see Commit Limiting
 	section above) in reverse order. Cannot be combined with
 	`--walk-reflogs`.
+endif::git-shortlog[]
 
+ifndef::git-shortlog[]
 Object Traversal
 ~~~~~~~~~~~~~~~~
 
@@ -817,7 +957,9 @@ endif::git-rev-list[]
 
 --do-walk::
 	Overrides a previous `--no-walk`.
+endif::git-shortlog[]
 
+ifndef::git-shortlog[]
 Commit Formatting
 ~~~~~~~~~~~~~~~~~
 
@@ -973,46 +1115,4 @@ ifdef::git-rev-list[]
 	counts and print the count for equivalent commits separated
 	by a tab.
 endif::git-rev-list[]
-
-ifndef::git-rev-list[]
-Diff Formatting
-~~~~~~~~~~~~~~~
-
-Listed below are options that control the formatting of diff output.
-Some of them are specific to linkgit:git-rev-list[1], however other diff
-options may be given. See linkgit:git-diff-files[1] for more options.
-
--c::
-	With this option, diff output for a merge commit
-	shows the differences from each of the parents to the merge result
-	simultaneously instead of showing pairwise diff between a parent
-	and the result one at a time. Furthermore, it lists only files
-	which were modified from all parents.
-
---cc::
-	This flag implies the `-c` option and further compresses the
-	patch output by omitting uninteresting hunks whose contents in
-	the parents have only two variants and the merge result picks
-	one of them without modification.
-
---combined-all-paths::
-	This flag causes combined diffs (used for merge commits) to
-	list the name of the file from all parents.  It thus only has
-	effect when -c or --cc are specified, and is likely only
-	useful if filename changes are detected (i.e. when either
-	rename or copy detection have been requested).
-
--m::
-	This flag makes the merge commits show the full diff like
-	regular commits; for each merge parent, a separate log entry
-	and diff is generated. An exception is that only diff against
-	the first parent is shown when `--first-parent` option is given;
-	in that case, the output represents the changes the merge
-	brought _into_ the then-current branch.
-
--r::
-	Show recursive diffs.
-
--t::
-	Show the tree objects in the diff output. This implies `-r`.
-endif::git-rev-list[]
+endif::git-shortlog[]

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-commit(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -754,7 +754,8 @@ git-commit(1) Manual Page
            [-F &lt;file&gt; | -m &lt;msg&gt;] [--reset-author] [--allow-empty]
            [--allow-empty-message] [--no-verify] [-e] [--author=&lt;author&gt;]
            [--date=&lt;date&gt;] [--cleanup=&lt;mode&gt;] [--[no-]status]
-           [-i | -o] [-S[&lt;keyid&gt;]] [--] [&lt;file&gt;&#8230;]</pre>
+           [-i | -o] [--pathspec-from-file=&lt;file&gt; [--pathspec-file-nul]]
+           [-S[&lt;keyid&gt;]] [--] [&lt;pathspec&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1029,15 +1030,24 @@ that, you can recover from it with <em>git reset</em>.</p></div>
 <dt class="hdlist1">
 --signoff
 </dt>
+<dt class="hdlist1">
+--no-signoff
+</dt>
 <dd>
 <p>
-        Add Signed-off-by line by the committer at the end of the commit
-        log message.  The meaning of a signoff depends on the project,
-        but it typically certifies that committer has
-        the rights to submit this work under the same license and
-        agrees to a Developer Certificate of Origin
-        (see <a href="http://developercertificate.org/">http://developercertificate.org/</a> for more information).
+        Add a <code>Signed-off-by</code> trailer by the committer at the end of the commit
+        log message.  The meaning of a signoff depends on the project
+        to which you&#8217;re committing.  For example, it may certify that
+        the committer has the rights to submit the work under the
+        project&#8217;s license or agrees to some contributor representation,
+        such as a Developer Certificate of Origin.
+        (See <a href="http://developercertificate.org">http://developercertificate.org</a> for the one used by the
+        Linux kernel and Git projects.)  Consult the documentation or
+        leadership of the project to which you&#8217;re contributing to
+        understand how the signoffs are used in that project.
 </p>
+<div class="paragraph"><p>The --no-signoff option can be used to countermand an earlier --signoff
+option on the command line.</p></div>
 </dd>
 <dt class="hdlist1">
 -n
@@ -1236,6 +1246,29 @@ FROM UPSTREAM REBASE" section in <a href="git-rebase.html">git-rebase(1)</a>.)</
 </p>
 </dd>
 <dt class="hdlist1">
+--pathspec-from-file=&lt;file&gt;
+</dt>
+<dd>
+<p>
+        Pathspec is passed in <code>&lt;file&gt;</code> instead of commandline args. If
+        <code>&lt;file&gt;</code> is exactly <code>-</code> then standard input is used. Pathspec
+        elements are separated by LF or CR/LF. Pathspec elements can be
+        quoted as explained for the configuration variable <code>core.quotePath</code>
+        (see <a href="git-config.html">git-config(1)</a>). See also <code>--pathspec-file-nul</code> and
+        global <code>--literal-pathspecs</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+--pathspec-file-nul
+</dt>
+<dd>
+<p>
+        Only meaningful with <code>--pathspec-from-file</code>. Pathspec elements are
+        separated with NUL character and all other characters are taken
+        literally (including newlines and quotes).
+</p>
+</dd>
+<dt class="hdlist1">
 -u[&lt;mode&gt;]
 </dt>
 <dt class="hdlist1">
@@ -1341,20 +1374,16 @@ changes to tracked files.</p></div>
 <dt class="hdlist1">
 --gpg-sign[=&lt;keyid&gt;]
 </dt>
-<dd>
-<p>
-        GPG-sign commits. The <code>keyid</code> argument is optional and
-        defaults to the committer identity; if specified, it must be
-        stuck to the option without a space.
-</p>
-</dd>
 <dt class="hdlist1">
 --no-gpg-sign
 </dt>
 <dd>
 <p>
-        Countermand <code>commit.gpgSign</code> configuration variable that is
-        set to force each and every commit to be signed.
+        GPG-sign commits. The <code>keyid</code> argument is optional and
+        defaults to the committer identity; if specified, it must be
+        stuck to the option without a space. <code>--no-gpg-sign</code> is useful to
+        countermand both <code>commit.gpgSign</code> configuration variable, and
+        earlier <code>--gpg-sign</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1366,65 +1395,16 @@ changes to tracked files.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
-&lt;file&gt;&#8230;
+&lt;pathspec&gt;&#8230;
 </dt>
 <dd>
 <p>
-        When files are given on the command line, the command
-        commits the contents of the named files, without
-        recording the changes already staged.  The contents of
-        these files are also staged for the next commit on top
-        of what have been staged before.
+        When pathspec is given on the command line, commit the contents of
+        the files that match the pathspec without recording the changes
+        already added to the index. The contents of these files are also
+        staged for the next commit on top of what have been staged before.
 </p>
-</dd>
-</dl></div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_date_formats">DATE FORMATS</h2>
-<div class="sectionbody">
-<div class="paragraph"><p>The <code>GIT_AUTHOR_DATE</code>, <code>GIT_COMMITTER_DATE</code> environment variables
-and the <code>--date</code> option
-support the following date formats:</p></div>
-<div class="dlist"><dl>
-<dt class="hdlist1">
-Git internal format
-</dt>
-<dd>
-<p>
-        It is <code>&lt;unix timestamp&gt; &lt;time zone offset&gt;</code>, where <code>&lt;unix
-        timestamp&gt;</code> is the number of seconds since the UNIX epoch.
-        <code>&lt;time zone offset&gt;</code> is a positive or negative offset from UTC.
-        For example CET (which is 1 hour ahead of UTC) is <code>+0100</code>.
-</p>
-</dd>
-<dt class="hdlist1">
-RFC 2822
-</dt>
-<dd>
-<p>
-        The standard email format as described by RFC 2822, for example
-        <code>Thu, 07 Apr 2005 22:13:13 +0200</code>.
-</p>
-</dd>
-<dt class="hdlist1">
-ISO 8601
-</dt>
-<dd>
-<p>
-        Time and date specified by the ISO 8601 standard, for example
-        <code>2005-04-07T22:13:13</code>. The parser accepts a space instead of the
-        <code>T</code> character as well.
-</p>
-<div class="admonitionblock">
-<table><tr>
-<td class="icon">
-<div class="title">Note</div>
-</td>
-<td class="content">In addition, the date part is accepted in the following formats:
-<code>YYYY.MM.DD</code>, <code>MM/DD/YYYY</code> and <code>DD.MM.YYYY</code>.</td>
-</tr></table>
-</div>
+<div class="paragraph"><p>For more details, see the <em>pathspec</em> entry in <a href="gitglossary.html">gitglossary(7)</a>.</p></div>
 </dd>
 </dl></div>
 </div>
@@ -1513,6 +1493,90 @@ resolution, you cannot use <code>git commit</code> with pathnames to
 alter the order the changes are committed, because the merge
 should be recorded as a single commit.  In fact, the command
 refuses to run when given pathnames (but see <code>-i</code> option).</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_commit_information">COMMIT INFORMATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Author and committer information is taken from the following environment
+variables, if set:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>GIT_AUTHOR_NAME
+GIT_AUTHOR_EMAIL
+GIT_AUTHOR_DATE
+GIT_COMMITTER_NAME
+GIT_COMMITTER_EMAIL
+GIT_COMMITTER_DATE</code></pre>
+</div></div>
+<div class="paragraph"><p>(nb "&lt;", "&gt;" and "\n"s are stripped)</p></div>
+<div class="paragraph"><p>The author and committer names are by convention some form of a personal name
+(that is, the name by which other humans refer to you), although Git does not
+enforce or require any particular form. Arbitrary Unicode may be used, subject
+to the constraints listed above. This name has no effect on authentication; for
+that, see the <code>credential.username</code> variable in <a href="git-config.html">git-config(1)</a>.</p></div>
+<div class="paragraph"><p>In case (some of) these environment variables are not set, the information
+is taken from the configuration items <code>user.name</code> and <code>user.email</code>, or, if not
+present, the environment variable EMAIL, or, if that is not set,
+system user name and the hostname used for outgoing mail (taken
+from <code>/etc/mailname</code> and falling back to the fully qualified hostname when
+that file does not exist).</p></div>
+<div class="paragraph"><p>The <code>author.name</code> and <code>committer.name</code> and their corresponding email options
+override <code>user.name</code> and <code>user.email</code> if set and are overridden themselves by
+the environment variables.</p></div>
+<div class="paragraph"><p>The typical usage is to set just the <code>user.name</code> and <code>user.email</code> variables;
+the other options are provided for more complex use cases.</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_date_formats">DATE FORMATS</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>The <code>GIT_AUTHOR_DATE</code>, <code>GIT_COMMITTER_DATE</code> environment variables
+and the <code>--date</code> option
+support the following date formats:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+Git internal format
+</dt>
+<dd>
+<p>
+        It is <code>&lt;unix timestamp&gt; &lt;time zone offset&gt;</code>, where <code>&lt;unix
+        timestamp&gt;</code> is the number of seconds since the UNIX epoch.
+        <code>&lt;time zone offset&gt;</code> is a positive or negative offset from UTC.
+        For example CET (which is 1 hour ahead of UTC) is <code>+0100</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+RFC 2822
+</dt>
+<dd>
+<p>
+        The standard email format as described by RFC 2822, for example
+        <code>Thu, 07 Apr 2005 22:13:13 +0200</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+ISO 8601
+</dt>
+<dd>
+<p>
+        Time and date specified by the ISO 8601 standard, for example
+        <code>2005-04-07T22:13:13</code>. The parser accepts a space instead of the
+        <code>T</code> character as well. Fractional parts of a second will be ignored,
+        for example <code>2005-04-07T22:13:13.019</code> will be treated as
+        <code>2005-04-07T22:13:13</code>.
+</p>
+<div class="admonitionblock">
+<table><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">In addition, the date part is accepted in the following formats:
+<code>YYYY.MM.DD</code>, <code>MM/DD/YYYY</code> and <code>DD.MM.YYYY</code>.</td>
+</tr></table>
+</div>
+</dd>
+</dl></div>
 </div>
 </div>
 <div class="sect1">
@@ -1668,7 +1732,7 @@ information.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-10-09 14:51:03 JST
+ 2020-11-02 14:02:22 PST
 </div>
 </div>
 </body>

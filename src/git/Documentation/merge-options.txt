@@ -34,7 +34,7 @@ set to `no` at the beginning of them.
 
 --cleanup=<mode>::
 	This option determines how the merge message will be cleaned up before
-	commiting. See linkgit:git-commit[1] for more details. In addition, if
+	committing. See linkgit:git-commit[1] for more details. In addition, if
 	the '<mode>' is given a value of `scissors`, scissors will be appended
 	to `MERGE_MSG` before being passed on to the commit machinery in the
 	case of a merge conflict.
@@ -61,9 +61,12 @@ When not possible, refuse to merge and exit with a non-zero status.
 
 -S[<keyid>]::
 --gpg-sign[=<keyid>]::
+--no-gpg-sign::
 	GPG-sign the resulting merge commit. The `keyid` argument is
 	optional and defaults to the committer identity; if specified,
-	it must be stuck to the option without a space.
+	it must be stuck to the option without a space. `--no-gpg-sign`
+	is useful to countermand both `commit.gpgSign` configuration variable,
+	and earlier `--gpg-sign`.
 
 --log[=<n>]::
 --no-log::
@@ -74,16 +77,7 @@ When not possible, refuse to merge and exit with a non-zero status.
 With --no-log do not list one-line descriptions from the
 actual commits being merged.
 
---signoff::
---no-signoff::
-	Add Signed-off-by line by the committer at the end of the commit
-	log message.  The meaning of a signoff depends on the project,
-	but it typically certifies that committer has
-	the rights to submit this work under the same license and
-	agrees to a Developer Certificate of Origin
-	(see http://developercertificate.org/ for more information).
-+
-With --no-signoff do not add a Signed-off-by line.
+include::signoff-option.txt[]
 
 --stat::
 -n::
@@ -156,6 +150,14 @@ ifndef::git-pull[]
 	reporting.
 
 endif::git-pull[]
+
+--autostash::
+--no-autostash::
+	Automatically create a temporary stash entry before the operation
+	begins, and apply it after the operation ends.  This means
+	that you can run the operation on a dirty worktree.  However, use
+	with care: the final stash application after a successful
+	merge might result in non-trivial conflicts.
 
 --allow-unrelated-histories::
 	By default, `git merge` command refuses to merge histories

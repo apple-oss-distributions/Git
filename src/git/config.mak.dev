@@ -1,5 +1,6 @@
 ifeq ($(filter no-error,$(DEVOPTS)),)
 DEVELOPER_CFLAGS += -Werror
+SPARSE_FLAGS += -Wsparse-error
 endif
 ifneq ($(filter pedantic,$(DEVOPTS)),)
 DEVELOPER_CFLAGS += -pedantic
@@ -9,13 +10,13 @@ endif
 DEVELOPER_CFLAGS += -Wall
 DEVELOPER_CFLAGS += -Wdeclaration-after-statement
 DEVELOPER_CFLAGS += -Wformat-security
-DEVELOPER_CFLAGS += -Wno-format-zero-length
 DEVELOPER_CFLAGS += -Wold-style-definition
 DEVELOPER_CFLAGS += -Woverflow
 DEVELOPER_CFLAGS += -Wpointer-arith
 DEVELOPER_CFLAGS += -Wstrict-prototypes
 DEVELOPER_CFLAGS += -Wunused
 DEVELOPER_CFLAGS += -Wvla
+DEVELOPER_CFLAGS += -fno-common
 
 ifndef COMPILER_FEATURES
 COMPILER_FEATURES := $(shell ./detect-compiler $(CC))
@@ -46,3 +47,5 @@ ifeq ($(filter gcc5,$(COMPILER_FEATURES)),)
 DEVELOPER_CFLAGS += -Wno-uninitialized
 endif
 endif
+
+GIT_TEST_PERL_FATAL_WARNINGS = YesPlease

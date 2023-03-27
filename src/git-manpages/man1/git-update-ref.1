@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-update-ref
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-UPDATE\-REF" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-UPDATE\-REF" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -86,6 +86,10 @@ create SP <ref> SP <newvalue> LF
 delete SP <ref> [SP <oldvalue>] LF
 verify SP <ref> [SP <oldvalue>] LF
 option SP <opt> LF
+start LF
+prepare LF
+commit LF
+abort LF
 .fi
 .if n \{\
 .RE
@@ -106,6 +110,10 @@ create SP <ref> NUL <newvalue> NUL
 delete SP <ref> NUL [<oldvalue>] NUL
 verify SP <ref> NUL [<oldvalue>] NUL
 option SP <opt> NUL
+start NUL
+prepare NUL
+commit NUL
+abort NUL
 .fi
 .if n \{\
 .RE
@@ -132,7 +140,7 @@ Delete <ref> after verifying it exists with <oldvalue>, if given\&. If given, <o
 .PP
 verify
 .RS 4
-Verify <ref> against <oldvalue> but do not change it\&. If <oldvalue> zero or missing, the ref must not exist\&.
+Verify <ref> against <oldvalue> but do not change it\&. If <oldvalue> is zero or missing, the ref must not exist\&.
 .RE
 .PP
 option
@@ -141,11 +149,31 @@ Modify behavior of the next command naming a <ref>\&. The only valid option is
 \fBno\-deref\fR
 to avoid dereferencing a symbolic ref\&.
 .RE
+.PP
+start
+.RS 4
+Start a transaction\&. In contrast to a non\-transactional session, a transaction will automatically abort if the session ends without an explicit commit\&. This command may create a new empty transaction when the current one has been committed or aborted already\&.
+.RE
+.PP
+prepare
+.RS 4
+Prepare to commit the transaction\&. This will create lock files for all queued reference updates\&. If one reference could not be locked, the transaction will be aborted\&.
+.RE
+.PP
+commit
+.RS 4
+Commit all reference updates queued for the transaction, ending the transaction\&.
+.RE
+.PP
+abort
+.RS 4
+Abort the transaction, releasing all locks if the transaction is in prepared state\&.
+.RE
 .sp
 If all <ref>s can be locked with matching <oldvalue>s simultaneously, all modifications are performed\&. Otherwise, no modifications are performed\&. Note that while each individual <ref> is updated or deleted atomically, a concurrent reader may still see a subset of the modifications\&.
 .SH "LOGGING UPDATES"
 .sp
-If config parameter "core\&.logAllRefUpdates" is true and the ref is one under "refs/heads/", "refs/remotes/", "refs/notes/", or the symbolic ref HEAD; or the file "$GIT_DIR/logs/<ref>" exists then \fBgit update\-ref\fR will append a line to the log file "$GIT_DIR/logs/<ref>" (dereferencing all symbolic refs before creating the log name) describing the change in ref value\&. Log lines are formatted as:
+If config parameter "core\&.logAllRefUpdates" is true and the ref is one under "refs/heads/", "refs/remotes/", "refs/notes/", or a pseudoref like HEAD or ORIG_HEAD; or the file "$GIT_DIR/logs/<ref>" exists then \fBgit update\-ref\fR will append a line to the log file "$GIT_DIR/logs/<ref>" (dereferencing all symbolic refs before creating the log name) describing the change in ref value\&. Log lines are formatted as:
 .sp
 .if n \{\
 .RS 4

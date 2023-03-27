@@ -459,7 +459,7 @@ static struct reflog_expire_cfg *find_cfg_ent(const char *pattern, size_t len)
 static int reflog_expire_config(const char *var, const char *value, void *cb)
 {
 	const char *pattern, *key;
-	int pattern_len;
+	size_t pattern_len;
 	timestamp_t expire;
 	int slot;
 	struct reflog_expire_cfg *ent;
@@ -560,15 +560,16 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
 
 	for (i = 1; i < argc; i++) {
 		const char *arg = argv[i];
+
 		if (!strcmp(arg, "--dry-run") || !strcmp(arg, "-n"))
 			flags |= EXPIRE_REFLOGS_DRY_RUN;
-		else if (starts_with(arg, "--expire=")) {
-			if (parse_expiry_date(arg + 9, &cb.cmd.expire_total))
+		else if (skip_prefix(arg, "--expire=", &arg)) {
+			if (parse_expiry_date(arg, &cb.cmd.expire_total))
 				die(_("'%s' is not a valid timestamp"), arg);
 			explicit_expiry |= EXPIRE_TOTAL;
 		}
-		else if (starts_with(arg, "--expire-unreachable=")) {
-			if (parse_expiry_date(arg + 21, &cb.cmd.expire_unreachable))
+		else if (skip_prefix(arg, "--expire-unreachable=", &arg)) {
+			if (parse_expiry_date(arg, &cb.cmd.expire_unreachable))
 				die(_("'%s' is not a valid timestamp"), arg);
 			explicit_expiry |= EXPIRE_UNREACH;
 		}
@@ -614,7 +615,7 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
 		int i;
 
 		memset(&collected, 0, sizeof(collected));
-		worktrees = get_worktrees(0);
+		worktrees = get_worktrees();
 		for (p = worktrees; *p; p++) {
 			if (!all_worktrees && !(*p)->is_current)
 				continue;

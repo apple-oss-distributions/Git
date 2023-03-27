@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-gc
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-GC" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-GC" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -184,8 +184,8 @@ gc\&.bigPackThreshold
 If non\-zero, all packs larger than this limit are kept when
 \fBgit gc\fR
 is run\&. This is very similar to
-\fB\-\-keep\-base\-pack\fR
-except that all packs that meet the threshold are kept, not just the base pack\&. Defaults to zero\&. Common unit suffixes of
+\fB\-\-keep\-largest\-pack\fR
+except that all packs that meet the threshold are kept, not just the largest pack\&. Defaults to zero\&. Common unit suffixes of
 \fIk\fR,
 \fIm\fR, or
 \fIg\fR
@@ -200,7 +200,7 @@ to run smoothly is not available and
 is not set, the largest pack will also be excluded (this is the equivalent of running
 \fBgit gc\fR
 with
-\fB\-\-keep\-base\-pack\fR)\&.
+\fB\-\-keep\-largest\-pack\fR)\&.
 .RE
 .PP
 gc\&.writeCommitGraph

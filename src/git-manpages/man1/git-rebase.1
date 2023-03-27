@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-rebase
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-REBASE" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-REBASE" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -306,6 +306,14 @@ rebase\&.useBuiltin
 Unused configuration variable\&. Used in Git versions 2\&.20 and 2\&.21 as an escape hatch to enable the legacy shellscript implementation of rebase\&. Now the built\-in rewrite of it in C is always used\&. Setting this will emit a warning, to alert any remaining users that setting this now does nothing\&.
 .RE
 .PP
+rebase\&.backend
+.RS 4
+Default backend to use for rebasing\&. Possible choices are
+\fIapply\fR
+or
+\fImerge\fR\&. In the future, if the merge backend gains all remaining capabilities of the apply backend, this setting may become unused\&.
+.RE
+.PP
 rebase\&.stat
 .RS 4
 Whether to show a diffstat of what changed upstream since the last rebase\&. False by default\&.
@@ -388,6 +396,15 @@ option was provided)\&. This is the same as specifying the
 \fB\-\-reschedule\-failed\-exec\fR
 option\&.
 .RE
+.PP
+sequence\&.editor
+.RS 4
+Text editor used by
+\fBgit rebase \-i\fR
+for editing the rebase instruction file\&. The value is meant to be interpreted by the shell when it is used\&. It can be overridden by the
+\fBGIT_SEQUENCE_EDITOR\fR
+environment variable\&. When not configured the default commit message editor is used instead\&.
+.RE
 .SH "OPTIONS"
 .PP
 \-\-onto <newbase>
@@ -437,19 +454,59 @@ Abort the rebase operation and reset HEAD to the original branch\&. If <branch> 
 .PP
 \-\-quit
 .RS 4
-Abort the rebase operation but HEAD is not reset back to the original branch\&. The index and working tree are also left unchanged as a result\&.
+Abort the rebase operation but HEAD is not reset back to the original branch\&. The index and working tree are also left unchanged as a result\&. If a temporary stash entry was created using \-\-autostash, it will be saved to the stash list\&.
 .RE
 .PP
-\-\-keep\-empty
+\-\-apply
 .RS 4
-Keep the commits that do not change anything from its parents in the result\&.
+Use applying strategies to rebase (calling
+\fBgit\-am\fR
+internally)\&. This option may become a no\-op in the future once the merge backend handles everything the apply one does\&.
+.sp
+See also INCOMPATIBLE OPTIONS below\&.
+.RE
+.PP
+\-\-empty={drop,keep,ask}
+.RS 4
+How to handle commits that are not empty to start and are not clean cherry\-picks of any upstream commit, but which become empty after rebasing (because they contain a subset of already upstream changes)\&. With drop (the default), commits that become empty are dropped\&. With keep, such commits are kept\&. With ask (implied by \-\-interactive), the rebase will halt when an empty commit is applied allowing you to choose whether to drop it, edit files more, or just commit the empty changes\&. Other options, like \-\-exec, will use the default of drop unless \-i/\-\-interactive is explicitly specified\&.
+.sp
+Note that commits which start empty are kept (unless \-\-no\-keep\-empty is specified), and commits which are clean cherry\-picks (as determined by
+\fBgit log \-\-cherry\-mark \&.\&.\&.\fR) are detected and dropped as a preliminary step (unless \-\-reapply\-cherry\-picks is passed)\&.
+.sp
+See also INCOMPATIBLE OPTIONS below\&.
+.RE
+.PP
+\-\-no\-keep\-empty, \-\-keep\-empty
+.RS 4
+Do not keep commits that start empty before the rebase (i\&.e\&. that do not change anything from its parent) in the result\&. The default is to keep commits which start empty, since creating such commits requires passing the \-\-allow\-empty override flag to
+\fBgit commit\fR, signifying that a user is very intentionally creating such a commit and thus wants to keep it\&.
+.sp
+Usage of this flag will probably be rare, since you can get rid of commits that start empty by just firing up an interactive rebase and removing the lines corresponding to the commits you don\(cqt want\&. This flag exists as a convenient shortcut, such as for cases where external tools generate many empty commits and you want them all removed\&.
+.sp
+For commits which do not start empty but become empty after rebasing, see the \-\-empty flag\&.
+.sp
+See also INCOMPATIBLE OPTIONS below\&.
+.RE
+.PP
+\-\-reapply\-cherry\-picks, \-\-no\-reapply\-cherry\-picks
+.RS 4
+Reapply all clean cherry\-picks of any upstream commit instead of preemptively dropping them\&. (If these commits then become empty after rebasing, because they contain a subset of already upstream changes, the behavior towards them is controlled by the
+\fB\-\-empty\fR
+flag\&.)
+.sp
+By default (or if
+\fB\-\-no\-reapply\-cherry\-picks\fR
+is given), these commits will be automatically dropped\&. Because this necessitates reading all upstream commits, this can be expensive in repos with a large number of upstream commits that need to be read\&.
+.sp
+\fB\-\-reapply\-cherry\-picks\fR
+allows rebase to forgo reading all upstream commits, potentially improving performance\&.
 .sp
 See also INCOMPATIBLE OPTIONS below\&.
 .RE
 .PP
 \-\-allow\-empty\-message
 .RS 4
-By default, rebasing commits with an empty message will fail\&. This option overrides that behavior, allowing commits with empty messages to be rebased\&.
+No\-op\&. Rebasing commits with an empty message used to fail and this option would override that behavior, allowing commits with empty messages to be rebased\&. Now commits with an empty message do not cause rebasing to halt\&.
 .sp
 See also INCOMPATIBLE OPTIONS below\&.
 .RE
@@ -472,7 +529,7 @@ Show the current patch in an interactive rebase or when rebase is stopped becaus
 .PP
 \-m, \-\-merge
 .RS 4
-Use merging strategies to rebase\&. When the recursive (default) merge strategy is used, this allows rebase to be aware of renames on the upstream side\&.
+Use merging strategies to rebase\&. When the recursive (default) merge strategy is used, this allows rebase to be aware of renames on the upstream side\&. This is the default\&.
 .sp
 Note that a rebase merge works by replaying each commit from the working branch on top of the <upstream> branch\&. Because of this, when a merge conflict happens, the side reported as
 \fIours\fR
@@ -521,11 +578,16 @@ See also INCOMPATIBLE OPTIONS below\&.
 Allow the rerere mechanism to update the index with the result of auto\-conflict resolution if possible\&.
 .RE
 .PP
-\-S[<keyid>], \-\-gpg\-sign[=<keyid>]
+\-S[<keyid>], \-\-gpg\-sign[=<keyid>], \-\-no\-gpg\-sign
 .RS 4
 GPG\-sign commits\&. The
 \fBkeyid\fR
 argument is optional and defaults to the committer identity; if specified, it must be stuck to the option without a space\&.
+\fB\-\-no\-gpg\-sign\fR
+is useful to countermand both
+\fBcommit\&.gpgSign\fR
+configuration variable, and earlier
+\fB\-\-gpg\-sign\fR\&.
 .RE
 .PP
 \-q, \-\-quiet
@@ -562,7 +624,7 @@ Allows the pre\-rebase hook to run, which is the default\&. This option can be u
 .PP
 \-C<n>
 .RS 4
-Ensure at least <n> lines of surrounding context match before and after each change\&. When fewer lines of surrounding context exist they all must match\&. By default no context is ever ignored\&.
+Ensure at least <n> lines of surrounding context match before and after each change\&. When fewer lines of surrounding context exist they all must match\&. By default no context is ever ignored\&. Implies \-\-apply\&.
 .sp
 See also INCOMPATIBLE OPTIONS below\&.
 .RE
@@ -591,38 +653,55 @@ command (see
 \fIfork_point\fR
 ends up being empty, the <upstream> will be used as a fallback\&.
 .sp
-If either <upstream> or \-\-root is given on the command line, then the default is
+If <upstream> is given on the command line, then the default is
 \fB\-\-no\-fork\-point\fR, otherwise the default is
 \fB\-\-fork\-point\fR\&.
 .sp
 If your branch was based on <upstream> but <upstream> was rewound and your branch contains commits which were dropped, this option can be used with
 \fB\-\-keep\-base\fR
 in order to drop those commits from your branch\&.
-.RE
-.PP
-\-\-ignore\-whitespace, \-\-whitespace=<option>
-.RS 4
-These flag are passed to the
-\fIgit apply\fR
-program (see
-\fBgit-apply\fR(1)) that applies the patch\&.
 .sp
 See also INCOMPATIBLE OPTIONS below\&.
 .RE
 .PP
-\-\-committer\-date\-is\-author\-date, \-\-ignore\-date
+\-\-ignore\-whitespace
 .RS 4
-These flags are passed to
-\fIgit am\fR
-to easily change the dates of the rebased commits (see
-\fBgit-am\fR(1))\&.
+Ignore whitespace differences when trying to reconcile differences\&. Currently, each backend implements an approximation of this behavior:
+.sp
+apply backend: When applying a patch, ignore changes in whitespace in context lines\&. Unfortunately, this means that if the "old" lines being replaced by the patch differ only in whitespace from the existing file, you will get a merge conflict instead of a successful patch application\&.
+.sp
+merge backend: Treat lines with only whitespace changes as unchanged when merging\&. Unfortunately, this means that any patch hunks that were intended to modify whitespace and nothing else will be dropped, even if the other side had no changes that conflicted\&.
+.RE
+.PP
+\-\-whitespace=<option>
+.RS 4
+This flag is passed to the
+\fIgit apply\fR
+program (see
+\fBgit-apply\fR(1)) that applies the patch\&. Implies \-\-apply\&.
+.sp
+See also INCOMPATIBLE OPTIONS below\&.
+.RE
+.PP
+\-\-committer\-date\-is\-author\-date
+.RS 4
+Instead of using the current time as the committer date, use the author date of the commit being rebased as the committer date\&. This option implies
+\fB\-\-force\-rebase\fR\&.
+.RE
+.PP
+\-\-ignore\-date, \-\-reset\-author\-date
+.RS 4
+Instead of using the author date of the original commit, use the current time as the author date of the rebased commit\&. This option implies
+\fB\-\-force\-rebase\fR\&.
 .sp
 See also INCOMPATIBLE OPTIONS below\&.
 .RE
 .PP
 \-\-signoff
 .RS 4
-Add a Signed\-off\-by: trailer to all the rebased commits\&. Note that if
+Add a
+\fBSigned\-off\-by\fR
+trailer to all the rebased commits\&. Note that if
 \fB\-\-interactive\fR
 is given then only commits marked to be picked, edited or reworded will have the trailer added\&.
 .sp
@@ -660,7 +739,8 @@ mode is turned on, such commits are instead rebased onto
 The
 \fB\-\-rebase\-merges\fR
 mode is similar in spirit to the deprecated
-\fB\-\-preserve\-merges\fR, but in contrast to that option works well in interactive rebases: commits can be reordered, inserted and dropped at will\&.
+\fB\-\-preserve\-merges\fR
+but works with interactive rebases, where commits can be reordered, inserted and dropped at will\&.
 .sp
 It is currently only possible to recreate the merge commits using the
 \fBrecursive\fR
@@ -788,18 +868,7 @@ The following options:
 .sp -1
 .IP \(bu 2.3
 .\}
-\-\-committer\-date\-is\-author\-date
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\-\-ignore\-date
+\-\-apply
 .RE
 .sp
 .RS 4
@@ -811,17 +880,6 @@ The following options:
 .IP \(bu 2.3
 .\}
 \-\-whitespace
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\-\-ignore\-whitespace
 .RE
 .sp
 .RS 4
@@ -944,7 +1002,29 @@ are incompatible with the following options:
 .sp -1
 .IP \(bu 2.3
 .\}
-\-\-keep\-empty
+\-\-no\-keep\-empty
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\-\-empty=
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\-\-reapply\-cherry\-picks
 .RE
 .sp
 .RS 4
@@ -1012,6 +1092,50 @@ In addition, the following pairs of options are incompatible:
 .sp -1
 .IP \(bu 2.3
 .\}
+\-\-preserve\-merges and \-\-empty=
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\-\-preserve\-merges and \-\-ignore\-whitespace
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\-\-preserve\-merges and \-\-committer\-date\-is\-author\-date
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\-\-preserve\-merges and \-\-ignore\-date
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \-\-keep\-base and \-\-onto
 .RE
 .sp
@@ -1025,17 +1149,87 @@ In addition, the following pairs of options are incompatible:
 .\}
 \-\-keep\-base and \-\-root
 .RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\-\-fork\-point and \-\-root
+.RE
 .SH "BEHAVIORAL DIFFERENCES"
 .sp
-There are some subtle differences how the backends behave\&.
+git rebase has two primary backends: apply and merge\&. (The apply backend used to be known as the \fIam\fR backend, but the name led to confusion as it looks like a verb instead of a noun\&. Also, the merge backend used to be known as the interactive backend, but it is now used for non\-interactive cases as well\&. Both were renamed based on lower\-level functionality that underpinned each\&.) There are some subtle differences in how these two backends behave:
 .SS "Empty commits"
 .sp
-The am backend drops any "empty" commits, regardless of whether the commit started empty (had no changes relative to its parent to start with) or ended empty (all changes were already applied upstream in other commits)\&.
+The apply backend unfortunately drops intentionally empty commits, i\&.e\&. commits that started empty, though these are rare in practice\&. It also drops commits that become empty and has no option for controlling this behavior\&.
 .sp
-The interactive backend drops commits by default that started empty and halts if it hits a commit that ended up empty\&. The \fB\-\-keep\-empty\fR option exists for the interactive backend to allow it to keep commits that started empty\&.
+The merge backend keeps intentionally empty commits by default (though with \-i they are marked as empty in the todo list editor, or they can be dropped automatically with \-\-no\-keep\-empty)\&.
+.sp
+Similar to the apply backend, by default the merge backend drops commits that become empty unless \-i/\-\-interactive is specified (in which case it stops and asks the user what to do)\&. The merge backend also has an \-\-empty={drop,keep,ask} option for changing the behavior of handling commits that become empty\&.
 .SS "Directory rename detection"
 .sp
-Directory rename heuristics are enabled in the merge and interactive backends\&. Due to the lack of accurate tree information, directory rename detection is disabled in the am backend\&.
+Due to the lack of accurate tree information (arising from constructing fake ancestors with the limited information available in patches), directory rename detection is disabled in the apply backend\&. Disabled directory rename detection means that if one side of history renames a directory and the other adds new files to the old directory, then the new files will be left behind in the old directory without any warning at the time of rebasing that you may want to move these files into the new directory\&.
+.sp
+Directory rename detection works with the merge backend to provide you warnings in such cases\&.
+.SS "Context"
+.sp
+The apply backend works by creating a sequence of patches (by calling \fBformat\-patch\fR internally), and then applying the patches in sequence (calling \fBam\fR internally)\&. Patches are composed of multiple hunks, each with line numbers, a context region, and the actual changes\&. The line numbers have to be taken with some fuzz, since the other side will likely have inserted or deleted lines earlier in the file\&. The context region is meant to help find how to adjust the line numbers in order to apply the changes to the right lines\&. However, if multiple areas of the code have the same surrounding lines of context, the wrong one can be picked\&. There are real\-world cases where this has caused commits to be reapplied incorrectly with no conflicts reported\&. Setting diff\&.context to a larger value may prevent such types of problems, but increases the chance of spurious conflicts (since it will require more lines of matching context to apply)\&.
+.sp
+The merge backend works with a full copy of each relevant file, insulating it from these types of problems\&.
+.SS "Labelling of conflicts markers"
+.sp
+When there are content conflicts, the merge machinery tries to annotate each side\(cqs conflict markers with the commits where the content came from\&. Since the apply backend drops the original information about the rebased commits and their parents (and instead generates new fake commits based off limited information in the generated patches), those commits cannot be identified; instead it has to fall back to a commit summary\&. Also, when merge\&.conflictStyle is set to diff3, the apply backend will use "constructed merge base" to label the content from the merge base, and thus provide no information about the merge base commit whatsoever\&.
+.sp
+The merge backend works with the full commits on both sides of history and thus has no such limitations\&.
+.SS "Hooks"
+.sp
+The apply backend has not traditionally called the post\-commit hook, while the merge backend has\&. Both have called the post\-checkout hook, though the merge backend has squelched its output\&. Further, both backends only call the post\-checkout hook with the starting point commit of the rebase, not the intermediate commits nor the final commit\&. In each case, the calling of these hooks was by accident of implementation rather than by design (both backends were originally implemented as shell scripts and happened to invoke other commands like \fIgit checkout\fR or \fIgit commit\fR that would call the hooks)\&. Both backends should have the same behavior, though it is not entirely clear which, if any, is correct\&. We will likely make rebase stop calling either of these hooks in the future\&.
+.SS "Interruptability"
+.sp
+The apply backend has safety problems with an ill\-timed interrupt; if the user presses Ctrl\-C at the wrong time to try to abort the rebase, the rebase can enter a state where it cannot be aborted with a subsequent \fBgit rebase \-\-abort\fR\&. The merge backend does not appear to suffer from the same shortcoming\&. (See \m[blue]\fBhttps://lore\&.kernel\&.org/git/20200207132152\&.GC2868@szeder\&.dev/\fR\m[] for details\&.)
+.SS "Commit Rewording"
+.sp
+When a conflict occurs while rebasing, rebase stops and asks the user to resolve\&. Since the user may need to make notable changes while resolving conflicts, after conflicts are resolved and the user has run \fBgit rebase \-\-continue\fR, the rebase should open an editor and ask the user to update the commit message\&. The merge backend does this, while the apply backend blindly applies the original commit message\&.
+.SS "Miscellaneous differences"
+.sp
+There are a few more behavioral differences that most folks would probably consider inconsequential but which are mentioned for completeness:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Reflog: The two backends will use different wording when describing the changes made in the reflog, though both will make use of the word "rebase"\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Progress, informational, and error messages: The two backends provide slightly different progress and informational messages\&. Also, the apply backend writes error messages (such as "Your files would be overwritten\&...") to stdout, while the merge backend writes them to stderr\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+State directories: The two backends keep their state in different directories under \&.git/
+.RE
 .SH "MERGE STRATEGIES"
 .sp
 The merge mechanism (\fBgit merge\fR and \fBgit pull\fR commands) allows the backend \fImerge strategies\fR to be chosen with \fB\-s\fR option\&. Some strategies can also take their own options, which can be passed by giving \fB\-X<option>\fR arguments to \fBgit merge\fR and/or \fBgit pull\fR\&.
@@ -1057,7 +1251,7 @@ ours
 .RS 4
 This option forces conflicting hunks to be auto\-resolved cleanly by favoring
 \fIour\fR
-version\&. Changes from the other tree that do not conflict with our side are reflected to the merge result\&. For a binary file, the entire contents are taken from our side\&.
+version\&. Changes from the other tree that do not conflict with our side are reflected in the merge result\&. For a binary file, the entire contents are taken from our side\&.
 .sp
 This should not be confused with the
 \fIours\fR
@@ -1641,7 +1835,7 @@ to omit, edit, squash, or fixup commits; or if the upstream used one of
 .sp
 Only works if the changes (patch IDs based on the diff contents) on \fIsubsystem\fR are literally the same before and after the rebase \fIsubsystem\fR did\&.
 .sp
-In that case, the fix is easy because \fIgit rebase\fR knows to skip changes that are already present in the new upstream\&. So if you say (assuming you\(cqre on \fItopic\fR)
+In that case, the fix is easy because \fIgit rebase\fR knows to skip changes that are already present in the new upstream (unless \fB\-\-reapply\-cherry\-picks\fR is given)\&. So if you say (assuming you\(cqre on \fItopic\fR)
 .sp
 .if n \{\
 .RS 4

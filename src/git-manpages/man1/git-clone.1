@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-clone
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-CLONE" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-CLONE" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -38,7 +38,8 @@ git-clone \- Clone a repository into a new directory
           [\-\-dissociate] [\-\-separate\-git\-dir <git dir>]
           [\-\-depth <depth>] [\-\-[no\-]single\-branch] [\-\-no\-tags]
           [\-\-recurse\-submodules[=<pathspec>]] [\-\-[no\-]shallow\-submodules]
-          [\-\-[no\-]remote\-submodules] [\-\-jobs <n>] [\-\-] <repository>
+          [\-\-[no\-]remote\-submodules] [\-\-jobs <n>] [\-\-sparse]
+          [\-\-filter=<filter>] [\-\-] <repository>
           [<directory>]
 .fi
 .sp
@@ -63,6 +64,11 @@ If the repository is specified as a local path (e\&.g\&.,
 will override the default when
 \fB/path/to/repo\fR
 is given, using the regular Git transport instead\&.
+.sp
+\fBNOTE\fR: this operation can race with concurrent modification to the source repository, similar to running
+\fBcp \-r src dst\fR
+while modifying
+\fBsrc\fR\&.
 .RE
 .PP
 \-\-no\-hardlinks
@@ -82,8 +88,8 @@ to share the objects with the source repository\&. The resulting repository star
 \fBnot\fR
 use it unless you understand what it does\&. If you clone your repository using this option and then delete branches (or use any other Git command that makes any existing commit unreferenced) in the source repository, some objects may become unreferenced (or dangling)\&. These objects may be removed by normal Git operations (such as
 \fBgit commit\fR) which automatically call
-\fBgit gc \-\-auto\fR\&. (See
-\fBgit-gc\fR(1)\&.) If these objects are removed and were referenced by the cloned repository, then the cloned repository will become corrupt\&.
+\fBgit maintenance run \-\-auto\fR\&. (See
+\fBgit-maintenance\fR(1)\&.) If these objects are removed and were referenced by the cloned repository, then the cloned repository will become corrupt\&.
 .sp
 Note that running
 \fBgit repack\fR
@@ -170,6 +176,27 @@ because there is nowhere to check out the working tree\&. Also the branch heads 
 \fBrefs/remotes/origin/\fR\&. When this option is used, neither remote\-tracking branches nor the related configuration variables are created\&.
 .RE
 .PP
+\-\-sparse
+.RS 4
+Initialize the sparse\-checkout file so the working directory starts with only the files in the root of the repository\&. The sparse\-checkout file can be modified to grow the working directory as needed\&.
+.RE
+.PP
+\-\-filter=<filter\-spec>
+.RS 4
+Use the partial clone feature and request that the server sends a subset of reachable objects according to a given object filter\&. When using
+\fB\-\-filter\fR, the supplied
+\fB<filter\-spec>\fR
+is used for the partial clone filter\&. For example,
+\fB\-\-filter=blob:none\fR
+will filter out all blobs (file contents) until needed by Git\&. Also,
+\fB\-\-filter=blob:limit=<size>\fR
+will filter out all blobs of size at least
+\fB<size>\fR\&. For more details on filter specifications, see the
+\fB\-\-filter\fR
+option in
+\fBgit-rev-list\fR(1)\&.
+.RE
+.PP
 \-\-mirror
 .RS 4
 Set up a mirror of the source repository\&. This implies
@@ -186,7 +213,9 @@ in the target repository\&.
 Instead of using the remote name
 \fBorigin\fR
 to keep track of the upstream repository, use
-\fB<name>\fR\&.
+\fB<name>\fR\&. Overrides
+\fBclone\&.defaultRemoteName\fR
+from the config\&.
 .RE
 .PP
 \-b <name>, \-\-branch <name>
@@ -275,7 +304,7 @@ Can be used in conjunction with
 to clone and maintain a branch with no references other than a single cloned branch\&. This is useful e\&.g\&. to maintain minimal clones of the default branch of some repository for search indexing\&.
 .RE
 .PP
-\-\-recurse\-submodules[=<pathspec]
+\-\-recurse\-submodules[=<pathspec>]
 .RS 4
 After the clone is created, initialize and clone submodules within based on the provided pathspec\&. If no pathspec is provided, all submodules are initialized and cloned\&. This option can be given multiple times for pathspecs consisting of multiple entries\&. The resulting clone has
 \fBsubmodule\&.active\fR
@@ -461,6 +490,8 @@ file:///path/to/repo\&.git/
 .RE
 .sp
 These two syntaxes are mostly equivalent, except the former implies \-\-local option\&.
+.sp
+\fIgit clone\fR, \fIgit fetch\fR and \fIgit pull\fR, but not \fIgit push\fR, will also accept a suitable bundle file\&. See \fBgit-bundle\fR(1)\&.
 .sp
 When Git doesn\(cqt know how to handle a certain transport protocol, it attempts to use the \fIremote\-<transport>\fR remote helper, if one exists\&. To explicitly request a remote helper, the following syntax may be used:
 .sp

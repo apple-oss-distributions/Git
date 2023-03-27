@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-restore(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -749,8 +749,9 @@ git-restore(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git restore</em> [&lt;options&gt;] [--source=&lt;tree&gt;] [--staged] [--worktree] &lt;pathspec&gt;&#8230;
-<em>git restore</em> (-p|--patch) [&lt;options&gt;] [--source=&lt;tree&gt;] [--staged] [--worktree] [&lt;pathspec&gt;&#8230;]</pre>
+<pre class="content"><em>git restore</em> [&lt;options&gt;] [--source=&lt;tree&gt;] [--staged] [--worktree] [--] &lt;pathspec&gt;&#8230;
+<em>git restore</em> [&lt;options&gt;] [--source=&lt;tree&gt;] [--staged] [--worktree] --pathspec-from-file=&lt;file&gt; [--pathspec-file-nul]
+<em>git restore</em> (-p|--patch) [&lt;options&gt;] [--source=&lt;tree&gt;] [--staged] [--worktree] [--] [&lt;pathspec&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -764,9 +765,8 @@ source, it will be removed to match the source.</p></div>
 <div class="paragraph"><p>The command can also be used to restore the content in the index with
 <code>--staged</code>, or restore both the working tree and the index with
 <code>--staged --worktree</code>.</p></div>
-<div class="paragraph"><p>By default, the restore sources for working tree and the index are the
-index and <code>HEAD</code> respectively. <code>--source</code> could be used to specify a
-commit as the restore source.</p></div>
+<div class="paragraph"><p>By default, if <code>--staged</code> is given, the contents are restored from <code>HEAD</code>,
+otherwise from the index. Use <code>--source</code> to restore from a different commit.</p></div>
 <div class="paragraph"><p>See "Reset, restore and revert" in <a href="git.html">git(1)</a> for the differences
 between the three commands.</p></div>
 <div class="paragraph"><p>THIS COMMAND IS EXPERIMENTAL. THE BEHAVIOR MAY CHANGE.</p></div>
@@ -788,10 +788,11 @@ between the three commands.</p></div>
         tree. It is common to specify the source tree by naming a
         commit, branch or tag associated with it.
 </p>
-<div class="paragraph"><p>If not specified, the default restore source for the working tree is
-the index, and the default restore source for the index is
-<code>HEAD</code>. When both <code>--staged</code> and <code>--worktree</code> are specified,
-<code>--source</code> must also be specified.</p></div>
+<div class="paragraph"><p>If not specified, the contents are restored from <code>HEAD</code> if <code>--staged</code> is
+given, otherwise from the index.</p></div>
+<div class="paragraph"><p>As a special case, you may use <code>"A...B"</code> as a shortcut for the
+merge base of <code>A</code> and <code>B</code> if there is exactly one merge base. You can
+leave out at most one of <code>A</code> and <code>B</code>, in which case it defaults to <code>HEAD</code>.</p></div>
 </dd>
 <dt class="hdlist1">
 -p
@@ -916,6 +917,24 @@ in <a href="git-checkout.html">git-checkout(1)</a> for details.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--recurse-submodules
+</dt>
+<dt class="hdlist1">
+--no-recurse-submodules
+</dt>
+<dd>
+<p>
+        If <code>&lt;pathspec&gt;</code> names an active submodule and the restore location
+        includes the working tree, the submodule will only be updated if
+        this option is given, in which case its working tree will be
+        restored to the commit recorded in the superproject, and any local
+        modifications overwritten. If nothing (or
+        <code>--no-recurse-submodules</code>) is used, submodules working trees will
+        not be updated. Just like <a href="git-checkout.html">git-checkout(1)</a>, this will detach
+        <code>HEAD</code> of the submodule.
+</p>
+</dd>
+<dt class="hdlist1">
 --overlay
 </dt>
 <dt class="hdlist1">
@@ -928,6 +947,46 @@ in <a href="git-checkout.html">git-checkout(1)</a> for details.</p></div>
         appear in the <code>--source</code> tree are removed, to make them match
         <code>&lt;tree&gt;</code> exactly. The default is no-overlay mode.
 </p>
+</dd>
+<dt class="hdlist1">
+--pathspec-from-file=&lt;file&gt;
+</dt>
+<dd>
+<p>
+        Pathspec is passed in <code>&lt;file&gt;</code> instead of commandline args. If
+        <code>&lt;file&gt;</code> is exactly <code>-</code> then standard input is used. Pathspec
+        elements are separated by LF or CR/LF. Pathspec elements can be
+        quoted as explained for the configuration variable <code>core.quotePath</code>
+        (see <a href="git-config.html">git-config(1)</a>). See also <code>--pathspec-file-nul</code> and
+        global <code>--literal-pathspecs</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+--pathspec-file-nul
+</dt>
+<dd>
+<p>
+        Only meaningful with <code>--pathspec-from-file</code>. Pathspec elements are
+        separated with NUL character and all other characters are taken
+        literally (including newlines and quotes).
+</p>
+</dd>
+<dt class="hdlist1">
+--
+</dt>
+<dd>
+<p>
+        Do not interpret any more arguments as options.
+</p>
+</dd>
+<dt class="hdlist1">
+&lt;pathspec&gt;&#8230;
+</dt>
+<dd>
+<p>
+        Limits the paths affected by the operation.
+</p>
+<div class="paragraph"><p>For more details, see the <em>pathspec</em> entry in <a href="gitglossary.html">gitglossary(7)</a>.</p></div>
 </dd>
 </dl></div>
 </div>
@@ -1015,7 +1074,7 @@ as using <a href="git-checkout.html">git-checkout(1)</a>)</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-08-09 06:41:52 JST
+ 2020-10-27 15:58:27 PDT
 </div>
 </div>
 </body>

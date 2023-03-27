@@ -9,7 +9,6 @@ test_description='git fsck random collection of tests
 . ./test-lib.sh
 
 test_expect_success setup '
-	test_oid_init &&
 	git config gc.auto 0 &&
 	git config i18n.commitencoding ISO-8859-1 &&
 	test_commit A fileA one &&
@@ -133,6 +132,30 @@ test_expect_success 'other worktree HEAD link pointing at a funny place' '
 	test_i18ngrep "worktrees/other/HEAD points to something strange" out
 '
 
+test_expect_success 'commit with multiple signatures is okay' '
+	git cat-file commit HEAD >basis &&
+	cat >sigs <<-EOF &&
+	gpgsig -----BEGIN PGP SIGNATURE-----
+	  VGhpcyBpcyBub3QgcmVhbGx5IGEgc2lnbmF0dXJlLg==
+	  -----END PGP SIGNATURE-----
+	gpgsig-sha256 -----BEGIN PGP SIGNATURE-----
+	  VGhpcyBpcyBub3QgcmVhbGx5IGEgc2lnbmF0dXJlLg==
+	  -----END PGP SIGNATURE-----
+	EOF
+	sed -e "/^committer/q" basis >okay &&
+	cat sigs >>okay &&
+	echo >>okay &&
+	sed -e "1,/^$/d" basis >>okay &&
+	cat okay &&
+	new=$(git hash-object -t commit -w --stdin <okay) &&
+	test_when_finished "remove_object $new" &&
+	git update-ref refs/heads/bogus "$new" &&
+	test_when_finished "git update-ref -d refs/heads/bogus" &&
+	git fsck 2>out &&
+	cat out &&
+	! grep "commit $new" out
+'
+
 test_expect_success 'email without @ is okay' '
 	git cat-file commit HEAD >basis &&
 	sed "s/@/AT/" basis >okay &&
@@ -141,7 +164,6 @@ test_expect_success 'email without @ is okay' '
 	git update-ref refs/heads/bogus "$new" &&
 	test_when_finished "git update-ref -d refs/heads/bogus" &&
 	git fsck 2>out &&
-	cat out &&
 	! grep "commit $new" out
 '
 
@@ -233,6 +255,35 @@ test_expect_success 'tree object with duplicate entries' '
 	test_must_fail git fsck 2>out &&
 	test_i18ngrep "error in tree .*contains duplicate file entries" out
 '
+
+check_duplicate_names () {
+	expect=$1 &&
+	shift &&
+	names=$@ &&
+	test_expect_$expect "tree object with duplicate names: $names" '
+		test_when_finished "remove_object \$blob" &&
+		test_when_finished "remove_object \$tree" &&
+		test_when_finished "remove_object \$badtree" &&
+		blob=$(echo blob | git hash-object -w --stdin) &&
+		printf "100644 blob %s\t%s\n" $blob x.2 >tree &&
+		tree=$(git mktree <tree) &&
+		for name in $names
+		do
+			case "$name" in
+			*/) printf "040000 tree %s\t%s\n" $tree "${name%/}" ;;
+			*)  printf "100644 blob %s\t%s\n" $blob "$name" ;;
+			esac
+		done >badtree &&
+		badtree=$(git mktree <badtree) &&
+		test_must_fail git fsck 2>out &&
+		test_i18ngrep "$badtree" out &&
+		test_i18ngrep "error in tree .*contains duplicate file entries" out
+	'
+}
+
+check_duplicate_names success x x.1 x/
+check_duplicate_names success x x.1.2 x.1/ x/
+check_duplicate_names success x x.1 x.1.2 x/
 
 test_expect_success 'unparseable tree object' '
 	test_oid_cache <<-\EOF &&
@@ -617,7 +668,7 @@ test_expect_success 'fsck --name-objects' '
 		remove_object $(git rev-parse julius:caesar.t) &&
 		test_must_fail git fsck --name-objects >out &&
 		tree=$(git rev-parse --verify julius:) &&
-		test_i18ngrep -E "$tree \((refs/heads/master|HEAD)@\{[0-9]*\}:" out
+		test_i18ngrep "$tree (refs/tags/julius:" out
 	)
 '
 
@@ -662,7 +713,7 @@ test_expect_success 'fsck fails on corrupt packfile' '
 	# at least one of which is not zero, so setting the first byte to 0 is
 	# sufficient.)
 	chmod a+w .git/objects/pack/pack-$pack.pack &&
-	printf '\0' | dd of=.git/objects/pack/pack-$pack.pack bs=1 conv=notrunc seek=12 &&
+	printf "\0" | dd of=.git/objects/pack/pack-$pack.pack bs=1 conv=notrunc seek=12 &&
 
 	test_when_finished "rm -f .git/objects/pack/pack-$pack.*" &&
 	remove_object $hsh &&

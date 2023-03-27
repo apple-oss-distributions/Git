@@ -244,8 +244,11 @@ test_expect_success 'save -q is quiet' '
 	test_must_be_empty output.out
 '
 
-test_expect_success 'pop -q is quiet' '
+test_expect_success 'pop -q works and is quiet' '
 	git stash pop -q >output.out 2>&1 &&
+	echo bar >expect &&
+	git show :file >actual &&
+	test_cmp expect actual &&
 	test_must_be_empty output.out
 '
 
@@ -254,6 +257,8 @@ test_expect_success 'pop -q --index works and is quiet' '
 	git add file &&
 	git stash save --quiet &&
 	git stash pop -q --index >output.out 2>&1 &&
+	git diff-files file2 >file2.diff &&
+	test_must_be_empty file2.diff &&
 	test foo = "$(git show :file)" &&
 	test_must_be_empty output.out
 '
@@ -278,6 +283,11 @@ test_expect_success 'stash --no-keep-index' '
 	git add file2 &&
 	git stash --no-keep-index &&
 	test bar,bar2 = $(cat file),$(cat file2)
+'
+
+test_expect_success 'dont assume push with non-option args' '
+	test_must_fail git stash -q drop 2>err &&
+	test_i18ngrep -e "subcommand wasn'\''t specified; '\''push'\'' can'\''t be assumed due to unexpected token '\''drop'\''" err
 '
 
 test_expect_success 'stash --invalid-option' '
@@ -1267,6 +1277,31 @@ test_expect_success 'stash apply should succeed with unmodified file' '
 	mv other file &&
 
 	git stash apply
+'
+
+test_expect_success 'stash handles skip-worktree entries nicely' '
+	test_commit A &&
+	echo changed >A.t &&
+	git add A.t &&
+	git update-index --skip-worktree A.t &&
+	rm A.t &&
+	git stash &&
+
+	git rev-parse --verify refs/stash:A.t
+'
+
+test_expect_success 'stash -c stash.useBuiltin=false warning ' '
+	expected="stash.useBuiltin support has been removed" &&
+
+	git -c stash.useBuiltin=false stash 2>err &&
+	test_i18ngrep "$expected" err &&
+	env GIT_TEST_STASH_USE_BUILTIN=false git stash 2>err &&
+	test_i18ngrep "$expected" err &&
+
+	git -c stash.useBuiltin=true stash 2>err &&
+	test_must_be_empty err &&
+	env GIT_TEST_STASH_USE_BUILTIN=true git stash 2>err &&
+	test_must_be_empty err
 '
 
 test_done

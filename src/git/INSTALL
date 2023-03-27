@@ -109,15 +109,15 @@ Issues of note:
 
  - Git is reasonably self-sufficient, but does depend on a few external
    programs and libraries.  Git can be used without most of them by adding
-   the approriate "NO_<LIBRARY>=YesPlease" to the make command line or
+   the appropriate "NO_<LIBRARY>=YesPlease" to the make command line or
    config.mak file.
 
 	- "zlib", the compression library. Git won't build without it.
 
 	- "ssh" is used to push and pull over the net.
 
-	- A POSIX-compliant shell is required to run many scripts needed
-	  for everyday use (e.g. "bisect", "pull").
+	- A POSIX-compliant shell is required to run some scripts needed
+	  for everyday use (e.g. "bisect", "request-pull").
 
 	- "Perl" version 5.8 or later is needed to use some of the
 	  features (e.g. preparing a partial commit using "git add -i/-p",
@@ -165,8 +165,7 @@ Issues of note:
 	  use English. Under autoconf the configure script will do this
 	  automatically if it can't find libintl on the system.
 
-	- Python version 2.4 or later (but not 3.x, which is not
-	  supported by Perforce) is needed to use the git-p4 interface
+	- Python version 2.7 or later is needed to use the git-p4 interface
 	  to Perforce.
 
  - Some platform specific issues are dealt with Makefile rules,
@@ -206,9 +205,7 @@ Issues of note:
    clone two separate git-htmldocs and git-manpages repositories next
    to the clone of git itself.
 
-   It has been reported that docbook-xsl version 1.72 and 1.73 are
-   buggy; 1.72 misformats manual pages for callouts, and 1.73 needs
-   the patch in contrib/patches/docbook-xsl-manpages-charmap.patch
+   The minimum supported version of docbook-xsl is 1.74.
 
    Users attempting to build the documentation on Cygwin may need to ensure
    that the /etc/xml/catalog file looks something like this:

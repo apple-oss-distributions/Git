@@ -7,11 +7,13 @@
 #include "sigchain.h"
 #include "strbuf.h"
 #include "string-list.h"
-#include "argv-array.h"
+#include "strvec.h"
 #include "midx.h"
 #include "packfile.h"
+#include "prune-packed.h"
 #include "object-store.h"
 #include "promisor-remote.h"
+#include "shallow.h"
 
 static int delta_base_offset = 1;
 static int pack_kept_objects = -1;
@@ -131,7 +133,11 @@ static void get_non_kept_pack_filenames(struct string_list *fname_list,
 static void remove_redundant_pack(const char *dir_name, const char *base_name)
 {
 	struct strbuf buf = STRBUF_INIT;
-	strbuf_addf(&buf, "%s/%s.pack", dir_name, base_name);
+	struct multi_pack_index *m = get_local_multi_pack_index(the_repository);
+	strbuf_addf(&buf, "%s.pack", base_name);
+	if (m && midx_contains_pack(m, buf.buf))
+		clear_midx_file(the_repository);
+	strbuf_insertf(&buf, 0, "%s/", dir_name);
 	unlink_pack_path(buf.buf, 1);
 	strbuf_release(&buf);
 }
@@ -151,28 +157,28 @@ struct pack_objects_args {
 static void prepare_pack_objects(struct child_process *cmd,
 				 const struct pack_objects_args *args)
 {
-	argv_array_push(&cmd->args, "pack-objects");
+	strvec_push(&cmd->args, "pack-objects");
 	if (args->window)
-		argv_array_pushf(&cmd->args, "--window=%s", args->window);
+		strvec_pushf(&cmd->args, "--window=%s", args->window);
 	if (args->window_memory)
-		argv_array_pushf(&cmd->args, "--window-memory=%s", args->window_memory);
+		strvec_pushf(&cmd->args, "--window-memory=%s", args->window_memory);
 	if (args->depth)
-		argv_array_pushf(&cmd->args, "--depth=%s", args->depth);
+		strvec_pushf(&cmd->args, "--depth=%s", args->depth);
 	if (args->threads)
-		argv_array_pushf(&cmd->args, "--threads=%s", args->threads);
+		strvec_pushf(&cmd->args, "--threads=%s", args->threads);
 	if (args->max_pack_size)
-		argv_array_pushf(&cmd->args, "--max-pack-size=%s", args->max_pack_size);
+		strvec_pushf(&cmd->args, "--max-pack-size=%s", args->max_pack_size);
 	if (args->no_reuse_delta)
-		argv_array_pushf(&cmd->args, "--no-reuse-delta");
+		strvec_pushf(&cmd->args, "--no-reuse-delta");
 	if (args->no_reuse_object)
-		argv_array_pushf(&cmd->args, "--no-reuse-object");
+		strvec_pushf(&cmd->args, "--no-reuse-object");
 	if (args->local)
-		argv_array_push(&cmd->args,  "--local");
+		strvec_push(&cmd->args,  "--local");
 	if (args->quiet)
-		argv_array_push(&cmd->args,  "--quiet");
+		strvec_push(&cmd->args,  "--quiet");
 	if (delta_base_offset)
-		argv_array_push(&cmd->args,  "--delta-base-offset");
-	argv_array_push(&cmd->args, packtmp);
+		strvec_push(&cmd->args,  "--delta-base-offset");
+	strvec_push(&cmd->args, packtmp);
 	cmd->git_cmd = 1;
 	cmd->out = -1;
 }
@@ -194,6 +200,37 @@ static int write_oid(const struct object_id *oid, struct packed_git *pack,
 	xwrite(cmd->in, oid_to_hex(oid), the_hash_algo->hexsz);
 	xwrite(cmd->in, "\n", 1);
 	return 0;
+}
+
+static struct {
+	const char *name;
+	unsigned optional:1;
+} exts[] = {
+	{".pack"},
+	{".idx"},
+	{".bitmap", 1},
+	{".promisor", 1},
+};
+
+static unsigned populate_pack_exts(char *name)
+{
+	struct stat statbuf;
+	struct strbuf path = STRBUF_INIT;
+	unsigned ret = 0;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(exts); i++) {
+		strbuf_reset(&path);
+		strbuf_addf(&path, "%s-%s%s", packtmp, name, exts[i].name);
+
+		if (stat(path.buf, &statbuf))
+			continue;
+
+		ret |= (1 << i);
+	}
+
+	strbuf_release(&path);
+	return ret;
 }
 
 static void repack_promisor_objects(const struct pack_objects_args *args,
@@ -224,15 +261,23 @@ static void repack_promisor_objects(const struct pack_objects_args *args,
 
 	out = xfdopen(cmd.out, "r");
 	while (strbuf_getline_lf(&line, out) != EOF) {
+		struct string_list_item *item;
 		char *promisor_name;
 		int fd;
 		if (line.len != the_hash_algo->hexsz)
 			die(_("repack: Expecting full hex object ID lines only from pack-objects."));
-		string_list_append(names, line.buf);
+		item = string_list_append(names, line.buf);
 
 		/*
 		 * pack-objects creates the .pack and .idx files, but not the
 		 * .promisor file. Create the .promisor file, which is empty.
+		 *
+		 * NEEDSWORK: fetch-pack sometimes generates non-empty
+		 * .promisor files containing the ref names and associated
+		 * hashes at the point of generation of the corresponding
+		 * packfile, but this would not preserve their contents. Maybe
+		 * concatenate the contents of all .promisor files instead of
+		 * just creating a new empty file.
 		 */
 		promisor_name = mkpathdup("%s-%s.promisor", packtmp,
 					  line.buf);
@@ -240,6 +285,9 @@ static void repack_promisor_objects(const struct pack_objects_args *args,
 		if (fd < 0)
 			die_errno(_("unable to create '%s'"), promisor_name);
 		close(fd);
+
+		item->util = (void *)(uintptr_t)populate_pack_exts(item->string);
+
 		free(promisor_name);
 	}
 	fclose(out);
@@ -252,22 +300,13 @@ static void repack_promisor_objects(const struct pack_objects_args *args,
 
 int cmd_repack(int argc, const char **argv, const char *prefix)
 {
-	struct {
-		const char *name;
-		unsigned optional:1;
-	} exts[] = {
-		{".pack"},
-		{".idx"},
-		{".bitmap", 1},
-		{".promisor", 1},
-	};
 	struct child_process cmd = CHILD_PROCESS_INIT;
 	struct string_list_item *item;
 	struct string_list names = STRING_LIST_INIT_DUP;
 	struct string_list rollback = STRING_LIST_INIT_NODUP;
 	struct string_list existing_packs = STRING_LIST_INIT_DUP;
 	struct strbuf line = STRBUF_INIT;
-	int i, ext, ret, failed;
+	int i, ext, ret;
 	FILE *out;
 
 	/* variables to be filled by option parsing */
@@ -277,7 +316,6 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 	int keep_unreachable = 0;
 	struct string_list keep_pack_list = STRING_LIST_INIT_NODUP;
 	int no_update_server_info = 0;
-	int midx_cleared = 0;
 	struct pack_objects_args po_args = {NULL};
 
 	struct option builtin_repack_options[] = {
@@ -352,24 +390,24 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 
 	prepare_pack_objects(&cmd, &po_args);
 
-	argv_array_push(&cmd.args, "--keep-true-parents");
+	strvec_push(&cmd.args, "--keep-true-parents");
 	if (!pack_kept_objects)
-		argv_array_push(&cmd.args, "--honor-pack-keep");
+		strvec_push(&cmd.args, "--honor-pack-keep");
 	for (i = 0; i < keep_pack_list.nr; i++)
-		argv_array_pushf(&cmd.args, "--keep-pack=%s",
-				 keep_pack_list.items[i].string);
-	argv_array_push(&cmd.args, "--non-empty");
-	argv_array_push(&cmd.args, "--all");
-	argv_array_push(&cmd.args, "--reflog");
-	argv_array_push(&cmd.args, "--indexed-objects");
+		strvec_pushf(&cmd.args, "--keep-pack=%s",
+			     keep_pack_list.items[i].string);
+	strvec_push(&cmd.args, "--non-empty");
+	strvec_push(&cmd.args, "--all");
+	strvec_push(&cmd.args, "--reflog");
+	strvec_push(&cmd.args, "--indexed-objects");
 	if (has_promisor_remote())
-		argv_array_push(&cmd.args, "--exclude-promisor-objects");
+		strvec_push(&cmd.args, "--exclude-promisor-objects");
 	if (write_bitmaps > 0)
-		argv_array_push(&cmd.args, "--write-bitmap-index");
+		strvec_push(&cmd.args, "--write-bitmap-index");
 	else if (write_bitmaps < 0)
-		argv_array_push(&cmd.args, "--write-bitmap-index-quiet");
+		strvec_push(&cmd.args, "--write-bitmap-index-quiet");
 	if (use_delta_islands)
-		argv_array_push(&cmd.args, "--delta-islands");
+		strvec_push(&cmd.args, "--delta-islands");
 
 	if (pack_everything & ALL_INTO_ONE) {
 		get_non_kept_pack_filenames(&existing_packs, &keep_pack_list);
@@ -378,23 +416,23 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 
 		if (existing_packs.nr && delete_redundant) {
 			if (unpack_unreachable) {
-				argv_array_pushf(&cmd.args,
-						"--unpack-unreachable=%s",
-						unpack_unreachable);
-				argv_array_push(&cmd.env_array, "GIT_REF_PARANOIA=1");
+				strvec_pushf(&cmd.args,
+					     "--unpack-unreachable=%s",
+					     unpack_unreachable);
+				strvec_push(&cmd.env_array, "GIT_REF_PARANOIA=1");
 			} else if (pack_everything & LOOSEN_UNREACHABLE) {
-				argv_array_push(&cmd.args,
-						"--unpack-unreachable");
+				strvec_push(&cmd.args,
+					    "--unpack-unreachable");
 			} else if (keep_unreachable) {
-				argv_array_push(&cmd.args, "--keep-unreachable");
-				argv_array_push(&cmd.args, "--pack-loose-unreachable");
+				strvec_push(&cmd.args, "--keep-unreachable");
+				strvec_push(&cmd.args, "--pack-loose-unreachable");
 			} else {
-				argv_array_push(&cmd.env_array, "GIT_REF_PARANOIA=1");
+				strvec_push(&cmd.env_array, "GIT_REF_PARANOIA=1");
 			}
 		}
 	} else {
-		argv_array_push(&cmd.args, "--unpacked");
-		argv_array_push(&cmd.args, "--incremental");
+		strvec_push(&cmd.args, "--unpacked");
+		strvec_push(&cmd.args, "--incremental");
 	}
 
 	cmd.no_stdin = 1;
@@ -417,118 +455,42 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 	if (!names.nr && !po_args.quiet)
 		printf_ln(_("Nothing new to pack."));
 
+	for_each_string_list_item(item, &names) {
+		item->util = (void *)(uintptr_t)populate_pack_exts(item->string);
+	}
+
 	close_object_store(the_repository->objects);
 
 	/*
 	 * Ok we have prepared all new packfiles.
-	 * First see if there are packs of the same name and if so
-	 * if we can move them out of the way (this can happen if we
-	 * repacked immediately after packing fully.
 	 */
-	failed = 0;
 	for_each_string_list_item(item, &names) {
 		for (ext = 0; ext < ARRAY_SIZE(exts); ext++) {
 			char *fname, *fname_old;
 
-			if (!midx_cleared) {
-				clear_midx_file(the_repository);
-				midx_cleared = 1;
-			}
-
-			fname = mkpathdup("%s/pack-%s%s", packdir,
-						item->string, exts[ext].name);
-			if (!file_exists(fname)) {
-				free(fname);
-				continue;
-			}
-
-			fname_old = mkpathdup("%s/old-%s%s", packdir,
-						item->string, exts[ext].name);
-			if (file_exists(fname_old))
-				if (unlink(fname_old))
-					failed = 1;
-
-			if (!failed && rename(fname, fname_old)) {
-				free(fname);
-				free(fname_old);
-				failed = 1;
-				break;
-			} else {
-				string_list_append(&rollback, fname);
-				free(fname_old);
-			}
-		}
-		if (failed)
-			break;
-	}
-	if (failed) {
-		struct string_list rollback_failure = STRING_LIST_INIT_DUP;
-		for_each_string_list_item(item, &rollback) {
-			char *fname, *fname_old;
-			fname = mkpathdup("%s/%s", packdir, item->string);
-			fname_old = mkpathdup("%s/old-%s", packdir, item->string);
-			if (rename(fname_old, fname))
-				string_list_append(&rollback_failure, fname);
-			free(fname);
-			free(fname_old);
-		}
-
-		if (rollback_failure.nr) {
-			int i;
-			fprintf(stderr,
-				_("WARNING: Some packs in use have been renamed by\n"
-				  "WARNING: prefixing old- to their name, in order to\n"
-				  "WARNING: replace them with the new version of the\n"
-				  "WARNING: file.  But the operation failed, and the\n"
-				  "WARNING: attempt to rename them back to their\n"
-				  "WARNING: original names also failed.\n"
-				  "WARNING: Please rename them in %s manually:\n"), packdir);
-			for (i = 0; i < rollback_failure.nr; i++)
-				fprintf(stderr, "WARNING:   old-%s -> %s\n",
-					rollback_failure.items[i].string,
-					rollback_failure.items[i].string);
-		}
-		exit(1);
-	}
-
-	/* Now the ones with the same name are out of the way... */
-	for_each_string_list_item(item, &names) {
-		for (ext = 0; ext < ARRAY_SIZE(exts); ext++) {
-			char *fname, *fname_old;
-			struct stat statbuffer;
-			int exists = 0;
 			fname = mkpathdup("%s/pack-%s%s",
 					packdir, item->string, exts[ext].name);
 			fname_old = mkpathdup("%s-%s%s",
 					packtmp, item->string, exts[ext].name);
-			if (!stat(fname_old, &statbuffer)) {
-				statbuffer.st_mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
-				chmod(fname_old, statbuffer.st_mode);
-				exists = 1;
-			}
-			if (exists || !exts[ext].optional) {
+
+			if (((uintptr_t)item->util) & (1 << ext)) {
+				struct stat statbuffer;
+				if (!stat(fname_old, &statbuffer)) {
+					statbuffer.st_mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
+					chmod(fname_old, statbuffer.st_mode);
+				}
+
 				if (rename(fname_old, fname))
 					die_errno(_("renaming '%s' failed"), fname_old);
-			}
+			} else if (!exts[ext].optional)
+				die(_("missing required file: %s"), fname_old);
+			else if (unlink(fname) < 0 && errno != ENOENT)
+				die_errno(_("could not unlink: %s"), fname);
+
 			free(fname);
 			free(fname_old);
 		}
 	}
-
-	/* Remove the "old-" files */
-	for_each_string_list_item(item, &names) {
-		for (ext = 0; ext < ARRAY_SIZE(exts); ext++) {
-			char *fname;
-			fname = mkpathdup("%s/old-%s%s",
-					  packdir,
-					  item->string,
-					  exts[ext].name);
-			if (remove_path(fname))
-				warning(_("failed to remove '%s'"), fname);
-			free(fname);
-		}
-	}
-
 	/* End of pack replacement. */
 
 	reprepare_packed_git(the_repository);
@@ -562,7 +524,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 	remove_temporary_files();
 
 	if (git_env_bool(GIT_TEST_MULTI_PACK_INDEX, 0))
-		write_midx_file(get_object_directory());
+		write_midx_file(get_object_directory(), 0);
 
 	string_list_clear(&names, 0);
 	string_list_clear(&rollback, 0);

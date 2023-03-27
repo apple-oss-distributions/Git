@@ -103,6 +103,11 @@ test_expect_success 'fetch notices corrupt idx' '
 	)
 '
 
+test_expect_success 'client refuses to ask for repo with newline' '
+	test_must_fail git clone "$GIT_DAEMON_URL/repo$LF.git" dst 2>stderr &&
+	test_i18ngrep newline.is.forbidden stderr
+'
+
 test_remote_error()
 {
 	do_export=YesPlease
@@ -147,18 +152,18 @@ test_remote_error()
 }
 
 msg="access denied or repository not exported"
-test_expect_success 'clone non-existent' "test_remote_error    '$msg' clone nowhere.git    "
+test_expect_success 'clone non-existent' "test_remote_error    '$msg' clone nowhere.git"
 test_expect_success 'push disabled'      "test_remote_error    '$msg' push  repo.git master"
-test_expect_success 'read access denied' "test_remote_error -x '$msg' fetch repo.git       "
-test_expect_success 'not exported'       "test_remote_error -n '$msg' fetch repo.git       "
+test_expect_success 'read access denied' "test_remote_error -x '$msg' fetch repo.git"
+test_expect_success 'not exported'       "test_remote_error -n '$msg' fetch repo.git"
 
 stop_git_daemon
 start_git_daemon --informative-errors
 
-test_expect_success 'clone non-existent' "test_remote_error    'no such repository'      clone nowhere.git    "
+test_expect_success 'clone non-existent' "test_remote_error    'no such repository'      clone nowhere.git"
 test_expect_success 'push disabled'      "test_remote_error    'service not enabled'     push  repo.git master"
-test_expect_success 'read access denied' "test_remote_error -x 'no such repository'      fetch repo.git       "
-test_expect_success 'not exported'       "test_remote_error -n 'repository not exported' fetch repo.git       "
+test_expect_success 'read access denied' "test_remote_error -x 'no such repository'      fetch repo.git"
+test_expect_success 'not exported'       "test_remote_error -n 'repository not exported' fetch repo.git"
 
 stop_git_daemon
 start_git_daemon --interpolated-path="$GIT_DAEMON_DOCUMENT_ROOT_PATH/%H%D"

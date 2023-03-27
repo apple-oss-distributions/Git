@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-commit-graph(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -749,8 +749,7 @@ git-commit-graph(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git commit-graph read</em> [--object-dir &lt;dir&gt;]
-<em>git commit-graph verify</em> [--object-dir &lt;dir&gt;] [--shallow] [--[no-]progress]
+<pre class="content"><em>git commit-graph verify</em> [--object-dir &lt;dir&gt;] [--shallow] [--[no-]progress]
 <em>git commit-graph write</em> &lt;options&gt; [--object-dir &lt;dir&gt;] [--[no-]progress]</pre>
 <div class="attribution">
 </div></div>
@@ -775,7 +774,10 @@ git-commit-graph(1) Manual Page
         file. This parameter exists to specify the location of an alternate
         that only has the objects directory, not a full <code>.git</code> directory. The
         commit-graph file is expected to be in the <code>&lt;dir&gt;/info</code> directory and
-        the packfiles are expected to be in <code>&lt;dir&gt;/pack</code>.
+        the packfiles are expected to be in <code>&lt;dir&gt;/pack</code>. If the directory
+        could not be made into an absolute path, or does not match any known
+        object directory, <code>git commit-graph ...</code> will exit with non-zero
+        status.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -799,26 +801,54 @@ git-commit-graph(1) Manual Page
 </dt>
 <dd>
 <p>
-Write a commit-graph file based on the commits found in packfiles.
+Write a commit-graph file based on the commits found in packfiles. If
+the config option <code>core.commitGraph</code> is disabled, then this command will
+output a warning, then return success without writing a commit-graph file.
 </p>
 <div class="paragraph"><p>With the <code>--stdin-packs</code> option, generate the new commit graph by
 walking objects only in the specified pack-indexes. (Cannot be combined
 with <code>--stdin-commits</code> or <code>--reachable</code>.)</p></div>
 <div class="paragraph"><p>With the <code>--stdin-commits</code> option, generate the new commit graph by
 walking commits starting at the commits specified in stdin as a list
-of OIDs in hex, one OID per line. (Cannot be combined with
-<code>--stdin-packs</code> or <code>--reachable</code>.)</p></div>
+of OIDs in hex, one OID per line. OIDs that resolve to non-commits
+(either directly, or by peeling tags) are silently ignored. OIDs that
+are malformed, or do not exist generate an error. (Cannot be combined
+with <code>--stdin-packs</code> or <code>--reachable</code>.)</p></div>
 <div class="paragraph"><p>With the <code>--reachable</code> option, generate the new commit graph by walking
 commits starting at all refs. (Cannot be combined with <code>--stdin-commits</code>
 or <code>--stdin-packs</code>.)</p></div>
 <div class="paragraph"><p>With the <code>--append</code> option, include all commits that are present in the
 existing commit-graph file.</p></div>
-<div class="paragraph"><p>With the <code>--split</code> option, write the commit-graph as a chain of multiple
-commit-graph files stored in <code>&lt;dir&gt;/info/commit-graphs</code>. The new commits
-not already in the commit-graph are added in a new "tip" file. This file
-is merged with the existing file if the following merge conditions are
-met:</p></div>
+<div class="paragraph"><p>With the <code>--changed-paths</code> option, compute and write information about the
+paths changed between a commit and its first parent. This operation can
+take a while on large repositories. It provides significant performance gains
+for getting history of a directory or a file with <code>git log -- &lt;path&gt;</code>. If
+this option is given, future commit-graph writes will automatically assume
+that this option was intended. Use <code>--no-changed-paths</code> to stop storing this
+data.</p></div>
+<div class="paragraph"><p>With the <code>--max-new-filters=&lt;n&gt;</code> option, generate at most <code>n</code> new Bloom
+filters (if <code>--changed-paths</code> is specified). If <code>n</code> is <code>-1</code>, no limit is
+enforced. Only commits present in the new layer count against this
+limit. To retroactively compute Bloom filters over earlier layers, it is
+advised to use <code>--split=replace</code>.  Overrides the <code>commitGraph.maxNewFilters</code>
+configuration.</p></div>
+<div class="paragraph"><p>With the <code>--split[=&lt;strategy&gt;]</code> option, write the commit-graph as a
+chain of multiple commit-graph files stored in
+<code>&lt;dir&gt;/info/commit-graphs</code>. Commit-graph layers are merged based on the
+strategy and other splitting options. The new commits not already in the
+commit-graph are added in a new "tip" file. This file is merged with the
+existing file if the following merge conditions are met:</p></div>
 <div class="ulist"><ul>
+<li>
+<p>
+If <code>--split=no-merge</code> is specified, a merge is never performed, and
+the remaining options are ignored. <code>--split=replace</code> overwrites the
+existing chain with a new one. A bare <code>--split</code> defers to the remaining
+options. (Note that merging a chain of commit graphs replaces the
+existing chain with a length-1 chain where the first and only
+incremental holds the entire graph).
+</p>
+</li>
 <li>
 <p>
 If <code>--size-multiple=&lt;X&gt;</code> is not specified, let <code>X</code> equal 2. If the new
@@ -838,15 +868,6 @@ be the current time. After writing the split commit-graph, delete all
 unused commit-graph whose modified times are older than <code>datetime</code>.</p></div>
 </li>
 </ul></div>
-</dd>
-<dt class="hdlist1">
-<em>read</em>
-</dt>
-<dd>
-<p>
-Read the commit-graph file and output basic details about it.
-Used for debugging purposes.
-</p>
 </dd>
 <dt class="hdlist1">
 <em>verify</em>
@@ -905,15 +926,6 @@ Write a commit-graph file containing all commits in the current
 <pre><code>$ git rev-parse HEAD | git commit-graph write --stdin-commits --append</code></pre>
 </div></div>
 </li>
-<li>
-<p>
-Read basic information from the commit-graph file.
-</p>
-<div class="listingblock">
-<div class="content">
-<pre><code>$ git commit-graph read</code></pre>
-</div></div>
-</li>
 </ul></div>
 </div>
 </div>
@@ -928,7 +940,7 @@ Read basic information from the commit-graph file.
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-10-09 14:51:03 JST
+ 2020-11-02 14:02:22 PST
 </div>
 </div>
 </body>

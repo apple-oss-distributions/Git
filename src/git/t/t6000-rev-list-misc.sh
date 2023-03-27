@@ -8,6 +8,7 @@ test_expect_success setup '
 	echo content1 >wanted_file &&
 	echo content2 >unwanted_file &&
 	git add wanted_file unwanted_file &&
+	test_tick &&
 	git commit -m one
 '
 
@@ -21,6 +22,7 @@ test_expect_success 'rev-list --objects with pathspecs and deeper paths' '
 	mkdir foo &&
 	>foo/file &&
 	git add foo/file &&
+	test_tick &&
 	git commit -m two &&
 
 	git rev-list --objects HEAD -- foo >output &&
@@ -69,6 +71,7 @@ test_expect_success '--no-object-names and --object-names are last-one-wins' '
 '
 
 test_expect_success 'rev-list A..B and rev-list ^A B are the same' '
+	test_tick &&
 	git commit --allow-empty -m another &&
 	git tag -a -m "annotated" v1.0 &&
 	git rev-list --objects ^v1.0^ v1.0 >expect &&
@@ -84,10 +87,10 @@ test_expect_success 'propagate uninteresting flag down correctly' '
 test_expect_success 'symleft flag bit is propagated down from tag' '
 	git log --format="%m %s" --left-right v1.0...master >actual &&
 	cat >expect <<-\EOF &&
-	> two
-	> one
 	< another
 	< that
+	> two
+	> one
 	EOF
 	test_cmp expect actual
 '
@@ -104,13 +107,16 @@ test_expect_success 'rev-list can show index objects' '
 	#   - we do not show the root tree; since we updated the index, it
 	#     does not have a valid cache tree
 	#
-	cat >expect <<-\EOF &&
-	8e4020bb5a8d8c873b25de15933e75cc0fc275df one
-	d9d3a7417b9605cfd88ee6306b28dadc29e6ab08 only-in-index
-	9200b628cf9dc883a85a7abc8d6e6730baee589c two
-	EOF
 	echo only-in-index >only-in-index &&
 	test_when_finished "git reset --hard" &&
+	rev1=$(git rev-parse HEAD:one) &&
+	rev2=$(git rev-parse HEAD:two) &&
+	revi=$(git hash-object only-in-index) &&
+	cat >expect <<-EOF &&
+	$rev1 one
+	$revi only-in-index
+	$rev2 two
+	EOF
 	git add only-in-index &&
 	git rev-list --objects --indexed-objects >actual &&
 	test_cmp expect actual
@@ -122,8 +128,8 @@ test_expect_success 'rev-list can negate index objects' '
 	test_cmp expect actual
 '
 
-test_expect_success '--bisect and --first-parent can not be combined' '
-	test_must_fail git rev-list --bisect --first-parent HEAD
+test_expect_success '--bisect and --first-parent can be combined' '
+	git rev-list --bisect --first-parent HEAD
 '
 
 test_expect_success '--header shows a NUL after each commit' '
@@ -146,6 +152,18 @@ test_expect_success 'rev-list --end-of-options' '
 	test_path_is_missing yikes &&
 	git rev-list HEAD >expect &&
 	test_cmp expect actual
+'
+
+test_expect_success 'rev-list --count' '
+	count=$(git rev-list --count HEAD) &&
+	git rev-list HEAD >actual &&
+	test_line_count = $count actual
+'
+
+test_expect_success 'rev-list --count --objects' '
+	count=$(git rev-list --count --objects HEAD) &&
+	git rev-list --objects HEAD >actual &&
+	test_line_count = $count actual
 '
 
 test_done

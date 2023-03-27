@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-fast-import(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -809,6 +809,28 @@ the frontend program in use.</p></div>
         is currently the default, but can be disabled with --quiet.
 </p>
 </dd>
+<dt class="hdlist1">
+--allow-unsafe-features
+</dt>
+<dd>
+<p>
+        Many command-line options can be provided as part of the
+        fast-import stream itself by using the <code>feature</code> or <code>option</code>
+        commands. However, some of these options are unsafe (e.g.,
+        allowing fast-import to access the filesystem outside of the
+        repository). These options are disabled by default, but can be
+        allowed by providing this option on the command line.  This
+        currently impacts only the <code>export-marks</code>, <code>import-marks</code>, and
+        <code>import-marks-if-exists</code> feature commands.
+</p>
+<div class="literalblock">
+<div class="content">
+<pre><code>Only enable this option if you trust the program generating the
+fast-import stream! This option is enabled automatically for
+remote-helpers that use the `import` capability, as they are
+already trusted to run their own code.</code></pre>
+</div></div>
+</dd>
 </dl></div>
 <div class="sect2">
 <h3 id="_options_for_frontends">Options for Frontends</h3>
@@ -901,6 +923,33 @@ the frontend program in use.</p></div>
 </p>
 <div class="paragraph"><p>Relative and non-relative marks may be combined by interweaving
 --(no-)-relative-marks with the --(import|export)-marks= options.</p></div>
+</dd>
+</dl></div>
+</div>
+<div class="sect2">
+<h3 id="_submodule_rewriting">Submodule Rewriting</h3>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+--rewrite-submodules-from=&lt;name&gt;:&lt;file&gt;
+</dt>
+<dt class="hdlist1">
+--rewrite-submodules-to=&lt;name&gt;:&lt;file&gt;
+</dt>
+<dd>
+<p>
+  Rewrite the object IDs for the submodule specified by &lt;name&gt; from the values
+        used in the from &lt;file&gt; to those used in the to &lt;file&gt;. The from marks should
+        have been created by <code>git fast-export</code>, and the to marks should have been
+        created by <code>git fast-import</code> when importing that same submodule.
+</p>
+<div class="paragraph"><p>&lt;name&gt; may be any arbitrary string not containing a colon character, but the
+same value must be used with both options when specifying corresponding marks.
+Multiple submodules may be specified with different values for &lt;name&gt;. It is an
+error not to use these options in corresponding pairs.</p></div>
+<div class="paragraph"><p>These options are primarily useful when converting a repository from one hash
+algorithm to another; without them, fast-import will fail if it encounters a
+submodule because it has no way of writing the object ID into the new hash
+algorithm.</p></div>
 </dd>
 </dl></div>
 </div>
@@ -1090,7 +1139,19 @@ organizations have a CVS repository which has only ever been accessed
 by users who are located in the same location and time zone.  In this
 case a reasonable offset from UTC could be assumed.</p></div>
 <div class="paragraph"><p>Unlike the <code>rfc2822</code> format, this format is very strict.  Any
-variation in formatting will cause fast-import to reject the value.</p></div>
+variation in formatting will cause fast-import to reject the value,
+and some sanity checks on the numeric values may also be performed.</p></div>
+</dd>
+<dt class="hdlist1">
+<code>raw-permissive</code>
+</dt>
+<dd>
+<p>
+        This is the same as <code>raw</code> except that no sanity checks on
+        the numeric epoch and local offset are performed.  This can
+        be useful when trying to filter or import an existing history
+        with e.g. bogus timezone values.
+</p>
 </dd>
 <dt class="hdlist1">
 <code>rfc2822</code>
@@ -1718,7 +1779,7 @@ may have uses for this information</p></div>
 <div class="content">
 <pre><code>        'original-oid' SP &lt;object-identifier&gt; LF</code></pre>
 </div></div>
-<div class="paragraph"><p>where <code>&lt;object-identifer&gt;</code> is any string not containing LF.</p></div>
+<div class="paragraph"><p>where <code>&lt;object-identifier&gt;</code> is any string not containing LF.</p></div>
 </div>
 <div class="sect2">
 <h3 id="_code_tag_code"><code>tag</code></h3>
@@ -2555,7 +2616,7 @@ compression.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-10-15 14:20:15 JST
+ 2020-10-05 15:17:53 PDT
 </div>
 </div>
 </body>

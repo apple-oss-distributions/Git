@@ -23,6 +23,42 @@ useful additional context:
 - `Documentation/SubmittingPatches`
 - `Documentation/howto/new-command.txt`
 
+[[getting-help]]
+=== Getting Help
+
+If you get stuck, you can seek help in the following places.
+
+==== git@vger.kernel.org
+
+This is the main Git project mailing list where code reviews, version
+announcements, design discussions, and more take place. Those interested in
+contributing are welcome to post questions here. The Git list requires
+plain-text-only emails and prefers inline and bottom-posting when replying to
+mail; you will be CC'd in all replies to you. Optionally, you can subscribe to
+the list by sending an email to majordomo@vger.kernel.org with "subscribe git"
+in the body. The https://lore.kernel.org/git[archive] of this mailing list is
+available to view in a browser.
+
+==== https://groups.google.com/forum/#!forum/git-mentoring[git-mentoring@googlegroups.com]
+
+This mailing list is targeted to new contributors and was created as a place to
+post questions and receive answers outside of the public eye of the main list.
+Veteran contributors who are especially interested in helping mentor newcomers
+are present on the list. In order to avoid search indexers, group membership is
+required to view messages; anyone can join and no approval is required.
+
+==== https://webchat.freenode.net/#git-devel[#git-devel] on Freenode
+
+This IRC channel is for conversations between Git contributors. If someone is
+currently online and knows the answer to your question, you can receive help
+in real time. Otherwise, you can read the
+https://colabti.org/irclogger/irclogger_logs/git-devel[scrollback] to see
+whether someone answered you. IRC does not allow offline private messaging, so
+if you try to private message someone and then log out of IRC, they cannot
+respond to you. It's better to ask your questions in the channel so that you
+can be answered if you disconnect and so that others can learn from the
+conversation.
+
 [[getting-started]]
 == Getting Started
 
@@ -37,6 +73,26 @@ the mirror on GitHub.
 $ git clone https://github.com/git/git git
 $ cd git
 ----
+
+[[dependencies]]
+=== Installing Dependencies
+
+To build Git from source, you need to have a handful of dependencies installed
+on your system. For a hint of what's needed, you can take a look at
+`INSTALL`, paying close attention to the section about Git's dependencies on
+external programs and libraries. That document mentions a way to "test-drive"
+our freshly built Git without installing; that's the method we'll be using in
+this tutorial.
+
+Make sure that your environment has everything you need by building your brand
+new clone of Git from the above step:
+
+----
+$ make
+----
+
+NOTE: The Git build is parallelizable. `-j#` is not included above but you can
+use it as you prefer, here and elsewhere.
 
 [[identify-problem]]
 === Identify Problem to Solve
@@ -138,9 +194,6 @@ NOTE: When you are developing the Git project, it's preferred that you use the
 `DEVELOPER` flag; if there's some reason it doesn't work for you, you can turn
 it off, but it's a good idea to mention the problem to the mailing list.
 
-NOTE: The Git build is parallelizable. `-j#` is not included above but you can
-use it as you prefer, here and elsewhere.
-
 Great, now your new command builds happily on its own. But nobody invokes it.
 Let's change that.
 
@@ -196,7 +249,7 @@ component you're working on, followed by a blank line (always required) and then
 the body of your commit message, which should provide the bulk of the context.
 Remember to be explicit and provide the "Why" of your change, especially if it
 couldn't easily be understood from your diff. When editing your commit message,
-don't remove the Signed-off-by line which was added by `-s` above.
+don't remove the `Signed-off-by` trailer which was added by `-s` above.
 
 ----
 psuh: add a built-in by popular demand
@@ -266,14 +319,14 @@ function body:
 ...
 
 	git_config(git_default_config, NULL);
-	if (git_config_get_string_const("user.name", &cfg_name) > 0)
+	if (git_config_get_string_tmp("user.name", &cfg_name) > 0)
 		printf(_("No name is found in config\n"));
 	else
 		printf(_("Your name: %s\n"), cfg_name);
 ----
 
 `git_config()` will grab the configuration from config files known to Git and
-apply standard precedence rules. `git_config_get_string_const()` will look up
+apply standard precedence rules. `git_config_get_string_tmp()` will look up
 a specific key ("user.name") and give you the value. There are a number of
 single-key lookup functions like this one; you can see them all (and more info
 about how to use `git_config()`) in `Documentation/technical/api-config.txt`.
@@ -454,6 +507,9 @@ documentation is consistent with other Git and UNIX manpages; this makes life
 easier for your user, who can skip to the section they know contains the
 information they need.
 
+NOTE: Before trying to build the docs, make sure you have the package `asciidoc`
+installed.
+
 Now that you've written your manpage, you'll need to build it explicitly. We
 convert your AsciiDoc to troff which is man-readable like so:
 
@@ -468,8 +524,6 @@ or
 $ make -C Documentation/ git-psuh.1
 $ man Documentation/git-psuh.1
 ----
-
-NOTE: You may need to install the package `asciidoc` to get this to work.
 
 While this isn't as satisfying as running through `git help`, you can at least
 check that your help page looks right.
@@ -533,6 +587,28 @@ the `--` are interpreted merely as positional arguments. (This can be handy if
 you want to pass as a parameter something which would usually be interpreted as
 a flag.) `parse_options()` will terminate parsing when it reaches `--` and give
 you the rest of the options afterwards, untouched.
+
+Now that you have a usage hint, you can teach Git how to show it in the general
+command list shown by `git help git` or `git help -a`, which is generated from
+`command-list.txt`. Find the line for 'git-pull' so you can add your 'git-psuh'
+line above it in alphabetical order. Now, we can add some attributes about the
+command which impacts where it shows up in the aforementioned help commands. The
+top of `command-list.txt` shares some information about what each attribute
+means; in those help pages, the commands are sorted according to these
+attributes. `git psuh` is user-facing, or porcelain - so we will mark it as
+"mainporcelain". For "mainporcelain" commands, the comments at the top of
+`command-list.txt` indicate we can also optionally add an attribute from another
+list; since `git psuh` shows some information about the user's workspace but
+doesn't modify anything, let's mark it as "info". Make sure to keep your
+attributes in the same style as the rest of `command-list.txt` using spaces to
+align and delineate them:
+
+----
+git-prune-packed                        plumbingmanipulators
+git-psuh                                mainporcelain		info
+git-pull                                mainporcelain           remote
+git-push                                mainporcelain           remote
+----
 
 Build again. Now, when you run with `-h`, you should see your usage printed and
 your command terminated before anything else interesting happens. Great!
@@ -745,6 +821,14 @@ already uses it to comment on your PR with `/allow <username>`. GitGitGadget
 will automatically run your PRs through the CI even without the permission given
 but you will not be able to `/submit` your changes until someone allows you to
 use the tool.
+
+NOTE: You can typically find someone who can `/allow` you on GitGitGadget by
+either examining recent pull requests where someone has been granted `/allow`
+(https://github.com/gitgitgadget/git/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen+%22%2Fallow%22[Search:
+is:pr is:open "/allow"]), in which case both the author and the person who
+granted the `/allow` can now `/allow` you, or by inquiring on the
+https://webchat.freenode.net/#git-devel[#git-devel] IRC channel on Freenode
+linking your pull request and asking for someone to `/allow` you.
 
 If the CI fails, you can update your changes with `git rebase -i` and push your
 branch again:
@@ -970,7 +1054,7 @@ reviewers the changes you've made that may not be as visible.
 You will also need to go and find the Message-Id of your previous cover letter.
 You can either note it when you send the first series, from the output of `git
 send-email`, or you can look it up on the
-https://public-inbox.org/git[mailing list]. Find your cover letter in the
+https://lore.kernel.org/git[mailing list]. Find your cover letter in the
 archives, click on it, then click "permalink" or "raw" to reveal the Message-Id
 header. It should match:
 
@@ -1059,10 +1143,24 @@ After a few days, you will hopefully receive a reply to your patchset with some
 comments. Woohoo! Now you can get back to work.
 
 It's good manners to reply to each comment, notifying the reviewer that you have
-made the change requested, feel the original is better, or that the comment
+made the change suggested, feel the original is better, or that the comment
 inspired you to do something a new way which is superior to both the original
 and the suggested change. This way reviewers don't need to inspect your v2 to
 figure out whether you implemented their comment or not.
+
+Reviewers may ask you about what you wrote in the patchset, either in
+the proposed commit log message or in the changes themselves.  You
+should answer these questions in your response messages, but often the
+reason why reviewers asked these questions to understand what you meant
+to write is because your patchset needed clarification to be understood.
+
+Do not be satisfied by just answering their questions in your response
+and hear them say that they now understand what you wanted to say.
+Update your patches to clarify the points reviewers had trouble with,
+and prepare your v2; the words you used to explain your v1 to answer
+reviewers' questions may be useful thing to use.  Your goal is to make
+your v2 clear enough so that it becomes unnecessary for you to give the
+same explanation to the next person who reads it.
 
 If you are going to push back on a comment, be polite and explain why you feel
 your original is better; be prepared that the reviewer may still disagree with
@@ -1096,8 +1194,8 @@ look at the section below this one for some context.)
 [[after-approval]]
 === After Review Approval
 
-The Git project has four integration branches: `pu`, `next`, `master`, and
-`maint`. Your change will be placed into `pu` fairly early on by the maintainer
+The Git project has four integration branches: `seen`, `next`, `master`, and
+`maint`. Your change will be placed into `seen` fairly early on by the maintainer
 while it is still in the review process; from there, when it is ready for wider
 testing, it will be merged into `next`. Plenty of early testers use `next` and
 may report issues. Eventually, changes in `next` will make it to `master`,

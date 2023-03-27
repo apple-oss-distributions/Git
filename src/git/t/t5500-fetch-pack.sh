@@ -385,6 +385,54 @@ test_expect_success 'clone shallow with packed refs' '
 	test_cmp count8.expected count8.actual
 '
 
+test_expect_success 'in_vain not triggered before first ACK' '
+	rm -rf myserver myclient &&
+	git init myserver &&
+	test_commit -C myserver foo &&
+	git clone "file://$(pwd)/myserver" myclient &&
+
+	# MAX_IN_VAIN is 256. Because of batching, the client will send 496
+	# (16+32+64+128+256) commits, not 256, before giving up. So create 496
+	# irrelevant commits.
+	test_commit_bulk -C myclient 496 &&
+
+	# The new commit that the client wants to fetch.
+	test_commit -C myserver bar &&
+
+	git -C myclient fetch --progress origin 2>log &&
+	test_i18ngrep "remote: Total 3 " log
+'
+
+test_expect_success 'in_vain resetted upon ACK' '
+	rm -rf myserver myclient &&
+	git init myserver &&
+
+	# Linked list of commits on master. The first is common; the rest are
+	# not.
+	test_commit -C myserver first_master_commit &&
+	git clone "file://$(pwd)/myserver" myclient &&
+	test_commit_bulk -C myclient 255 &&
+
+	# Another linked list of commits on anotherbranch with no connection to
+	# master. The first is common; the rest are not.
+	git -C myserver checkout --orphan anotherbranch &&
+	test_commit -C myserver first_anotherbranch_commit &&
+	git -C myclient fetch origin anotherbranch:refs/heads/anotherbranch &&
+	git -C myclient checkout anotherbranch &&
+	test_commit_bulk -C myclient 255 &&
+
+	# The new commit that the client wants to fetch.
+	git -C myserver checkout master &&
+	test_commit -C myserver to_fetch &&
+
+	# The client will send (as "have"s) all 256 commits in anotherbranch
+	# first. The 256th commit is common between the client and the server,
+	# and should reset in_vain. This allows negotiation to continue until
+	# the client reports that first_anotherbranch_commit is common.
+	git -C myclient fetch --progress origin master 2>log &&
+	test_i18ngrep "Total 3 " log
+'
+
 test_expect_success 'fetch in shallow repo unreachable shallow objects' '
 	(
 		git clone --bare --branch B --single-branch "file://$(pwd)/." no-reflog &&
@@ -440,11 +488,12 @@ test_expect_success 'setup tests for the --stdin parameter' '
 '
 
 test_expect_success 'setup fetch refs from cmdline v[12]' '
+	cp -r client client0 &&
 	cp -r client client1 &&
 	cp -r client client2
 '
 
-for version in '' 1 2
+for version in '' 0 1 2
 do
 	test_expect_success "protocol.version=$version fetch refs from cmdline" "
 		(
@@ -638,7 +687,7 @@ test_expect_success 'fetch-pack cannot fetch a raw sha1 that is not advertised a
 	git init client &&
 	# Some protocol versions (e.g. 2) support fetching
 	# unadvertised objects, so restrict this test to v0.
-	test_must_fail env GIT_TEST_PROTOCOL_VERSION= git -C client fetch-pack ../server \
+	test_must_fail env GIT_TEST_PROTOCOL_VERSION=0 git -C client fetch-pack ../server \
 		$(git -C server rev-parse refs/heads/master^) 2>err &&
 	test_i18ngrep "Server does not allow request for unadvertised object" err
 '
@@ -822,9 +871,10 @@ test_expect_success 'shallow since with commit graph and already-seen commit' '
 
 	GIT_PROTOCOL=version=2 git upload-pack . <<-EOF >/dev/null
 	0012command=fetch
+	$(echo "object-format=$(test_oid algo)" | packetize)
 	00010013deepen-since 1
-	0032want $(git rev-parse other)
-	0032have $(git rev-parse master)
+	$(echo "want $(git rev-parse other)" | packetize)
+	$(echo "have $(git rev-parse master)" | packetize)
 	0000
 	EOF
 	)
@@ -917,7 +967,10 @@ test_expect_success 'filtering by size' '
 	git -C client fetch-pack --filter=blob:limit=0 ../server HEAD &&
 
 	# Ensure that object is not inadvertently fetched
-	test_must_fail git -C client cat-file -e $(git hash-object server/one.t)
+	commit=$(git -C server rev-parse HEAD) &&
+	blob=$(git hash-object server/one.t) &&
+	git -C client rev-list --objects --missing=allow-any "$commit" >oids &&
+	! grep "$blob" oids
 '
 
 test_expect_success 'filtering by size has no effect if support for it is not advertised' '
@@ -929,7 +982,10 @@ test_expect_success 'filtering by size has no effect if support for it is not ad
 	git -C client fetch-pack --filter=blob:limit=0 ../server HEAD 2> err &&
 
 	# Ensure that object is fetched
-	git -C client cat-file -e $(git hash-object server/one.t) &&
+	commit=$(git -C server rev-parse HEAD) &&
+	blob=$(git hash-object server/one.t) &&
+	git -C client rev-list --objects --missing=allow-any "$commit" >oids &&
+	grep "$blob" oids &&
 
 	test_i18ngrep "filtering not recognized by server" err
 '
@@ -944,16 +1000,17 @@ fetch_filter_blob_limit_zero () {
 	test_config -C "$SERVER" uploadpack.allowfilter 1 &&
 
 	git clone "$URL" client &&
-	test_config -C client extensions.partialclone origin &&
 
 	test_commit -C "$SERVER" two &&
 
 	git -C client fetch --filter=blob:limit=0 origin HEAD:somewhere &&
 
 	# Ensure that commit is fetched, but blob is not
-	test_config -C client extensions.partialclone "arbitrary string" &&
-	git -C client cat-file -e $(git -C "$SERVER" rev-parse two) &&
-	test_must_fail git -C client cat-file -e $(git hash-object "$SERVER/two.t")
+	commit=$(git -C "$SERVER" rev-parse two) &&
+	blob=$(git hash-object server/two.t) &&
+	git -C client rev-list --objects --missing=allow-any "$commit" >oids &&
+	grep "$commit" oids &&
+	! grep "$blob" oids
 }
 
 test_expect_success 'fetch with --filter=blob:limit=0' '

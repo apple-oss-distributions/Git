@@ -43,6 +43,7 @@ struct pretty_print_context {
 	struct string_list *mailmap;
 	int color;
 	struct ident_split *from_ident;
+	unsigned encode_email_headers:1;
 
 	/*
 	 * Fields below here are manipulated internally by pp_* functions and
@@ -137,5 +138,8 @@ const char *format_subject(struct strbuf *sb, const char *msg,
 
 /* Check if "cmit_fmt" will produce an empty output. */
 int commit_format_is_empty(enum cmit_fmt);
+
+/* Make subject of commit message suitable for filename */
+void format_sanitized_subject(struct strbuf *sb, const char *msg, size_t len);
 
 #endif /* PRETTY_H */

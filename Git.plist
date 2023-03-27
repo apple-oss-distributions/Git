@@ -4,13 +4,15 @@
 <array>
 	<dict>
 		<key>OpenSourceImportDate</key>
-		<string>2020-04-21</string>
+		<string>2021-02-09</string>
 		<key>OpenSourceLicense</key>
 		<string>GPL</string>
 		<key>OpenSourceProject</key>
 		<string>git</string>
 		<key>OpenSourceVersion</key>
-		<string>2.24.3</string>
+		<string>2.30.1_DEV</string>
+		<key>OpenSourceSHA1</key>
+		<value>2085dd570da7979ba2cd810afc25c0731d69025c</value>
 		<key>OpenSourceWebsiteURL</key>
 		<string>http://git-scm.com</string>
 		<key>OpenSourceModifications</key>
@@ -20,6 +22,7 @@
 			<string>HTML documentation is not provided with Apple&apos;s git. Make the error message more on point.</string>
 			<string>Set Apple Git version during build</string>
 			<string>Fix test cases that expect --version to not contain a space</string>
+			<string>Pulled in advance patch for CVE-2021-21300</string>
 		</array>
 	</dict>
 </array>

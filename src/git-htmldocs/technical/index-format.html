@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>Git index format</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -742,8 +742,11 @@ asciidoc.install();
 <div class="sectionbody">
 <div class="literalblock">
 <div class="content">
-<pre><code>All binary numbers are in network byte order. Version 2 is described
-here unless stated otherwise.</code></pre>
+<pre><code>All binary numbers are in network byte order.
+In a repository using the traditional SHA-1, checksums and object IDs
+(object names) mentioned below are all computed using SHA-1.  Similarly,
+in SHA-256 repositories, these values are computed using SHA-256.
+Version 2 is described here unless stated otherwise.</code></pre>
 </div></div>
 <div class="ulist"><ul>
 <li>
@@ -781,7 +784,7 @@ be ignored if Git does not understand them.</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>Git currently supports cached tree and resolve undo extensions.</code></pre>
+<pre><code>Git currently supports cache tree and resolve undo extensions.</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -799,8 +802,7 @@ extension is optional and can be ignored.</code></pre>
 </li>
 <li>
 <p>
-160-bit SHA-1 over the content of the index file before this
-     checksum.
+Hash checksum over the content of the index file before this checksum.
 </p>
 </li>
 </ul></div>
@@ -882,7 +884,7 @@ Symbolic links and gitlinks have value 0 in this field.</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>160-bit SHA-1 for the represented object</code></pre>
+<pre><code>Object name for the represented object</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -972,17 +974,42 @@ different. See below for details.</code></pre>
 <h2 id="_extensions">Extensions</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_cached_tree">Cached tree</h3>
+<h3 id="_cache_tree">Cache tree</h3>
 <div class="literalblock">
 <div class="content">
-<pre><code>Cached tree extension contains pre-computed hashes for trees that can
-be derived from the index. It helps speed up tree object generation
-from index for a new commit.</code></pre>
+<pre><code>Since the index does not record entries for directories, the cache
+entries cannot describe tree objects that already exist in the object
+database for regions of the index that are unchanged from an existing
+commit. The cache tree extension stores a recursive tree structure that
+describes the trees that already exist and completely match sections of
+the cache entries. This speeds up tree object generation from the index
+for a new commit by only computing the trees that are "new" to that
+commit. It also assists when comparing the index to another tree, such
+as `HEAD^{tree}`, since sections of the index can be skipped when a tree
+comparison demonstrates equality.</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>When a path is updated in index, the path must be invalidated and
-removed from tree cache.</code></pre>
+<pre><code>The recursive tree structure uses nodes that store a number of cache
+entries, a list of subnodes, and an object ID (OID). The OID references
+the existing tree for that node, if it is known to exist. The subnodes
+correspond to subdirectories that themselves have cache tree nodes. The
+number of cache entries corresponds to the number of cache entries in
+the index that describe paths within that tree's directory.</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>The extension tracks the full directory structure in the cache tree
+extension, but this is generally smaller than the full cache entry list.</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>When a path is updated in index, Git invalidates all nodes of the
+recursive cache tree corresponding to the parent directories of that
+path. We store these tree nodes as being "invalid" by using "-1" as the
+number of cache entries. Invalid nodes still store a span of index
+entries, allowing Git to focus its efforts when reconstructing a full
+cache tree.</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1023,8 +1050,8 @@ A newline (ASCII 10); and
 </li>
 <li>
 <p>
-160-bit object name for the object that would result from writing
-    this span of index as a tree.
+Object name for the object that would result from writing this span
+    of index as a tree.
 </p>
 <div class="literalblock">
 <div class="content">
@@ -1039,7 +1066,8 @@ When writing an invalid entry, -1 should always be used as entry_count.</code></
 first entry represents the root level of the repository, followed by the
 first subtree--let's call this A--of the root level (with its name
 relative to the root level), followed by the first subtree of A (with
-its name relative to A), ...</code></pre>
+its name relative to A), and so on. The specified number of subtrees
+indicates when the current level of the recursive stack is complete.</code></pre>
 </div></div>
 </li>
 </ul></div>
@@ -1085,7 +1113,7 @@ Three NUL-terminated ASCII octal numbers, entry mode of entries in
 </li>
 <li>
 <p>
-At most three 160-bit object names of the entry in stages from 1 to 3
+At most three object names of the entry in stages from 1 to 3
     (nothing is written for a missing stage).
 </p>
 </li>
@@ -1110,8 +1138,8 @@ top of that to produce the final index.</code></pre>
 <div class="ulist"><ul>
 <li>
 <p>
-160-bit SHA-1 of the shared index file. The shared index file path
-    is $GIT_DIR/sharedindex.&lt;SHA-1&gt;. If all 160 bits are zero, the
+Hash of the shared index file. The shared index file path
+    is $GIT_DIR/sharedindex.&lt;hash&gt;. If all bits are zero, the
     index does not require a shared index file.
 </p>
 </li>
@@ -1185,13 +1213,13 @@ Stat data of core.excludesfile
 </li>
 <li>
 <p>
-160-bit SHA-1 of $GIT_DIR/info/exclude. Null SHA-1 means the file
+Hash of $GIT_DIR/info/exclude. A null hash means the file
     does not exist.
 </p>
 </li>
 <li>
 <p>
-160-bit SHA-1 of core.excludesfile. Null SHA-1 means the file does
+Hash of core.excludesfile. A null hash means the file does
     not exist.
 </p>
 </li>
@@ -1251,7 +1279,7 @@ An ewah bitmap, the n-th bit records "check-only" bit of
 </li>
 <li>
 <p>
-An ewah bitmap, the n-th bit indicates whether SHA-1 and stat data
+An ewah bitmap, the n-th bit indicates whether hash and stat data
     is valid for the n-th directory and exists in the next data.
 </p>
 </li>
@@ -1263,7 +1291,7 @@ An array of stat data. The n-th data corresponds with the n-th
 </li>
 <li>
 <p>
-An array of SHA-1. The n-th SHA-1 corresponds with the n-th "one" bit
+An array of hashes. The n-th hash corresponds with the n-th "one" bit
     in the previous ewah bitmap.
 </p>
 </li>
@@ -1291,14 +1319,23 @@ hook has told us about changes.  The signature for this extension is
 <div class="ulist"><ul>
 <li>
 <p>
-32-bit version number: the current supported version is 1.
+32-bit version number: the current supported versions are 1 and 2.
 </p>
 </li>
 <li>
 <p>
-64-bit time: the extension data reflects all changes through the given
+(Version 1)
+    64-bit time: the extension data reflects all changes through the given
         time which is stored as the nanoseconds elapsed since midnight,
         January 1, 1970.
+</p>
+</li>
+<li>
+<p>
+(Version 2)
+    A null terminated string: an opaque token defined by the file system
+    monitor application.  The extension data reflects all changes relative
+    to that token.
 </p>
 </li>
 <li>
@@ -1321,7 +1358,7 @@ An ewah bitmap, the n-th bit indicates whether the n-th index entry
 <div class="literalblock">
 <div class="content">
 <pre><code>The End of Index Entry (EOIE) is used to locate the end of the variable
-length index entries and the begining of the extensions. Code can take
+length index entries and the beginning of the extensions. Code can take
 advantage of this to quickly locate the index extensions without having
 to parse through all of the index entries.</code></pre>
 </div></div>
@@ -1343,14 +1380,14 @@ The signature for this extension is { 'E', 'O', 'I', 'E' }.</code></pre>
 </li>
 <li>
 <p>
-160-bit SHA-1 over the extension types and their sizes (but not
+Hash over the extension types and their sizes (but not
         their contents).  E.g. if we have "TREE" extension that is N-bytes
         long, "REUC" extension that is M-bytes long, followed by "EOIE",
         then the hash would be:
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>SHA-1("TREE" + &lt;binary representation of N&gt; +
+<pre><code>Hash("TREE" + &lt;binary representation of N&gt; +
         "REUC" + &lt;binary representation of M&gt;)</code></pre>
 </div></div>
 </li>
@@ -1384,7 +1421,7 @@ A number of index offset entries each consisting of:
 </li>
 <li>
 <p>
-32-bit offset from the begining of the file to the first cache entry
+32-bit offset from the beginning of the file to the first cache entry
         in this block of entries.
 </p>
 </li>
@@ -1401,7 +1438,7 @@ A number of index offset entries each consisting of:
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-10-19 14:42:33 JST
+ 2021-02-05 17:34:58 PST
 </div>
 </div>
 </body>

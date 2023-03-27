@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-mailinfo
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-MAILINFO" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-MAILINFO" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -124,7 +124,7 @@ Copy the Message\-ID header at the end of the commit message\&. This is useful i
 .PP
 \-\-scissors
 .RS 4
-Remove everything in body before a scissors line\&. A line that mainly consists of scissors (either ">8" or "8<") and perforation (dash "\-") marks is called a scissors line, and is used to request the reader to cut the message at that line\&. If such a line appears in the body of the message before the patch, everything before it (including the scissors line itself) is ignored when this option is used\&.
+Remove everything in body before a scissors line (e\&.g\&. "\-\- >8 \-\-")\&. The line represents scissors and perforation marks, and is used to request the reader to cut the message at that line\&. If that line appears in the body of the message before the patch, everything before it (including the scissors line itself) is ignored when this option is used\&.
 .sp
 This is useful if you want to begin your message in a discussion thread with comments and suggestions on the message you are responding to, and to conclude it with a patch submission, separating the discussion and the beginning of the proposed commit log message with a scissors line\&.
 .sp

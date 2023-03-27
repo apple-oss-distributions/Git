@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>Git Wire Protocol, Version 2</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -803,6 +803,12 @@ commands be executed.</p></div>
 <em>0001</em> Delimiter Packet (delim-pkt) - separates sections of a message
 </p>
 </li>
+<li>
+<p>
+<em>0002</em> Message Packet (response-end-pkt) - indicates the end of a response
+    for stateless connections
+</p>
+</li>
 </ul></div>
 </div>
 </div>
@@ -1043,7 +1049,7 @@ of a space separated list of features: "&lt;command&gt;=&lt;feature 1&gt; &lt;fe
 <pre><code>ofs-delta
     Indicate that the client understands PACKv2 with delta referring
     to its base by position in pack rather than by an oid.  That is,
-    they can read OBJ_OFS_DELTA (ake type 6) in a packfile.</code></pre>
+    they can read OBJ_OFS_DELTA (aka type 6) in a packfile.</code></pre>
 </div></div>
 <div class="paragraph"><p>If the <em>shallow</em> feature is advertised the following arguments can be
 included in the clients request as well as the potential addition of the
@@ -1126,14 +1132,28 @@ included in the client&#8217;s request:</p></div>
     indicating its sideband (1, 2, or 3), and the server may send "0005\2"
     (a PKT-LINE of sideband 2 with no payload) as a keepalive packet.</code></pre>
 </div></div>
-<div class="paragraph"><p>The response of <code>fetch</code> is broken into a number of sections separated by
-delimiter packets (0001), with each section beginning with its section
-header.</p></div>
+<div class="paragraph"><p>If the <em>packfile-uris</em> feature is advertised, the following argument
+can be included in the client&#8217;s request as well as the potential
+addition of the <em>packfile-uris</em> section in the server&#8217;s response as
+explained below.</p></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>output = *section
-section = (acknowledgments | shallow-info | wanted-refs | packfile)
-          (flush-pkt | delim-pkt)</code></pre>
+<pre><code>packfile-uris &lt;comma-separated list of protocols&gt;
+    Indicates to the server that the client is willing to receive
+    URIs of any of the given protocols in place of objects in the
+    sent packfile. Before performing the connectivity check, the
+    client should download from all given URIs. Currently, the
+    protocols supported are "http" and "https".</code></pre>
+</div></div>
+<div class="paragraph"><p>The response of <code>fetch</code> is broken into a number of sections separated by
+delimiter packets (0001), with each section beginning with its section
+header. Most sections are sent only when the packfile is sent.</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>output = acknowledgements flush-pkt |
+         [acknowledgments delim-pkt] [shallow-info delim-pkt]
+         [wanted-refs delim-pkt] [packfile-uris delim-pkt]
+         packfile flush-pkt</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1159,15 +1179,21 @@ wanted-ref = obj-id SP refname</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
+<pre><code>packfile-uris = PKT-LINE("packfile-uris" LF) *packfile-uri
+packfile-uri = PKT-LINE(40*(HEXDIGIT) SP *%x20-ff LF)</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
 <pre><code>packfile = PKT-LINE("packfile" LF)
            *PKT-LINE(%x01-03 *%x00-ff)</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
 <pre><code>acknowledgments section
-    * If the client determines that it is finished with negotiations
-      by sending a "done" line, the acknowledgments sections MUST be
-      omitted from the server's response.</code></pre>
+    * If the client determines that it is finished with negotiations by
+      sending a "done" line (thus requiring the server to send a packfile),
+      the acknowledgments sections MUST be omitted from the server's
+      response.</code></pre>
 </div></div>
 <div class="ulist"><ul>
 <li>
@@ -1253,12 +1279,6 @@ The server MUST NOT send any "unshallow" lines for anything
           which the client has not indicated was shallow as a part of
           its request.
 </p>
-</li>
-<li>
-<p>
-This section is only included if a packfile section is also
-          included in the response.
-</p>
 <div class="literalblock">
 <div class="content">
 <pre><code>wanted-refs section
@@ -1282,6 +1302,31 @@ The server will send a ref listing ("&lt;oid&gt; &lt;refname&gt;") for
 <p>
 The server MUST NOT send any refs which were not requested
           using <em>want-ref</em> lines.
+</p>
+<div class="literalblock">
+<div class="content">
+<pre><code>packfile-uris section
+    * This section is only included if the client sent
+      'packfile-uris' and the server has at least one such URI to
+      send.</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Always begins with the section header "packfile-uris".
+</p>
+</li>
+<li>
+<p>
+For each URI the server sends, it sends a hash of the pack&#8217;s
+          contents (as output by git index-pack) followed by the URI.
+</p>
+</li>
+<li>
+<p>
+The hashes are 40 hex characters long. When Git upgrades to a new
+          hash algorithm, this might need to be updated. (It should match
+          whatever index-pack outputs after "pack\t" or "keep\t".
 </p>
 <div class="literalblock">
 <div class="content">
@@ -1331,6 +1376,25 @@ included in a request.  This is done by sending each option as a
 a request.</p></div>
 <div class="paragraph"><p>The provided options must not contain a NUL or LF character.</p></div>
 </div>
+<div class="sect2">
+<h3 id="_object_format"> object-format</h3>
+<div class="paragraph"><p>The server can advertise the <code>object-format</code> capability with a value <code>X</code> (in the
+form <code>object-format=X</code>) to notify the client that the server is able to deal
+with objects using hash algorithm X.  If not specified, the server is assumed to
+only handle SHA-1.  If the client would like to use a hash algorithm other than
+SHA-1, it should specify its object-format string.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_session_id_lt_session_id_gt">session-id=&lt;session id&gt;</h3>
+<div class="paragraph"><p>The server may advertise a session ID that can be used to identify this process
+across multiple requests. The client may advertise its own session ID back to
+the server as well.</p></div>
+<div class="paragraph"><p>Session IDs should be unique to a given process. They must fit within a
+packet-line, and must not contain non-printable or whitespace characters. The
+current implementation uses trace2 session IDs (see
+<a href="api-trace2.html">api-trace2</a> for details), but this may change and users of
+the session ID should not rely on this fact.</p></div>
+</div>
 </div>
 </div>
 </div>
@@ -1338,7 +1402,7 @@ a request.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-08-13 02:43:45 JST
+ 2020-12-08 16:10:07 PST
 </div>
 </div>
 </body>

@@ -12,75 +12,75 @@ test_expect_success 'clear default config' '
 '
 
 cat > expect << EOF
-[core]
+[section]
 	penguin = little blue
 EOF
 test_expect_success 'initial' '
-	git config core.penguin "little blue" &&
+	git config section.penguin "little blue" &&
 	test_cmp expect .git/config
 '
 
 cat > expect << EOF
-[core]
+[section]
 	penguin = little blue
 	Movie = BadPhysics
 EOF
 test_expect_success 'mixed case' '
-	git config Core.Movie BadPhysics &&
+	git config Section.Movie BadPhysics &&
 	test_cmp expect .git/config
 '
 
 cat > expect << EOF
-[core]
+[section]
 	penguin = little blue
 	Movie = BadPhysics
-[Cores]
+[Sections]
 	WhatEver = Second
 EOF
 test_expect_success 'similar section' '
-	git config Cores.WhatEver Second &&
+	git config Sections.WhatEver Second &&
 	test_cmp expect .git/config
 '
 
 cat > expect << EOF
-[core]
+[section]
 	penguin = little blue
 	Movie = BadPhysics
 	UPPERCASE = true
-[Cores]
+[Sections]
 	WhatEver = Second
 EOF
 test_expect_success 'uppercase section' '
-	git config CORE.UPPERCASE true &&
+	git config SECTION.UPPERCASE true &&
 	test_cmp expect .git/config
 '
 
 test_expect_success 'replace with non-match' '
-	git config core.penguin kingpin !blue
+	git config section.penguin kingpin !blue
 '
 
 test_expect_success 'replace with non-match (actually matching)' '
-	git config core.penguin "very blue" !kingpin
+	git config section.penguin "very blue" !kingpin
 '
 
 cat > expect << EOF
-[core]
+[section]
 	penguin = very blue
 	Movie = BadPhysics
 	UPPERCASE = true
 	penguin = kingpin
-[Cores]
+[Sections]
 	WhatEver = Second
 EOF
 
 test_expect_success 'non-match result' 'test_cmp expect .git/config'
 
 test_expect_success 'find mixed-case key by canonical name' '
-	test_cmp_config Second cores.whatever
+	test_cmp_config Second sections.whatever
 '
 
 test_expect_success 'find mixed-case key by non-canonical name' '
-	test_cmp_config Second CoReS.WhAtEvEr
+	test_cmp_config Second SeCtIoNs.WhAtEvEr
 '
 
 test_expect_success 'subsections are not canonicalized by git-config' '
@@ -469,7 +469,8 @@ test_expect_success 'new variable inserts into proper section' '
 '
 
 test_expect_success 'alternative --file (non-existing file should fail)' '
-	test_must_fail git config --file non-existing-config -l
+	test_must_fail git config --file non-existing-config -l &&
+	test_must_fail git config --file non-existing-config test.xyzzy
 '
 
 cat > other-config << EOF
@@ -506,10 +507,6 @@ test_expect_success 'editing stdin is an error' '
 
 test_expect_success 'refer config from subdirectory' '
 	mkdir x &&
-	test_cmp_config -C x strasse --get --file ../other-config ein.bahn
-'
-
-test_expect_success 'refer config from subdirectory via --file' '
 	test_cmp_config -C x strasse --file=../other-config --get ein.bahn
 '
 
@@ -1036,11 +1033,6 @@ test_expect_success SYMLINKS 'symlinked configuration' '
 	test_cmp expect actual
 '
 
-test_expect_success 'nonexistent configuration' '
-	test_must_fail git config --file=doesnotexist --list &&
-	test_must_fail git config --file=doesnotexist test.xyzzy
-'
-
 test_expect_success SYMLINKS 'symlink to nonexistent configuration' '
 	ln -s doesnotexist linktonada &&
 	ln -s linktonada linktolinktonada &&
@@ -1065,12 +1057,12 @@ test_expect_success 'git -c "key=value" support' '
 	true
 	EOF
 	{
-		git -c core.name=value config core.name &&
+		git -c section.name=value config section.name &&
 		git -c foo.CamelCase=value config foo.camelcase &&
 		git -c foo.flag config --bool foo.flag
 	} >actual &&
 	test_cmp expect actual &&
-	test_must_fail git -c name=value config core.name
+	test_must_fail git -c name=value config section.name
 '
 
 # We just need a type-specifier here that cares about the
@@ -1115,7 +1107,7 @@ test_expect_success 'aliases can be CamelCased' '
 
 test_expect_success 'git -c does not split values on equals' '
 	echo "value with = in it" >expect &&
-	git -c core.foo="value with = in it" config core.foo >actual &&
+	git -c section.foo="value with = in it" config section.foo >actual &&
 	test_cmp expect actual
 '
 
@@ -1191,47 +1183,47 @@ test_expect_success 'old-fashioned settings are case insensitive' '
 	test_when_finished "rm -f testConfig testConfig_expect testConfig_actual" &&
 
 	cat >testConfig_actual <<-EOF &&
-		[V.A]
-		r = value1
+	[V.A]
+	r = value1
 	EOF
 	q_to_tab >testConfig_expect <<-EOF &&
-		[V.A]
-		Qr = value2
+	[V.A]
+	Qr = value2
 	EOF
 	git config -f testConfig_actual "v.a.r" value2 &&
 	test_cmp testConfig_expect testConfig_actual &&
 
 	cat >testConfig_actual <<-EOF &&
-		[V.A]
-		r = value1
+	[V.A]
+	r = value1
 	EOF
 	q_to_tab >testConfig_expect <<-EOF &&
-		[V.A]
-		QR = value2
+	[V.A]
+	QR = value2
 	EOF
 	git config -f testConfig_actual "V.a.R" value2 &&
 	test_cmp testConfig_expect testConfig_actual &&
 
 	cat >testConfig_actual <<-EOF &&
-		[V.A]
-		r = value1
+	[V.A]
+	r = value1
 	EOF
 	q_to_tab >testConfig_expect <<-EOF &&
-		[V.A]
-		r = value1
-		Qr = value2
+	[V.A]
+	r = value1
+	Qr = value2
 	EOF
 	git config -f testConfig_actual "V.A.r" value2 &&
 	test_cmp testConfig_expect testConfig_actual &&
 
 	cat >testConfig_actual <<-EOF &&
-		[V.A]
-		r = value1
+	[V.A]
+	r = value1
 	EOF
 	q_to_tab >testConfig_expect <<-EOF &&
-		[V.A]
-		r = value1
-		Qr = value2
+	[V.A]
+	r = value1
+	Qr = value2
 	EOF
 	git config -f testConfig_actual "v.A.r" value2 &&
 	test_cmp testConfig_expect testConfig_actual
@@ -1241,26 +1233,26 @@ test_expect_success 'setting different case sensitive subsections ' '
 	test_when_finished "rm -f testConfig testConfig_expect testConfig_actual" &&
 
 	cat >testConfig_actual <<-EOF &&
-		[V "A"]
-		R = v1
-		[K "E"]
-		Y = v1
-		[a "b"]
-		c = v1
-		[d "e"]
-		f = v1
+	[V "A"]
+	R = v1
+	[K "E"]
+	Y = v1
+	[a "b"]
+	c = v1
+	[d "e"]
+	f = v1
 	EOF
 	q_to_tab >testConfig_expect <<-EOF &&
-		[V "A"]
-		Qr = v2
-		[K "E"]
-		Qy = v2
-		[a "b"]
-		Qc = v2
-		[d "e"]
-		f = v1
-		[d "E"]
-		Qf = v2
+	[V "A"]
+	Qr = v2
+	[K "E"]
+	Qy = v2
+	[a "b"]
+	Qc = v2
+	[d "e"]
+	f = v1
+	[d "E"]
+	Qf = v2
 	EOF
 	# exact match
 	git config -f testConfig_actual a.b.c v2 &&
@@ -1408,6 +1400,8 @@ test_expect_success 'urlmatch favors more specific URLs' '
 		cookieFile = /tmp/wildcard.txt
 	[http "https://*.example.com/wildcardwithsubdomain"]
 		cookieFile = /tmp/wildcardwithsubdomain.txt
+	[http "https://*.example.*"]
+		cookieFile = /tmp/multiwildcard.txt
 	[http "https://trailing.example.com"]
 		cookieFile = /tmp/trailing.txt
 	[http "https://user@*.example.com/"]
@@ -1454,6 +1448,10 @@ test_expect_success 'urlmatch favors more specific URLs' '
 
 	echo http.cookiefile /tmp/sub.txt >expect &&
 	git config --get-urlmatch HTTP https://user@sub.example.com >actual &&
+	test_cmp expect actual &&
+
+	echo http.cookiefile /tmp/multiwildcard.txt >expect &&
+	git config --get-urlmatch HTTP https://wildcard.example.org >actual &&
 	test_cmp expect actual
 '
 
@@ -1622,40 +1620,40 @@ test_expect_success 'set up --show-origin tests' '
 	INCLUDE_DIR="$HOME/include" &&
 	mkdir -p "$INCLUDE_DIR" &&
 	cat >"$INCLUDE_DIR"/absolute.include <<-\EOF &&
-		[user]
-			absolute = include
+	[user]
+		absolute = include
 	EOF
 	cat >"$INCLUDE_DIR"/relative.include <<-\EOF &&
-		[user]
-			relative = include
+	[user]
+		relative = include
 	EOF
 	cat >"$HOME"/.gitconfig <<-EOF &&
-		[user]
-			global = true
-			override = global
-		[include]
-			path = "$INCLUDE_DIR/absolute.include"
+	[user]
+		global = true
+		override = global
+	[include]
+		path = "$INCLUDE_DIR/absolute.include"
 	EOF
 	cat >.git/config <<-\EOF
-		[user]
-			local = true
-			override = local
-		[include]
-			path = ../include/relative.include
+	[user]
+		local = true
+		override = local
+	[include]
+		path = ../include/relative.include
 	EOF
 '
 
 test_expect_success '--show-origin with --list' '
 	cat >expect <<-EOF &&
-		file:$HOME/.gitconfig	user.global=true
-		file:$HOME/.gitconfig	user.override=global
-		file:$HOME/.gitconfig	include.path=$INCLUDE_DIR/absolute.include
-		file:$INCLUDE_DIR/absolute.include	user.absolute=include
-		file:.git/config	user.local=true
-		file:.git/config	user.override=local
-		file:.git/config	include.path=../include/relative.include
-		file:.git/../include/relative.include	user.relative=include
-		command line:	user.cmdline=true
+	file:$HOME/.gitconfig	user.global=true
+	file:$HOME/.gitconfig	user.override=global
+	file:$HOME/.gitconfig	include.path=$INCLUDE_DIR/absolute.include
+	file:$INCLUDE_DIR/absolute.include	user.absolute=include
+	file:.git/config	user.local=true
+	file:.git/config	user.override=local
+	file:.git/config	include.path=../include/relative.include
+	file:.git/../include/relative.include	user.relative=include
+	command line:	user.cmdline=true
 	EOF
 	git -c user.cmdline=true config --list --show-origin >output &&
 	test_cmp expect output
@@ -1663,16 +1661,16 @@ test_expect_success '--show-origin with --list' '
 
 test_expect_success '--show-origin with --list --null' '
 	cat >expect <<-EOF &&
-		file:$HOME/.gitconfigQuser.global
-		trueQfile:$HOME/.gitconfigQuser.override
-		globalQfile:$HOME/.gitconfigQinclude.path
-		$INCLUDE_DIR/absolute.includeQfile:$INCLUDE_DIR/absolute.includeQuser.absolute
-		includeQfile:.git/configQuser.local
-		trueQfile:.git/configQuser.override
-		localQfile:.git/configQinclude.path
-		../include/relative.includeQfile:.git/../include/relative.includeQuser.relative
-		includeQcommand line:Quser.cmdline
-		trueQ
+	file:$HOME/.gitconfigQuser.global
+	trueQfile:$HOME/.gitconfigQuser.override
+	globalQfile:$HOME/.gitconfigQinclude.path
+	$INCLUDE_DIR/absolute.includeQfile:$INCLUDE_DIR/absolute.includeQuser.absolute
+	includeQfile:.git/configQuser.local
+	trueQfile:.git/configQuser.override
+	localQfile:.git/configQinclude.path
+	../include/relative.includeQfile:.git/../include/relative.includeQuser.relative
+	includeQcommand line:Quser.cmdline
+	trueQ
 	EOF
 	git -c user.cmdline=true config --null --list --show-origin >output.raw &&
 	nul_to_q <output.raw >output &&
@@ -1684,9 +1682,9 @@ test_expect_success '--show-origin with --list --null' '
 
 test_expect_success '--show-origin with single file' '
 	cat >expect <<-\EOF &&
-		file:.git/config	user.local=true
-		file:.git/config	user.override=local
-		file:.git/config	include.path=../include/relative.include
+	file:.git/config	user.local=true
+	file:.git/config	user.override=local
+	file:.git/config	include.path=../include/relative.include
 	EOF
 	git config --local --list --show-origin >output &&
 	test_cmp expect output
@@ -1694,8 +1692,8 @@ test_expect_success '--show-origin with single file' '
 
 test_expect_success '--show-origin with --get-regexp' '
 	cat >expect <<-EOF &&
-		file:$HOME/.gitconfig	user.global true
-		file:.git/config	user.local true
+	file:$HOME/.gitconfig	user.global true
+	file:.git/config	user.local true
 	EOF
 	git config --show-origin --get-regexp "user\.[g|l].*" >output &&
 	test_cmp expect output
@@ -1703,31 +1701,36 @@ test_expect_success '--show-origin with --get-regexp' '
 
 test_expect_success '--show-origin getting a single key' '
 	cat >expect <<-\EOF &&
-		file:.git/config	local
+	file:.git/config	local
 	EOF
 	git config --show-origin user.override >output &&
 	test_cmp expect output
 '
 
 test_expect_success 'set up custom config file' '
-	CUSTOM_CONFIG_FILE="file\" (dq) and spaces.conf" &&
+	CUSTOM_CONFIG_FILE="custom.conf" &&
 	cat >"$CUSTOM_CONFIG_FILE" <<-\EOF
-		[user]
-			custom = true
+	[user]
+		custom = true
 	EOF
+'
+
+test_expect_success !MINGW 'set up custom config file with special name characters' '
+	WEIRDLY_NAMED_FILE="file\" (dq) and spaces.conf" &&
+	cp "$CUSTOM_CONFIG_FILE" "$WEIRDLY_NAMED_FILE"
 '
 
 test_expect_success !MINGW '--show-origin escape special file name characters' '
 	cat >expect <<-\EOF &&
-		file:"file\" (dq) and spaces.conf"	user.custom=true
+	file:"file\" (dq) and spaces.conf"	user.custom=true
 	EOF
-	git config --file "$CUSTOM_CONFIG_FILE" --show-origin --list >output &&
+	git config --file "$WEIRDLY_NAMED_FILE" --show-origin --list >output &&
 	test_cmp expect output
 '
 
 test_expect_success '--show-origin stdin' '
 	cat >expect <<-\EOF &&
-		standard input:	user.custom=true
+	standard input:	user.custom=true
 	EOF
 	git config --file - --show-origin --list <"$CUSTOM_CONFIG_FILE" >output &&
 	test_cmp expect output
@@ -1735,11 +1738,11 @@ test_expect_success '--show-origin stdin' '
 
 test_expect_success '--show-origin stdin with file include' '
 	cat >"$INCLUDE_DIR"/stdin.include <<-EOF &&
-		[user]
-			stdin = include
+	[user]
+		stdin = include
 	EOF
 	cat >expect <<-EOF &&
-		file:$INCLUDE_DIR/stdin.include	include
+	file:$INCLUDE_DIR/stdin.include	include
 	EOF
 	echo "[include]path=\"$INCLUDE_DIR\"/stdin.include" |
 	git config --show-origin --includes --file - user.stdin >output &&
@@ -1747,18 +1750,18 @@ test_expect_success '--show-origin stdin with file include' '
 	test_cmp expect output
 '
 
-test_expect_success !MINGW '--show-origin blob' '
+test_expect_success '--show-origin blob' '
 	blob=$(git hash-object -w "$CUSTOM_CONFIG_FILE") &&
 	cat >expect <<-EOF &&
-		blob:$blob	user.custom=true
+	blob:$blob	user.custom=true
 	EOF
 	git config --blob=$blob --show-origin --list >output &&
 	test_cmp expect output
 '
 
-test_expect_success !MINGW '--show-origin blob ref' '
+test_expect_success '--show-origin blob ref' '
 	cat >expect <<-\EOF &&
-		blob:"master:file\" (dq) and spaces.conf"	user.custom=true
+	blob:master:custom.conf	user.custom=true
 	EOF
 	git add "$CUSTOM_CONFIG_FILE" &&
 	git commit -m "new config file" &&
@@ -1766,60 +1769,122 @@ test_expect_success !MINGW '--show-origin blob ref' '
 	test_cmp expect output
 '
 
-test_expect_success '--local requires a repo' '
-	# we expect 128 to ensure that we do not simply
-	# fail to find anything and return code "1"
-	test_expect_code 128 nongit git config --local foo.bar
+test_expect_success '--show-scope with --list' '
+	cat >expect <<-EOF &&
+	global	user.global=true
+	global	user.override=global
+	global	include.path=$INCLUDE_DIR/absolute.include
+	global	user.absolute=include
+	local	user.local=true
+	local	user.override=local
+	local	include.path=../include/relative.include
+	local	user.relative=include
+	command	user.cmdline=true
+	EOF
+	git -c user.cmdline=true config --list --show-scope >output &&
+	test_cmp expect output
 '
 
+test_expect_success !MINGW '--show-scope with --blob' '
+	blob=$(git hash-object -w "$CUSTOM_CONFIG_FILE") &&
+	cat >expect <<-EOF &&
+	command	user.custom=true
+	EOF
+	git config --blob=$blob --show-scope --list >output &&
+	test_cmp expect output
+'
+
+test_expect_success '--show-scope with --local' '
+	cat >expect <<-\EOF &&
+	local	user.local=true
+	local	user.override=local
+	local	include.path=../include/relative.include
+	EOF
+	git config --local --list --show-scope >output &&
+	test_cmp expect output
+'
+
+test_expect_success '--show-scope getting a single value' '
+	cat >expect <<-\EOF &&
+	local	true
+	EOF
+	git config --show-scope --get user.local >output &&
+	test_cmp expect output
+'
+
+test_expect_success '--show-scope with --show-origin' '
+	cat >expect <<-EOF &&
+	global	file:$HOME/.gitconfig	user.global=true
+	global	file:$HOME/.gitconfig	user.override=global
+	global	file:$HOME/.gitconfig	include.path=$INCLUDE_DIR/absolute.include
+	global	file:$INCLUDE_DIR/absolute.include	user.absolute=include
+	local	file:.git/config	user.local=true
+	local	file:.git/config	user.override=local
+	local	file:.git/config	include.path=../include/relative.include
+	local	file:.git/../include/relative.include	user.relative=include
+	command	command line:	user.cmdline=true
+	EOF
+	git -c user.cmdline=true config --list --show-origin --show-scope >output &&
+	test_cmp expect output
+'
+
+for opt in --local --worktree
+do
+	test_expect_success "$opt requires a repo" '
+		# we expect 128 to ensure that we do not simply
+		# fail to find anything and return code "1"
+		test_expect_code 128 nongit git config $opt foo.bar
+	'
+done
+
 cat >.git/config <<-\EOF &&
-[core]
+[section]
 foo = true
 number = 10
 big = 1M
 EOF
 
 test_expect_success 'identical modern --type specifiers are allowed' '
-	test_cmp_config 1048576 --type=int --type=int core.big
+	test_cmp_config 1048576 --type=int --type=int section.big
 '
 
 test_expect_success 'identical legacy --type specifiers are allowed' '
-	test_cmp_config 1048576 --int --int core.big
+	test_cmp_config 1048576 --int --int section.big
 '
 
 test_expect_success 'identical mixed --type specifiers are allowed' '
-	test_cmp_config 1048576 --int --type=int core.big
+	test_cmp_config 1048576 --int --type=int section.big
 '
 
 test_expect_success 'non-identical modern --type specifiers are not allowed' '
-	test_must_fail git config --type=int --type=bool core.big 2>error &&
+	test_must_fail git config --type=int --type=bool section.big 2>error &&
 	test_i18ngrep "only one type at a time" error
 '
 
 test_expect_success 'non-identical legacy --type specifiers are not allowed' '
-	test_must_fail git config --int --bool core.big 2>error &&
+	test_must_fail git config --int --bool section.big 2>error &&
 	test_i18ngrep "only one type at a time" error
 '
 
 test_expect_success 'non-identical mixed --type specifiers are not allowed' '
-	test_must_fail git config --type=int --bool core.big 2>error &&
+	test_must_fail git config --type=int --bool section.big 2>error &&
 	test_i18ngrep "only one type at a time" error
 '
 
 test_expect_success '--type allows valid type specifiers' '
-	test_cmp_config true  --type=bool core.foo
+	test_cmp_config true  --type=bool section.foo
 '
 
 test_expect_success '--no-type unsets type specifiers' '
-	test_cmp_config 10 --type=bool --no-type core.number
+	test_cmp_config 10 --type=bool --no-type section.number
 '
 
 test_expect_success 'unset type specifiers may be reset to conflicting ones' '
-	test_cmp_config 1048576 --type=bool --no-type --type=int core.big
+	test_cmp_config 1048576 --type=bool --no-type --type=int section.big
 '
 
 test_expect_success '--type rejects unknown specifiers' '
-	test_must_fail git config --type=nonsense core.foo 2>error &&
+	test_must_fail git config --type=nonsense section.foo 2>error &&
 	test_i18ngrep "unrecognized --type argument" error
 '
 
@@ -1842,6 +1907,155 @@ test_expect_success '--replace-all does not invent newlines' '
 	EOF
 	git config --replace-all abc.key b &&
 	test_cmp expect .git/config
+'
+
+test_expect_success 'set all config with value-pattern' '
+	test_when_finished rm -f config initial &&
+	git config --file=initial abc.key one &&
+
+	# no match => add new entry
+	cp initial config &&
+	git config --file=config abc.key two a+ &&
+	git config --file=config --list >actual &&
+	cat >expect <<-\EOF &&
+	abc.key=one
+	abc.key=two
+	EOF
+	test_cmp expect actual &&
+
+	# multiple matches => failure
+	test_must_fail git config --file=config abc.key three o+ 2>err &&
+	test_i18ngrep "has multiple values" err &&
+
+	# multiple values, no match => add
+	git config --file=config abc.key three a+ &&
+	git config --file=config --list >actual &&
+	cat >expect <<-\EOF &&
+	abc.key=one
+	abc.key=two
+	abc.key=three
+	EOF
+	test_cmp expect actual &&
+
+	# single match => replace
+	git config --file=config abc.key four h+ &&
+	git config --file=config --list >actual &&
+	cat >expect <<-\EOF &&
+	abc.key=one
+	abc.key=two
+	abc.key=four
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success '--replace-all and value-pattern' '
+	test_when_finished rm -f config &&
+	git config --file=config --add abc.key one &&
+	git config --file=config --add abc.key two &&
+	git config --file=config --add abc.key three &&
+	git config --file=config --replace-all abc.key four "o+" &&
+	git config --file=config --list >actual &&
+	cat >expect <<-\EOF &&
+	abc.key=four
+	abc.key=three
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'refuse --fixed-value for incompatible actions' '
+	test_when_finished rm -f config &&
+	git config --file=config dev.null bogus &&
+
+	# These modes do not allow --fixed-value at all
+	test_must_fail git config --file=config --fixed-value --add dev.null bogus &&
+	test_must_fail git config --file=config --fixed-value --get-urlmatch dev.null bogus &&
+	test_must_fail git config --file=config --fixed-value --get-urlmatch dev.null bogus &&
+	test_must_fail git config --file=config --fixed-value --rename-section dev null &&
+	test_must_fail git config --file=config --fixed-value --remove-section dev &&
+	test_must_fail git config --file=config --fixed-value --list &&
+	test_must_fail git config --file=config --fixed-value --get-color dev.null &&
+	test_must_fail git config --file=config --fixed-value --get-colorbool dev.null &&
+
+	# These modes complain when --fixed-value has no value-pattern
+	test_must_fail git config --file=config --fixed-value dev.null bogus &&
+	test_must_fail git config --file=config --fixed-value --replace-all dev.null bogus &&
+	test_must_fail git config --file=config --fixed-value --get dev.null &&
+	test_must_fail git config --file=config --fixed-value --get-all dev.null &&
+	test_must_fail git config --file=config --fixed-value --get-regexp "dev.*" &&
+	test_must_fail git config --file=config --fixed-value --unset dev.null &&
+	test_must_fail git config --file=config --fixed-value --unset-all dev.null
+'
+
+test_expect_success '--fixed-value uses exact string matching' '
+	test_when_finished rm -f config initial &&
+	META="a+b*c?d[e]f.g" &&
+	git config --file=initial fixed.test "$META" &&
+
+	cp initial config &&
+	git config --file=config fixed.test bogus "$META" &&
+	git config --file=config --list >actual &&
+	cat >expect <<-EOF &&
+	fixed.test=$META
+	fixed.test=bogus
+	EOF
+	test_cmp expect actual &&
+
+	cp initial config &&
+	git config --file=config --fixed-value fixed.test bogus "$META" &&
+	git config --file=config --list >actual &&
+	cat >expect <<-\EOF &&
+	fixed.test=bogus
+	EOF
+	test_cmp expect actual &&
+
+	cp initial config &&
+	test_must_fail git config --file=config --unset fixed.test "$META" &&
+	git config --file=config --fixed-value --unset fixed.test "$META" &&
+	test_must_fail git config --file=config fixed.test &&
+
+	cp initial config &&
+	test_must_fail git config --file=config --unset-all fixed.test "$META" &&
+	git config --file=config --fixed-value --unset-all fixed.test "$META" &&
+	test_must_fail git config --file=config fixed.test &&
+
+	cp initial config &&
+	git config --file=config --replace-all fixed.test bogus "$META" &&
+	git config --file=config --list >actual &&
+	cat >expect <<-EOF &&
+	fixed.test=$META
+	fixed.test=bogus
+	EOF
+	test_cmp expect actual &&
+
+	git config --file=config --fixed-value --replace-all fixed.test bogus "$META" &&
+	git config --file=config --list >actual &&
+	cat >expect <<-EOF &&
+	fixed.test=bogus
+	fixed.test=bogus
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success '--get and --get-all with --fixed-value' '
+	test_when_finished rm -f config &&
+	META="a+b*c?d[e]f.g" &&
+	git config --file=config fixed.test bogus &&
+	git config --file=config --add fixed.test "$META" &&
+
+	git config --file=config --get fixed.test bogus &&
+	test_must_fail git config --file=config --get fixed.test "$META" &&
+	git config --file=config --get --fixed-value fixed.test "$META" &&
+	test_must_fail git config --file=config --get --fixed-value fixed.test non-existent &&
+
+	git config --file=config --get-all fixed.test bogus &&
+	test_must_fail git config --file=config --get-all fixed.test "$META" &&
+	git config --file=config --get-all --fixed-value fixed.test "$META" &&
+	test_must_fail git config --file=config --get-all --fixed-value fixed.test non-existent &&
+
+	git config --file=config --get-regexp fixed+ bogus &&
+	test_must_fail git config --file=config --get-regexp fixed+ "$META" &&
+	git config --file=config --get-regexp --fixed-value fixed+ "$META" &&
+	test_must_fail git config --file=config --get-regexp --fixed-value fixed+ non-existent
 '
 
 test_done

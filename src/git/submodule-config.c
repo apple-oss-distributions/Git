@@ -103,8 +103,8 @@ static void submodule_cache_clear(struct submodule_cache *cache)
 				ent /* member name */)
 		free_one_config(entry);
 
-	hashmap_free_entries(&cache->for_path, struct submodule_entry, ent);
-	hashmap_free_entries(&cache->for_name, struct submodule_entry, ent);
+	hashmap_clear_and_free(&cache->for_path, struct submodule_entry, ent);
+	hashmap_clear_and_free(&cache->for_name, struct submodule_entry, ent);
 	cache->initialized = 0;
 	cache->gitmodules_read = 0;
 }
@@ -225,7 +225,8 @@ static int name_and_item_from_var(const char *var, struct strbuf *name,
 				  struct strbuf *item)
 {
 	const char *subsection, *key;
-	int subsection_len, parse;
+	size_t subsection_len;
+	int parse;
 	parse = parse_config_key(var, "submodule", &subsection,
 			&subsection_len, &key);
 	if (parse < 0 || !subsection)
@@ -626,7 +627,7 @@ static void submodule_cache_check_init(struct repository *repo)
 
 /*
  * Note: This function is private for a reason, the '.gitmodules' file should
- * not be used as as a mechanism to retrieve arbitrary configuration stored in
+ * not be used as a mechanism to retrieve arbitrary configuration stored in
  * the repository.
  *
  * Runs the provided config function on the '.gitmodules' file found in the
@@ -635,7 +636,9 @@ static void submodule_cache_check_init(struct repository *repo)
 static void config_from_gitmodules(config_fn_t fn, struct repository *repo, void *data)
 {
 	if (repo->worktree) {
-		struct git_config_source config_source = { 0 };
+		struct git_config_source config_source = {
+			0, .scope = CONFIG_SCOPE_SUBMODULE
+		};
 		const struct config_options opts = { 0 };
 		struct object_id oid;
 		char *file;
@@ -674,9 +677,12 @@ static int gitmodules_cb(const char *var, const char *value, void *data)
 	return parse_config(var, value, &parameter);
 }
 
-void repo_read_gitmodules(struct repository *repo)
+void repo_read_gitmodules(struct repository *repo, int skip_if_read)
 {
 	submodule_cache_check_init(repo);
+
+	if (repo->submodule_cache->gitmodules_read && skip_if_read)
+		return;
 
 	if (repo_read_index(repo) < 0)
 		return;
@@ -703,20 +709,11 @@ void gitmodules_config_oid(const struct object_id *commit_oid)
 	the_repository->submodule_cache->gitmodules_read = 1;
 }
 
-static void gitmodules_read_check(struct repository *repo)
-{
-	submodule_cache_check_init(repo);
-
-	/* read the repo's .gitmodules file if it hasn't been already */
-	if (!repo->submodule_cache->gitmodules_read)
-		repo_read_gitmodules(repo);
-}
-
 const struct submodule *submodule_from_name(struct repository *r,
 					    const struct object_id *treeish_name,
 		const char *name)
 {
-	gitmodules_read_check(r);
+	repo_read_gitmodules(r, 1);
 	return config_from(r->submodule_cache, treeish_name, name, lookup_name);
 }
 
@@ -724,7 +721,7 @@ const struct submodule *submodule_from_path(struct repository *r,
 					    const struct object_id *treeish_name,
 		const char *path)
 {
-	gitmodules_read_check(r);
+	repo_read_gitmodules(r, 1);
 	return config_from(r->submodule_cache, treeish_name, path, lookup_path);
 }
 
@@ -780,10 +777,14 @@ static int gitmodules_fetch_config(const char *var, const char *value, void *cb)
 {
 	struct fetch_config *config = cb;
 	if (!strcmp(var, "submodule.fetchjobs")) {
-		*(config->max_children) = parse_submodule_fetchjobs(var, value);
+		if (config->max_children)
+			*(config->max_children) =
+				parse_submodule_fetchjobs(var, value);
 		return 0;
 	} else if (!strcmp(var, "fetch.recursesubmodules")) {
-		*(config->recurse_submodules) = parse_fetch_recurse_submodules_arg(var, value);
+		if (config->recurse_submodules)
+			*(config->recurse_submodules) =
+				parse_fetch_recurse_submodules_arg(var, value);
 		return 0;
 	}
 

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>gitrevisions(7)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -1111,7 +1111,7 @@ left-to-right.</p></div>
 <div class="content">
 <pre><code>A =      = A^0
 B = A^   = A^1     = A~1
-C = A^2  = A^2
+C =      = A^2
 D = A^^  = A^1^1   = A~2
 E = B^2  = A^^2
 F = B^3  = A^^3
@@ -1131,6 +1131,8 @@ of commits, not just a single commit.</p></div>
 specifying a single revision, using the notation described in the
 previous section, means the set of commits <code>reachable</code> from the given
 commit.</p></div>
+<div class="paragraph"><p>Specifying several revisions means the set of commits reachable from
+any of the given commits.</p></div>
 <div class="paragraph"><p>A commit&#8217;s reachable set is the commit itself and the commits in
 its ancestry chain.</p></div>
 <div class="sect2">
@@ -1322,7 +1324,7 @@ spelt out:</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-09-18 07:45:24 JST
+ 2020-03-10 08:03:13 PDT
 </div>
 </div>
 </body>

@@ -126,6 +126,22 @@ test_expect_success 'create and delete remote branch' '
 	test_must_fail git show-ref --verify refs/remotes/origin/dev
 '
 
+test_expect_success 'non-force push fails if not up to date' '
+	git init --bare "$HTTPD_DOCUMENT_ROOT_PATH"/test_repo_conflict.git &&
+	git -C "$HTTPD_DOCUMENT_ROOT_PATH"/test_repo_conflict.git update-server-info &&
+	git clone $HTTPD_URL/dumb/test_repo_conflict.git "$ROOT_PATH"/c1 &&
+	git clone $HTTPD_URL/dumb/test_repo_conflict.git "$ROOT_PATH"/c2 &&
+	test_commit -C "$ROOT_PATH/c1" path1 &&
+	git -C "$ROOT_PATH/c1" push origin HEAD &&
+	git -C "$ROOT_PATH/c2" pull &&
+	test_commit -C "$ROOT_PATH/c1" path2 &&
+	git -C "$ROOT_PATH/c1" push origin HEAD &&
+	test_commit -C "$ROOT_PATH/c2" path3 &&
+	git -C "$ROOT_PATH/c1" log --graph --all &&
+	git -C "$ROOT_PATH/c2" log --graph --all &&
+	test_must_fail git -C "$ROOT_PATH/c2" push origin HEAD
+'
+
 test_expect_success 'MKCOL sends directory names with trailing slashes' '
 
 	! grep "\"MKCOL.*[^/] HTTP/[^ ]*\"" < "$HTTPD_ROOT_PATH"/access.log
@@ -134,15 +150,13 @@ test_expect_success 'MKCOL sends directory names with trailing slashes' '
 
 x1="[0-9a-f]"
 x2="$x1$x1"
-x5="$x1$x1$x1$x1$x1"
-x38="$x5$x5$x5$x5$x5$x5$x5$x1$x1$x1"
-x40="$x38$x2"
+xtrunc=$(echo $OID_REGEX | sed -e "s/\[0-9a-f\]\[0-9a-f\]//")
 
 test_expect_success 'PUT and MOVE sends object to URLs with SHA-1 hash suffix' '
 	sed \
 		-e "s/PUT /OP /" \
 		-e "s/MOVE /OP /" \
-	    -e "s|/objects/$x2/${x38}_$x40|WANTED_PATH_REQUEST|" \
+	    -e "s|/objects/$x2/${xtrunc}_$OID_REGEX|WANTED_PATH_REQUEST|" \
 		"$HTTPD_ROOT_PATH"/access.log |
 	grep -e "\"OP .*WANTED_PATH_REQUEST HTTP/[.0-9]*\" 20[0-9] "
 

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>Fighting regressions with git bisect</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -886,7 +886,7 @@ test suites and tools similar as "git bisect".</p></div>
 supposed to be used so that all the tests are checked after each
 commit. This means that they are not very efficient, because many
 tests are run for no interesting result, and they suffer from
-combinational explosion.</p></div>
+combinatorial explosion.</p></div>
 <div class="paragraph"><p>In fact the problem is that big software often has many different
 configuration options and that each test case should pass for each
 configuration after each commit. So if you have for each release: N
@@ -1167,7 +1167,7 @@ and Z will be kept:</p></div>
 Z-Z</code></pre>
 </div></div>
 <div class="paragraph"><p>2) starting from the "good" ends of the graph, associate to each
-commit the number of ancestors it has plus one</p></div>
+   commit the number of ancestors it has plus one</p></div>
 <div class="paragraph"><p>For example with the following graph where H is the "bad" commit and A
 and D are some parents of some "good" commits:</p></div>
 <div class="listingblock">
@@ -1202,7 +1202,7 @@ A-B-C
 D---E</code></pre>
 </div></div>
 <div class="paragraph"><p>4) the best bisection point is the commit with the highest associated
-number</p></div>
+   number</p></div>
 <div class="paragraph"><p>So in the above example the best bisection point is commit C.</p></div>
 <div class="paragraph"><p>5) note that some shortcuts are implemented to speed up the algorithm</p></div>
 <div class="paragraph"><p>As we know N from the beginning, we know that min(X, N - X) can&#8217;t be
@@ -1257,8 +1257,8 @@ suppose that these commits being for example on a branch or near a
 good or a bad commit does not give more or less information).</p></div>
 <div class="paragraph"><p>Let&#8217;s also suppose that we have a cleaned up graph like one after step
 1) in the bisection algorithm above. This means that we can measure
-the information we get in terms of number of commit we can remove from
-the graph..</p></div>
+   the information we get in terms of number of commit we can remove
+   from the graph..</p></div>
 <div class="paragraph"><p>And let&#8217;s take a commit X in the graph.</p></div>
 <div class="paragraph"><p>If X is found to be "good", then we know that its ancestors are all
 "good", so we want to say that:</p></div>
@@ -1348,14 +1348,14 @@ the bisection algorithm is the same for step 1) to 3). But then we use
 roughly the following steps:</p></div>
 <div class="paragraph"><p>6) sort the commit by decreasing associated value</p></div>
 <div class="paragraph"><p>7) if the first commit has not been skipped, we can return it and stop
-here</p></div>
+   here</p></div>
 <div class="paragraph"><p>8) otherwise filter out all the skipped commits in the sorted list</p></div>
 <div class="paragraph"><p>9) use a pseudo random number generator (PRNG) to generate a random
-number between 0 and 1</p></div>
+   number between 0 and 1</p></div>
 <div class="paragraph"><p>10) multiply this random number with its square root to bias it toward
-0</p></div>
+    0</p></div>
 <div class="paragraph"><p>11) multiply the result by the number of commits in the filtered list
-to get an index into this list</p></div>
+    to get an index into this list</p></div>
 <div class="paragraph"><p>12) return the commit at the computed index</p></div>
 </div>
 <div class="sect2">
@@ -1947,7 +1947,7 @@ author to given a talk and for publishing this paper.</p></div>
 </li>
 <li>
 <p>
-<a id="4"></a>[4] <a href="https://public-inbox.org/git/7vps5xsbwp.fsf_-_@assigned-by-dhcp.cox.net/">Junio C Hamano. <em>Automated bisect success story</em>.</a>
+<a id="4"></a>[4] <a href="https://lore.kernel.org/git/7vps5xsbwp.fsf_-_@assigned-by-dhcp.cox.net/">Junio C Hamano. <em>Automated bisect success story</em>.</a>
 </p>
 </li>
 <li>
@@ -1962,7 +1962,7 @@ author to given a talk and for publishing this paper.</p></div>
 </li>
 <li>
 <p>
-<a id="7"></a>[7] <a href="http://marc.info/?l=linux-kernel&amp;m=119702753411680&amp;w=2">Ingo Molnar. <em>Re: BUG 2.6.23-rc3 can&#8217;t see sd partitions on Alpha</em>. Linux-kernel mailing list.</a>
+<a id="7"></a>[7] <a href="https://lore.kernel.org/lkml/20071207113734.GA14598@elte.hu/">Ingo Molnar. <em>Re: BUG 2.6.23-rc3 can&#8217;t see sd partitions on Alpha</em>. Linux-kernel mailing list.</a>
 </p>
 </li>
 <li>
@@ -1983,7 +1983,7 @@ author to given a talk and for publishing this paper.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-10-30 16:33:48 JST
+ 2020-10-09 08:47:57 PDT
 </div>
 </div>
 </body>

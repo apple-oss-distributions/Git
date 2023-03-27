@@ -271,7 +271,9 @@ test_expect_success 'fetch from gitfile parent' '
 
 test_expect_success 'clone separate gitdir where target already exists' '
 	rm -rf dst &&
-	test_must_fail git clone --separate-git-dir realgitdir src dst
+	echo foo=bar >>realgitdir/config &&
+	test_must_fail git clone --separate-git-dir realgitdir src dst &&
+	grep foo=bar realgitdir/config
 '
 
 test_expect_success 'clone --reference from original' '
@@ -629,16 +631,30 @@ test_expect_success CASE_INSENSITIVE_FS 'colliding file detection' '
 	test_i18ngrep "the following paths have collided" icasefs/warning
 '
 
+test_expect_success 'clone with GIT_DEFAULT_HASH' '
+	(
+		sane_unset GIT_DEFAULT_HASH &&
+		git init --object-format=sha1 test-sha1 &&
+		git init --object-format=sha256 test-sha256
+	) &&
+	test_commit -C test-sha1 foo &&
+	test_commit -C test-sha256 foo &&
+	GIT_DEFAULT_HASH=sha1 git clone test-sha256 test-clone-sha256 &&
+	GIT_DEFAULT_HASH=sha256 git clone test-sha1 test-clone-sha1 &&
+	git -C test-clone-sha1 status &&
+	git -C test-clone-sha256 status
+'
+
 partial_clone_server () {
 	       SERVER="$1" &&
 
 	rm -rf "$SERVER" client &&
 	test_create_repo "$SERVER" &&
 	test_commit -C "$SERVER" one &&
-	HASH1=$(git hash-object "$SERVER/one.t") &&
+	HASH1=$(git -C "$SERVER" hash-object one.t) &&
 	git -C "$SERVER" revert HEAD &&
 	test_commit -C "$SERVER" two &&
-	HASH2=$(git hash-object "$SERVER/two.t") &&
+	HASH2=$(git -C "$SERVER" hash-object two.t) &&
 	test_config -C "$SERVER" uploadpack.allowfilter 1 &&
 	test_config -C "$SERVER" uploadpack.allowanysha1inwant 1
 }
@@ -667,7 +683,8 @@ test_expect_success 'partial clone' '
 
 test_expect_success 'partial clone with -o' '
 	partial_clone_server server &&
-	git clone -o blah --filter=blob:limit=0 "file://$(pwd)/server" client
+	git clone -o blah --filter=blob:limit=0 "file://$(pwd)/server" client &&
+	test_cmp_config -C client "blob:limit=0" --get-all remote.blah.partialclonefilter
 '
 
 test_expect_success 'partial clone: warn if server does not support object filtering' '
@@ -702,7 +719,7 @@ test_expect_success 'batch missing blob request during checkout' '
 	# Ensure that there is only one negotiation by checking that there is
 	# only "done" line sent. ("done" marks the end of negotiation.)
 	GIT_TRACE_PACKET="$(pwd)/trace" git -C client checkout HEAD^ &&
-	grep "git> done" trace >done_lines &&
+	grep "fetch> done" trace >done_lines &&
 	test_line_count = 1 done_lines
 '
 

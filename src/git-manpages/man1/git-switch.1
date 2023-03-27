@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-switch
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-SWITCH" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-SWITCH" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -172,6 +172,10 @@ in
 is the default behavior\&. Use
 \fB\-\-no\-guess\fR
 to disable it\&.
+.sp
+The default behavior can be set via the
+\fBcheckout\&.guess\fR
+configuration variable\&.
 .RE
 .PP
 \-f, \-\-force
@@ -269,8 +273,8 @@ refuses when the wanted ref is already checked out by another worktree\&. This o
 .RS 4
 Using
 \fB\-\-recurse\-submodules\fR
-will update the content of all initialized submodules according to the commit recorded in the superproject\&. If nothing (or
-\fB\-\-no\-recurse\-submodules\fR) is used, the work trees of submodules will not be updated\&. Just like
+will update the content of all active submodules according to the commit recorded in the superproject\&. If nothing (or
+\fB\-\-no\-recurse\-submodules\fR) is used, submodules working trees will not be updated\&. Just like
 \fBgit-submodule\fR(1), this will detach
 \fBHEAD\fR
 of the submodules\&.

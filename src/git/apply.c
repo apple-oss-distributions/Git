@@ -30,9 +30,9 @@ struct gitdiff_data {
 
 static void git_apply_config(void)
 {
-	git_config_get_string_const("apply.whitespace", &apply_default_whitespace);
-	git_config_get_string_const("apply.ignorewhitespace", &apply_default_ignorewhitespace);
-	git_config(git_default_config, NULL);
+	git_config_get_string("apply.whitespace", &apply_default_whitespace);
+	git_config_get_string("apply.ignorewhitespace", &apply_default_ignorewhitespace);
+	git_config(git_xmerge_config, NULL);
 }
 
 static int parse_whitespace_option(struct apply_state *state, const char *option)
@@ -450,7 +450,7 @@ static char *find_name_gnu(struct strbuf *root,
 
 	/*
 	 * Proposed "new-style" GNU patch/diff format; see
-	 * https://public-inbox.org/git/7vll0wvb2a.fsf@assigned-by-dhcp.cox.net/
+	 * https://lore.kernel.org/git/7vll0wvb2a.fsf@assigned-by-dhcp.cox.net/
 	 */
 	if (unquote_c_style(&name, line, NULL)) {
 		strbuf_release(&name);
@@ -2662,6 +2662,16 @@ static int find_pos(struct apply_state *state,
 	int backwards_lno, forwards_lno, current_lno;
 
 	/*
+	 * When running with --allow-overlap, it is possible that a hunk is
+	 * seen that pretends to start at the beginning (but no longer does),
+	 * and that *still* needs to match the end. So trust `match_end` more
+	 * than `match_beginning`.
+	 */
+	if (state->allow_overlap && match_beginning && match_end &&
+	    img->nr - preimage->nr != 0)
+		match_beginning = 0;
+
+	/*
 	 * If match_beginning or match_end is specified, there is no
 	 * point starting from a wrong line that will never match and
 	 * wander around and wait for a match at the specified end.
@@ -3147,7 +3157,8 @@ static int apply_binary(struct apply_state *state,
 		 * See if the old one matches what the patch
 		 * applies to.
 		 */
-		hash_object_file(img->buf, img->len, blob_type, &oid);
+		hash_object_file(the_hash_algo, img->buf, img->len, blob_type,
+				 &oid);
 		if (strcmp(oid_to_hex(&oid), patch->old_oid_prefix))
 			return error(_("the patch applies to '%s' (%s), "
 				       "which does not match the "
@@ -3167,7 +3178,7 @@ static int apply_binary(struct apply_state *state,
 		return 0; /* deletion patch */
 	}
 
-	if (has_object_file(&oid)) {
+	if (has_object(the_repository, &oid, 0)) {
 		/* We already have the postimage */
 		enum object_type type;
 		unsigned long size;
@@ -3192,7 +3203,8 @@ static int apply_binary(struct apply_state *state,
 				     name);
 
 		/* verify that the result matches */
-		hash_object_file(img->buf, img->len, blob_type, &oid);
+		hash_object_file(the_hash_algo, img->buf, img->len, blob_type,
+				 &oid);
 		if (strcmp(oid_to_hex(&oid), patch->new_oid_prefix))
 			return error(_("binary patch to '%s' creates incorrect result (expecting %s, got %s)"),
 				name, patch->new_oid_prefix, oid_to_hex(&oid));
@@ -3728,6 +3740,7 @@ static int check_preimage(struct apply_state *state,
 
 #define EXISTS_IN_INDEX 1
 #define EXISTS_IN_WORKTREE 2
+#define EXISTS_IN_INDEX_AS_ITA 3
 
 static int check_to_create(struct apply_state *state,
 			   const char *new_name,
@@ -3735,10 +3748,23 @@ static int check_to_create(struct apply_state *state,
 {
 	struct stat nst;
 
-	if (state->check_index &&
-	    index_name_pos(state->repo->index, new_name, strlen(new_name)) >= 0 &&
-	    !ok_if_exists)
-		return EXISTS_IN_INDEX;
+	if (state->check_index && (!ok_if_exists || !state->cached)) {
+		int pos;
+
+		pos = index_name_pos(state->repo->index, new_name, strlen(new_name));
+		if (pos >= 0) {
+			struct cache_entry *ce = state->repo->index->cache[pos];
+
+			/* allow ITA, as they do not yet exist in the index */
+			if (!ok_if_exists && !(ce->ce_flags & CE_INTENT_TO_ADD))
+				return EXISTS_IN_INDEX;
+
+			/* ITA entries can never match working tree files */
+			if (!state->cached && (ce->ce_flags & CE_INTENT_TO_ADD))
+				return EXISTS_IN_INDEX_AS_ITA;
+		}
+	}
+
 	if (state->cached)
 		return 0;
 
@@ -3922,7 +3948,8 @@ static int check_patch(struct apply_state *state, struct patch *patch)
 			break; /* happy */
 		case EXISTS_IN_INDEX:
 			return error(_("%s: already exists in index"), new_name);
-			break;
+		case EXISTS_IN_INDEX_AS_ITA:
+			return error(_("%s: does not match index"), new_name);
 		case EXISTS_IN_WORKTREE:
 			return error(_("%s: already exists in working directory"),
 				     new_name);
@@ -4183,8 +4210,8 @@ static void show_rename_copy(struct patch *p)
 		old_name = slash_old + 1;
 		new_name = slash_new + 1;
 	}
-	/* p->old_name thru old_name is the common prefix, and old_name and new_name
-	 * through the end of names are renames
+	/* p->old_name through old_name is the common prefix, and old_name and
+	 * new_name through the end of names are renames
 	 */
 	if (old_name != p->old_name)
 		printf(" %s %.*s{%s => %s} (%d%%)\n", renamecopy,
@@ -4337,7 +4364,7 @@ static int try_create_file(struct apply_state *state, const char *path,
 	if (fd < 0)
 		return 1;
 
-	if (convert_to_working_tree(state->repo->index, path, buf, size, &nbuf)) {
+	if (convert_to_working_tree(state->repo->index, path, buf, size, &nbuf, NULL)) {
 		size = nbuf.len;
 		buf  = nbuf.buf;
 	}
@@ -4380,7 +4407,7 @@ static int create_one_file(struct apply_state *state,
 		return 0;
 
 	if (errno == ENOENT) {
-		if (safe_create_leading_directories(path))
+		if (safe_create_leading_directories_no_share(path))
 			return 0;
 		res = try_create_file(state, path, mode, buf, size);
 		if (res < 0)
@@ -4670,8 +4697,13 @@ static int apply_patch(struct apply_state *state,
 			reverse_patches(patch);
 		if (use_patch(state, patch)) {
 			patch_stats(state, patch);
-			*listp = patch;
-			listp = &patch->next;
+			if (!list || !state->apply_in_reverse) {
+				*listp = patch;
+				listp = &patch->next;
+			} else {
+				patch->next = list;
+				list = patch;
+			}
 
 			if ((patch->new_name &&
 			     ends_with_path_components(patch->new_name,
@@ -4952,15 +4984,15 @@ int apply_parse_options(int argc, const char **argv,
 			const char * const *apply_usage)
 {
 	struct option builtin_apply_options[] = {
-		{ OPTION_CALLBACK, 0, "exclude", state, N_("path"),
+		OPT_CALLBACK_F(0, "exclude", state, N_("path"),
 			N_("don't apply changes matching the given path"),
-			PARSE_OPT_NONEG, apply_option_parse_exclude },
-		{ OPTION_CALLBACK, 0, "include", state, N_("path"),
+			PARSE_OPT_NONEG, apply_option_parse_exclude),
+		OPT_CALLBACK_F(0, "include", state, N_("path"),
 			N_("apply changes matching the given path"),
-			PARSE_OPT_NONEG, apply_option_parse_include },
-		{ OPTION_CALLBACK, 'p', NULL, state, N_("num"),
+			PARSE_OPT_NONEG, apply_option_parse_include),
+		OPT_CALLBACK('p', NULL, state, N_("num"),
 			N_("remove <num> leading slashes from traditional diff paths"),
-			0, apply_option_parse_p },
+			apply_option_parse_p),
 		OPT_BOOL(0, "no-add", &state->no_add,
 			N_("ignore additions made by the patch")),
 		OPT_BOOL(0, "stat", &state->diffstat,
@@ -4993,15 +5025,15 @@ int apply_parse_options(int argc, const char **argv,
 			N_("paths are separated with NUL character"), '\0'),
 		OPT_INTEGER('C', NULL, &state->p_context,
 				N_("ensure at least <n> lines of context match")),
-		{ OPTION_CALLBACK, 0, "whitespace", state, N_("action"),
+		OPT_CALLBACK(0, "whitespace", state, N_("action"),
 			N_("detect new or modified lines that have whitespace errors"),
-			0, apply_option_parse_whitespace },
-		{ OPTION_CALLBACK, 0, "ignore-space-change", state, NULL,
+			apply_option_parse_whitespace),
+		OPT_CALLBACK_F(0, "ignore-space-change", state, NULL,
 			N_("ignore changes in whitespace when finding context"),
-			PARSE_OPT_NOARG, apply_option_parse_space_change },
-		{ OPTION_CALLBACK, 0, "ignore-whitespace", state, NULL,
+			PARSE_OPT_NOARG, apply_option_parse_space_change),
+		OPT_CALLBACK_F(0, "ignore-whitespace", state, NULL,
 			N_("ignore changes in whitespace when finding context"),
-			PARSE_OPT_NOARG, apply_option_parse_space_change },
+			PARSE_OPT_NOARG, apply_option_parse_space_change),
 		OPT_BOOL('R', "reverse", &state->apply_in_reverse,
 			N_("apply the patch in reverse")),
 		OPT_BOOL(0, "unidiff-zero", &state->unidiff_zero,
@@ -5017,9 +5049,9 @@ int apply_parse_options(int argc, const char **argv,
 		OPT_BIT(0, "recount", options,
 			N_("do not trust the line counts in the hunk headers"),
 			APPLY_OPT_RECOUNT),
-		{ OPTION_CALLBACK, 0, "directory", state, N_("root"),
+		OPT_CALLBACK(0, "directory", state, N_("root"),
 			N_("prepend <root> to all filenames"),
-			0, apply_option_parse_directory },
+			apply_option_parse_directory),
 		OPT_END()
 	};
 

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-diff-files(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -802,8 +802,8 @@ same as for <em>git diff-index</em> and <em>git diff-tree</em>.</p></div>
 <dd>
 <p>
         Generate diffs with &lt;n&gt; lines of context instead of
-        the usual three. Implies <code>--patch</code>.
-        Implies <code>-p</code>.
+        the usual three.
+        Implies <code>--patch</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1501,7 +1501,8 @@ override configuration settings.</p></div>
 <dd>
 <p>
         In addition to <code>--full-index</code>, output a binary diff that
-        can be applied with <code>git-apply</code>. Implies <code>--patch</code>.
+        can be applied with <code>git-apply</code>.
+        Implies <code>--patch</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1511,10 +1512,12 @@ override configuration settings.</p></div>
 <p>
         Instead of showing the full 40-byte hexadecimal object
         name in diff-raw format output and diff-tree header
-        lines, show only a partial prefix.  This is
-        independent of the <code>--full-index</code> option above, which controls
-        the diff-patch output format.  Non default number of
-        digits can be specified with <code>--abbrev=&lt;n&gt;</code>.
+        lines, show the shortest prefix that is at least <em>&lt;n&gt;</em>
+        hexdigits long that uniquely refers the object.
+        In diff-patch output format, <code>--full-index</code> takes higher
+        precedence, i.e. if <code>--full-index</code> is specified, full blob
+        names will be shown regardless of <code>--abbrev</code>.
+        Non default number of digits can be specified with <code>--abbrev=&lt;n&gt;</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1675,12 +1678,12 @@ very first version of the block.</p></div>
 file:</p></div>
 <div class="listingblock">
 <div class="content">
-<pre><code>+    return !regexec(regexp, two-&gt;ptr, 1, &amp;regmatch, 0);
+<pre><code>+    return frotz(nitfol, two-&gt;ptr, 1, 0);
 ...
--    hit = !regexec(regexp, mf2.ptr, 1, &amp;regmatch, 0);</code></pre>
+-    hit = frotz(nitfol, mf2.ptr, 1, 0);</code></pre>
 </div></div>
-<div class="paragraph"><p>While <code>git log -G"regexec\(regexp"</code> will show this commit, <code>git log
--S"regexec\(regexp" --pickaxe-regex</code> will not (because the number of
+<div class="paragraph"><p>While <code>git log -G"frotz\(nitfol"</code> will show this commit, <code>git log
+-S"frotz\(nitfol" --pickaxe-regex</code> will not (because the number of
 occurrences of that string did not change).</p></div>
 <div class="paragraph"><p>Unless <code>--text</code> is supplied patches of binary files without a textconv
 filter will be ignored.</p></div>
@@ -1782,6 +1785,9 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 <dt class="hdlist1">
 --relative[=&lt;path&gt;]
 </dt>
+<dt class="hdlist1">
+--no-relative
+</dt>
 <dd>
 <p>
         When run from a subdirectory of the project, it can be
@@ -1790,6 +1796,8 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
         not in a subdirectory (e.g. in a bare repository), you
         can name which subdirectory to make the output relative
         to by giving a &lt;path&gt; as an argument.
+        <code>--no-relative</code> can be used to countermand both <code>diff.relative</code> config
+        option and previous <code>--relative</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1854,6 +1862,18 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </p>
 </dd>
 <dt class="hdlist1">
+-I&lt;regex&gt;
+</dt>
+<dt class="hdlist1">
+--ignore-matching-lines=&lt;regex&gt;
+</dt>
+<dd>
+<p>
+        Ignore changes whose all lines match &lt;regex&gt;.  This option may
+        be specified more than once.
+</p>
+</dd>
+<dt class="hdlist1">
 --inter-hunk-context=&lt;lines&gt;
 </dt>
 <dd>
@@ -1872,7 +1892,10 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 </dt>
 <dd>
 <p>
-        Show whole surrounding functions of changes.
+        Show whole function as context lines for each change.
+        The function names are determined in the same way as
+        <code>git diff</code> works out patch hunk headers (see <em>Defining a
+        custom hunk-header</em> in <a href="gitattributes.html">gitattributes(5)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2210,7 +2233,7 @@ T: change in the type of the file
 <li>
 <p>
 U: file is unmerged (you must complete the merge before it can
-be committed)
+  be committed)
 </p>
 </li>
 <li>
@@ -2304,7 +2327,8 @@ all parents.</p></div>
 <a href="git-diff-files.html">git-diff-files(1)</a>
 with the <code>-p</code> option produces patch text.
 You can customize the creation of patch text via the
-<code>GIT_EXTERNAL_DIFF</code> and the <code>GIT_DIFF_OPTS</code> environment variables.</p></div>
+<code>GIT_EXTERNAL_DIFF</code> and the <code>GIT_DIFF_OPTS</code> environment variables
+(see <a href="git.html">git(1)</a>).</p></div>
 <div class="paragraph"><p>What the -p option produces is slightly different from the traditional
 diff format:</p></div>
 <div class="olist arabic"><ol class="arabic">
@@ -2387,9 +2411,9 @@ rename to a</code></pre>
 <div class="paragraph"><p>Any diff-generating command can take the <code>-c</code> or <code>--cc</code> option to
 produce a <em>combined diff</em> when showing a merge. This is the default
 format when showing merges with <a href="git-diff.html">git-diff(1)</a> or
-<a href="git-show.html">git-show(1)</a>. Note also that you can give the <code>-m</code> option to any
-of these commands to force generation of diffs with individual parents
-of a merge.</p></div>
+<a href="git-show.html">git-show(1)</a>. Note also that you can give suitable
+<code>--diff-merges</code> option to any of these commands to force generation of
+diffs in specific format.</p></div>
 <div class="paragraph"><p>A "combined diff" format looks like this:</p></div>
 <div class="listingblock">
 <div class="content">
@@ -2650,7 +2674,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-01-27 08:11:04 JST
+ 2013-08-20 08:40:27 PDT
 </div>
 </div>
 </body>

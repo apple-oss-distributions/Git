@@ -36,9 +36,9 @@ endif::git-format-patch[]
 -U<n>::
 --unified=<n>::
 	Generate diffs with <n> lines of context instead of
-	the usual three. Implies `--patch`.
+	the usual three.
 ifndef::git-format-patch[]
-	Implies `-p`.
+	Implies `--patch`.
 endif::git-format-patch[]
 
 --output=<file>::
@@ -72,6 +72,11 @@ ifndef::git-format-patch[]
 --patch-with-raw::
 	Synonym for `-p --raw`.
 endif::git-format-patch[]
+
+ifdef::git-log[]
+-t::
+	Show the tree objects in the diff output.
+endif::git-log[]
 
 --indent-heuristic::
 	Enable the heuristic that shifts diff hunk boundaries to make patches
@@ -436,15 +441,20 @@ endif::git-format-patch[]
 
 --binary::
 	In addition to `--full-index`, output a binary diff that
-	can be applied with `git-apply`. Implies `--patch`.
+	can be applied with `git-apply`.
+ifndef::git-format-patch[]
+	Implies `--patch`.
+endif::git-format-patch[]
 
 --abbrev[=<n>]::
 	Instead of showing the full 40-byte hexadecimal object
 	name in diff-raw format output and diff-tree header
-	lines, show only a partial prefix.  This is
-	independent of the `--full-index` option above, which controls
-	the diff-patch output format.  Non default number of
-	digits can be specified with `--abbrev=<n>`.
+	lines, show the shortest prefix that is at least '<n>'
+	hexdigits long that uniquely refers the object.
+	In diff-patch output format, `--full-index` takes higher
+	precedence, i.e. if `--full-index` is specified, full blob
+	names will be shown regardless of `--abbrev`.
+	Non default number of digits can be specified with `--abbrev=<n>`.
 
 -B[<n>][/<m>]::
 --break-rewrites[=[<n>][/<m>]]::
@@ -567,13 +577,13 @@ To illustrate the difference between `-S<regex> --pickaxe-regex` and
 file:
 +
 ----
-+    return !regexec(regexp, two->ptr, 1, &regmatch, 0);
++    return frotz(nitfol, two->ptr, 1, 0);
 ...
--    hit = !regexec(regexp, mf2.ptr, 1, &regmatch, 0);
+-    hit = frotz(nitfol, mf2.ptr, 1, 0);
 ----
 +
-While `git log -G"regexec\(regexp"` will show this commit, `git log
--S"regexec\(regexp" --pickaxe-regex` will not (because the number of
+While `git log -G"frotz\(nitfol"` will show this commit, `git log
+-S"frotz\(nitfol" --pickaxe-regex` will not (because the number of
 occurrences of that string did not change).
 +
 Unless `--text` is supplied patches of binary files without a textconv
@@ -643,15 +653,18 @@ ifndef::git-format-patch[]
 -R::
 	Swap two inputs; that is, show differences from index or
 	on-disk file to tree contents.
+endif::git-format-patch[]
 
 --relative[=<path>]::
+--no-relative::
 	When run from a subdirectory of the project, it can be
 	told to exclude changes outside the directory and show
 	pathnames relative to it with this option.  When you are
 	not in a subdirectory (e.g. in a bare repository), you
 	can name which subdirectory to make the output relative
 	to by giving a <path> as an argument.
-endif::git-format-patch[]
+	`--no-relative` can be used to countermand both `diff.relative` config
+	option and previous `--relative`.
 
 -a::
 --text::
@@ -678,6 +691,11 @@ endif::git-format-patch[]
 --ignore-blank-lines::
 	Ignore changes whose lines are all blank.
 
+-I<regex>::
+--ignore-matching-lines=<regex>::
+	Ignore changes whose all lines match <regex>.  This option may
+	be specified more than once.
+
 --inter-hunk-context=<lines>::
 	Show the context between diff hunks, up to the specified number
 	of lines, thereby fusing hunks that are close to each other.
@@ -686,7 +704,10 @@ endif::git-format-patch[]
 
 -W::
 --function-context::
-	Show whole surrounding functions of changes.
+	Show whole function as context lines for each change.
+	The function names are determined in the same way as
+	`git diff` works out patch hunk headers (see 'Defining a
+	custom hunk-header' in linkgit:gitattributes[5]).
 
 ifndef::git-format-patch[]
 ifndef::git-log[]

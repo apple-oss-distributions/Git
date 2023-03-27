@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-update-index
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-UPDATE\-INDEX" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-UPDATE\-INDEX" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -39,6 +39,7 @@ git-update-index \- Register file contents in the working tree to the index
              [\-\-chmod=(+|\-)x]
              [\-\-[no\-]assume\-unchanged]
              [\-\-[no\-]skip\-worktree]
+             [\-\-[no\-]ignore\-skip\-worktree\-entries]
              [\-\-[no\-]fsmonitor\-valid]
              [\-\-ignore\-submodules]
              [\-\-[no\-]split\-index]
@@ -53,7 +54,7 @@ git-update-index \- Register file contents in the working tree to the index
 .sp
 .SH "DESCRIPTION"
 .sp
-Modifies the index or directory cache\&. Each file mentioned is updated into the index and any \fIunmerged\fR or \fIneeds updating\fR state is cleared\&.
+Modifies the index\&. Each file mentioned is updated into the index and any \fIunmerged\fR or \fIneeds updating\fR state is cleared\&.
 .sp
 See also \fBgit-add\fR(1) for a more user\-friendly way to do some of the most common operations on the index\&.
 .sp
@@ -130,6 +131,13 @@ Like
 \-\-[no\-]skip\-worktree
 .RS 4
 When one of these flags is specified, the object name recorded for the paths are not updated\&. Instead, these options set and unset the "skip\-worktree" bit for the paths\&. See section "Skip\-worktree bit" below for more information\&.
+.RE
+.PP
+\-\-[no\-]ignore\-skip\-worktree\-entries
+.RS 4
+Do not remove skip\-worktree (AKA "index\-only") entries even when the
+\fB\-\-remove\fR
+option was specified\&.
 .RE
 .PP
 \-\-[no\-]fsmonitor\-valid
@@ -480,7 +488,7 @@ All changes in the split index are pushed back to the shared index file when the
 .sp
 Each time a new shared index file is created, the old shared index files are deleted if their modification time is older than what is specified by the splitIndex\&.sharedIndexExpire config variable (see \fBgit-config\fR(1))\&.
 .sp
-To avoid deleting a shared index file that is still used, its modification time is updated to the current time everytime a new split index based on the shared index file is either created or read from\&.
+To avoid deleting a shared index file that is still used, its modification time is updated to the current time every time a new split index based on the shared index file is either created or read from\&.
 .SH "UNTRACKED CACHE"
 .sp
 This cache is meant to speed up commands that involve determining untracked files such as \fBgit status\fR\&.
@@ -533,6 +541,11 @@ The command looks at \fBcore\&.ignorestat\fR configuration variable\&. See \fIUs
 The command also looks at \fBcore\&.trustctime\fR configuration variable\&. It can be useful when the inode change time is regularly modified by something outside Git (file system crawlers and backup systems use ctime for marking files processed) (see \fBgit-config\fR(1))\&.
 .sp
 The untracked cache extension can be enabled by the \fBcore\&.untrackedCache\fR configuration variable (see \fBgit-config\fR(1))\&.
+.SH "NOTES"
+.sp
+Users often try to use the assume\-unchanged and skip\-worktree bits to tell Git to ignore changes to files that are tracked\&. This does not work as expected, since Git may still check working tree files against the index when performing certain operations\&. In general, Git does not provide a way to ignore changes to tracked files, so alternate solutions are recommended\&.
+.sp
+For example, if the file you want to change is some sort of config file, the repository can include a sample config file that can then be copied into the ignored name and modified\&. The repository can even include a script to treat the sample file as a template, modifying and copying it automatically\&.
 .SH "SEE ALSO"
 .sp
 \fBgit-config\fR(1), \fBgit-add\fR(1), \fBgit-ls-files\fR(1)

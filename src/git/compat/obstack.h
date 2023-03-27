@@ -79,7 +79,7 @@ change its address during its lifetime.
 When the chars burst over a chunk boundary, we allocate a larger
 chunk, and then copy the partly formed object from the end of the old
 chunk to the beginning of the new larger chunk.  We then carry on
-accreting characters to the end of the object as we normally would.
+accrediting characters to the end of the object as we normally would.
 
 A special macro is provided to add a single char at a time to a
 growing object.  This allows the use of register variables, which
@@ -135,8 +135,10 @@ extern "C" {
    alignment relative to 0.  */
 
 #define __PTR_ALIGN(B, P, A)						    \
-  __BPTR_ALIGN (sizeof (PTR_INT_TYPE) < sizeof (void *) ? (B) : (char *) 0, \
-		P, A)
+  (sizeof (PTR_INT_TYPE) < sizeof(void *) ?                                 \
+   __BPTR_ALIGN((B), (P), (A)) :                                            \
+   (void *)__BPTR_ALIGN((PTR_INT_TYPE)(void *)0, (PTR_INT_TYPE)(P), (A))            \
+  )
 
 #include <string.h>
 

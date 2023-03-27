@@ -210,7 +210,7 @@ test_expect_success 'set up for garbage collection tests' '
 	echo Hello >$rr/preimage &&
 	echo World >$rr/postimage &&
 
-	sha2=4000000000000000000000000000000000000000 &&
+	sha2=$(test_oid deadbeef) &&
 	rr2=.git/rr-cache/$sha2 &&
 	mkdir $rr2 &&
 	echo Hello >$rr2/preimage &&
@@ -363,7 +363,7 @@ test_expect_success 'set up an unresolved merge' '
 	git reset --hard &&
 	git checkout version2 &&
 	fifth=$(git rev-parse fifth) &&
-	echo "$fifth		branch 'fifth' of ." |
+	echo "$fifth		branch fifth of ." |
 	git fmt-merge-msg >msg &&
 	ancestor=$(git merge-base version2 fifth) &&
 	test_must_fail git merge-recursive "$ancestor" -- HEAD fifth &&

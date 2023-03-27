@@ -27,6 +27,13 @@ Note that changing the compression level will not automatically recompress
 all existing objects. You can force recompression by passing the -F option
 to linkgit:git-repack[1].
 
+pack.allowPackReuse::
+	When true, and when reachability bitmaps are enabled,
+	pack-objects will try to send parts of the bitmapped packfile
+	verbatim. This can reduce memory and CPU usage to serve fetches,
+	but might result in sending a slightly larger pack. Defaults to
+	true.
+
 pack.island::
 	An extended regular expression configuring a set of delta
 	islands. See "DELTA ISLANDS" in linkgit:git-pack-objects[1]
@@ -112,8 +119,8 @@ pack.useSparse::
 	objects. This can have significant performance benefits when
 	computing a pack to send a small change. However, it is possible
 	that extra objects are added to the pack-file if the included
-	commits contain certain types of direct renames. Default is `false`
-	unless `feature.experimental` is enabled.
+	commits contain certain types of direct renames. Default is
+	`true`.
 
 pack.writeBitmaps (deprecated)::
 	This is a deprecated synonym for `repack.writeBitmaps`.

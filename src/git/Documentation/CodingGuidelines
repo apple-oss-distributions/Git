@@ -75,7 +75,7 @@ For shell scripts specifically (not exhaustive):
 
  - If you want to find out if a command is available on the user's
    $PATH, you should use 'type <command>', instead of 'which <command>'.
-   The output of 'which' is not machine parseable and its exit code
+   The output of 'which' is not machine parsable and its exit code
    is not reliable across platforms.
 
  - We use POSIX compliant parameter substitutions and avoid bashisms;
@@ -91,15 +91,9 @@ For shell scripts specifically (not exhaustive):
 
    - No shell arrays.
 
-   - No strlen ${#parameter}.
-
    - No pattern replacement ${parameter/pattern/string}.
 
  - We use Arithmetic Expansion $(( ... )).
-
- - Inside Arithmetic Expansion, spell shell variables with $ in front
-   of them, as some shells do not grok $((x)) while accepting $(($x))
-   just fine (e.g. dash older than 0.5.4).
 
  - We do not use Process Substitution <(list) or >(list).
 
@@ -203,7 +197,7 @@ For C programs:
    . since early 2012 with e1327023ea, we have been using an enum
      definition whose last element is followed by a comma.  This, like
      an array initializer that ends with a trailing comma, can be used
-     to reduce the patch noise when adding a new identifer at the end.
+     to reduce the patch noise when adding a new identifier at the end.
 
    . since mid 2017 with cbc0f81d, we have been using designated
      initializers for struct (e.g. "struct t v = { .val = 'a' };").
@@ -237,6 +231,18 @@ For C programs:
 
         while( condition )
 		func (bar+1);
+
+ - Do not explicitly compare an integral value with constant 0 or '\0',
+   or a pointer value with constant NULL.  For instance, to validate that
+   counted array <ptr, cnt> is initialized but has no elements, write:
+
+	if (!ptr || cnt)
+		BUG("empty array expected");
+
+   and not:
+
+	if (ptr == NULL || cnt != 0);
+		BUG("empty array expected");
 
  - We avoid using braces unnecessarily.  I.e.
 
@@ -483,15 +489,10 @@ For Python scripts:
 
  - We follow PEP-8 (http://www.python.org/dev/peps/pep-0008/).
 
- - As a minimum, we aim to be compatible with Python 2.6 and 2.7.
+ - As a minimum, we aim to be compatible with Python 2.7.
 
  - Where required libraries do not restrict us to Python 2, we try to
    also be compatible with Python 3.1 and later.
-
- - When you must differentiate between Unicode literals and byte string
-   literals, it is OK to use the 'b' prefix.  Even though the Python
-   documentation for version 2.6 does not mention this prefix, it has
-   been supported since version 2.6.0.
 
 Error Messages
 

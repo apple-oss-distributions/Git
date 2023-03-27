@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-fetch
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-FETCH" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-FETCH" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -62,6 +62,11 @@ Append ref names and object names of fetched refs to the existing contents of
 \fB\&.git/FETCH_HEAD\fR\&. Without this option old data in
 \fB\&.git/FETCH_HEAD\fR
 will be overwritten\&.
+.RE
+.PP
+\-\-atomic
+.RS 4
+Use an atomic transaction to update local refs\&. Either all refs are updated, or on error, no refs are updated\&.
 .RE
 .PP
 \-\-depth=<depth>
@@ -124,6 +129,18 @@ configuration variable documented in
 Show what would be done, without making any changes\&.
 .RE
 .PP
+\-\-[no\-]write\-fetch\-head
+.RS 4
+Write the list of remote refs fetched in the
+\fBFETCH_HEAD\fR
+file directly under
+\fB$GIT_DIR\fR\&. This is the default\&. Passing
+\fB\-\-no\-write\-fetch\-head\fR
+from the command line tells Git not to write the file\&. Under
+\fB\-\-dry\-run\fR
+option, the file is never written\&.
+.RE
+.PP
 \-f, \-\-force
 .RS 4
 When
@@ -145,11 +162,18 @@ Keep downloaded pack\&.
 Allow several <repository> and <group> arguments to be specified\&. No <refspec>s may be specified\&.
 .RE
 .PP
-\-\-[no\-]auto\-gc
+\-\-[no\-]auto\-maintenance, \-\-[no\-]auto\-gc
 .RS 4
 Run
-\fBgit gc \-\-auto\fR
-at the end to perform garbage collection if needed\&. This is enabled by default\&.
+\fBgit maintenance run \-\-auto\fR
+at the end to perform automatic repository maintenance if needed\&. (\fB\-\-[no\-]auto\-gc\fR
+is a synonym\&.) This is enabled by default\&.
+.RE
+.PP
+\-\-[no\-]write\-commit\-graph
+.RS 4
+Write a commit\-graph after fetching\&. This overrides the config setting
+\fBfetch\&.writeCommitGraph\fR\&.
 .RE
 .PP
 \-p, \-\-prune
@@ -183,7 +207,11 @@ By default, tags that point at objects that are downloaded from the remote repos
 .RS 4
 When fetching refs listed on the command line, use the specified refspec (can be given more than once) to map the refs to remote\-tracking branches, instead of the values of
 \fBremote\&.*\&.fetch\fR
-configuration variables for the remote repository\&. See section on "Configured Remote\-tracking Branches" for details\&.
+configuration variables for the remote repository\&. Providing an empty
+\fB<refspec>\fR
+to the
+\fB\-\-refmap\fR
+option causes Git to ignore the configured refspecs and rely entirely on the refspecs supplied as command\-line arguments\&. See section on "Configured Remote\-tracking Branches" for details\&.
 .RE
 .PP
 \-t, \-\-tags
@@ -201,7 +229,12 @@ This option controls if and under what conditions new commits of populated submo
 or to unconditionally recurse into all populated submodules when set to
 \fIyes\fR, which is the default when this option is used without any value\&. Use
 \fIon\-demand\fR
-to only recurse into a populated submodule when the superproject retrieves a commit that updates the submodule\(cqs reference to a commit that isn\(cqt already in the local submodule clone\&.
+to only recurse into a populated submodule when the superproject retrieves a commit that updates the submodule\(cqs reference to a commit that isn\(cqt already in the local submodule clone\&. By default,
+\fIon\-demand\fR
+is used, unless
+\fBfetch\&.recurseSubmodules\fR
+is set (see
+\fBgit-config\fR(1))\&.
 .RE
 .PP
 \-j, \-\-jobs=<n>
@@ -229,7 +262,7 @@ option)\&.
 .PP
 \-\-set\-upstream
 .RS 4
-If the remote is fetched successfully, pull and add upstream (tracking) reference, used by argument\-less
+If the remote is fetched successfully, add upstream (tracking) reference, used by argument\-less
 \fBgit-pull\fR(1)
 and other commands\&. For more information, see
 \fBbranch\&.<name>\&.merge\fR
@@ -343,6 +376,17 @@ The format of a <refspec> parameter is an optional plus
 \fB+\fR, followed by the source <src>, followed by a colon
 \fB:\fR, followed by the destination ref <dst>\&. The colon can be omitted when <dst> is empty\&. <src> is typically a ref, but it can also be a fully spelled hex object name\&.
 .sp
+A <refspec> may contain a
+\fB*\fR
+in its <src> to indicate a simple pattern match\&. Such a refspec functions like a glob that matches any ref with the same prefix\&. A pattern <refspec> must have a
+\fB*\fR
+in both the <src> and <dst>\&. It will map refs to the destination by replacing the
+\fB*\fR
+with the contents matched from the source\&.
+.sp
+If a refspec is prefixed by
+\fB^\fR, it will be interpreted as a negative refspec\&. Rather than specifying which refs to fetch or which local refs to update, such a refspec will instead specify refs to exclude\&. A ref will be considered to match if it matches at least one positive refspec, and does not match any negative refspec\&. Negative refspecs can be useful to restrict the scope of a pattern refspec so that it will not include specific refs\&. Negative refspecs can themselves be pattern refspecs\&. However, they may only contain a <src> and do not specify a <dst>\&. Fully spelled out hex object names are also not supported\&.
+.sp
 \fBtag <tag>\fR
 means the same as
 \fBrefs/tags/<tag>:refs/tags/<tag>\fR; it requests fetching everything up to the given tag\&.
@@ -412,6 +456,11 @@ When the remote branch you want to fetch is known to be rewound and rebased regu
 sign to indicate non\-fast\-forward updates will be needed for such branches\&. There is no way to determine or declare that a branch will be made available in a repository with this behavior; the pulling user simply must know this is the expected usage pattern for a branch\&.
 .sp .5v
 .RE
+.RE
+.PP
+\-\-stdin
+.RS 4
+Read refspecs, one per line, from stdin in addition to those provided as arguments\&. The "tag <name>" format is not supported\&.
 .RE
 .SH "GIT URLS"
 .sp
@@ -542,6 +591,8 @@ file:///path/to/repo\&.git/
 .RE
 .sp
 These two syntaxes are mostly equivalent, except when cloning, when the former implies \-\-local option\&. See \fBgit-clone\fR(1) for details\&.
+.sp
+\fIgit clone\fR, \fIgit fetch\fR and \fIgit pull\fR, but not \fIgit push\fR, will also accept a suitable bundle file\&. See \fBgit-bundle\fR(1)\&.
 .sp
 When Git doesn\(cqt know how to handle a certain transport protocol, it attempts to use the \fIremote\-<transport>\fR remote helper, if one exists\&. To explicitly request a remote helper, the following syntax may be used:
 .sp
@@ -1016,24 +1067,24 @@ Using refspecs explicitly:
 .RS 4
 .\}
 .nf
-$ git fetch origin +pu:pu maint:tmp
+$ git fetch origin +seen:seen maint:tmp
 .fi
 .if n \{\
 .RE
 .\}
 .sp
 This updates (or creates, as necessary) branches
-\fBpu\fR
+\fBseen\fR
 and
 \fBtmp\fR
 in the local repository by fetching from the branches (respectively)
-\fBpu\fR
+\fBseen\fR
 and
 \fBmaint\fR
 from the remote repository\&.
 .sp
 The
-\fBpu\fR
+\fBseen\fR
 branch will be updated even if it does not fast\-forward, because it is prefixed with a plus sign;
 \fBtmp\fR
 will not be\&.

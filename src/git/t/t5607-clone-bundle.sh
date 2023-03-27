@@ -4,6 +4,10 @@ test_description='some bundle related tests'
 . ./test-lib.sh
 
 test_expect_success 'setup' '
+	test_oid_cache <<-EOF &&
+	version sha1:2
+	version sha256:3
+	EOF
 	test_commit initial &&
 	test_tick &&
 	git tag -m tag tag &&
@@ -16,7 +20,7 @@ test_expect_success 'setup' '
 
 test_expect_success '"verify" needs a worktree' '
 	git bundle create tip.bundle -1 master &&
-	test_must_fail nongit git bundle verify ../tip.bundle 2>err &&
+	nongit test_must_fail git bundle verify ../tip.bundle 2>err &&
 	test_i18ngrep "need a repository" err
 '
 
@@ -64,7 +68,7 @@ test_expect_success 'ridiculously long subject in boundary' '
 	test -s heads &&
 	git fetch long-subject-bundle.bdl &&
 	sed -n "/^-/{p;q;}" long-subject-bundle.bdl >boundary &&
-	grep "^-[0-9a-f]\\{40\\} " boundary
+	grep "^-$OID_REGEX " boundary
 '
 
 test_expect_success 'prerequisites with an empty commit message' '
@@ -92,6 +96,33 @@ test_expect_success 'fetch SHA-1 from bundle' '
 	# Exercise to ensure that fetching a SHA-1 from a bundle works with no
 	# errors
 	git fetch --no-tags foo/tip.bundle "$(cat hash)"
+'
+
+test_expect_success 'git bundle uses expected default format' '
+	git bundle create bundle HEAD^.. &&
+	head -n1 bundle | grep "^# v$(test_oid version) git bundle$"
+'
+
+test_expect_success 'git bundle v3 has expected contents' '
+	git branch side HEAD &&
+	git bundle create --version=3 bundle HEAD^..side &&
+	head -n2 bundle >actual &&
+	cat >expect <<-EOF &&
+	# v3 git bundle
+	@object-format=$(test_oid algo)
+	EOF
+	test_cmp expect actual &&
+	git bundle verify bundle
+'
+
+test_expect_success 'git bundle v3 rejects unknown capabilities' '
+	cat >new <<-EOF &&
+	# v3 git bundle
+	@object-format=$(test_oid algo)
+	@unknown=silly
+	EOF
+	test_must_fail git bundle verify new 2>output &&
+	test_i18ngrep "unknown capability .unknown=silly." output
 '
 
 test_done

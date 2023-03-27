@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-rebase(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -944,6 +944,17 @@ rebase.useBuiltin
 </p>
 </dd>
 <dt class="hdlist1">
+rebase.backend
+</dt>
+<dd>
+<p>
+        Default backend to use for rebasing.  Possible choices are
+        <em>apply</em> or <em>merge</em>.  In the future, if the merge backend gains
+        all remaining capabilities of the apply backend, this setting
+        may become unused.
+</p>
+</dd>
+<dt class="hdlist1">
 rebase.stat
 </dt>
 <dd>
@@ -1034,6 +1045,17 @@ rebase.rescheduleFailedExec
         This is the same as specifying the <code>--reschedule-failed-exec</code> option.
 </p>
 </dd>
+<dt class="hdlist1">
+sequence.editor
+</dt>
+<dd>
+<p>
+        Text editor used by <code>git rebase -i</code> for editing the rebase instruction file.
+        The value is meant to be interpreted by the shell when it is used.
+        It can be overridden by the <code>GIT_SEQUENCE_EDITOR</code> environment variable.
+        When not configured the default commit message editor is used instead.
+</p>
+</dd>
 </dl></div>
 </div>
 </div>
@@ -1120,17 +1142,88 @@ the merge base to determine the <em>set of commits</em> which will be rebased.</
 <p>
         Abort the rebase operation but HEAD is not reset back to the
         original branch. The index and working tree are also left
-        unchanged as a result.
+        unchanged as a result. If a temporary stash entry was created
+        using --autostash, it will be saved to the stash list.
 </p>
 </dd>
+<dt class="hdlist1">
+--apply
+</dt>
+<dd>
+<p>
+        Use applying strategies to rebase (calling <code>git-am</code>
+        internally).  This option may become a no-op in the future
+        once the merge backend handles everything the apply one does.
+</p>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
+</dd>
+<dt class="hdlist1">
+--empty={drop,keep,ask}
+</dt>
+<dd>
+<p>
+        How to handle commits that are not empty to start and are not
+        clean cherry-picks of any upstream commit, but which become
+        empty after rebasing (because they contain a subset of already
+        upstream changes).  With drop (the default), commits that
+        become empty are dropped.  With keep, such commits are kept.
+        With ask (implied by --interactive), the rebase will halt when
+        an empty commit is applied allowing you to choose whether to
+        drop it, edit files more, or just commit the empty changes.
+        Other options, like --exec, will use the default of drop unless
+        -i/--interactive is explicitly specified.
+</p>
+<div class="paragraph"><p>Note that commits which start empty are kept (unless --no-keep-empty
+is specified), and commits which are clean cherry-picks (as determined
+by <code>git log --cherry-mark ...</code>) are detected and dropped as a
+preliminary step (unless --reapply-cherry-picks is passed).</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
+</dd>
+<dt class="hdlist1">
+--no-keep-empty
+</dt>
 <dt class="hdlist1">
 --keep-empty
 </dt>
 <dd>
 <p>
-        Keep the commits that do not change anything from its
-        parents in the result.
+        Do not keep commits that start empty before the rebase
+        (i.e. that do not change anything from its parent) in the
+        result.  The default is to keep commits which start empty,
+        since creating such commits requires passing the --allow-empty
+        override flag to <code>git commit</code>, signifying that a user is very
+        intentionally creating such a commit and thus wants to keep
+        it.
 </p>
+<div class="paragraph"><p>Usage of this flag will probably be rare, since you can get rid of
+commits that start empty by just firing up an interactive rebase and
+removing the lines corresponding to the commits you don&#8217;t want.  This
+flag exists as a convenient shortcut, such as for cases where external
+tools generate many empty commits and you want them all removed.</p></div>
+<div class="paragraph"><p>For commits which do not start empty but become empty after rebasing,
+see the --empty flag.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
+</dd>
+<dt class="hdlist1">
+--reapply-cherry-picks
+</dt>
+<dt class="hdlist1">
+--no-reapply-cherry-picks
+</dt>
+<dd>
+<p>
+        Reapply all clean cherry-picks of any upstream commit instead
+        of preemptively dropping them. (If these commits then become
+        empty after rebasing, because they contain a subset of already
+        upstream changes, the behavior towards them is controlled by
+        the <code>--empty</code> flag.)
+</p>
+<div class="paragraph"><p>By default (or if <code>--no-reapply-cherry-picks</code> is given), these commits
+will be automatically dropped.  Because this necessitates reading all
+upstream commits, this can be expensive in repos with a large number
+of upstream commits that need to be read.</p></div>
+<div class="paragraph"><p><code>--reapply-cherry-picks</code> allows rebase to forgo reading all upstream
+commits, potentially improving performance.</p></div>
 <div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
@@ -1138,9 +1231,10 @@ the merge base to determine the <em>set of commits</em> which will be rebased.</
 </dt>
 <dd>
 <p>
-        By default, rebasing commits with an empty message will fail.
-        This option overrides that behavior, allowing commits with empty
-        messages to be rebased.
+        No-op.  Rebasing commits with an empty message used to fail
+        and this option would override that behavior, allowing commits
+        with empty messages to be rebased.  Now commits with an empty
+        message do not cause rebasing to halt.
 </p>
 <div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
@@ -1180,7 +1274,7 @@ the merge base to determine the <em>set of commits</em> which will be rebased.</
 <p>
         Use merging strategies to rebase.  When the recursive (default) merge
         strategy is used, this allows rebase to be aware of renames on the
-        upstream side.
+        upstream side.  This is the default.
 </p>
 <div class="paragraph"><p>Note that a rebase merge works by replaying each commit from the working
 branch on top of the &lt;upstream&gt; branch.  Because of this, when a merge
@@ -1240,11 +1334,16 @@ which makes little sense.</p></div>
 <dt class="hdlist1">
 --gpg-sign[=&lt;keyid&gt;]
 </dt>
+<dt class="hdlist1">
+--no-gpg-sign
+</dt>
 <dd>
 <p>
         GPG-sign commits. The <code>keyid</code> argument is optional and
         defaults to the committer identity; if specified, it must be
-        stuck to the option without a space.
+        stuck to the option without a space. <code>--no-gpg-sign</code> is useful to
+        countermand both <code>commit.gpgSign</code> configuration variable, and
+        earlier <code>--gpg-sign</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1314,7 +1413,7 @@ which makes little sense.</p></div>
         Ensure at least &lt;n&gt; lines of surrounding context match before
         and after each change.  When fewer lines of surrounding
         context exist they all must match.  By default no context is
-        ever ignored.
+        ever ignored.  Implies --apply.
 </p>
 <div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
@@ -1356,35 +1455,64 @@ details).</p></div>
 <em>fork_point</em> is the result of <code>git merge-base --fork-point &lt;upstream&gt;
 &lt;branch&gt;</code> command (see <a href="git-merge-base.html">git-merge-base(1)</a>).  If <em>fork_point</em>
 ends up being empty, the &lt;upstream&gt; will be used as a fallback.</p></div>
-<div class="paragraph"><p>If either &lt;upstream&gt; or --root is given on the command line, then the
-default is <code>--no-fork-point</code>, otherwise the default is <code>--fork-point</code>.</p></div>
+<div class="paragraph"><p>If &lt;upstream&gt; is given on the command line, then the default is
+<code>--no-fork-point</code>, otherwise the default is <code>--fork-point</code>.</p></div>
 <div class="paragraph"><p>If your branch was based on &lt;upstream&gt; but &lt;upstream&gt; was rewound and
 your branch contains commits which were dropped, this option can be used
 with <code>--keep-base</code> in order to drop those commits from your branch.</p></div>
+<div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --ignore-whitespace
 </dt>
+<dd>
+<p>
+        Ignore whitespace differences when trying to reconcile
+differences. Currently, each backend implements an approximation of
+this behavior:
+</p>
+<div class="paragraph"><p>apply backend: When applying a patch, ignore changes in whitespace in
+context lines. Unfortunately, this means that if the "old" lines being
+replaced by the patch differ only in whitespace from the existing
+file, you will get a merge conflict instead of a successful patch
+application.</p></div>
+<div class="paragraph"><p>merge backend: Treat lines with only whitespace changes as unchanged
+when merging. Unfortunately, this means that any patch hunks that were
+intended to modify whitespace and nothing else will be dropped, even
+if the other side had no changes that conflicted.</p></div>
+</dd>
 <dt class="hdlist1">
 --whitespace=&lt;option&gt;
 </dt>
 <dd>
 <p>
-        These flag are passed to the <em>git apply</em> program
+        This flag is passed to the <em>git apply</em> program
         (see <a href="git-apply.html">git-apply(1)</a>) that applies the patch.
+        Implies --apply.
 </p>
 <div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
 <dt class="hdlist1">
 --committer-date-is-author-date
 </dt>
+<dd>
+<p>
+        Instead of using the current time as the committer date, use
+        the author date of the commit being rebased as the committer
+        date. This option implies <code>--force-rebase</code>.
+</p>
+</dd>
 <dt class="hdlist1">
 --ignore-date
 </dt>
+<dt class="hdlist1">
+--reset-author-date
+</dt>
 <dd>
 <p>
-        These flags are passed to <em>git am</em> to easily change the dates
-        of the rebased commits (see <a href="git-am.html">git-am(1)</a>).
+        Instead of using the author date of the original commit, use
+        the current time as the author date of the rebased commit.  This
+        option implies <code>--force-rebase</code>.
 </p>
 <div class="paragraph"><p>See also INCOMPATIBLE OPTIONS below.</p></div>
 </dd>
@@ -1393,7 +1521,7 @@ with <code>--keep-base</code> in order to drop those commits from your branch.</
 </dt>
 <dd>
 <p>
-        Add a Signed-off-by: trailer to all the rebased commits. Note
+        Add a <code>Signed-off-by</code> trailer to all the rebased commits. Note
         that if <code>--interactive</code> is given then only commits marked to be
         picked, edited or reworded will have the trailer added.
 </p>
@@ -1439,8 +1567,8 @@ i.e. commits that would be excluded by <a href="git-log.html">git-log(1)</a>'s
 the <code>rebase-cousins</code> mode is turned on, such commits are instead rebased
 onto <code>&lt;upstream&gt;</code> (or <code>&lt;onto&gt;</code>, if specified).</p></div>
 <div class="paragraph"><p>The <code>--rebase-merges</code> mode is similar in spirit to the deprecated
-<code>--preserve-merges</code>, but in contrast to that option works well in interactive
-rebases: commits can be reordered, inserted and dropped at will.</p></div>
+<code>--preserve-merges</code> but works with interactive rebases,
+where commits can be reordered, inserted and dropped at will.</p></div>
 <div class="paragraph"><p>It is currently only possible to recreate the merge commits using the
 <code>recursive</code> merge strategy; Different merge strategies can be used only via
 explicit <code>exec git merge -s &lt;strategy&gt; [...]</code> commands.</p></div>
@@ -1572,22 +1700,12 @@ used to override and disable this setting.</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
---committer-date-is-author-date
-</p>
-</li>
-<li>
-<p>
---ignore-date
+--apply
 </p>
 </li>
 <li>
 <p>
 --whitespace
-</p>
-</li>
-<li>
-<p>
---ignore-whitespace
 </p>
 </li>
 <li>
@@ -1645,7 +1763,17 @@ used to override and disable this setting.</p></div>
 </li>
 <li>
 <p>
---keep-empty
+--no-keep-empty
+</p>
+</li>
+<li>
+<p>
+--empty=
+</p>
+</li>
+<li>
+<p>
+--reapply-cherry-picks
 </p>
 </li>
 <li>
@@ -1678,6 +1806,26 @@ used to override and disable this setting.</p></div>
 </li>
 <li>
 <p>
+--preserve-merges and --empty=
+</p>
+</li>
+<li>
+<p>
+--preserve-merges and --ignore-whitespace
+</p>
+</li>
+<li>
+<p>
+--preserve-merges and --committer-date-is-author-date
+</p>
+</li>
+<li>
+<p>
+--preserve-merges and --ignore-date
+</p>
+</li>
+<li>
+<p>
 --keep-base and --onto
 </p>
 </li>
@@ -1686,29 +1834,149 @@ used to override and disable this setting.</p></div>
 --keep-base and --root
 </p>
 </li>
+<li>
+<p>
+--fork-point and --root
+</p>
+</li>
 </ul></div>
 </div>
 </div>
 <div class="sect1">
 <h2 id="_behavioral_differences">BEHAVIORAL DIFFERENCES</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>There are some subtle differences how the backends behave.</p></div>
+<div class="paragraph"><p>git rebase has two primary backends: apply and merge.  (The apply
+backend used to be known as the <em>am</em> backend, but the name led to
+confusion as it looks like a verb instead of a noun.  Also, the merge
+backend used to be known as the interactive backend, but it is now
+used for non-interactive cases as well.  Both were renamed based on
+lower-level functionality that underpinned each.) There are some
+subtle differences in how these two backends behave:</p></div>
 <div class="sect2">
 <h3 id="_empty_commits">Empty commits</h3>
-<div class="paragraph"><p>The am backend drops any "empty" commits, regardless of whether the
-commit started empty (had no changes relative to its parent to
-start with) or ended empty (all changes were already applied
-upstream in other commits).</p></div>
-<div class="paragraph"><p>The interactive backend drops commits by default that
-started empty and halts if it hits a commit that ended up empty.
-The <code>--keep-empty</code> option exists for the interactive backend to allow
-it to keep commits that started empty.</p></div>
+<div class="paragraph"><p>The apply backend unfortunately drops intentionally empty commits, i.e.
+commits that started empty, though these are rare in practice.  It
+also drops commits that become empty and has no option for controlling
+this behavior.</p></div>
+<div class="paragraph"><p>The merge backend keeps intentionally empty commits by default (though
+with -i they are marked as empty in the todo list editor, or they can
+be dropped automatically with --no-keep-empty).</p></div>
+<div class="paragraph"><p>Similar to the apply backend, by default the merge backend drops
+commits that become empty unless -i/--interactive is specified (in
+which case it stops and asks the user what to do).  The merge backend
+also has an --empty={drop,keep,ask} option for changing the behavior
+of handling commits that become empty.</p></div>
 </div>
 <div class="sect2">
 <h3 id="_directory_rename_detection">Directory rename detection</h3>
-<div class="paragraph"><p>Directory rename heuristics are enabled in the merge and interactive
-backends.  Due to the lack of accurate tree information, directory
-rename detection is disabled in the am backend.</p></div>
+<div class="paragraph"><p>Due to the lack of accurate tree information (arising from
+constructing fake ancestors with the limited information available in
+patches), directory rename detection is disabled in the apply backend.
+Disabled directory rename detection means that if one side of history
+renames a directory and the other adds new files to the old directory,
+then the new files will be left behind in the old directory without
+any warning at the time of rebasing that you may want to move these
+files into the new directory.</p></div>
+<div class="paragraph"><p>Directory rename detection works with the merge backend to provide you
+warnings in such cases.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_context">Context</h3>
+<div class="paragraph"><p>The apply backend works by creating a sequence of patches (by calling
+<code>format-patch</code> internally), and then applying the patches in sequence
+(calling <code>am</code> internally).  Patches are composed of multiple hunks,
+each with line numbers, a context region, and the actual changes.  The
+line numbers have to be taken with some fuzz, since the other side
+will likely have inserted or deleted lines earlier in the file.  The
+context region is meant to help find how to adjust the line numbers in
+order to apply the changes to the right lines.  However, if multiple
+areas of the code have the same surrounding lines of context, the
+wrong one can be picked.  There are real-world cases where this has
+caused commits to be reapplied incorrectly with no conflicts reported.
+Setting diff.context to a larger value may prevent such types of
+problems, but increases the chance of spurious conflicts (since it
+will require more lines of matching context to apply).</p></div>
+<div class="paragraph"><p>The merge backend works with a full copy of each relevant file,
+insulating it from these types of problems.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_labelling_of_conflicts_markers">Labelling of conflicts markers</h3>
+<div class="paragraph"><p>When there are content conflicts, the merge machinery tries to
+annotate each side&#8217;s conflict markers with the commits where the
+content came from.  Since the apply backend drops the original
+information about the rebased commits and their parents (and instead
+generates new fake commits based off limited information in the
+generated patches), those commits cannot be identified; instead it has
+to fall back to a commit summary.  Also, when merge.conflictStyle is
+set to diff3, the apply backend will use "constructed merge base" to
+label the content from the merge base, and thus provide no information
+about the merge base commit whatsoever.</p></div>
+<div class="paragraph"><p>The merge backend works with the full commits on both sides of history
+and thus has no such limitations.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_hooks">Hooks</h3>
+<div class="paragraph"><p>The apply backend has not traditionally called the post-commit hook,
+while the merge backend has.  Both have called the post-checkout hook,
+though the merge backend has squelched its output.  Further, both
+backends only call the post-checkout hook with the starting point
+commit of the rebase, not the intermediate commits nor the final
+commit.  In each case, the calling of these hooks was by accident of
+implementation rather than by design (both backends were originally
+implemented as shell scripts and happened to invoke other commands
+like <em>git checkout</em> or <em>git commit</em> that would call the hooks).  Both
+backends should have the same behavior, though it is not entirely
+clear which, if any, is correct.  We will likely make rebase stop
+calling either of these hooks in the future.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_interruptability">Interruptability</h3>
+<div class="paragraph"><p>The apply backend has safety problems with an ill-timed interrupt; if
+the user presses Ctrl-C at the wrong time to try to abort the rebase,
+the rebase can enter a state where it cannot be aborted with a
+subsequent <code>git rebase --abort</code>.  The merge backend does not appear to
+suffer from the same shortcoming.  (See
+<a href="https://lore.kernel.org/git/20200207132152.GC2868@szeder.dev/">https://lore.kernel.org/git/20200207132152.GC2868@szeder.dev/</a> for
+details.)</p></div>
+</div>
+<div class="sect2">
+<h3 id="_commit_rewording">Commit Rewording</h3>
+<div class="paragraph"><p>When a conflict occurs while rebasing, rebase stops and asks the user
+to resolve.  Since the user may need to make notable changes while
+resolving conflicts, after conflicts are resolved and the user has run
+<code>git rebase --continue</code>, the rebase should open an editor and ask the
+user to update the commit message.  The merge backend does this, while
+the apply backend blindly applies the original commit message.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_miscellaneous_differences">Miscellaneous differences</h3>
+<div class="paragraph"><p>There are a few more behavioral differences that most folks would
+probably consider inconsequential but which are mentioned for
+completeness:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+Reflog: The two backends will use different wording when describing
+  the changes made in the reflog, though both will make use of the
+  word "rebase".
+</p>
+</li>
+<li>
+<p>
+Progress, informational, and error messages: The two backends
+  provide slightly different progress and informational messages.
+  Also, the apply backend writes error messages (such as "Your files
+  would be overwritten&#8230;") to stdout, while the merge backend writes
+  them to stderr.
+</p>
+</li>
+<li>
+<p>
+State directories: The two backends keep their state in different
+  directories under .git/
+</p>
+</li>
+</ul></div>
 </div>
 </div>
 </div>
@@ -1759,7 +2027,7 @@ ours
 <p>
         This option forces conflicting hunks to be auto-resolved cleanly by
         favoring <em>our</em> version.  Changes from the other tree that do not
-        conflict with our side are reflected to the merge result.
+        conflict with our side are reflected in the merge result.
         For a binary file, the entire contents are taken from our side.
 </p>
 <div class="paragraph"><p>This should not be confused with the <em>ours</em> merge strategy, which does not
@@ -2263,7 +2531,8 @@ Hard case: The changes are not the same.
 <em>subsystem</em> are literally the same before and after the rebase
 <em>subsystem</em> did.</p></div>
 <div class="paragraph"><p>In that case, the fix is easy because <em>git rebase</em> knows to skip
-changes that are already present in the new upstream.  So if you say
+changes that are already present in the new upstream (unless
+<code>--reapply-cherry-picks</code> is given). So if you say
 (assuming you&#8217;re on <em>topic</em>)</p></div>
 <div class="listingblock">
 <div class="content">
@@ -2485,7 +2754,7 @@ Use <code>--rebase-merges</code> in such scenarios instead.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-09-30 14:04:22 JST
+ 2020-11-02 14:02:22 PST
 </div>
 </div>
 </body>

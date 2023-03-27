@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-update-index(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -756,6 +756,7 @@ git-update-index(1) Manual Page
              [--chmod=(+|-)x]
              [--[no-]assume-unchanged]
              [--[no-]skip-worktree]
+             [--[no-]ignore-skip-worktree-entries]
              [--[no-]fsmonitor-valid]
              [--ignore-submodules]
              [--[no-]split-index]
@@ -773,9 +774,8 @@ git-update-index(1) Manual Page
 <div class="sect1">
 <h2 id="_description">DESCRIPTION</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Modifies the index or directory cache. Each file mentioned is updated
-into the index and any <em>unmerged</em> or <em>needs updating</em> state is
-cleared.</p></div>
+<div class="paragraph"><p>Modifies the index. Each file mentioned is updated into the index and
+any <em>unmerged</em> or <em>needs updating</em> state is cleared.</p></div>
 <div class="paragraph"><p>See also <a href="git-add.html">git-add(1)</a> for a more user-friendly way to do some of
 the most common operations on the index.</p></div>
 <div class="paragraph"><p>The way <em>git update-index</em> handles files it is told about can be modified
@@ -922,6 +922,15 @@ you will need to handle the situation manually.</p></div>
         for the paths are not updated. Instead, these options
         set and unset the "skip-worktree" bit for the paths. See
         section "Skip-worktree bit" below for more information.
+</p>
+</dd>
+<dt class="hdlist1">
+--[no-]ignore-skip-worktree-entries
+</dt>
+<dd>
+<p>
+        Do not remove skip-worktree (AKA "index-only") entries even when
+        the <code>--remove</code> option was specified.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1369,7 +1378,7 @@ files are deleted if their modification time is older than what is
 specified by the splitIndex.sharedIndexExpire config variable (see
 <a href="git-config.html">git-config(1)</a>).</p></div>
 <div class="paragraph"><p>To avoid deleting a shared index file that is still used, its
-modification time is updated to the current time everytime a new split
+modification time is updated to the current time every time a new split
 index based on the shared index file is either created or read from.</p></div>
 </div>
 </div>
@@ -1475,6 +1484,22 @@ ctime for marking files processed) (see <a href="git-config.html">git-config(1)<
 </div>
 </div>
 <div class="sect1">
+<h2 id="_notes">NOTES</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Users often try to use the assume-unchanged and skip-worktree bits
+to tell Git to ignore changes to files that are tracked.  This does not
+work as expected, since Git may still check working tree files against
+the index when performing certain operations.  In general, Git does not
+provide a way to ignore changes to tracked files, so alternate solutions
+are recommended.</p></div>
+<div class="paragraph"><p>For example, if the file you want to change is some sort of config file,
+the repository can include a sample config file that can then be copied
+into the ignored name and modified.  The repository can even include a
+script to treat the sample file as a template, modifying and copying it
+automatically.</p></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
 <div class="paragraph"><p><a href="git-config.html">git-config(1)</a>,
@@ -1493,7 +1518,7 @@ ctime for marking files processed) (see <a href="git-config.html">git-config(1)<
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-08-21 05:12:02 JST
+ 2021-01-25 15:29:19 PST
 </div>
 </div>
 </body>

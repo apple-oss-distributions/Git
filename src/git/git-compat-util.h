@@ -252,8 +252,10 @@ typedef unsigned long uintptr_t;
 #ifdef PRECOMPOSE_UNICODE
 #include "compat/precompose_utf8.h"
 #else
-#define precompose_str(in,i_nfd2nfc)
-#define precompose_argv(c,v)
+static inline void precompose_argv(int argc, const char **argv)
+{
+	; /* nothing */
+}
 #define probe_utf8_pathname_composition()
 #endif
 
@@ -270,7 +272,9 @@ struct itimerval {
 #endif
 
 #ifdef NO_SETITIMER
-#define setitimer(which,value,ovalue)
+static inline int setitimer(int which, const struct itimerval *value, struct itimerval *newvalue) {
+	return 0; /* pretend success */
+}
 #endif
 
 #ifndef NO_LIBGEN_H
@@ -320,26 +324,6 @@ char *gitdirname(char *);
 #define PATH_MAX 4096
 #endif
 
-#ifndef PRIuMAX
-#define PRIuMAX "llu"
-#endif
-
-#ifndef SCNuMAX
-#define SCNuMAX PRIuMAX
-#endif
-
-#ifndef PRIu32
-#define PRIu32 "u"
-#endif
-
-#ifndef PRIx32
-#define PRIx32 "x"
-#endif
-
-#ifndef PRIo32
-#define PRIo32 "o"
-#endif
-
 typedef uintmax_t timestamp_t;
 #define PRItime PRIuMAX
 #define parse_timestamp strtoumax
@@ -355,6 +339,11 @@ typedef uintmax_t timestamp_t;
 #endif
 #ifndef _PATH_DEFPATH
 #define _PATH_DEFPATH "/usr/local/bin:/usr/bin:/bin"
+#endif
+
+#if !defined(__MINGW32__) && !defined(_MSC_VER)
+int lstat_cache_aware_rmdir(const char *path);
+#define rmdir lstat_cache_aware_rmdir
 #endif
 
 #ifndef platform_core_config
@@ -407,6 +396,14 @@ static inline char *git_find_last_dir_sep(const char *path)
 	return strrchr(path, '/');
 }
 #define find_last_dir_sep git_find_last_dir_sep
+#endif
+
+#ifndef has_dir_sep
+static inline int git_has_dir_sep(const char *path)
+{
+	return !!strchr(path, '/');
+}
+#define has_dir_sep(path) git_has_dir_sep(path)
 #endif
 
 #ifndef query_user_email
@@ -497,11 +494,13 @@ static inline int const_error(void)
 #define error_errno(...) (error_errno(__VA_ARGS__), const_error())
 #endif
 
-void set_die_routine(NORETURN_PTR void (*routine)(const char *err, va_list params));
-void set_error_routine(void (*routine)(const char *err, va_list params));
-extern void (*get_error_routine(void))(const char *err, va_list params);
-void set_warn_routine(void (*routine)(const char *warn, va_list params));
-extern void (*get_warn_routine(void))(const char *warn, va_list params);
+typedef void (*report_fn)(const char *, va_list params);
+
+void set_die_routine(NORETURN_PTR report_fn routine);
+void set_error_routine(report_fn routine);
+report_fn get_error_routine(void);
+void set_warn_routine(report_fn routine);
+report_fn get_warn_routine(void);
 void set_die_is_recursing_routine(int (*routine)(void));
 
 int starts_with(const char *str, const char *prefix);
@@ -881,6 +880,12 @@ FILE *fopen_for_writing(const char *path);
 FILE *fopen_or_warn(const char *path, const char *mode);
 
 /*
+ * Like strncmp, but only return zero if s is NUL-terminated and exactly len
+ * characters long.  If it is not, consider it greater than t.
+ */
+int xstrncmpz(const char *s, const char *t, size_t len);
+
+/*
  * FREE_AND_NULL(ptr) is like free(ptr) followed by ptr = NULL. Note
  * that ptr is used twice, so don't pass e.g. ptr++.
  */
@@ -1228,13 +1233,6 @@ int access_or_die(const char *path, int mode, unsigned flag);
 /* Warn on an inaccessible file if errno indicates this is an error */
 int warn_on_fopen_errors(const char *path);
 
-#ifdef GMTIME_UNRELIABLE_ERRORS
-struct tm *git_gmtime(const time_t *);
-struct tm *git_gmtime_r(const time_t *, struct tm *);
-#define gmtime git_gmtime
-#define gmtime_r git_gmtime_r
-#endif
-
 #if !defined(USE_PARENS_AROUND_GETTEXT_N) && defined(__GNUC__)
 #define USE_PARENS_AROUND_GETTEXT_N 1
 #endif
@@ -1244,8 +1242,14 @@ struct tm *git_gmtime_r(const time_t *, struct tm *);
 #endif
 
 #ifndef _POSIX_THREAD_SAFE_FUNCTIONS
-#define flockfile(fh)
-#define funlockfile(fh)
+static inline void flockfile(FILE *fh)
+{
+	; /* nothing */
+}
+static inline void funlockfile(FILE *fh)
+{
+	; /* nothing */
+}
 #define getc_unlocked(fh) getc(fh)
 #endif
 
@@ -1354,5 +1358,7 @@ static inline void *container_of_or_null_offset(void *ptr, size_t offset)
 #define OFFSETOF_VAR(ptr, member) \
 	((uintptr_t)&(ptr)->member - (uintptr_t)(ptr))
 #endif /* !__GNUC__ */
+
+void sleep_millisec(int millisec);
 
 #endif

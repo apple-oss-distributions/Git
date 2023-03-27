@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git
 .\"    Author: [see the "Authors" section]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -36,7 +36,7 @@ git \- the stupid content tracker
     [\-\-exec\-path[=<path>]] [\-\-html\-path] [\-\-man\-path] [\-\-info\-path]
     [\-p|\-\-paginate|\-P|\-\-no\-pager] [\-\-no\-replace\-objects] [\-\-bare]
     [\-\-git\-dir=<path>] [\-\-work\-tree=<path>] [\-\-namespace=<name>]
-    [\-\-super\-prefix=<path>]
+    [\-\-super\-prefix=<path>] [\-\-config\-env <name>=<envvar>]
     <command> [<args>]
 .fi
 .sp
@@ -131,6 +131,30 @@ will convert to
 \fBfalse\fR\&.
 .RE
 .PP
+\-\-config\-env=<name>=<envvar>
+.RS 4
+Like
+\fB\-c <name>=<value>\fR, give configuration variable
+\fI<name>\fR
+a value, where <envvar> is the name of an environment variable from which to retrieve the value\&. Unlike
+\fB\-c\fR
+there is no shortcut for directly setting the value to an empty string, instead the environment variable itself must be set to the empty string\&. It is an error if the
+\fB<envvar>\fR
+does not exist in the environment\&.
+\fB<envvar>\fR
+may not contain an equals sign to avoid ambiguity with `<name>`s which contain one\&.
+.sp
+This is useful for cases where you want to pass transitory configuration options to git, but are doing so on OS\(cqs where other processes might be able to read your cmdline (e\&.g\&.
+\fB/proc/self/cmdline\fR), but not your environ (e\&.g\&.
+\fB/proc/self/environ\fR)\&. That behavior is the default on Linux, but may not be on your system\&.
+.sp
+Note that this might add security for variables such as
+\fBhttp\&.extraHeader\fR
+where the sensitive information is part of the value, but not e\&.g\&.
+\fBurl\&.<base>\&.insteadOf\fR
+where the sensitive information can be part of the key\&.
+.RE
+.PP
 \-\-exec\-path[=<path>]
 .RS 4
 Path to wherever your core Git programs are installed\&. This can also be controlled by setting the GIT_EXEC_PATH environment variable\&. If no path is given,
@@ -170,9 +194,22 @@ Do not pipe Git output into a pager\&.
 .PP
 \-\-git\-dir=<path>
 .RS 4
-Set the path to the repository\&. This can also be controlled by setting the
+Set the path to the repository ("\&.git" directory)\&. This can also be controlled by setting the
 \fBGIT_DIR\fR
 environment variable\&. It can be an absolute path or relative path to current working directory\&.
+.sp
+Specifying the location of the "\&.git" directory using this option (or
+\fBGIT_DIR\fR
+environment variable) turns off the repository discovery that tries to find a directory with "\&.git" subdirectory (which is how the repository and the top\-level of the working tree are discovered), and tells Git that you are at the top level of the working tree\&. If you are not at the top\-level directory of the working tree, you should tell Git where the top\-level of the working tree is, with the
+\fB\-\-work\-tree=<path>\fR
+option (or
+\fBGIT_WORK_TREE\fR
+environment variable)
+.sp
+If you just want to run git as if it was started in
+\fB<path>\fR
+then use
+\fBgit \-C <path>\fR\&.
 .RE
 .PP
 \-\-work\-tree=<path>
@@ -367,6 +404,11 @@ Create an empty Git repository or reinitialize an existing one\&.
 Show commit logs\&.
 .RE
 .PP
+\fBgit-maintenance\fR(1)
+.RS 4
+Run tasks to optimize Git repository data\&.
+.RE
+.PP
 \fBgit-merge\fR(1)
 .RS 4
 Join two or more development histories together\&.
@@ -432,6 +474,11 @@ output\&.
 \fBgit-show\fR(1)
 .RS 4
 Show various types of objects\&.
+.RE
+.PP
+\fBgit-sparse-checkout\fR(1)
+.RS 4
+Initialize and modify the sparse\-checkout\&.
 .RE
 .PP
 \fBgit-stash\fR(1)
@@ -537,6 +584,11 @@ Annotate file lines with commit information\&.
 \fBgit-blame\fR(1)
 .RS 4
 Show what revision and author last modified each line of a file\&.
+.RE
+.PP
+\fBgit-bugreport\fR(1)
+.RS 4
+Collect information for user to file a bug report\&.
 .RE
 .PP
 \fBgit-count-objects\fR(1)
@@ -745,7 +797,7 @@ Run a merge for files needing merging\&.
 .PP
 \fBgit-mktag\fR(1)
 .RS 4
-Creates a tag object\&.
+Creates a tag object with extra validation\&.
 .RE
 .PP
 \fBgit-mktree\fR(1)
@@ -829,6 +881,11 @@ Compares the content and mode of blobs found via two tree objects\&.
 Output information on each ref\&.
 .RE
 .PP
+\fBgit-for-each-repo\fR(1)
+.RS 4
+Run a Git command on a list of repositories\&.
+.RE
+.PP
 \fBgit-get-tar-commit-id\fR(1)
 .RS 4
 Extract commit ID from an archive created using git\-archive\&.
@@ -900,7 +957,7 @@ Validate packed Git archive files\&.
 .RE
 .sp
 In general, the interrogate commands do not touch the files in the working tree\&.
-.SS "Synching repositories"
+.SS "Syncing repositories"
 .PP
 \fBgit-daemon\fR(1)
 .RS 4
@@ -937,11 +994,6 @@ Download from a remote Git repository via HTTP\&.
 \fBgit-http-push\fR(1)
 .RS 4
 Push objects over HTTP/DAV to another repository\&.
-.RE
-.PP
-\fBgit-parse-remote\fR(1)
-.RS 4
-Routines to help parsing remote repository access parameters\&.
 .RE
 .PP
 \fBgit-receive-pack\fR(1)
@@ -1050,6 +1102,114 @@ Common Git shell script setup code\&.
 \fBgit-stripspace\fR(1)
 .RS 4
 Remove unnecessary whitespace\&.
+.RE
+.SH "GUIDES"
+.sp
+The following documentation pages are guides about Git concepts\&.
+.PP
+\fBgitattributes\fR(5)
+.RS 4
+Defining attributes per path\&.
+.RE
+.PP
+\fBgitcli\fR(7)
+.RS 4
+Git command\-line interface and conventions\&.
+.RE
+.PP
+\fBgitcore-tutorial\fR(7)
+.RS 4
+A Git core tutorial for developers\&.
+.RE
+.PP
+\fBgitcredentials\fR(7)
+.RS 4
+Providing usernames and passwords to Git\&.
+.RE
+.PP
+\fBgitcvs-migration\fR(7)
+.RS 4
+Git for CVS users\&.
+.RE
+.PP
+\fBgitdiffcore\fR(7)
+.RS 4
+Tweaking diff output\&.
+.RE
+.PP
+\fBgiteveryday\fR(7)
+.RS 4
+A useful minimum set of commands for Everyday Git\&.
+.RE
+.PP
+\fBgitfaq\fR(7)
+.RS 4
+Frequently asked questions about using Git\&.
+.RE
+.PP
+\fBgitglossary\fR(7)
+.RS 4
+A Git Glossary\&.
+.RE
+.PP
+\fBgithooks\fR(5)
+.RS 4
+Hooks used by Git\&.
+.RE
+.PP
+\fBgitignore\fR(5)
+.RS 4
+Specifies intentionally untracked files to ignore\&.
+.RE
+.PP
+\fBgitmailmap\fR(5)
+.RS 4
+Map author/committer names and/or E\-Mail addresses\&.
+.RE
+.PP
+\fBgitmodules\fR(5)
+.RS 4
+Defining submodule properties\&.
+.RE
+.PP
+\fBgitnamespaces\fR(7)
+.RS 4
+Git namespaces\&.
+.RE
+.PP
+\fBgitremote-helpers\fR(7)
+.RS 4
+Helper programs to interact with remote repositories\&.
+.RE
+.PP
+\fBgitrepository-layout\fR(5)
+.RS 4
+Git Repository Layout\&.
+.RE
+.PP
+\fBgitrevisions\fR(7)
+.RS 4
+Specifying revisions and ranges for Git\&.
+.RE
+.PP
+\fBgitsubmodules\fR(7)
+.RS 4
+Mounting one repository inside another\&.
+.RE
+.PP
+\fBgittutorial\fR(7)
+.RS 4
+A tutorial introduction to Git\&.
+.RE
+.PP
+\fBgittutorial-2\fR(7)
+.RS 4
+A tutorial introduction to Git: part two\&.
+.RE
+.PP
+\fBgitworkflows\fR(7)
+.RS 4
+An overview of recommended workflows with Git\&.
 .RE
 .SH "CONFIGURATION MECHANISM"
 .sp
@@ -1255,12 +1415,69 @@ and
 \fBgit-worktree\fR(1)
 for details\&. This variable has lower precedence than other path variables such as GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY\&...
 .RE
+.PP
+\fBGIT_DEFAULT_HASH\fR
+.RS 4
+If this variable is set, the default hash algorithm for new repositories will be set to this value\&. This value is currently ignored when cloning; the setting of the remote repository is used instead\&. The default is "sha1"\&. THIS VARIABLE IS EXPERIMENTAL! See
+\fB\-\-object\-format\fR
+in
+\fBgit-init\fR(1)\&.
+.RE
 .SS "Git Commits"
 .PP
-\fBGIT_AUTHOR_NAME\fR, \fBGIT_AUTHOR_EMAIL\fR, \fBGIT_AUTHOR_DATE\fR, \fBGIT_COMMITTER_NAME\fR, \fBGIT_COMMITTER_EMAIL\fR, \fBGIT_COMMITTER_DATE\fR, \fIEMAIL\fR
+\fBGIT_AUTHOR_NAME\fR
 .RS 4
-see
-\fBgit-commit-tree\fR(1)
+The human\-readable name used in the author identity when creating commit or tag objects, or when writing reflogs\&. Overrides the
+\fBuser\&.name\fR
+and
+\fBauthor\&.name\fR
+configuration settings\&.
+.RE
+.PP
+\fBGIT_AUTHOR_EMAIL\fR
+.RS 4
+The email address used in the author identity when creating commit or tag objects, or when writing reflogs\&. Overrides the
+\fBuser\&.email\fR
+and
+\fBauthor\&.email\fR
+configuration settings\&.
+.RE
+.PP
+\fBGIT_AUTHOR_DATE\fR
+.RS 4
+The date used for the author identity when creating commit or tag objects, or when writing reflogs\&. See
+\fBgit-commit\fR(1)
+for valid formats\&.
+.RE
+.PP
+\fBGIT_COMMITTER_NAME\fR
+.RS 4
+The human\-readable name used in the committer identity when creating commit or tag objects, or when writing reflogs\&. Overrides the
+\fBuser\&.name\fR
+and
+\fBcommitter\&.name\fR
+configuration settings\&.
+.RE
+.PP
+\fBGIT_COMMITTER_EMAIL\fR
+.RS 4
+The email address used in the author identity when creating commit or tag objects, or when writing reflogs\&. Overrides the
+\fBuser\&.email\fR
+and
+\fBcommitter\&.email\fR
+configuration settings\&.
+.RE
+.PP
+\fBGIT_COMMITTER_DATE\fR
+.RS 4
+The date used for the committer identity when creating commit or tag objects, or when writing reflogs\&. See
+\fBgit-commit\fR(1)
+for valid formats\&.
+.RE
+.PP
+\fBEMAIL\fR
+.RS 4
+The email address used in the author and committer identities if no other relevant environment variable or configuration setting has been set\&.
 .RE
 .SS "Git Diffs"
 .PP
@@ -1273,7 +1490,7 @@ Only valid setting is "\-\-unified=??" or "\-u??" to set the number of context l
 .RS 4
 When the environment variable
 \fBGIT_EXTERNAL_DIFF\fR
-is set, the program named by it is called, instead of the diff invocation described above\&. For a path that is added, removed, or modified,
+is set, the program named by it is called to generate diffs, and Git does not use its builtin diff machinery\&. For a path that is added, removed, or modified,
 \fBGIT_EXTERNAL_DIFF\fR
 is called with 7 parameters:
 .sp
@@ -1357,6 +1574,11 @@ option in
 \fBgit-config\fR(1)\&.
 .RE
 .PP
+\fBGIT_PROGRESS_DELAY\fR
+.RS 4
+A number controlling how many seconds to delay before showing optional progress indicators\&. Defaults to 2\&.
+.RE
+.PP
 \fBGIT_EDITOR\fR
 .RS 4
 This environment variable overrides
@@ -1366,6 +1588,16 @@ and
 \fBgit-var\fR(1)
 and the
 \fBcore\&.editor\fR
+option in
+\fBgit-config\fR(1)\&.
+.RE
+.PP
+\fBGIT_SEQUENCE_EDITOR\fR
+.RS 4
+This environment variable overrides the configured Git editor when editing the todo list of an interactive rebase\&. See also
+\fBgit-rebase\fR(1)
+and the
+\fBsequence\&.editor\fR
 option in
 \fBgit-config\fR(1)\&.
 .RE
@@ -1497,6 +1729,13 @@ Enables performance related trace messages, e\&.g\&. total execution time of eac
 for available trace output options\&.
 .RE
 .PP
+\fBGIT_TRACE_REFS\fR
+.RS 4
+Enables trace messages for operations on the ref database\&. See
+\fBGIT_TRACE\fR
+for available trace output options\&.
+.RE
+.PP
 \fBGIT_TRACE_SETUP\fR
 .RS 4
 Enables trace messages printing the \&.git, working tree and current working directory after Git has completed its setup phase\&. See
@@ -1515,9 +1754,7 @@ for available trace output options\&.
 .RS 4
 Enables a curl full trace dump of all incoming and outgoing data, including descriptive information, of the git transport protocol\&. This is similar to doing curl
 \fB\-\-trace\-ascii\fR
-on the command line\&. This option overrides setting the
-\fBGIT_CURL_VERBOSE\fR
-environment variable\&. See
+on the command line\&. See
 \fBGIT_TRACE\fR
 for available trace output options\&.
 .RE
@@ -1575,11 +1812,11 @@ for available trace output options and
 for full details\&.
 .RE
 .PP
-\fBGIT_REDACT_COOKIES\fR
+\fBGIT_TRACE_REDACT\fR
 .RS 4
-This can be set to a comma\-separated list of strings\&. When a curl trace is enabled (see
-\fBGIT_TRACE_CURL\fR
-above), whenever a "Cookies:" header sent by the client is dumped, values of cookies whose key is in that list (case\-sensitive) are redacted\&.
+By default, when tracing is activated, Git redacts the values of cookies, the "Authorization:" header, and the "Proxy\-Authorization:" header\&. Set this variable to
+\fB0\fR
+to prevent this redaction\&.
 .RE
 .PP
 \fBGIT_LITERAL_PATHSPECS\fR
@@ -1735,7 +1972,7 @@ Git was started by Linus Torvalds, and is currently maintained by Junio C Hamano
 If you have a clone of git\&.git itself, the output of \fBgit-shortlog\fR(1) and \fBgit-blame\fR(1) can show you the authors for specific parts of the project\&.
 .SH "REPORTING BUGS"
 .sp
-Report bugs to the Git mailing list <\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[6]\d\s+2> where the development and maintenance is primarily done\&. You do not have to be subscribed to the list to send a message there\&. See the list archive at \m[blue]\fBhttps://public\-inbox\&.org/git\fR\m[] for previous bug reports and other discussions\&.
+Report bugs to the Git mailing list <\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[6]\d\s+2> where the development and maintenance is primarily done\&. You do not have to be subscribed to the list to send a message there\&. See the list archive at \m[blue]\fBhttps://lore\&.kernel\&.org/git\fR\m[] for previous bug reports and other discussions\&.
 .sp
 Issues which are security relevant should be disclosed privately to the Git Security mailing list <\m[blue]\fBgit\-security@googlegroups\&.com\fR\m[]\&\s-2\u[7]\d\s+2>\&.
 .SH "SEE ALSO"

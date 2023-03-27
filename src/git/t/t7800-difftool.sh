@@ -125,15 +125,14 @@ test_expect_success 'difftool stops on error with --trust-exit-code' '
 	test_when_finished "rm -f for-diff .git/fail-right-file" &&
 	test_when_finished "git reset -- for-diff" &&
 	write_script .git/fail-right-file <<-\EOF &&
-	echo "$2"
+	echo failed
 	exit 1
 	EOF
 	>for-diff &&
 	git add for-diff &&
-	echo file >expect &&
 	test_must_fail git difftool -y --trust-exit-code \
 		--extcmd .git/fail-right-file branch >actual &&
-	test_cmp expect actual
+	test_line_count = 1 actual
 '
 
 test_expect_success 'difftool honors exit status if command not found' '
@@ -719,6 +718,27 @@ test_expect_success SYMLINKS 'difftool --dir-diff handles modified symlinks' '
 	git difftool --no-symlinks --dir-diff --extcmd ls >output &&
 	grep -v ^/ output >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success 'add -N and difftool -d' '
+	test_when_finished git reset --hard &&
+
+	test_write_lines A B C >intent-to-add &&
+	git add -N intent-to-add &&
+	git difftool --dir-diff --extcmd ls
+'
+
+test_expect_success 'difftool --cached with unmerged files' '
+	test_when_finished git reset --hard &&
+
+	test_commit conflicting &&
+	test_commit conflict-a conflict.t a &&
+	git reset --hard conflicting &&
+	test_commit conflict-b conflict.t b &&
+	test_must_fail git merge conflict-a &&
+
+	git difftool --cached --no-prompt >output &&
+	test_must_be_empty output
 '
 
 test_expect_success 'outside worktree' '

@@ -1,6 +1,7 @@
 * araxis
 * bc
 * bc3
+* bc4
 * codecompare
 * deltawalker
 * diffmerge
@@ -15,6 +16,9 @@
 * kdiff3
 * kompare
 * meld
+* nvimdiff
+* nvimdiff2
+* nvimdiff3
 * opendiff
 * p4merge
 * smerge

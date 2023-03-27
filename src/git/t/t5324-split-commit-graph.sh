@@ -4,6 +4,7 @@ test_description='split commit graph'
 . ./test-lib.sh
 
 GIT_TEST_COMMIT_GRAPH=0
+GIT_TEST_COMMIT_GRAPH_CHANGED_PATHS=0
 
 test_expect_success 'setup repo' '
 	git init &&
@@ -11,7 +12,16 @@ test_expect_success 'setup repo' '
 	git config gc.writeCommitGraph false &&
 	infodir=".git/objects/info" &&
 	graphdir="$infodir/commit-graphs" &&
-	test_oid_init
+	test_oid_cache <<-EOM
+	shallow sha1:1760
+	shallow sha256:2064
+
+	base sha1:1376
+	base sha256:1496
+
+	oid_version sha1:1
+	oid_version sha256:2
+	EOM
 '
 
 graph_read_expect() {
@@ -21,13 +31,17 @@ graph_read_expect() {
 		NUM_BASE=$2
 	fi
 	cat >expect <<- EOF
-	header: 43475048 1 1 3 $NUM_BASE
+	header: 43475048 1 $(test_oid oid_version) 3 $NUM_BASE
 	num_commits: $1
 	chunks: oid_fanout oid_lookup commit_metadata
 	EOF
-	git commit-graph read >output &&
+	test-tool read-graph >output &&
 	test_cmp expect output
 }
+
+test_expect_success POSIXPERM 'tweak umask for modebit tests' '
+	umask 022
+'
 
 test_expect_success 'create commits and write commit-graph' '
 	for i in $(test_seq 3)
@@ -203,8 +217,14 @@ test_expect_success 'test merge stragety constants' '
 		git config core.commitGraph true &&
 		test_line_count = 2 $graphdir/commit-graph-chain &&
 		test_commit 15 &&
-		git commit-graph write --reachable --split --size-multiple=10 --expire-time=1980-01-01 &&
+		touch $graphdir/to-delete.graph $graphdir/to-keep.graph &&
+		test-tool chmtime =1546362000 $graphdir/to-delete.graph &&
+		test-tool chmtime =1546362001 $graphdir/to-keep.graph &&
+		git commit-graph write --reachable --split --size-multiple=10 \
+			--expire-time="2019-01-01 12:00 -05:00" &&
 		test_line_count = 1 $graphdir/commit-graph-chain &&
+		test_path_is_missing $graphdir/to-delete.graph &&
+		test_path_is_file $graphdir/to-keep.graph &&
 		ls $graphdir/graph-*.graph >graph-files &&
 		test_line_count = 3 graph-files
 	) &&
@@ -248,7 +268,7 @@ test_expect_success 'verify hashes along chain, even in shallow' '
 		cd verify &&
 		git commit-graph verify &&
 		base_file=$graphdir/graph-$(head -n 1 $graphdir/commit-graph-chain).graph &&
-		corrupt_file "$base_file" 1760 "\01" &&
+		corrupt_file "$base_file" $(test_oid shallow) "\01" &&
 		test_must_fail git commit-graph verify --shallow 2>test_err &&
 		grep -v "^+" test_err >err &&
 		test_i18ngrep "incorrect checksum" err
@@ -275,7 +295,7 @@ test_expect_success 'warn on base graph chunk incorrect' '
 		cd base-chunk &&
 		git commit-graph verify &&
 		base_file=$graphdir/graph-$(tail -n 1 $graphdir/commit-graph-chain).graph &&
-		corrupt_file "$base_file" 1376 "\01" &&
+		corrupt_file "$base_file" $(test_oid base) "\01" &&
 		git commit-graph verify --shallow 2>test_err &&
 		grep -v "^+" test_err >err &&
 		test_i18ngrep "commit-graph chain does not match" err
@@ -342,6 +362,95 @@ test_expect_success 'split across alternate where alternate is not split' '
 		test_line_count = 1 $graphdir/commit-graph-chain
 	) &&
 	test_cmp commit-graph .git/objects/info/commit-graph
+'
+
+test_expect_success '--split=no-merge always writes an incremental' '
+	test_when_finished rm -rf a b &&
+	rm -rf $graphdir $infodir/commit-graph &&
+	git reset --hard commits/2 &&
+	git rev-list HEAD~1 >a &&
+	git rev-list HEAD >b &&
+	git commit-graph write --split --stdin-commits <a &&
+	git commit-graph write --split=no-merge --stdin-commits <b &&
+	test_line_count = 2 $graphdir/commit-graph-chain
+'
+
+test_expect_success '--split=replace replaces the chain' '
+	rm -rf $graphdir $infodir/commit-graph &&
+	git reset --hard commits/3 &&
+	git rev-list -1 HEAD~2 >a &&
+	git rev-list -1 HEAD~1 >b &&
+	git rev-list -1 HEAD >c &&
+	git commit-graph write --split=no-merge --stdin-commits <a &&
+	git commit-graph write --split=no-merge --stdin-commits <b &&
+	git commit-graph write --split=no-merge --stdin-commits <c &&
+	test_line_count = 3 $graphdir/commit-graph-chain &&
+	git commit-graph write --stdin-commits --split=replace <b &&
+	test_path_is_missing $infodir/commit-graph &&
+	test_path_is_file $graphdir/commit-graph-chain &&
+	ls $graphdir/graph-*.graph >graph-files &&
+	test_line_count = 1 graph-files &&
+	verify_chain_files_exist $graphdir &&
+	graph_read_expect 2
+'
+
+test_expect_success ULIMIT_FILE_DESCRIPTORS 'handles file descriptor exhaustion' '
+	git init ulimit &&
+	(
+		cd ulimit &&
+		for i in $(test_seq 64)
+		do
+			test_commit $i &&
+			run_with_limited_open_files test_might_fail git commit-graph write \
+				--split=no-merge --reachable || return 1
+		done
+	)
+'
+
+while read mode modebits
+do
+	test_expect_success POSIXPERM "split commit-graph respects core.sharedrepository $mode" '
+		rm -rf $graphdir $infodir/commit-graph &&
+		git reset --hard commits/1 &&
+		test_config core.sharedrepository "$mode" &&
+		git commit-graph write --split --reachable &&
+		ls $graphdir/graph-*.graph >graph-files &&
+		test_line_count = 1 graph-files &&
+		echo "$modebits" >expect &&
+		test_modebits $graphdir/graph-*.graph >actual &&
+		test_cmp expect actual &&
+		test_modebits $graphdir/commit-graph-chain >actual &&
+		test_cmp expect actual
+	'
+done <<\EOF
+0666 -r--r--r--
+0600 -r--------
+EOF
+
+test_expect_success '--split=replace with partial Bloom data' '
+	rm -rf $graphdir $infodir/commit-graph &&
+	git reset --hard commits/3 &&
+	git rev-list -1 HEAD~2 >a &&
+	git rev-list -1 HEAD~1 >b &&
+	git commit-graph write --split=no-merge --stdin-commits --changed-paths <a &&
+	git commit-graph write --split=no-merge --stdin-commits <b &&
+	git commit-graph write --split=replace --stdin-commits --changed-paths <c &&
+	ls $graphdir/graph-*.graph >graph-files &&
+	test_line_count = 1 graph-files &&
+	verify_chain_files_exist $graphdir
+'
+
+test_expect_success 'prevent regression for duplicate commits across layers' '
+	git init dup &&
+	git -C dup commit --allow-empty -m one &&
+	git -C dup -c core.commitGraph=false commit-graph write --split=no-merge --reachable 2>err &&
+	test_i18ngrep "attempting to write a commit-graph" err &&
+	git -C dup commit-graph write --split=no-merge --reachable &&
+	git -C dup commit --allow-empty -m two &&
+	git -C dup commit-graph write --split=no-merge --reachable &&
+	git -C dup commit --allow-empty -m three &&
+	git -C dup commit-graph write --split --reachable &&
+	git -C dup commit-graph verify
 '
 
 test_done

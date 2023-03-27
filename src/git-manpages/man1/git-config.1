@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-config
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 11/04/2019
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 02/08/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.24.0
+.\"    Source: Git 2.30.1.378.g1d4f2316c5
 .\"  Language: English
 .\"
-.TH "GIT\-CONFIG" "1" "11/04/2019" "Git 2\&.24\&.0" "Git Manual"
+.TH "GIT\-CONFIG" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,18 +32,18 @@ git-config \- Get and set repository or global options
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-z|\-\-null] name [value [value_regex]]
+\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-fixed\-value] [\-\-show\-origin] [\-\-show\-scope] [\-z|\-\-null] name [value [value\-pattern]]
 \fIgit config\fR [<file\-option>] [\-\-type=<type>] \-\-add name value
-\fIgit config\fR [<file\-option>] [\-\-type=<type>] \-\-replace\-all name value [value_regex]
-\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-z|\-\-null] \-\-get name [value_regex]
-\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-z|\-\-null] \-\-get\-all name [value_regex]
-\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-z|\-\-null] [\-\-name\-only] \-\-get\-regexp name_regex [value_regex]
+\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-fixed\-value] \-\-replace\-all name value [value\-pattern]
+\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-\-show\-scope] [\-z|\-\-null] [\-\-fixed\-value] \-\-get name [value\-pattern]
+\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-\-show\-scope] [\-z|\-\-null] [\-\-fixed\-value] \-\-get\-all name [value\-pattern]
+\fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-\-show\-origin] [\-\-show\-scope] [\-z|\-\-null] [\-\-fixed\-value] [\-\-name\-only] \-\-get\-regexp name_regex [value\-pattern]
 \fIgit config\fR [<file\-option>] [\-\-type=<type>] [\-z|\-\-null] \-\-get\-urlmatch name URL
-\fIgit config\fR [<file\-option>] \-\-unset name [value_regex]
-\fIgit config\fR [<file\-option>] \-\-unset\-all name [value_regex]
+\fIgit config\fR [<file\-option>] [\-\-fixed\-value] \-\-unset name [value\-pattern]
+\fIgit config\fR [<file\-option>] [\-\-fixed\-value] \-\-unset\-all name [value\-pattern]
 \fIgit config\fR [<file\-option>] \-\-rename\-section old_name new_name
 \fIgit config\fR [<file\-option>] \-\-remove\-section name
-\fIgit config\fR [<file\-option>] [\-\-show\-origin] [\-z|\-\-null] [\-\-name\-only] \-l | \-\-list
+\fIgit config\fR [<file\-option>] [\-\-show\-origin] [\-\-show\-scope] [\-z|\-\-null] [\-\-name\-only] \-l | \-\-list
 \fIgit config\fR [<file\-option>] \-\-get\-color name [default]
 \fIgit config\fR [<file\-option>] \-\-get\-colorbool name [stdout\-is\-tty]
 \fIgit config\fR [<file\-option>] \-e | \-\-edit
@@ -53,7 +53,7 @@ git-config \- Get and set repository or global options
 .sp
 You can query/set/replace/unset options with this command\&. The name is actually the section and the key separated by a dot, and the value will be escaped\&.
 .sp
-Multiple lines can be added to an option by using the \fB\-\-add\fR option\&. If you want to update or unset an option which can occur on multiple lines, a POSIX regexp \fBvalue_regex\fR needs to be given\&. Only the existing values that match the regexp are updated or unset\&. If you want to handle the lines that do \fBnot\fR match the regex, just prepend a single exclamation mark in front (see also the section called \(lqEXAMPLES\(rq)\&.
+Multiple lines can be added to an option by using the \fB\-\-add\fR option\&. If you want to update or unset an option which can occur on multiple lines, a \fBvalue\-pattern\fR (which is an extended regular expression, unless the \fB\-\-fixed\-value\fR option is given) needs to be given\&. Only the existing values that match the pattern are updated or unset\&. If you want to handle the lines that do \fBnot\fR match the pattern, just prepend a single exclamation mark in front (see also the section called \(lqEXAMPLES\(rq), but note that this only works when the \fB\-\-fixed\-value\fR option is not in use\&.
 .sp
 The \fB\-\-type=<type>\fR option instructs \fIgit config\fR to ensure that incoming and outgoing values are canonicalize\-able under the given <type>\&. If no \fB\-\-type=<type>\fR is given, no canonicalization will be performed\&. Callers may unset an existing \fB\-\-type\fR specifier with \fB\-\-no\-type\fR\&.
 .sp
@@ -145,14 +145,17 @@ On success, the command returns the exit code 0\&.
 .PP
 \-\-replace\-all
 .RS 4
-Default behavior is to replace at most one line\&. This replaces all lines matching the key (and optionally the value_regex)\&.
+Default behavior is to replace at most one line\&. This replaces all lines matching the key (and optionally the
+\fBvalue\-pattern\fR)\&.
 .RE
 .PP
 \-\-add
 .RS 4
 Adds a new line to the option without altering any existing values\&. This is the same as providing
 \fI^$\fR
-as the value_regex in
+as the
+\fBvalue\-pattern\fR
+in
 \fB\-\-replace\-all\fR\&.
 .RE
 .PP
@@ -279,6 +282,16 @@ Remove all lines matching the key from config file\&.
 \-l, \-\-list
 .RS 4
 List all variables set in config file, along with their values\&.
+.RE
+.PP
+\-\-fixed\-value
+.RS 4
+When used with the
+\fBvalue\-pattern\fR
+argument, treat
+\fBvalue\-pattern\fR
+as an exact string instead of a regular expression\&. This will restrict the name/value pairs that are matched to only those where the value is exactly equal to the
+\fBvalue\-pattern\fR\&.
 .RE
 .PP
 \-\-type <type>
@@ -409,6 +422,13 @@ or
 Augment the output of all queried config options with the origin type (file, standard input, blob, command line) and the actual origin (config file path, ref, or blob id if applicable)\&.
 .RE
 .PP
+\-\-show\-scope
+.RS 4
+Similar to
+\fB\-\-show\-origin\fR
+in that it augments the output of all queried config options with the scope of that value (local, global, system, command)\&.
+.RE
+.PP
 \-\-get\-colorbool name [stdout\-is\-tty]
 .RS 4
 Find the color setting for
@@ -530,6 +550,14 @@ for details\&.
 .RE
 .sp
 See also the section called \(lqFILES\(rq\&.
+.PP
+GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>
+.RS 4
+If GIT_CONFIG_COUNT is set to a positive number, all environment pairs GIT_CONFIG_KEY_<n> and GIT_CONFIG_VALUE_<n> up to that number will be added to the process\(cqs runtime configuration\&. The config pairs are zero\-indexed\&. Any missing key or value is treated as an error\&. An empty GIT_CONFIG_COUNT is treated the same as GIT_CONFIG_COUNT=0, namely no pairs are processed\&. These environment variables will override values in configuration files, but will be overridden by any explicit options passed via
+\fBgit \-c\fR\&.
+.sp
+This is useful for cases where you want to spawn multiple git commands with a common configuration but cannot depend on a configuration file, for example when writing scripts\&.
+.RE
 .SH "EXAMPLES"
 .sp
 Given a \&.git/config like this:
@@ -754,7 +782,7 @@ http\&.sslverify false
 .sp
 .SH "CONFIGURATION FILE"
 .sp
-The Git configuration file contains a number of variables that affect the Git commands\(aq behavior\&. The files \fB\&.git/config\fR and optionally \fBconfig\&.worktree\fR (see \fBextensions\&.worktreeConfig\fR below) in each repository are used to store the configuration for that repository, and \fB$HOME/\&.gitconfig\fR is used to store a per\-user configuration as fallback values for the \fB\&.git/config\fR file\&. The file \fB/etc/gitconfig\fR can be used to store a system\-wide default configuration\&.
+The Git configuration file contains a number of variables that affect the Git commands\(aq behavior\&. The files \fB\&.git/config\fR and optionally \fBconfig\&.worktree\fR (see the "CONFIGURATION FILE" section of \fBgit-worktree\fR(1)) in each repository are used to store the configuration for that repository, and \fB$HOME/\&.gitconfig\fR is used to store a per\-user configuration as fallback values for the \fB\&.git/config\fR file\&. The file \fB/etc/gitconfig\fR can be used to store a system\-wide default configuration\&.
 .sp
 The configuration variables are used by both the Git plumbing and the porcelains\&. The variables are divided into sections, wherein the fully qualified variable name of the variable itself is the last dot\-separated segment and the section name is everything before the last dot\&. The variable names are case\-insensitive, allow only alphanumeric characters and \fB\-\fR, and must start with an alphabetic character\&. Some variables may appear multiple times; we say then that the variable is multivalued\&.
 .SS "Syntax"
@@ -782,7 +810,7 @@ There is also a deprecated \fB[section\&.subsection]\fR syntax\&. With this synt
 .sp
 All the other lines (and the remainder of the line after the section header) are recognized as setting variables, in the form \fIname = value\fR (or just \fIname\fR, which is a short\-hand to say that the variable is the boolean "true")\&. The variable names are case\-insensitive, allow only alphanumeric characters and \fB\-\fR, and must start with an alphabetic character\&.
 .sp
-A line that defines a value can be continued to the next line by ending it with a \fB\e\fR; the backquote and the end\-of\-line are stripped\&. Leading whitespaces after \fIname =\fR, the remainder of the line after the first comment character \fI#\fR or \fI;\fR, and trailing whitespaces of the line are discarded unless they are enclosed in double quotes\&. Internal whitespaces within the value are retained verbatim\&.
+A line that defines a value can be continued to the next line by ending it with a \fB\e\fR; the backslash and the end\-of\-line are stripped\&. Leading whitespaces after \fIname =\fR, the remainder of the line after the first comment character \fI#\fR or \fI;\fR, and trailing whitespaces of the line are discarded unless they are enclosed in double quotes\&. Internal whitespaces within the value are retained verbatim\&.
 .sp
 Inside double quotes, double quote \fB"\fR and backslash \fB\e\fR characters must be escaped: use \fB\e"\fR for \fB"\fR and \fB\e\e\fR for \fB\e\fR\&.
 .sp
@@ -888,7 +916,7 @@ becomes
 .RS 4
 This is the same as
 \fBgitdir\fR
-except that matching is done case\-insensitively (e\&.g\&. on case\-insensitive file sytems)
+except that matching is done case\-insensitively (e\&.g\&. on case\-insensitive file systems)
 .RE
 .PP
 \fBonbranch\fR
@@ -1000,17 +1028,7 @@ Note that "\&.\&./" is not special and will match literally, which is unlikely w
 ; affected by the condition
 [includeIf "gitdir:/path/to/group/"]
         path = foo\&.inc
-.fi
-.if n \{\
-.RE
-.\}
-.sp
 
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
 ; include only if we are in a worktree where foo\-branch is
 ; currently checked out
 [includeIf "onbranch:foo\-branch"]
@@ -1019,6 +1037,7 @@ Note that "\&.\&./" is not special and will match literally, which is unlikely w
 .if n \{\
 .RE
 .\}
+.sp
 .SS "Values"
 .sp
 Values of many variables are treated as a simple string, but there are variables that take values of specific types and there are rules as to how to spell them\&.
@@ -1079,7 +1098,11 @@ The basic colors accepted are
 \fBmagenta\fR,
 \fBcyan\fR
 and
-\fBwhite\fR\&. The first color given is the foreground; the second is the background\&.
+\fBwhite\fR\&. The first color given is the foreground; the second is the background\&. All the basic colors except
+\fBnormal\fR
+have a bright variant that can be specified by prefixing the color with
+\fBbright\fR, like
+\fBbrightred\fR\&.
 .sp
 Colors may also be given as numbers between 0 and 255; these use ANSI 256\-color mode (but note that not all terminals may support this)\&. If your terminal supports it, you may also specify 24\-bit RGB values as hex, like
 \fB#ff0ab3\fR\&.
@@ -1152,8 +1175,9 @@ if you want to disable
 \fIpushNonFFCurrent\fR,
 \fIpushNonFFMatching\fR,
 \fIpushAlreadyExists\fR,
-\fIpushFetchFirst\fR, and
-\fIpushNeedsForce\fR
+\fIpushFetchFirst\fR,
+\fIpushNeedsForce\fR, and
+\fIpushRefNeedsUpdate\fR
 simultaneously\&.
 .RE
 .PP
@@ -1200,6 +1224,13 @@ pushUnqualifiedRefname
 Shown when
 \fBgit-push\fR(1)
 gives up trying to guess based on the source and destination refs what remote ref namespace the source belongs in, but where we can still suggest that the user push to either refs/heads/* or refs/tags/* based on the type of the source object\&.
+.RE
+.PP
+pushRefNeedsUpdate
+.RS 4
+Shown when
+\fBgit-push\fR(1)
+rejects a forced update of a branch when its remote\-tracking ref has updates that we do not have locally\&.
 .RE
 .PP
 statusAheadBehind
@@ -1316,6 +1347,21 @@ nestedTag
 .RS 4
 Advice shown if a user attempts to recursively tag a tag object\&.
 .RE
+.PP
+submoduleAlternateErrorStrategyDie
+.RS 4
+Advice shown when a submodule\&.alternateErrorStrategy option configured to "die" causes a fatal error\&.
+.RE
+.PP
+addIgnoredFile
+.RS 4
+Advice shown if a user attempts to add an ignored file to the index\&.
+.RE
+.PP
+addEmptyPathspec
+.RS 4
+Advice shown if a user runs the add command without providing the pathspec parameter\&.
+.RE
 .RE
 .PP
 core\&.fileMode
@@ -1388,6 +1434,11 @@ core\&.fsmonitor
 .RS 4
 If set, the value of this variable is used as a command which will identify all files that may have changed since the requested date/time\&. This information is used to speed up git by avoiding unnecessary processing of files that have not changed\&. See the "fsmonitor\-watchman" section of
 \fBgithooks\fR(5)\&.
+.RE
+.PP
+core\&.fsmonitorHookVersion
+.RS 4
+Sets the version of hook that is to be used when calling fsmonitor\&. There are currently versions 1 and 2\&. When this is not set, version 2 will be tried first and if it fails then version 1 will be tried\&. Version 1 uses a timestamp as input to determine which files have changes since that time but some monitors like watchman have race conditions when used with a timestamp\&. Version 2 uses an opaque string so that the monitor can return something that can be used to determine what files have changed without race conditions\&.
 .RE
 .PP
 core\&.trustctime
@@ -1726,7 +1777,7 @@ are supported\&.
 .PP
 core\&.deltaBaseCacheLimit
 .RS 4
-Maximum number of bytes to reserve for caching base objects that may be referenced by multiple deltified objects\&. By storing the entire decompressed base objects in a cache Git is able to avoid unpacking and decompressing frequently used base objects multiple times\&.
+Maximum number of bytes per thread to reserve for caching base objects that may be referenced by multiple deltified objects\&. By storing the entire decompressed base objects in a cache Git is able to avoid unpacking and decompressing frequently used base objects multiple times\&.
 .sp
 Default is 96 MiB on all platforms\&. This should be reasonable for all users/operating systems, except on the largest projects\&. You probably do not need to adjust this value\&.
 .sp
@@ -2040,6 +2091,23 @@ Windows\-only: comma\-separated list of environment variables\(aq names that nee
 to account for the fact that Git for Windows insists on using its own Perl interpreter\&.
 .RE
 .PP
+core\&.restrictinheritedhandles
+.RS 4
+Windows\-only: override whether spawned processes inherit only standard file handles (\fBstdin\fR,
+\fBstdout\fR
+and
+\fBstderr\fR) or all handles\&. Can be
+\fBauto\fR,
+\fBtrue\fR
+or
+\fBfalse\fR\&. Defaults to
+\fBauto\fR, which means
+\fBtrue\fR
+on Windows 7 and later, and
+\fBfalse\fR
+on older Windows versions\&.
+.RE
+.PP
 core\&.createObject
 .RS 4
 You can set this to
@@ -2082,19 +2150,27 @@ for more information\&.
 core\&.multiPackIndex
 .RS 4
 Use the multi\-pack\-index file to track multiple packfiles using a single index\&. See
-\m[blue]\fBthe multi\-pack\-index design document\fR\m[]\&\s-2\u[1]\d\s+2\&.
+\fBgit-multi-pack-index\fR(1)
+for more information\&. Defaults to true\&.
 .RE
 .PP
 core\&.sparseCheckout
 .RS 4
-Enable "sparse checkout" feature\&. See section "Sparse checkout" in
-\fBgit-read-tree\fR(1)
+Enable "sparse checkout" feature\&. See
+\fBgit-sparse-checkout\fR(1)
+for more information\&.
+.RE
+.PP
+core\&.sparseCheckoutCone
+.RS 4
+Enables the "cone mode" of the sparse checkout feature\&. When the sparse\-checkout file contains a limited set of patterns, then this mode provides significant performance advantages\&. See
+\fBgit-sparse-checkout\fR(1)
 for more information\&.
 .RE
 .PP
 core\&.abbrev
 .RS 4
-Set the length object names are abbreviated to\&. If unspecified or set to "auto", an appropriate value is computed based on the approximate number of packed objects in your repository, which hopefully is enough for abbreviated object names to stay unique for some time\&. The minimum length is 4\&.
+Set the length object names are abbreviated to\&. If unspecified or set to "auto", an appropriate value is computed based on the approximate number of packed objects in your repository, which hopefully is enough for abbreviated object names to stay unique for some time\&. If set to "no", no abbreviation is made and the object names are shown in their full length\&. The minimum length is 4\&.
 .RE
 .PP
 add\&.ignoreErrors, add\&.ignore\-errors (deprecated)
@@ -2107,6 +2183,17 @@ option of
 \fBgit-add\fR(1)\&.
 \fBadd\&.ignore\-errors\fR
 is deprecated, as it does not follow the usual naming convention for configuration variables\&.
+.RE
+.PP
+add\&.interactive\&.useBuiltin
+.RS 4
+[EXPERIMENTAL] Set to
+\fBtrue\fR
+to use the experimental built\-in implementation of the interactive version of
+\fBgit-add\fR(1)
+instead of the Perl script version\&. Is
+\fBfalse\fR
+by default\&.
 .RE
 .PP
 alias\&.*
@@ -2361,7 +2448,9 @@ branch\&.<name>\&.rebase
 When true, rebase the branch <name> on top of the fetched branch, instead of merging the default branch from the default remote when "git pull" is run\&. See "pull\&.rebase" for doing this in a non branch\-specific manner\&.
 .sp
 When
-\fBmerges\fR, pass the
+\fBmerges\fR
+(or just
+\fIm\fR), pass the
 \fB\-\-rebase\-merges\fR
 option to
 \fIgit rebase\fR
@@ -2371,7 +2460,8 @@ for details)\&.
 .sp
 When
 \fBpreserve\fR
-(deprecated in favor of
+(or just
+\fIp\fR, deprecated in favor of
 \fBmerges\fR), also pass
 \fB\-\-preserve\-merges\fR
 along to
@@ -2380,7 +2470,9 @@ so that locally committed merge commits will not be flattened by running
 \fIgit pull\fR\&.
 .sp
 When the value is
-\fBinteractive\fR, the rebase is run in interactive mode\&.
+\fBinteractive\fR
+(or just
+\fIi\fR), the rebase is run in interactive mode\&.
 .sp
 \fBNOTE\fR: this is a possibly dangerous operation; do
 \fBnot\fR
@@ -2413,12 +2505,12 @@ option in
 checkout\&.defaultRemote
 .RS 4
 When you run
-\fIgit checkout <something>\fR
+\fBgit checkout <something>\fR
 or
-\fIgit switch <something>\fR
+\fBgit switch <something>\fR
 and only have one remote, it may implicitly fall back on checking out and tracking e\&.g\&.
-\fIorigin/<something>\fR\&. This stops working as soon as you have more than one remote with a
-\fI<something>\fR
+\fBorigin/<something>\fR\&. This stops working as soon as you have more than one remote with a
+\fB<something>\fR
 reference\&. This setting allows for setting the name of a preferred remote that should always win when it comes to disambiguation\&. The typical use\-case is to set this to
 \fBorigin\fR\&.
 .sp
@@ -2427,21 +2519,45 @@ Currently this is used by
 and
 \fBgit-checkout\fR(1)
 when
-\fIgit checkout <something>\fR
+\fBgit checkout <something>\fR
 or
-\fIgit switch <something>\fR
+\fBgit switch <something>\fR
 will checkout the
-\fI<something>\fR
+\fB<something>\fR
 branch on another remote, and by
 \fBgit-worktree\fR(1)
 when
-\fIgit worktree add\fR
+\fBgit worktree add\fR
 refers to a remote branch\&. This setting might be used for other checkout\-like commands or functionality in the future\&.
+.RE
+.PP
+checkout\&.guess
+.RS 4
+Provides the default value for the
+\fB\-\-guess\fR
+or
+\fB\-\-no\-guess\fR
+option in
+\fBgit checkout\fR
+and
+\fBgit switch\fR\&. See
+\fBgit-switch\fR(1)
+and
+\fBgit-checkout\fR(1)\&.
 .RE
 .PP
 clean\&.requireForce
 .RS 4
 A boolean to make git\-clean do nothing unless given \-f, \-i or \-n\&. Defaults to true\&.
+.RE
+.PP
+clone\&.defaultRemoteName
+.RS 4
+The name of the remote to create when cloning a repository\&. Defaults to
+\fBorigin\fR, and can be overridden by passing the
+\fB\-\-origin\fR
+command\-line option to
+\fBgit-clone\fR(1)\&.
 .RE
 .PP
 color\&.advice
@@ -3012,11 +3128,31 @@ A boolean or int to specify the level of verbose with
 \fBgit-commit\fR(1)\&.
 .RE
 .PP
+commitGraph\&.maxNewFilters
+.RS 4
+Specifies the default value for the
+\fB\-\-max\-new\-filters\fR
+option of
+\fBgit commit\-graph write\fR
+(c\&.f\&.,
+\fBgit-commit-graph\fR(1))\&.
+.RE
+.PP
+commitGraph\&.readChangedPaths
+.RS 4
+If true, then git will use the changed\-path Bloom filters in the commit\-graph file (if it exists, and they are present)\&. Defaults to true\&. See
+\fBgit-commit-graph\fR(1)
+for more information\&.
+.RE
+.PP
 credential\&.helper
 .RS 4
-Specify an external helper to be called when a username or password credential is needed; the helper may consult external storage to avoid prompting the user for the credentials\&. Note that multiple helpers may be defined\&. See
+Specify an external helper to be called when a username or password credential is needed; the helper may consult external storage to avoid prompting the user for the credentials\&. This is normally the name of a credential helper with possible arguments, but may also be an absolute path with arguments or, if preceded by
+\fB!\fR, shell commands\&.
+.sp
+Note that multiple helpers may be defined\&. See
 \fBgitcredentials\fR(7)
-for details\&.
+for details and examples\&.
 .RE
 .PP
 credential\&.useHttpPath
@@ -3042,6 +3178,11 @@ for details on how URLs are matched\&.
 credentialCache\&.ignoreSIGHUP
 .RS 4
 Tell git\-credential\-cache\(emdaemon to ignore SIGHUP, instead of quitting\&.
+.RE
+.PP
+credentialStore\&.lockTimeoutMS
+.RS 4
+The length of time, in milliseconds, for git\-credential\-store to retry when trying to lock the credentials file\&. Value 0 means not to retry at all; \-1 means to try indefinitely\&. Default is 1000 (i\&.e\&., retry for 1s)\&.
 .RE
 .PP
 completion\&.commands
@@ -3164,7 +3305,7 @@ when
 \fBstatus\&.submoduleSummary\fR
 is set unless it is overridden by using the \-\-ignore\-submodules command\-line option\&. The
 \fIgit submodule\fR
-commands are not affected by this setting\&.
+commands are not affected by this setting\&. By default this is set to untracked so that any untracked submodules are ignored\&.
 .RE
 .PP
 diff\&.mnemonicPrefix
@@ -3204,6 +3345,14 @@ diff\&.noprefix
 If set,
 \fIgit diff\fR
 does not show any source or destination prefix\&.
+.RE
+.PP
+diff\&.relative
+.RS 4
+If set to
+\fItrue\fR,
+\fIgit diff\fR
+does not show changes outside of the directory and show pathnames relative to the current directory\&.
 .RE
 .PP
 diff\&.orderFile
@@ -3343,6 +3492,17 @@ bc
 .IP \(bu 2.3
 .\}
 bc3
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+bc4
 .RE
 .sp
 .RS 4
@@ -3497,6 +3657,39 @@ kompare
 .IP \(bu 2.3
 .\}
 meld
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff2
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff3
 .RE
 .sp
 .RS 4
@@ -3694,6 +3887,23 @@ difftool\&.prompt
 Prompt before each invocation of the diff tool\&.
 .RE
 .PP
+extensions\&.objectFormat
+.RS 4
+Specify the hash algorithm to use\&. The acceptable values are
+\fBsha1\fR
+and
+\fBsha256\fR\&. If not specified,
+\fBsha1\fR
+is assumed\&. It is an error to specify this key unless
+\fBcore\&.repositoryFormatVersion\fR
+is 1\&.
+.sp
+Note that this setting should only be set by
+\fBgit-init\fR(1)
+or
+\fBgit-clone\fR(1)\&. Trying to change it after initialization will not work and will produce hard\-to\-diagnose issues\&.
+.RE
+.PP
 fastimport\&.unpackLimit
 .RS 4
 If the number of objects imported by
@@ -3722,41 +3932,8 @@ Enable config options that are new to Git, and are being considered for future d
 .sp -1
 .IP \(bu 2.3
 .\}
-\fBpack\&.useSparse=true\fR
-uses a new algorithm when constructing a pack\-file which can improve
-\fBgit push\fR
-performance in repos with many files\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
 \fBfetch\&.negotiationAlgorithm=skipping\fR
 may improve fetch negotiation times by skipping more commits at a time, reducing the number of round trips\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fBfetch\&.writeCommitGraph=true\fR
-writes a commit\-graph after every
-\fBgit fetch\fR
-command that downloads a pack\-file from a remote\&. Using the
-\fB\-\-split\fR
-option, most executions will create a very small commit\-graph file on top of the existing commit\-graph file(s)\&. Occasionally, these files will merge and the write may take longer\&. Having an updated commit\-graph file helps performance of many Git commands, including
-\fBgit merge\-base\fR,
-\fBgit push \-f\fR, and
-\fBgit log \-\-graph\fR\&.
 .RE
 .RE
 .PP
@@ -3795,10 +3972,15 @@ enables the untracked cache\&. This setting assumes that mtime is working on you
 .PP
 fetch\&.recurseSubmodules
 .RS 4
-This option can be either set to a boolean value or to
-\fIon\-demand\fR\&. Setting it to a boolean changes the behavior of fetch and pull to unconditionally recurse into submodules when set to true or to not recurse at all when set to false\&. When set to
-\fIon\-demand\fR
-(the default value), fetch and pull will only recurse into a populated submodule when its superproject retrieves a commit that updates the submodule\(cqs reference\&.
+This option controls whether
+\fBgit fetch\fR
+(and the underlying fetch in
+\fBgit pull\fR) will recursively fetch into populated submodules\&. This option can be set either to a boolean value or to
+\fIon\-demand\fR\&. Setting it to a boolean changes the behavior of fetch and pull to recurse unconditionally into submodules when set to true or to not recurse at all when set to false\&. When set to
+\fIon\-demand\fR, fetch and pull will only recurse into a populated submodule when its superproject retrieves a commit that updates the submodule\(cqs reference\&. Defaults to
+\fIon\-demand\fR, or to the value of
+\fIsubmodule\&.recurse\fR
+if set\&.
 .RE
 .PP
 fetch\&.fsckObjects
@@ -3874,7 +4056,7 @@ for detail\&.
 .PP
 fetch\&.negotiationAlgorithm
 .RS 4
-Control how information about the commits in the local repository is sent when negotiating the contents of the packfile to be sent by the server\&. Set to "skipping" to use an algorithm that skips commits in an effort to converge faster, but may result in a larger\-than\-necessary packfile; The default is "default" which instructs Git to use the default algorithm that never skips commits (unless the server has acknowledged it or one of its descendants)\&. If
+Control how information about the commits in the local repository is sent when negotiating the contents of the packfile to be sent by the server\&. Set to "skipping" to use an algorithm that skips commits in an effort to converge faster, but may result in a larger\-than\-necessary packfile; or set to "noop" to not send any information at all, which will almost certainly result in a larger\-than\-necessary packfile, but will skip the negotiation step\&. The default is "default" which instructs Git to use the default algorithm that never skips commits (unless the server has acknowledged it or one of its descendants)\&. If
 \fBfeature\&.experimental\fR
 is enabled, then this setting defaults to "skipping"\&. Unknown values will cause
 \fIgit fetch\fR
@@ -3921,9 +4103,7 @@ command that downloads a pack\-file from a remote\&. Using the
 option, most executions will create a very small commit\-graph file on top of the existing commit\-graph file(s)\&. Occasionally, these files will merge and the write may take longer\&. Having an updated commit\-graph file helps performance of many Git commands, including
 \fBgit merge\-base\fR,
 \fBgit push \-f\fR, and
-\fBgit log \-\-graph\fR\&. Defaults to false, unless
-\fBfeature\&.experimental\fR
-is true\&.
+\fBgit log \-\-graph\fR\&. Defaults to false\&.
 .RE
 .PP
 format\&.attach
@@ -3967,6 +4147,14 @@ The default for format\-patch is to output files with the
 subject prefix\&. Use this variable to change that prefix\&.
 .RE
 .PP
+format\&.coverFromDescription
+.RS 4
+The default mode for format\-patch to determine which parts of the cover letter will be populated using the branch\(cqs description\&. See the
+\fB\-\-cover\-from\-description\fR
+option in
+\fBgit-format-patch\fR(1)\&.
+.RE
+.PP
 format\&.signature
 .RS 4
 The default for format\-patch is to output a signature containing the Git version number\&. Use this variable to change that default\&. Set this variable to the empty string ("") to suppress signature generation\&.
@@ -3981,6 +4169,11 @@ format\&.suffix
 .RS 4
 The default for format\-patch is to output files with the suffix
 \fB\&.patch\fR\&. Use this variable to change that suffix (make sure to include the dot if you want it)\&.
+.RE
+.PP
+format\&.encodeEmailHeaders
+.RS 4
+Encode email headers that have non\-ASCII characters with "Q\-encoding" (described in RFC 2047) for email transmission\&. Defaults to true\&.
 .RE
 .PP
 format\&.pretty
@@ -4012,7 +4205,9 @@ A boolean value which lets you enable the
 \fB\-s/\-\-signoff\fR
 option of format\-patch by default\&.
 \fBNote:\fR
-Adding the Signed\-off\-by: line to a patch should be a conscious act and means that you certify you have the rights to submit this work under the same open source license\&. Please see the
+Adding the
+\fBSigned\-off\-by\fR
+trailer to a patch should be a conscious act and means that you certify you have the rights to submit this work under the same open source license\&. Please see the
 \fISubmittingPatches\fR
 document for further discussion\&.
 .RE
@@ -4027,11 +4222,22 @@ format\&.outputDirectory
 Set a custom directory to store the resulting files instead of the current working directory\&. All directory components will be created\&.
 .RE
 .PP
+format\&.filenameMaxLength
+.RS 4
+The maximum length of the output filenames generated by the
+\fBformat\-patch\fR
+command; defaults to 64\&. Can be overridden by the
+\fB\-\-filename\-max\-length=<n>\fR
+command line option\&.
+.RE
+.PP
 format\&.useAutoBase
 .RS 4
 A boolean value which lets you enable the
 \fB\-\-base=auto\fR
-option of format\-patch by default\&.
+option of format\-patch by default\&. Can also be set to "whenAble" to allow enabling
+\fB\-\-base=auto\fR
+if a suitable base is available, but to skip adding base info otherwise without the format dying\&.
 .RE
 .PP
 format\&.notes
@@ -4048,7 +4254,34 @@ is the non\-boolean value\&. Defaults to false\&.
 If one wishes to use the ref
 \fBref/notes/true\fR, please use that literal instead\&.
 .sp
-This configuration can be specified multiple times in order to allow multiple notes refs to be included\&.
+This configuration can be specified multiple times in order to allow multiple notes refs to be included\&. In that case, it will behave similarly to multiple
+\fB\-\-[no\-]notes[=]\fR
+options passed in\&. That is, a value of
+\fBtrue\fR
+will show the default notes, a value of
+\fB<ref>\fR
+will also show notes from that notes ref and a value of
+\fBfalse\fR
+will negate previous configurations and not show notes\&.
+.sp
+For example,
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+[format]
+        notes = true
+        notes = foo
+        notes = false
+        notes = bar
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+will only show notes from
+\fBrefs/notes/bar\fR\&.
 .RE
 .PP
 filter\&.<driver>\&.clean
@@ -4222,8 +4455,8 @@ gc\&.bigPackThreshold
 If non\-zero, all packs larger than this limit are kept when
 \fBgit gc\fR
 is run\&. This is very similar to
-\fB\-\-keep\-base\-pack\fR
-except that all packs that meet the threshold are kept, not just the base pack\&. Defaults to zero\&. Common unit suffixes of
+\fB\-\-keep\-largest\-pack\fR
+except that all packs that meet the threshold are kept, not just the largest pack\&. Defaults to zero\&. Common unit suffixes of
 \fIk\fR,
 \fIm\fR, or
 \fIg\fR
@@ -4238,7 +4471,7 @@ to run smoothly is not available and
 is not set, the largest pack will also be excluded (this is the equivalent of running
 \fBgit gc\fR
 with
-\fB\-\-keep\-base\-pack\fR)\&.
+\fB\-\-keep\-largest\-pack\fR)\&.
 .RE
 .PP
 gc\&.writeCommitGraph
@@ -4508,6 +4741,70 @@ can still be used as a legacy synonym for
 is "gpgsm"\&.
 .RE
 .PP
+gpg\&.minTrustLevel
+.RS 4
+Specifies a minimum trust level for signature verification\&. If this option is unset, then signature verification for merge operations require a key with at least
+\fBmarginal\fR
+trust\&. Other operations that perform signature verification require a key with at least
+\fBundefined\fR
+trust\&. Setting this option overrides the required trust\-level for all operations\&. Supported values, in increasing order of significance:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBundefined\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBnever\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBmarginal\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBfully\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBultimate\fR
+.RE
+.RE
+.PP
 gui\&.commitMsgWidth
 .RS 4
 Defines how wide the commit message window is in the
@@ -4705,7 +5002,7 @@ are the same\&.
 .PP
 help\&.autoCorrect
 .RS 4
-Automatically correct and execute mistyped commands after waiting for the given number of deciseconds (0\&.1 sec)\&. If more than one command can be deduced from the entered text, nothing will be executed\&. If the value of this option is negative, the corrected command will be executed immediately\&. If the value is 0 \- the command will be just shown but not executed\&. This is the default\&.
+If git detects typos and can identify exactly one valid command similar to the error, git will automatically run the intended command after waiting a duration of time defined by this configuration value in deciseconds (0\&.1 sec)\&. If this value is 0, the suggested corrections will be shown, but not executed\&. If it is a negative integer, or "immediate", the suggested command is run immediately\&. If "never", suggestions are not shown at all\&. The default value is zero\&.
 .RE
 .PP
 help\&.htmlPath
@@ -4801,6 +5098,34 @@ environment variable\&. Possible values are:
 .RE
 .RE
 .PP
+http\&.proxySSLCert
+.RS 4
+The pathname of a file that stores a client certificate to use to authenticate with an HTTPS proxy\&. Can be overridden by the
+\fBGIT_PROXY_SSL_CERT\fR
+environment variable\&.
+.RE
+.PP
+http\&.proxySSLKey
+.RS 4
+The pathname of a file that stores a private key to use to authenticate with an HTTPS proxy\&. Can be overridden by the
+\fBGIT_PROXY_SSL_KEY\fR
+environment variable\&.
+.RE
+.PP
+http\&.proxySSLCertPasswordProtected
+.RS 4
+Enable Git\(cqs password prompt for the proxy SSL certificate\&. Otherwise OpenSSL will prompt the user, possibly many times, if the certificate or private key is encrypted\&. Can be overridden by the
+\fBGIT_PROXY_SSL_CERT_PASSWORD_PROTECTED\fR
+environment variable\&.
+.RE
+.PP
+http\&.proxySSLCAInfo
+.RS 4
+Pathname to the file containing the certificate bundle that should be used to verify the proxy with when using an HTTPS proxy\&. Can be overridden by the
+\fBGIT_PROXY_SSL_CAINFO\fR
+environment variable\&.
+.RE
+.PP
 http\&.emptyAuth
 .RS 4
 Attempt authentication without seeking a username or password\&. This can be used to attempt GSS\-Negotiate authentication without specifying a username in the URL, as libcurl normally requires a username for authentication\&.
@@ -4865,7 +5190,7 @@ If set, store cookies received during requests to the file specified by http\&.c
 .PP
 http\&.version
 .RS 4
-Use the specified HTTP protocol version when communicating with a server\&. If you want to force the default\&. The available and default version depend on libcurl\&. Actually the possible values of this option are:
+Use the specified HTTP protocol version when communicating with a server\&. If you want to force the default\&. The available and default version depend on libcurl\&. Currently the possible values of this option are:
 .sp
 .RS 4
 .ie n \{\
@@ -4894,7 +5219,7 @@ http\&.sslVersion
 .RS 4
 The SSL version to use when negotiating an SSL connection, if you want to force the default\&. The available and default version depend on whether libcurl was built against NSS or OpenSSL and the particular configuration of the crypto library in use\&. Internally this sets the
 \fICURLOPT_SSL_VERSION\fR
-option; see the libcurl documentation for more details on the format of this option and for the ssl version supported\&. Actually the possible values of this option are:
+option; see the libcurl documentation for more details on the format of this option and for the ssl version supported\&. Currently the possible values of this option are:
 .sp
 .RS 4
 .ie n \{\
@@ -5086,6 +5411,8 @@ The number of curl sessions (counted across slots) to be kept across requests\&.
 http\&.postBuffer
 .RS 4
 Maximum size in bytes of the buffer used by smart HTTP transports when POSTing data to the remote system\&. For requests larger than this buffer size, HTTP/1\&.1 and Transfer\-Encoding: chunked is used to avoid creating a massive pack file locally\&. Default is 1 MiB, which is sufficient for most requests\&.
+.sp
+Note that raising this limit is only effective for disabling chunked transfer encoding and therefore should be used only where the remote server or a proxy only supports HTTP/1\&.0 or is noncompliant with the HTTP standard\&. Raising this is not, in general, an effective solution for most push problems, but can increase memory consumption significantly since the entire buffer is allocated even for small pushes\&.
 .RE
 .PP
 http\&.lowSpeedLimit, http\&.lowSpeedTime
@@ -5333,6 +5660,11 @@ Specify the directory from which templates will be copied\&. (See the "TEMPLATE 
 \fBgit-init\fR(1)\&.)
 .RE
 .PP
+init\&.defaultBranch
+.RS 4
+Allows overriding the default branch name e\&.g\&. when initializing a new repository or when cloning an empty repository\&.
+.RE
+.PP
 instaweb\&.browser
 .RS 4
 Specify the program that will be used to browse your working repository in gitweb\&. See
@@ -5428,6 +5760,15 @@ option of the
 \fBgit log\fR\&.
 .RE
 .PP
+log\&.excludeDecoration
+.RS 4
+Exclude the specified patterns from the log decorations\&. This is similar to the
+\fB\-\-decorate\-refs\-exclude\fR
+command\-line option, but the config option can be overridden by the
+\fB\-\-decorate\-refs\fR
+option\&.
+.RE
+.PP
 log\&.follow
 .RS 4
 If
@@ -5501,6 +5842,119 @@ are given, both are parsed, with entries from
 \fBmailmap\&.file\fR
 taking precedence\&. In a bare repository, this defaults to
 \fBHEAD:\&.mailmap\fR\&. In a non\-bare repository, it defaults to empty\&.
+.RE
+.PP
+maintenance\&.auto
+.RS 4
+This boolean config option controls whether some commands run
+\fBgit maintenance run \-\-auto\fR
+after doing their normal work\&. Defaults to true\&.
+.RE
+.PP
+maintenance\&.strategy
+.RS 4
+This string config option provides a way to specify one of a few recommended schedules for background maintenance\&. This only affects which tasks are run during
+\fBgit maintenance run \-\-schedule=X\fR
+commands, provided no
+\fB\-\-task=<task>\fR
+arguments are provided\&. Further, if a
+\fBmaintenance\&.<task>\&.schedule\fR
+config value is set, then that value is used instead of the one provided by
+\fBmaintenance\&.strategy\fR\&. The possible strategy strings are:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBnone\fR: This default setting implies no task are run at any schedule\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBincremental\fR: This setting optimizes for performing small maintenance activities that do not delete any data\&. This does not schedule the
+\fBgc\fR
+task, but runs the
+\fBprefetch\fR
+and
+\fBcommit\-graph\fR
+tasks hourly and the
+\fBloose\-objects\fR
+and
+\fBincremental\-repack\fR
+tasks daily\&.
+.RE
+.RE
+.PP
+maintenance\&.<task>\&.enabled
+.RS 4
+This boolean config option controls whether the maintenance task with name
+\fB<task>\fR
+is run when no
+\fB\-\-task\fR
+option is specified to
+\fBgit maintenance run\fR\&. These config values are ignored if a
+\fB\-\-task\fR
+option exists\&. By default, only
+\fBmaintenance\&.gc\&.enabled\fR
+is true\&.
+.RE
+.PP
+maintenance\&.<task>\&.schedule
+.RS 4
+This config option controls whether or not the given
+\fB<task>\fR
+runs during a
+\fBgit maintenance run \-\-schedule=<frequency>\fR
+command\&. The value must be one of "hourly", "daily", or "weekly"\&.
+.RE
+.PP
+maintenance\&.commit\-graph\&.auto
+.RS 4
+This integer config option controls how often the
+\fBcommit\-graph\fR
+task should be run as part of
+\fBgit maintenance run \-\-auto\fR\&. If zero, then the
+\fBcommit\-graph\fR
+task will not run with the
+\fB\-\-auto\fR
+option\&. A negative value will force the task to run every time\&. Otherwise, a positive value implies the command should run when the number of reachable commits that are not in the commit\-graph file is at least the value of
+\fBmaintenance\&.commit\-graph\&.auto\fR\&. The default value is 100\&.
+.RE
+.PP
+maintenance\&.loose\-objects\&.auto
+.RS 4
+This integer config option controls how often the
+\fBloose\-objects\fR
+task should be run as part of
+\fBgit maintenance run \-\-auto\fR\&. If zero, then the
+\fBloose\-objects\fR
+task will not run with the
+\fB\-\-auto\fR
+option\&. A negative value will force the task to run every time\&. Otherwise, a positive value implies the command should run when the number of loose objects is at least the value of
+\fBmaintenance\&.loose\-objects\&.auto\fR\&. The default value is 100\&.
+.RE
+.PP
+maintenance\&.incremental\-repack\&.auto
+.RS 4
+This integer config option controls how often the
+\fBincremental\-repack\fR
+task should be run as part of
+\fBgit maintenance run \-\-auto\fR\&. If zero, then the
+\fBincremental\-repack\fR
+task will not run with the
+\fB\-\-auto\fR
+option\&. A negative value will force the task to run every time\&. Otherwise, a positive value implies the command should run when the number of pack\-files not in the multi\-pack\-index is at least the value of
+\fBmaintenance\&.incremental\-repack\&.auto\fR\&. The default value is 10\&.
 .RE
 .PP
 man\&.viewer
@@ -5579,6 +6033,17 @@ merge\&.log
 In addition to branch names, populate the log message with at most the specified number of one\-line descriptions from the actual commits that are being merged\&. Defaults to false, and true is a synonym for 20\&.
 .RE
 .PP
+merge\&.suppressDest
+.RS 4
+By adding a glob that matches the names of integration branches to this multi\-valued configuration variable, the default merge message computed for merges into these integration branches will omit "into <branch name>" from its title\&.
+.sp
+An element with an empty value can be used to clear the list of globs accumulated from previous configuration entries\&. When there is no
+\fBmerge\&.suppressDest\fR
+variable defined, the default value of
+\fBmaster\fR
+is used for backward compatibility\&.
+.RE
+.PP
 merge\&.renameLimit
 .RS 4
 The number of files to consider when performing rename detection during a merge; if not specified, defaults to the value of diff\&.renameLimit\&. This setting has no effect if rename detection is turned off\&.
@@ -5603,6 +6068,16 @@ Tell Git that canonical representation of files in the repository has changed ov
 merge\&.stat
 .RS 4
 Whether to print the diffstat between ORIG_HEAD and the merge result at the end of the merge\&. True by default\&.
+.RE
+.PP
+merge\&.autoStash
+.RS 4
+When set to true, automatically create a temporary stash entry before the operation begins, and apply it after the operation ends\&. This means that you can run merge on a dirty worktree\&. However, use with care: the final stash application after a successful merge might result in non\-trivial conflicts\&. This option can be overridden by the
+\fB\-\-no\-autostash\fR
+and
+\fB\-\-autostash\fR
+options of
+\fBgit-merge\fR(1)\&. Defaults to false\&.
 .RE
 .PP
 merge\&.tool
@@ -5648,6 +6123,17 @@ bc
 .IP \(bu 2.3
 .\}
 bc3
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+bc4
 .RE
 .sp
 .RS 4
@@ -5791,6 +6277,39 @@ kdiff3
 .IP \(bu 2.3
 .\}
 meld
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff2
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff3
 .RE
 .sp
 .RS 4
@@ -5980,6 +6499,30 @@ avoids using
 \fB\-\-output\fR\&.
 .RE
 .PP
+mergetool\&.meld\&.useAutoMerge
+.RS 4
+When the
+\fB\-\-auto\-merge\fR
+is given, meld will merge all non\-conflicting parts automatically, highlight the conflicting parts and wait for user decision\&. Setting
+\fBmergetool\&.meld\&.useAutoMerge\fR
+to
+\fBtrue\fR
+tells Git to unconditionally use the
+\fB\-\-auto\-merge\fR
+option with
+\fBmeld\fR\&. Setting this value to
+\fBauto\fR
+makes git detect whether
+\fB\-\-auto\-merge\fR
+is supported and will only use
+\fB\-\-auto\-merge\fR
+when available\&. A value of
+\fBfalse\fR
+avoids using
+\fB\-\-auto\-merge\fR
+altogether, and is the default value\&.
+.RE
+.PP
 mergetool\&.keepBackup
 .RS 4
 After performing a merge, the original file with conflict markers can be saved as a file with a
@@ -6111,6 +6654,11 @@ Note that changing the compression level will not automatically recompress all e
 \fBgit-repack\fR(1)\&.
 .RE
 .PP
+pack\&.allowPackReuse
+.RS 4
+When true, and when reachability bitmaps are enabled, pack\-objects will try to send parts of the bitmapped packfile verbatim\&. This can reduce memory and CPU usage to serve fetches, but might result in sending a slightly larger pack\&. Defaults to true\&.
+.RE
+.PP
 pack\&.island
 .RS 4
 An extended regular expression configuring a set of delta islands\&. See "DELTA ISLANDS" in
@@ -6189,10 +6737,7 @@ option in
 when the
 \fI\-\-revs\fR
 option is present\&. This algorithm only walks trees that appear in paths that introduce new objects\&. This can have significant performance benefits when computing a pack to send a small change\&. However, it is possible that extra objects are added to the pack\-file if the included commits contain certain types of direct renames\&. Default is
-\fBfalse\fR
-unless
-\fBfeature\&.experimental\fR
-is enabled\&.
+\fBtrue\fR\&.
 .RE
 .PP
 pack\&.writeBitmaps (deprecated)
@@ -6358,7 +6903,8 @@ helper)
 .PP
 protocol\&.version
 .RS 4
-Experimental\&. If set, clients will attempt to communicate with a server using the specified protocol version\&. If unset, no attempt will be made by the client to communicate using a particular protocol version, this results in protocol version 0 being used\&. Supported versions:
+If set, clients will attempt to communicate with a server using the specified protocol version\&. If the server does not support it, communication falls back to version 0\&. If unset, the default is
+\fB2\fR\&. Supported versions:
 .sp
 .RS 4
 .ie n \{\
@@ -6394,7 +6940,7 @@ Experimental\&. If set, clients will attempt to communicate with a server using 
 .\}
 \fB2\fR
 \-
-\m[blue]\fBwire protocol version 2\fR\m[]\&\s-2\u[2]\d\s+2\&.
+\m[blue]\fBwire protocol version 2\fR\m[]\&\s-2\u[1]\d\s+2\&.
 .RE
 .RE
 .PP
@@ -6416,7 +6962,9 @@ pull\&.rebase
 When true, rebase branches on top of the fetched branch, instead of merging the default branch from the default remote when "git pull" is run\&. See "branch\&.<name>\&.rebase" for setting this on a per\-branch basis\&.
 .sp
 When
-\fBmerges\fR, pass the
+\fBmerges\fR
+(or just
+\fIm\fR), pass the
 \fB\-\-rebase\-merges\fR
 option to
 \fIgit rebase\fR
@@ -6426,7 +6974,8 @@ for details)\&.
 .sp
 When
 \fBpreserve\fR
-(deprecated in favor of
+(or just
+\fIp\fR, deprecated in favor of
 \fBmerges\fR), also pass
 \fB\-\-preserve\-merges\fR
 along to
@@ -6435,7 +6984,9 @@ so that locally committed merge commits will not be flattened by running
 \fIgit pull\fR\&.
 .sp
 When the value is
-\fBinteractive\fR, the rebase is run in interactive mode\&.
+\fBinteractive\fR
+(or just
+\fIi\fR), the rebase is run in interactive mode\&.
 .sp
 \fBNOTE\fR: this is a possibly dangerous operation; do
 \fBnot\fR
@@ -6458,7 +7009,7 @@ push\&.default
 .RS 4
 Defines the action
 \fBgit push\fR
-should take if no refspec is explicitly given\&. Different values are well\-suited for specific workflows; for instance, in a purely central workflow (i\&.e\&. the fetch source is equal to the push destination),
+should take if no refspec is given (whether from the command\-line, config, or elsewhere)\&. Different values are well\-suited for specific workflows; for instance, in a purely central workflow (i\&.e\&. the fetch source is equal to the push destination),
 \fBupstream\fR
 is probably what you want\&. Possible values are:
 .sp
@@ -6471,7 +7022,7 @@ is probably what you want\&. Possible values are:
 .IP \(bu 2.3
 .\}
 \fBnothing\fR
-\- do not push anything (error out) unless a refspec is explicitly given\&. This is primarily meant for people who want to avoid mistakes by always being explicit\&.
+\- do not push anything (error out) unless a refspec is given\&. This is primarily meant for people who want to avoid mistakes by always being explicit\&.
 .RE
 .sp
 .RS 4
@@ -6596,15 +7147,29 @@ This is a multi\-valued variable, and an empty value can be used in a higher pri
 in a repository) to clear the values inherited from a lower priority configuration files (e\&.g\&.
 \fB$HOME/\&.gitconfig\fR)\&.
 .sp
+.if n \{\
+.RS 4
+.\}
+.nf
 Example:
-.sp
-/etc/gitconfig push\&.pushoption = a push\&.pushoption = b
-.sp
-~/\&.gitconfig push\&.pushoption = c
-.sp
-repo/\&.git/config push\&.pushoption = push\&.pushoption = b
-.sp
+
+/etc/gitconfig
+  push\&.pushoption = a
+  push\&.pushoption = b
+
+~/\&.gitconfig
+  push\&.pushoption = c
+
+repo/\&.git/config
+  push\&.pushoption =
+  push\&.pushoption = b
+
 This will result in only b (a and c are cleared)\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
 .RE
 .PP
 push\&.recurseSubmodules
@@ -6616,12 +7181,38 @@ then Git will verify that all submodule commits that changed in the revisions to
 then all submodules that changed in the revisions to be pushed will be pushed\&. If on\-demand was not able to push all necessary revisions it will also be aborted and exit with non\-zero status\&. If the value is
 \fIno\fR
 then default behavior of ignoring submodules when pushing is retained\&. You may override this configuration at time of push by specifying
-\fI\-\-recurse\-submodules=check|on\-demand|no\fR\&.
+\fI\-\-recurse\-submodules=check|on\-demand|no\fR\&. If not set,
+\fIno\fR
+is used by default, unless
+\fIsubmodule\&.recurse\fR
+is set (in which case a
+\fItrue\fR
+value means
+\fIon\-demand\fR)\&.
+.RE
+.PP
+push\&.useForceIfIncludes
+.RS 4
+If set to "true", it is equivalent to specifying
+\fB\-\-force\-if\-includes\fR
+as an option to
+\fBgit-push\fR(1)
+in the command line\&. Adding
+\fB\-\-no\-force\-if\-includes\fR
+at the time of push overrides this configuration setting\&.
 .RE
 .PP
 rebase\&.useBuiltin
 .RS 4
 Unused configuration variable\&. Used in Git versions 2\&.20 and 2\&.21 as an escape hatch to enable the legacy shellscript implementation of rebase\&. Now the built\-in rewrite of it in C is always used\&. Setting this will emit a warning, to alert any remaining users that setting this now does nothing\&.
+.RE
+.PP
+rebase\&.backend
+.RS 4
+Default backend to use for rebasing\&. Possible choices are
+\fIapply\fR
+or
+\fImerge\fR\&. In the future, if the merge backend gains all remaining capabilities of the apply backend, this setting may become unused\&.
 .RE
 .PP
 rebase\&.stat
@@ -6840,6 +7431,33 @@ This variable is the same as
 (and so affects pushes, but not fetches)\&. An attempt to update or delete a hidden ref by
 \fBgit push\fR
 is rejected\&.
+.RE
+.PP
+receive\&.procReceiveRefs
+.RS 4
+This is a multi\-valued variable that defines reference prefixes to match the commands in
+\fBreceive\-pack\fR\&. Commands matching the prefixes will be executed by an external hook "proc\-receive", instead of the internal
+\fBexecute_commands\fR
+function\&. If this variable is not defined, the "proc\-receive" hook will never be used, and all commands will be executed by the internal
+\fBexecute_commands\fR
+function\&.
+.sp
+For example, if this variable is set to "refs/for", pushing to reference such as "refs/for/master" will not create or update a reference named "refs/for/master", but may create or update a pull request directly by running the hook "proc\-receive"\&.
+.sp
+Optional modifiers can be provided in the beginning of the value to filter commands for specific actions: create (a), modify (m), delete (d)\&. A
+\fB!\fR
+can be included in the modifiers to negate the reference prefix entry\&. E\&.g\&.:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+git config \-\-system \-\-add receive\&.procReceiveRefs ad:refs/heads
+git config \-\-system \-\-add receive\&.procReceiveRefs !:refs/heads
+.fi
+.if n \{\
+.RE
+.\}
 .RE
 .PP
 receive\&.updateServerInfo
@@ -7129,6 +7747,13 @@ option of
 \fBgit-send-email\fR(1)\&.
 .RE
 .PP
+sendemail\&.forbidSendmailVariables
+.RS 4
+To avoid common misconfiguration mistakes,
+\fBgit-send-email\fR(1)
+will abort with a warning if any configuration options for "sendmail" exist\&. Set this variable to bypass the check\&.
+.RE
+.PP
 sequence\&.editor
 .RS 4
 Text editor used by
@@ -7373,21 +7998,7 @@ command, which shows a similar output but does not honor these settings\&.
 .PP
 stash\&.useBuiltin
 .RS 4
-Set to
-\fBfalse\fR
-to use the legacy shell script implementation of
-\fBgit-stash\fR(1)\&. Is
-\fBtrue\fR
-by default, which means use the built\-in rewrite of it in C\&.
-.sp
-The C rewrite is first included with Git version 2\&.22 (and Git for Windows version 2\&.19)\&. This option serves as an escape hatch to re\-enable the legacy version in case any bugs are found in the rewrite\&. This option and the shell script version of
-\fBgit-stash\fR(1)
-will be removed in some future release\&.
-.sp
-If you find some reason to set this option to
-\fBfalse\fR, other than one\-off testing, you should report the behavior difference as a bug in Git (see
-\m[blue]\fBhttps://git\-scm\&.com/community\fR\m[]
-for details)\&.
+Unused configuration variable\&. Used in Git versions 2\&.22 to 2\&.26 as an escape hatch to enable the legacy shellscript implementation of stash\&. Now the built\-in rewrite of it in C is always used\&. Setting this will emit a warning, to alert any remaining users that setting this now does nothing\&.
 .RE
 .PP
 stash\&.showPatch
@@ -7486,8 +8097,29 @@ submodule\&.recurse
 .RS 4
 Specifies if commands recurse into submodules by default\&. This applies to all commands that have a
 \fB\-\-recurse\-submodules\fR
-option, except
-\fBclone\fR\&. Defaults to false\&.
+option (\fBcheckout\fR,
+\fBfetch\fR,
+\fBgrep\fR,
+\fBpull\fR,
+\fBpush\fR,
+\fBread\-tree\fR,
+\fBreset\fR,
+\fBrestore\fR
+and
+\fBswitch\fR) except
+\fBclone\fR
+and
+\fBls\-files\fR\&. Defaults to false\&. When set to true, it can be deactivated via the
+\fB\-\-no\-recurse\-submodules\fR
+option\&. Note that some Git commands lacking this option may call some of the above commands affected by
+\fBsubmodule\&.recurse\fR; for instance
+\fBgit remote update\fR
+will call
+\fBgit fetch\fR
+but does not have a
+\fB\-\-no\-recurse\-submodules\fR
+option\&. For these commands a workaround is to temporarily change the configuration value by using
+\fBgit \-c submodule\&.recurse=0\fR\&.
 .RE
 .PP
 submodule\&.fetchJobs
@@ -7513,7 +8145,10 @@ Specifies how to treat errors with the alternates for a submodule as computed vi
 \fBignore\fR,
 \fBinfo\fR,
 \fBdie\fR\&. Default is
-\fBdie\fR\&.
+\fBdie\fR\&. Note that if set to
+\fBignore\fR
+or
+\fBinfo\fR, and if there is an error with the computed alternate, the clone proceeds as if no alternate was specified\&.
 .RE
 .PP
 tag\&.forceSignAnnotated
@@ -7531,7 +8166,7 @@ This variable controls the sort ordering of tags when displayed by
 .PP
 tag\&.gpgSign
 .RS 4
-A boolean to specify whether all tags should be GPG signed\&. Use of this option when running in an automated script can result in a large number of tags being signed\&. It is therefore convenient to use an agent to avoid typing your gpg passphrase several times\&. Note that this option doesn\(cqt affects tag signing behavior enabled by "\-u <keyid>" or "\-\-local\-user=<keyid>" options\&.
+A boolean to specify whether all tags should be GPG signed\&. Use of this option when running in an automated script can result in a large number of tags being signed\&. It is therefore convenient to use an agent to avoid typing your gpg passphrase several times\&. Note that this option doesn\(cqt affect tag signing behavior enabled by "\-u <keyid>" or "\-\-local\-user=<keyid>" options\&.
 .RE
 .PP
 tar\&.umask
@@ -7680,6 +8315,15 @@ would cause the trace2 output to contain events listing each configured remote\&
 environment variable\&. Unset by default\&.
 .RE
 .PP
+trace2\&.envVars
+.RS 4
+A comma\-separated list of "important" environment variables that should be recorded in the trace2 output\&. For example,
+\fBGIT_HTTP_USER_AGENT,GIT_CONFIG\fR
+would cause the trace2 output to contain events listing the overrides for HTTP user agent and the location of the Git configuration file (assuming any are set)\&. May be overridden by the
+\fBGIT_TRACE2_ENV_VARS\fR
+environment variable\&. Unset by default\&.
+.RE
+.PP
 trace2\&.destinationDebug
 .RS 4
 Boolean\&. When true Git will print error messages when a trace target destination cannot be opened for writing\&. By default, these errors are suppressed and tracing is silently disabled\&. May be overridden by the
@@ -7774,6 +8418,11 @@ When
 or
 \fBreceive\&.unpackLimit\fR
 are not set, the value of this variable is used instead\&. The default value is 100\&.
+.RE
+.PP
+transfer\&.advertiseSID
+.RS 4
+Boolean\&. When true, client and server processes will advertise their unique session IDs to their remote counterpart\&. Defaults to false\&.
 .RE
 .PP
 uploadarchive\&.allowUnreachable
@@ -7875,6 +8524,39 @@ If this option is set,
 will support partial clone and partial fetch object filtering\&.
 .RE
 .PP
+uploadpackfilter\&.allow
+.RS 4
+Provides a default value for unspecified object filters (see: the below configuration variable)\&. Defaults to
+\fBtrue\fR\&.
+.RE
+.PP
+uploadpackfilter\&.<filter>\&.allow
+.RS 4
+Explicitly allow or ban the object filter corresponding to
+\fB<filter>\fR, where
+\fB<filter>\fR
+may be one of:
+\fBblob:none\fR,
+\fBblob:limit\fR,
+\fBtree\fR,
+\fBsparse:oid\fR, or
+\fBcombine\fR\&. If using combined filters, both
+\fBcombine\fR
+and all of the nested filter kinds must be allowed\&. Defaults to
+\fBuploadpackfilter\&.allow\fR\&.
+.RE
+.PP
+uploadpackfilter\&.tree\&.maxDepth
+.RS 4
+Only allow
+\fB\-\-filter=tree:<n>\fR
+when
+\fB<n>\fR
+is no more than the value of
+\fBuploadpackfilter\&.tree\&.maxDepth\fR\&. If set, this also implies
+\fBuploadpackfilter\&.tree\&.allow=true\fR, unless this configuration variable had already been set\&. Has no effect if unset\&.
+.RE
+.PP
 uploadpack\&.allowRefInWant
 .RS 4
 If this option is set,
@@ -7932,9 +8614,17 @@ variables can be set\&. Also, all of these can be overridden by the
 \fBGIT_COMMITTER_EMAIL\fR
 and
 \fBEMAIL\fR
-environment variables\&. See
-\fBgit-commit-tree\fR(1)
-for more information\&.
+environment variables\&.
+.sp
+Note that the
+\fBname\fR
+forms of these variables conventionally refer to some form of a personal name\&. See
+\fBgit-commit\fR(1)
+and the environment variables section of
+\fBgit\fR(1)
+for more information on these settings and the
+\fBcredential\&.username\fR
+option if you\(cqre looking for authentication credentials instead\&.
 .RE
 .PP
 user\&.useConfigOnly
@@ -8035,11 +8725,6 @@ and running \fBgit config section\&.Subsection\&.key value2\fR will result in
 Part of the \fBgit\fR(1) suite
 .SH "NOTES"
 .IP " 1." 4
-the multi-pack-index design document
-.RS 4
-\%git-htmldocs/technical/multi-pack-index.html
-.RE
-.IP " 2." 4
 wire protocol version 2
 .RS 4
 \%git-htmldocs/technical/protocol-v2.html

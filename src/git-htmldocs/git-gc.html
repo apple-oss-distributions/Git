@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-gc(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -957,9 +957,9 @@ gc.bigPackThreshold
 <dd>
 <p>
         If non-zero, all packs larger than this limit are kept when
-        <code>git gc</code> is run. This is very similar to <code>--keep-base-pack</code>
+        <code>git gc</code> is run. This is very similar to <code>--keep-largest-pack</code>
         except that all packs that meet the threshold are kept, not
-        just the base pack. Defaults to zero. Common unit suffixes of
+        just the largest pack. Defaults to zero. Common unit suffixes of
         <em>k</em>, <em>m</em>, or <em>g</em> are supported.
 </p>
 <div class="paragraph"><p>Note that if the number of kept packs is more than gc.autoPackLimit,
@@ -969,7 +969,7 @@ gc.autoPackLimit and gc.bigPackThreshold should be respected again.</p></div>
 <div class="paragraph"><p>If the amount of memory estimated for <code>git repack</code> to run smoothly is
 not available and <code>gc.bigPackThreshold</code> is not set, the largest pack
 will also be excluded (this is the equivalent of running <code>git gc</code> with
-<code>--keep-base-pack</code>).</p></div>
+<code>--keep-largest-pack</code>).</p></div>
 </dd>
 <dt class="hdlist1">
 gc.writeCommitGraph
@@ -1163,7 +1163,7 @@ seems to be low in practice).</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-09-30 14:04:22 JST
+ 2020-03-10 08:03:13 PDT
 </div>
 </div>
 </body>

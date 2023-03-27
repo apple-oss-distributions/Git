@@ -116,9 +116,9 @@ OPTIONS
 	located in.
 
 --[no-]recurse-submodules::
-	Using --recurse-submodules will update the content of all initialized
+	Using --recurse-submodules will update the content of all active
 	submodules according to the commit recorded in the superproject by
-	calling read-tree recursively, also setting the submodules HEAD to be
+	calling read-tree recursively, also setting the submodules' HEAD to be
 	detached at that commit.
 
 --no-sparse-checkout::
@@ -436,7 +436,7 @@ support.
 SEE ALSO
 --------
 linkgit:git-write-tree[1]; linkgit:git-ls-files[1];
-linkgit:gitignore[5]
+linkgit:gitignore[5]; linkgit:git-sparse-checkout[1];
 
 GIT
 ---

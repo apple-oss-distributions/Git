@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
+<meta name="generator" content="AsciiDoc 9.0.0rc2" />
 <title>git-fetch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -436,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -808,6 +808,15 @@ may be used by scripts or other git commands, such as <a href="git-pull.html">gi
 </p>
 </dd>
 <dt class="hdlist1">
+--atomic
+</dt>
+<dd>
+<p>
+        Use an atomic transaction to update local refs. Either all refs are
+        updated, or on error, no refs are updated.
+</p>
+</dd>
+<dt class="hdlist1">
 --depth=&lt;depth&gt;
 </dt>
 <dd>
@@ -901,6 +910,18 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--[no-]write-fetch-head
+</dt>
+<dd>
+<p>
+        Write the list of remote refs fetched in the <code>FETCH_HEAD</code>
+        file directly under <code>$GIT_DIR</code>.  This is the default.
+        Passing <code>--no-write-fetch-head</code> from the command line tells
+        Git not to write the file.  Under <code>--dry-run</code> option, the
+        file is never written.
+</p>
+</dd>
+<dt class="hdlist1">
 -f
 </dt>
 <dt class="hdlist1">
@@ -935,12 +956,25 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--[no-]auto-maintenance
+</dt>
+<dt class="hdlist1">
 --[no-]auto-gc
 </dt>
 <dd>
 <p>
-        Run <code>git gc --auto</code> at the end to perform garbage collection
-        if needed. This is enabled by default.
+        Run <code>git maintenance run --auto</code> at the end to perform automatic
+        repository maintenance if needed. (<code>--[no-]auto-gc</code> is a synonym.)
+        This is enabled by default.
+</p>
+</dd>
+<dt class="hdlist1">
+--[no-]write-commit-graph
+</dt>
+<dd>
+<p>
+        Write a commit-graph after fetching. This overrides the config
+        setting <code>fetch.writeCommitGraph</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1004,7 +1038,10 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
         specified refspec (can be given more than once) to map the
         refs to remote-tracking branches, instead of the values of
         <code>remote.*.fetch</code> configuration variables for the remote
-        repository.  See section on "Configured Remote-tracking
+        repository.  Providing an empty <code>&lt;refspec&gt;</code> to the
+        <code>--refmap</code> option causes Git to ignore the configured
+        refspecs and rely entirely on the refspecs supplied as
+        command-line arguments. See section on "Configured Remote-tracking
         Branches" for details.
 </p>
 </dd>
@@ -1037,7 +1074,8 @@ documented in <a href="git-config.html">git-config(1)</a>.</p></div>
         value. Use <em>on-demand</em> to only recurse into a populated submodule
         when the superproject retrieves a commit that updates the submodule&#8217;s
         reference to a commit that isn&#8217;t already in the local submodule
-        clone.
+        clone. By default, <em>on-demand</em> is used, unless
+        <code>fetch.recurseSubmodules</code> is set (see <a href="git-config.html">git-config(1)</a>).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1071,7 +1109,7 @@ default fetches are performed sequentially, not in parallel.</p></div>
 </dt>
 <dd>
 <p>
-        If the remote is fetched successfully, pull and add upstream
+        If the remote is fetched successfully, add upstream
         (tracking) reference, used by argument-less
         <a href="git-pull.html">git-pull(1)</a> and other commands. For more information,
         see <code>branch.&lt;name&gt;.merge</code> and <code>branch.&lt;name&gt;.remote</code> in
@@ -1261,6 +1299,20 @@ by a colon <code>:</code>, followed by the destination ref &lt;dst&gt;.
 The colon can be omitted when &lt;dst&gt; is empty.  &lt;src&gt; is
 typically a ref, but it can also be a fully spelled hex object
 name.</p></div>
+<div class="paragraph"><p>A &lt;refspec&gt; may contain a <code>*</code> in its &lt;src&gt; to indicate a simple pattern
+match. Such a refspec functions like a glob that matches any ref with the
+same prefix. A pattern &lt;refspec&gt; must have a <code>*</code> in both the &lt;src&gt; and
+&lt;dst&gt;. It will map refs to the destination by replacing the <code>*</code> with the
+contents matched from the source.</p></div>
+<div class="paragraph"><p>If a refspec is prefixed by <code>^</code>, it will be interpreted as a negative
+refspec. Rather than specifying which refs to fetch or which local refs to
+update, such a refspec will instead specify refs to exclude. A ref will be
+considered to match if it matches at least one positive refspec, and does
+not match any negative refspec. Negative refspecs can be useful to restrict
+the scope of a pattern refspec so that it will not include specific refs.
+Negative refspecs can themselves be pattern refspecs. However, they may only
+contain a &lt;src&gt; and do not specify a &lt;dst&gt;. Fully spelled out hex object
+names are also not supported.</p></div>
 <div class="paragraph"><p><code>tag &lt;tag&gt;</code> means the same as <code>refs/tags/&lt;tag&gt;:refs/tags/&lt;tag&gt;</code>;
 it requests fetching everything up to the given tag.</p></div>
 <div class="paragraph"><p>The remote ref that matches &lt;src&gt;
@@ -1310,6 +1362,15 @@ in a repository with this behavior; the pulling user simply
 must know this is the expected usage pattern for a branch.</td>
 </tr></table>
 </div>
+</dd>
+<dt class="hdlist1">
+--stdin
+</dt>
+<dd>
+<p>
+        Read refspecs, one per line, from stdin in addition to those provided
+        as arguments. The "tag &lt;name&gt;" format is not supported.
+</p>
 </dd>
 </dl></div>
 </div>
@@ -1397,6 +1458,8 @@ file:///path/to/repo.git/
 <div class="paragraph"><p>These two syntaxes are mostly equivalent, except when cloning, when
 the former implies --local option. See <a href="git-clone.html">git-clone(1)</a> for
 details.</p></div>
+<div class="paragraph"><p><em>git clone</em>, <em>git fetch</em> and <em>git pull</em>, but not <em>git push</em>, will also
+accept a suitable bundle file. See <a href="git-bundle.html">git-bundle(1)</a>.</p></div>
 <div class="paragraph"><p>When Git doesn&#8217;t know how to handle a certain transport protocol, it
 attempts to use the <em>remote-&lt;transport&gt;</em> remote helper, if one
 exists. To explicitly request a remote helper, the following syntax
@@ -1819,12 +1882,12 @@ Using refspecs explicitly:
 </p>
 <div class="listingblock">
 <div class="content">
-<pre><code>$ git fetch origin +pu:pu maint:tmp</code></pre>
+<pre><code>$ git fetch origin +seen:seen maint:tmp</code></pre>
 </div></div>
-<div class="paragraph"><p>This updates (or creates, as necessary) branches <code>pu</code> and <code>tmp</code> in
+<div class="paragraph"><p>This updates (or creates, as necessary) branches <code>seen</code> and <code>tmp</code> in
 the local repository by fetching from the branches (respectively)
-<code>pu</code> and <code>maint</code> from the remote repository.</p></div>
-<div class="paragraph"><p>The <code>pu</code> branch will be updated even if it does not fast-forward,
+<code>seen</code> and <code>maint</code> from the remote repository.</p></div>
+<div class="paragraph"><p>The <code>seen</code> branch will be updated even if it does not fast-forward,
 because it is prefixed with a plus sign; <code>tmp</code> will not be.</p></div>
 </li>
 <li>
@@ -1914,7 +1977,7 @@ version.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2019-08-09 06:41:52 JST
+ 2020-09-03 13:19:53 PDT
 </div>
 </div>
 </body>
