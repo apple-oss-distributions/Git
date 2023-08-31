@@ -4,15 +4,15 @@
 <array>
 	<dict>
 		<key>OpenSourceImportDate</key>
-		<string>2021-07-21</string>
+		<string>2022-04-13</string>
 		<key>OpenSourceLicense</key>
 		<string>GPL</string>
 		<key>OpenSourceProject</key>
 		<string>git</string>
 		<key>OpenSourceVersion</key>
-		<string>2.32.0</string>
+		<string>2.32.1</string>
 		<key>OpenSourceSHA1</key>
-		<value>ebf3c04b262aa27fbb97f8a0156c2347fecafafb</value>
+		<value>9bcd7a8ecac1c9196bc927647bd06c38ec1feabe</value>
 		<key>OpenSourceWebsiteURL</key>
 		<string>http://git-scm.com</string>
 		<key>OpenSourceModifications</key>
