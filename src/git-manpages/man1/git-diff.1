@@ -2,12 +2,12 @@
 .\"     Title: git-diff
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GIT\-DIFF" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GIT\-DIFF" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -363,14 +363,18 @@ Without this option, pathnames with "unusual" characters are quoted as explained
 .PP
 \-\-name\-only
 .RS 4
-Show only names of changed files\&.
+Show only names of changed files\&. The file names are often encoded in UTF\-8\&. For more information see the discussion about encoding in the
+\fBgit-log\fR(1)
+manual page\&.
 .RE
 .PP
 \-\-name\-status
 .RS 4
 Show only names and status of changed files\&. See the description of the
 \fB\-\-diff\-filter\fR
-option on what the status letters mean\&.
+option on what the status letters mean\&. Just like
+\fB\-\-name\-only\fR
+the file names are often encoded in UTF\-8\&.
 .RE
 .PP
 \-\-submodule[=<format>]
@@ -865,6 +869,15 @@ Each other line contains a single pattern\&.
 .RE
 .sp
 Patterns have the same syntax and semantics as patterns used for fnmatch(3) without the FNM_PATHNAME flag, except a pathname also matches a pattern if removing any number of the final pathname components matches the pattern\&. For example, the pattern "\fBfoo*bar\fR" matches "\fBfooasdfbar\fR" and "\fBfoo/bar/baz/asdf\fR" but not "\fBfoobarx\fR"\&.
+.RE
+.PP
+\-\-skip\-to=<file>, \-\-rotate\-to=<file>
+.RS 4
+Discard the files before the named <file> from the output (i\&.e\&.
+\fIskip to\fR), or move them to the end of the output (i\&.e\&.
+\fIrotate to\fR)\&. These were invented primarily for use of the
+\fBgit difftool\fR
+command, and may not be very useful otherwise\&.
 .RE
 .PP
 \-R
@@ -1445,7 +1458,7 @@ Examples when \fB\-\-combined\-all\-paths\fR added to either \fB\-c\fR or \fB\-\
 Note that \fIcombined diff\fR lists only files which were modified from all parents\&.
 .SH "GENERATING PATCH TEXT WITH \-P"
 .sp
-Running \fBgit-diff\fR(1), \fBgit-log\fR(1), \fBgit-show\fR(1), \fBgit-diff-index\fR(1), \fBgit-diff-tree\fR(1), or \fBgit-diff-files\fR(1) with the \fB\-p\fR option produces patch text\&. You can customize the creation of patch text via the \fBGIT_EXTERNAL_DIFF\fR and the \fBGIT_DIFF_OPTS\fR environment variables (see \fBgit\fR(1))\&.
+Running \fBgit-diff\fR(1), \fBgit-log\fR(1), \fBgit-show\fR(1), \fBgit-diff-index\fR(1), \fBgit-diff-tree\fR(1), or \fBgit-diff-files\fR(1) with the \fB\-p\fR option produces patch text\&. You can customize the creation of patch text via the \fBGIT_EXTERNAL_DIFF\fR and the \fBGIT_DIFF_OPTS\fR environment variables (see \fBgit\fR(1)), and the \fBdiff\fR attribute (see \fBgitattributes\fR(5))\&.
 .sp
 What the \-p option produces is slightly different from the traditional diff format:
 .sp
@@ -1575,6 +1588,19 @@ rename to a
 .if n \{\
 .RE
 .\}
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 5.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  5." 4.2
+.\}
+Hunk headers mention the name of the function to which the hunk applies\&. See "Defining a custom hunk\-header" in
+\fBgitattributes\fR(5)
+for details of how to tailor to this to specific languages\&.
 .RE
 .SH "COMBINED DIFF FORMAT"
 .sp

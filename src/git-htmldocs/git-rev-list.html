@@ -1194,6 +1194,20 @@ explicitly.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--disk-usage
+</dt>
+<dd>
+<p>
+        Suppress normal output; instead, print the sum of the bytes used
+        for on-disk storage by the selected commits or objects. This is
+        equivalent to piping the output into <code>git cat-file
+        --batch-check='%(objectsize:disk)'</code>, except that it runs much
+        faster (especially with <code>--use-bitmap-index</code>). See the <code>CAVEATS</code>
+        section in <a href="git-cat-file.html">git-cat-file(1)</a> for the limitations of what
+        "on-disk storage" means.
+</p>
+</dd>
+<dt class="hdlist1">
 --cherry-mark
 </dt>
 <dd>
@@ -2073,6 +2087,8 @@ together.</p></div>
 or units.  n may be zero.  The suffixes k, m, and g can be used to name
 units in KiB, MiB, or GiB.  For example, <em>blob:limit=1k</em> is the same
 as <em>blob:limit=1024</em>.</p></div>
+<div class="paragraph"><p>The form <em>--filter=object:type=(tag|commit|tree|blob)</em> omits all objects
+which are not of the requested type.</p></div>
 <div class="paragraph"><p>The form <em>--filter=sparse:oid=&lt;blob-ish&gt;</em> uses a sparse-checkout
 specification contained in the blob (or blob-expression) <em>&lt;blob-ish&gt;</em>
 to omit blobs that would not be not required for a sparse checkout on
@@ -2109,6 +2125,16 @@ equivalent.</p></div>
 <dd>
 <p>
         Turn off any previous <code>--filter=</code> argument.
+</p>
+</dd>
+<dt class="hdlist1">
+--filter-provided-objects
+</dt>
+<dd>
+<p>
+        Filter the list of explicitly provided objects, which would otherwise
+        always be printed even if they did not match any of the filters. Only
+        useful with <code>--filter=</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2976,6 +3002,15 @@ author date, short format (<code>YYYY-MM-DD</code>)
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%ah</em>
+</dt>
+<dd>
+<p>
+author date, human style (like the <code>--date=human</code> option of
+        <a href="git-rev-list.html">git-rev-list(1)</a>)
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%cn</em>
 </dt>
 <dd>
@@ -3083,6 +3118,15 @@ committer date, short format (<code>YYYY-MM-DD</code>)
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%ch</em>
+</dt>
+<dd>
+<p>
+committer date, human style (like the <code>--date=human</code> option of
+        <a href="git-rev-list.html">git-rev-list(1)</a>)
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%d</em>
 </dt>
 <dd>
@@ -3097,6 +3141,34 @@ ref names, like the --decorate option of <a href="git-log.html">git-log(1)</a>
 <p>
 ref names without the " (", ")" wrapping.
 </p>
+</dd>
+<dt class="hdlist1">
+<em>%(describe[:options])</em>
+</dt>
+<dd>
+<p>
+human-readable name, like
+                          <a href="git-describe.html">git-describe(1)</a>; empty string for
+                          undescribable commits.  The <code>describe</code> string
+                          may be followed by a colon and zero or more
+                          comma-separated options.  Descriptions can be
+                          inconsistent when tags are added or removed at
+                          the same time.
+</p>
+<div class="ulist"><ul>
+<li>
+<p>
+<em>match=&lt;pattern&gt;</em>: Only consider tags matching the given
+   <code>glob(7)</code> pattern, excluding the "refs/tags/" prefix.
+</p>
+</li>
+<li>
+<p>
+<em>exclude=&lt;pattern&gt;</em>: Do not consider tags matching the given
+   <code>glob(7)</code> pattern, excluding the "refs/tags/" prefix.
+</p>
+</li>
+</ul></div>
 </dd>
 <dt class="hdlist1">
 <em>%S</em>
@@ -3286,7 +3358,7 @@ display the trailers of the body as
                           <code>trailers</code> string may be followed by a colon
                           and zero or more comma-separated options.
                           If any option is provided multiple times the
-                          last occurance wins.
+                          last occurrence wins.
 </p>
 <div class="paragraph"><p>The boolean options accept an optional value <code>[=&lt;BOOL&gt;]</code>. The values
 <code>true</code>, <code>false</code>, <code>on</code>, <code>off</code> etc. are all accepted. See the "boolean"
@@ -3414,6 +3486,133 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_examples">EXAMPLES</h2>
+<div class="sectionbody">
+<div class="ulist"><ul>
+<li>
+<p>
+Print the list of commits reachable from the current branch.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list HEAD</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Print the list of commits on this branch, but not present in the
+  upstream branch.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list @{upstream}..HEAD</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Format commits with their author and commit message (see also the
+  porcelain <a href="git-log.html">git-log(1)</a>).
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list --format=medium HEAD</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Format commits along with their diffs (see also the porcelain
+  <a href="git-log.html">git-log(1)</a>, which can do this in a single process).
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list HEAD |
+git diff-tree --stdin --format=medium -p</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Print the list of commits on the current branch that touched any
+  file in the <code>Documentation</code> directory.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list HEAD -- Documentation/</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Print the list of commits authored by you in the past year, on
+  any branch, tag, or other ref.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list --author=you@example.com --since=1.year.ago --all</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Print the list of objects reachable from the current branch (i.e., all
+  commits and the blobs and trees they contain).
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list --objects HEAD</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Compare the disk size of all reachable objects, versus those
+  reachable from reflogs, versus the total packed size. This can tell
+  you whether running <code>git repack -ad</code> might reduce the repository size
+  (by dropping unreachable objects), and whether expiring reflogs might
+  help.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code># reachable objects
+git rev-list --disk-usage --objects --all
+# plus reflogs
+git rev-list --disk-usage --objects --all --reflog
+# total disk size used
+du -c .git/objects/pack/*.pack .git/objects/??/*
+# alternative to du: add up "size" and "size-pack" fields
+git count-objects -v</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Report the disk size of each branch, not including objects used by the
+  current branch. This can find outliers that are contributing to a
+  bloated repository size (e.g., because somebody accidentally committed
+  large build artifacts).
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git for-each-ref --format='%(refname)' |
+while read branch
+do
+        size=$(git rev-list --disk-usage --objects HEAD..$branch)
+        echo "$size $branch"
+done |
+sort -n</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Compare the on-disk size of branches in one group of refs, excluding
+  another. If you co-mingle objects from multiple remotes in a single
+  repository, this can show which remotes are contributing to the
+  repository size (taking the size of <code>origin</code> as a baseline).
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>git rev-list --disk-usage --objects --remotes=$suspect --not --remotes=origin</code></pre>
+</div></div>
+</li>
+</ul></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_git">GIT</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Part of the <a href="git.html">git(1)</a> suite</p></div>
@@ -3424,7 +3623,7 @@ $ git log -2 --pretty=%h 4da45bef</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-07-30 14:18:13 PDT
+ 2021-02-26 10:29:29 JST
 </div>
 </div>
 </body>

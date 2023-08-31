@@ -1142,7 +1142,9 @@ explained for the configuration variable <code>core.quotePath</code> (see
 </dt>
 <dd>
 <p>
-        Show only names of changed files.
+        Show only names of changed files. The file names are often encoded in UTF-8.
+        For more information see the discussion about encoding in the <a href="git-log.html">git-log(1)</a>
+        manual page.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1152,6 +1154,7 @@ explained for the configuration variable <code>core.quotePath</code> (see
 <p>
         Show only names and status of changed files. See the description
         of the <code>--diff-filter</code> option on what the status letters mean.
+        Just like <code>--name-only</code> the file names are often encoded in UTF-8.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1774,6 +1777,21 @@ components matches the pattern.  For example, the pattern "<code>foo*bar</code>"
 matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<code>foobarx</code>".</p></div>
 </dd>
 <dt class="hdlist1">
+--skip-to=&lt;file&gt;
+</dt>
+<dt class="hdlist1">
+--rotate-to=&lt;file&gt;
+</dt>
+<dd>
+<p>
+        Discard the files before the named &lt;file&gt; from the output
+        (i.e. <em>skip to</em>), or move them to the end of the output
+        (i.e. <em>rotate to</em>).  These were invented primarily for use
+        of the <code>git difftool</code> command, and may not be very useful
+        otherwise.
+</p>
+</dd>
+<dt class="hdlist1">
 -R
 </dt>
 <dd>
@@ -2328,7 +2346,7 @@ all parents.</p></div>
 with the <code>-p</code> option produces patch text.
 You can customize the creation of patch text via the
 <code>GIT_EXTERNAL_DIFF</code> and the <code>GIT_DIFF_OPTS</code> environment variables
-(see <a href="git.html">git(1)</a>).</p></div>
+(see <a href="git.html">git(1)</a>), and the <code>diff</code> attribute (see <a href="gitattributes.html">gitattributes(5)</a>).</p></div>
 <div class="paragraph"><p>What the -p option produces is slightly different from the traditional
 diff format:</p></div>
 <div class="olist arabic"><ol class="arabic">
@@ -2401,6 +2419,14 @@ diff --git a/b b/a
 rename from b
 rename to a</code></pre>
 </div></div>
+</li>
+<li>
+<p>
+Hunk headers mention the name of the function to which the hunk
+    applies.  See "Defining a custom hunk-header" in
+    <a href="gitattributes.html">gitattributes(5)</a> for details of how to tailor to this to
+    specific languages.
+</p>
 </li>
 </ol></div>
 </div>
@@ -2674,7 +2700,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2013-08-20 08:40:27 PDT
+ 2013-08-21 00:40:27 JST
 </div>
 </div>
 </body>

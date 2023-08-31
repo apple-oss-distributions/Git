@@ -1211,11 +1211,8 @@ parents) and <code>--max-parents=-1</code> (negative numbers denote no upper lim
         this option allows you to ignore the individual commits
         brought in to your history by such a merge.
 </p>
-<div class="literalblock">
-<div class="content">
-<pre><code>This option also changes default diff format for merge commits
-to `first-parent`, see `--diff-merges=first-parent` for details.</code></pre>
-</div></div>
+<div class="paragraph"><p>This option also changes default diff format for merge commits
+to <code>first-parent</code>, see <code>--diff-merges=first-parent</code> for details.</p></div>
 </dd>
 <dt class="hdlist1">
 --not
@@ -2899,6 +2896,15 @@ author date, short format (<code>YYYY-MM-DD</code>)
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%ah</em>
+</dt>
+<dd>
+<p>
+author date, human style (like the <code>--date=human</code> option of
+        <a href="git-rev-list.html">git-rev-list(1)</a>)
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%cn</em>
 </dt>
 <dd>
@@ -3006,6 +3012,15 @@ committer date, short format (<code>YYYY-MM-DD</code>)
 </p>
 </dd>
 <dt class="hdlist1">
+<em>%ch</em>
+</dt>
+<dd>
+<p>
+committer date, human style (like the <code>--date=human</code> option of
+        <a href="git-rev-list.html">git-rev-list(1)</a>)
+</p>
+</dd>
+<dt class="hdlist1">
 <em>%d</em>
 </dt>
 <dd>
@@ -3020,6 +3035,34 @@ ref names, like the --decorate option of <a href="git-log.html">git-log(1)</a>
 <p>
 ref names without the " (", ")" wrapping.
 </p>
+</dd>
+<dt class="hdlist1">
+<em>%(describe[:options])</em>
+</dt>
+<dd>
+<p>
+human-readable name, like
+                          <a href="git-describe.html">git-describe(1)</a>; empty string for
+                          undescribable commits.  The <code>describe</code> string
+                          may be followed by a colon and zero or more
+                          comma-separated options.  Descriptions can be
+                          inconsistent when tags are added or removed at
+                          the same time.
+</p>
+<div class="ulist"><ul>
+<li>
+<p>
+<em>match=&lt;pattern&gt;</em>: Only consider tags matching the given
+   <code>glob(7)</code> pattern, excluding the "refs/tags/" prefix.
+</p>
+</li>
+<li>
+<p>
+<em>exclude=&lt;pattern&gt;</em>: Do not consider tags matching the given
+   <code>glob(7)</code> pattern, excluding the "refs/tags/" prefix.
+</p>
+</li>
+</ul></div>
 </dd>
 <dt class="hdlist1">
 <em>%S</em>
@@ -3217,7 +3260,7 @@ display the trailers of the body as
                           <code>trailers</code> string may be followed by a colon
                           and zero or more comma-separated options.
                           If any option is provided multiple times the
-                          last occurance wins.
+                          last occurrence wins.
 </p>
 <div class="paragraph"><p>The boolean options accept an optional value <code>[=&lt;BOOL&gt;]</code>. The values
 <code>true</code>, <code>false</code>, <code>on</code>, <code>off</code> etc. are all accepted. See the "boolean"
@@ -3383,7 +3426,7 @@ the default format.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---diff-merges=(off|none|first-parent|1|separate|m|combined|c|dense-combined|cc)
+--diff-merges=(off|none|on|first-parent|1|separate|m|combined|c|dense-combined|cc)
 </dt>
 <dt class="hdlist1">
 --no-diff-merges
@@ -3408,6 +3451,24 @@ the default format.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--diff-merges=on
+</dt>
+<dt class="hdlist1">
+--diff-merges=m
+</dt>
+<dt class="hdlist1">
+-m
+</dt>
+<dd>
+<p>
+        This option makes diff output for merge commits to be shown in
+        the default format. <code>-m</code> will produce the output only if <code>-p</code>
+        is given as well. The default format could be changed using
+        <code>log.diffMerges</code> configuration parameter, which default value
+        is <code>separate</code>.
+</p>
+</dd>
+<dt class="hdlist1">
 --diff-merges=first-parent
 </dt>
 <dt class="hdlist1">
@@ -3422,17 +3483,11 @@ the default format.</p></div>
 <dt class="hdlist1">
 --diff-merges=separate
 </dt>
-<dt class="hdlist1">
---diff-merges=m
-</dt>
-<dt class="hdlist1">
--m
-</dt>
 <dd>
 <p>
         This makes merge commits show the full diff with respect to
         each of the parents. Separate log entry and diff is generated
-        for each parent. <code>-m</code> doesn&#8217;t produce any output without <code>-p</code>.
+        for each parent.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3847,7 +3902,9 @@ explained for the configuration variable <code>core.quotePath</code> (see
 </dt>
 <dd>
 <p>
-        Show only names of changed files.
+        Show only names of changed files. The file names are often encoded in UTF-8.
+        For more information see the discussion about encoding in the <a href="git-log.html">git-log(1)</a>
+        manual page.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -3857,6 +3914,7 @@ explained for the configuration variable <code>core.quotePath</code> (see
 <p>
         Show only names and status of changed files. See the description
         of the <code>--diff-filter</code> option on what the status letters mean.
+        Just like <code>--name-only</code> the file names are often encoded in UTF-8.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -4481,6 +4539,21 @@ components matches the pattern.  For example, the pattern "<code>foo*bar</code>"
 matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<code>foobarx</code>".</p></div>
 </dd>
 <dt class="hdlist1">
+--skip-to=&lt;file&gt;
+</dt>
+<dt class="hdlist1">
+--rotate-to=&lt;file&gt;
+</dt>
+<dd>
+<p>
+        Discard the files before the named &lt;file&gt; from the output
+        (i.e. <em>skip to</em>), or move them to the end of the output
+        (i.e. <em>rotate to</em>).  These were invented primarily for use
+        of the <code>git difftool</code> command, and may not be very useful
+        otherwise.
+</p>
+</dd>
+<dt class="hdlist1">
 -R
 </dt>
 <dd>
@@ -4722,7 +4795,7 @@ matches "<code>fooasdfbar</code>" and "<code>foo/bar/baz/asdf</code>" but not "<
 with the <code>-p</code> option produces patch text.
 You can customize the creation of patch text via the
 <code>GIT_EXTERNAL_DIFF</code> and the <code>GIT_DIFF_OPTS</code> environment variables
-(see <a href="git.html">git(1)</a>).</p></div>
+(see <a href="git.html">git(1)</a>), and the <code>diff</code> attribute (see <a href="gitattributes.html">gitattributes(5)</a>).</p></div>
 <div class="paragraph"><p>What the -p option produces is slightly different from the traditional
 diff format:</p></div>
 <div class="olist arabic"><ol class="arabic">
@@ -4795,6 +4868,14 @@ diff --git a/b b/a
 rename from b
 rename to a</code></pre>
 </div></div>
+</li>
+<li>
+<p>
+Hunk headers mention the name of the function to which the hunk
+    applies.  See "Defining a custom hunk-header" in
+    <a href="gitattributes.html">gitattributes(5)</a> for details of how to tailor to this to
+    specific languages.
+</p>
 </li>
 </ol></div>
 </div>
@@ -5096,7 +5177,7 @@ mind.</p></div>
   a warning if the commit log message given to it does not look
   like a valid UTF-8 string, unless you explicitly say your
   project uses a legacy encoding.  The way to say this is to
-  have i18n.commitencoding in <code>.git/config</code> file, like this:
+  have <code>i18n.commitEncoding</code> in <code>.git/config</code> file, like this:
 </p>
 <div class="listingblock">
 <div class="content">
@@ -5239,7 +5320,7 @@ and overridden by the <code>--notes=&lt;ref&gt;</code> option.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-02-05 17:34:58 PST
+ 2021-02-06 10:34:58 JST
 </div>
 </div>
 </body>

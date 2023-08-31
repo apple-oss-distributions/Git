@@ -2,12 +2,12 @@
 .\"     Title: gitignore
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GITIGNORE" "5" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GITIGNORE" "5" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -312,6 +312,8 @@ The optional configuration variable \fBcore\&.excludesFile\fR indicates a path t
 The purpose of gitignore files is to ensure that certain files not tracked by Git remain untracked\&.
 .sp
 To stop tracking a file that is currently tracked, use \fIgit rm \-\-cached\fR\&.
+.sp
+Git does not follow symbolic links when accessing a \fB\&.gitignore\fR file in the working tree\&. This keeps behavior consistent when the file is accessed from the index or a tree versus from the filesystem\&.
 .SH "EXAMPLES"
 .sp
 .RS 4
@@ -325,7 +327,7 @@ To stop tracking a file that is currently tracked, use \fIgit rm \-\-cached\fR\&
 The pattern
 \fBhello\&.*\fR
 matches any file or folder whose name begins with
-\fBhello\fR\&. If one wants to restrict this only to the directory and not in its subdirectories, one can prepend the pattern with a slash, i\&.e\&.
+\fBhello\&.\fR\&. If one wants to restrict this only to the directory and not in its subdirectories, one can prepend the pattern with a slash, i\&.e\&.
 \fB/hello\&.*\fR; the pattern now matches
 \fBhello\&.txt\fR,
 \fBhello\&.c\fR

@@ -957,6 +957,9 @@ those in <code>$GIT_DIR/info/exclude</code>.</p></div>
 not tracked by Git remain untracked.</p></div>
 <div class="paragraph"><p>To stop tracking a file that is currently tracked, use
 <em>git rm --cached</em>.</p></div>
+<div class="paragraph"><p>Git does not follow symbolic links when accessing a <code>.gitignore</code> file in
+the working tree. This keeps behavior consistent when the file is
+accessed from the index or a tree versus from the filesystem.</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -966,7 +969,7 @@ not tracked by Git remain untracked.</p></div>
 <li>
 <p>
 The pattern <code>hello.*</code> matches any file or folder
-   whose name begins with <code>hello</code>. If one wants to restrict
+   whose name begins with <code>hello.</code>. If one wants to restrict
    this only to the directory and not in its subdirectories,
    one can prepend the pattern with a slash, i.e. <code>/hello.*</code>;
    the pattern now matches <code>hello.txt</code>, <code>hello.c</code> but not
@@ -1069,7 +1072,7 @@ everything within <code>foo/bar</code>):</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-03-10 08:03:13 PDT
+ 2021-05-12 14:17:56 JST
 </div>
 </div>
 </body>

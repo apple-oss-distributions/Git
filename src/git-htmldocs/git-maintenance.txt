@@ -92,10 +92,8 @@ commit-graph::
 prefetch::
 	The `prefetch` task updates the object directory with the latest
 	objects from all registered remotes. For each remote, a `git fetch`
-	command is run. The refmap is custom to avoid updating local or remote
-	branches (those in `refs/heads` or `refs/remotes`). Instead, the
-	remote refs are stored in `refs/prefetch/<remote>/`. Also, tags are
-	not updated.
+	command is run. The configured refspec is modified to place all
+	requested refs within `refs/prefetch/`. Also, tags are not updated.
 +
 This is done to avoid disrupting the remote-tracking branches. The end users
 expect these refs to stay unmoved unless they initiate a fetch.  With prefetch
@@ -144,6 +142,12 @@ incremental-repack::
 	linkgit:git-multi-pack-index[1]. The default batch-size is zero,
 	which is a special case that attempts to repack all pack-files
 	into a single pack-file.
+
+pack-refs::
+	The `pack-refs` task collects the loose reference files and
+	collects them into a single file. This speeds up operations that
+	need to iterate across many references. See linkgit:git-pack-refs[1]
+	for more information.
 
 OPTIONS
 -------

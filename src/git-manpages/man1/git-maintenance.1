@@ -2,12 +2,12 @@
 .\"     Title: git-maintenance
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GIT\-MAINTENANCE" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GIT\-MAINTENANCE" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -173,11 +173,8 @@ The
 \fBprefetch\fR
 task updates the object directory with the latest objects from all registered remotes\&. For each remote, a
 \fBgit fetch\fR
-command is run\&. The refmap is custom to avoid updating local or remote branches (those in
-\fBrefs/heads\fR
-or
-\fBrefs/remotes\fR)\&. Instead, the remote refs are stored in
-\fBrefs/prefetch/<remote>/\fR\&. Also, tags are not updated\&.
+command is run\&. The configured refspec is modified to place all requested refs within
+\fBrefs/prefetch/\fR\&. Also, tags are not updated\&.
 .sp
 This is done to avoid disrupting the remote\-tracking branches\&. The end users expect these refs to stay unmoved unless they initiate a fetch\&. With prefetch task, however, the objects necessary to complete a later real fetch would already be obtained, so the real fetch would go faster\&. In the ideal case, it will just become an update to a bunch of remote\-tracking branches without any object transfer\&.
 .RE
@@ -223,6 +220,15 @@ option for the
 \fBrepack\fR
 subcommand in
 \fBgit-multi-pack-index\fR(1)\&. The default batch\-size is zero, which is a special case that attempts to repack all pack\-files into a single pack\-file\&.
+.RE
+.PP
+pack\-refs
+.RS 4
+The
+\fBpack\-refs\fR
+task collects the loose reference files and collects them into a single file\&. This speeds up operations that need to iterate across many references\&. See
+\fBgit-pack-refs\fR(1)
+for more information\&.
 .RE
 .SH "OPTIONS"
 .PP

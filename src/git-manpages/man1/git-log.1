@@ -2,12 +2,12 @@
 .\"     Title: git-log
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GIT\-LOG" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GIT\-LOG" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -423,16 +423,10 @@ reset these limits (to no limit) again\&. Equivalent forms are
 .RS 4
 Follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&.
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-This option also changes default diff format for merge commits
-to `first\-parent`, see `\-\-diff\-merges=first\-parent` for details\&.
-.fi
-.if n \{\
-.RE
-.\}
+This option also changes default diff format for merge commits to
+\fBfirst\-parent\fR, see
+\fB\-\-diff\-merges=first\-parent\fR
+for details\&.
 .RE
 .PP
 \-\-not
@@ -2407,6 +2401,14 @@ author date, strict ISO 8601 format
 author date, short format (\fBYYYY\-MM\-DD\fR)
 .RE
 .PP
+\fI%ah\fR
+.RS 4
+author date, human style (like the
+\fB\-\-date=human\fR
+option of
+\fBgit-rev-list\fR(1))
+.RE
+.PP
 \fI%cn\fR
 .RS 4
 committer name
@@ -2484,6 +2486,14 @@ committer date, strict ISO 8601 format
 committer date, short format (\fBYYYY\-MM\-DD\fR)
 .RE
 .PP
+\fI%ch\fR
+.RS 4
+committer date, human style (like the
+\fB\-\-date=human\fR
+option of
+\fBgit-rev-list\fR(1))
+.RE
+.PP
 \fI%d\fR
 .RS 4
 ref names, like the \-\-decorate option of
@@ -2493,6 +2503,40 @@ ref names, like the \-\-decorate option of
 \fI%D\fR
 .RS 4
 ref names without the " (", ")" wrapping\&.
+.RE
+.PP
+\fI%(describe[:options])\fR
+.RS 4
+human\-readable name, like
+\fBgit-describe\fR(1); empty string for undescribable commits\&. The
+\fBdescribe\fR
+string may be followed by a colon and zero or more comma\-separated options\&. Descriptions can be inconsistent when tags are added or removed at the same time\&.
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fImatch=<pattern>\fR: Only consider tags matching the given
+\fBglob(7)\fR
+pattern, excluding the "refs/tags/" prefix\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIexclude=<pattern>\fR: Do not consider tags matching the given
+\fBglob(7)\fR
+pattern, excluding the "refs/tags/" prefix\&.
+.RE
 .RE
 .PP
 \fI%S\fR
@@ -2627,7 +2671,7 @@ reflog subject
 display the trailers of the body as interpreted by
 \fBgit-interpret-trailers\fR(1)\&. The
 \fBtrailers\fR
-string may be followed by a colon and zero or more comma\-separated options\&. If any option is provided multiple times the last occurance wins\&.
+string may be followed by a colon and zero or more comma\-separated options\&. If any option is provided multiple times the last occurrence wins\&.
 .sp
 The boolean options accept an optional value
 \fB[=<BOOL>]\fR\&. The values
@@ -2826,7 +2870,7 @@ that show the patch by default, or to cancel the effect of
 \fB\-\-patch\fR\&.
 .RE
 .PP
-\-\-diff\-merges=(off|none|first\-parent|1|separate|m|combined|c|dense\-combined|cc), \-\-no\-diff\-merges
+\-\-diff\-merges=(off|none|on|first\-parent|1|separate|m|combined|c|dense\-combined|cc), \-\-no\-diff\-merges
 .RS 4
 Specify diff format to be used for merge commits\&. Default is
 \fBoff\fR
@@ -2841,17 +2885,26 @@ is the default\&.
 Disable output of diffs for merge commits\&. Useful to override implied value\&.
 .RE
 .PP
+\-\-diff\-merges=on, \-\-diff\-merges=m, \-m
+.RS 4
+This option makes diff output for merge commits to be shown in the default format\&.
+\fB\-m\fR
+will produce the output only if
+\fB\-p\fR
+is given as well\&. The default format could be changed using
+\fBlog\&.diffMerges\fR
+configuration parameter, which default value is
+\fBseparate\fR\&.
+.RE
+.PP
 \-\-diff\-merges=first\-parent, \-\-diff\-merges=1
 .RS 4
 This option makes merge commits show the full diff with respect to the first parent only\&.
 .RE
 .PP
-\-\-diff\-merges=separate, \-\-diff\-merges=m, \-m
+\-\-diff\-merges=separate
 .RS 4
 This makes merge commits show the full diff with respect to each of the parents\&. Separate log entry and diff is generated for each parent\&.
-\fB\-m\fR
-doesn\(cqt produce any output without
-\fB\-p\fR\&.
 .RE
 .PP
 \-\-diff\-merges=combined, \-\-diff\-merges=c, \-c
@@ -3116,14 +3169,18 @@ Without this option, pathnames with "unusual" characters are quoted as explained
 .PP
 \-\-name\-only
 .RS 4
-Show only names of changed files\&.
+Show only names of changed files\&. The file names are often encoded in UTF\-8\&. For more information see the discussion about encoding in the
+\fBgit-log\fR(1)
+manual page\&.
 .RE
 .PP
 \-\-name\-status
 .RS 4
 Show only names and status of changed files\&. See the description of the
 \fB\-\-diff\-filter\fR
-option on what the status letters mean\&.
+option on what the status letters mean\&. Just like
+\fB\-\-name\-only\fR
+the file names are often encoded in UTF\-8\&.
 .RE
 .PP
 \-\-submodule[=<format>]
@@ -3613,6 +3670,15 @@ Each other line contains a single pattern\&.
 Patterns have the same syntax and semantics as patterns used for fnmatch(3) without the FNM_PATHNAME flag, except a pathname also matches a pattern if removing any number of the final pathname components matches the pattern\&. For example, the pattern "\fBfoo*bar\fR" matches "\fBfooasdfbar\fR" and "\fBfoo/bar/baz/asdf\fR" but not "\fBfoobarx\fR"\&.
 .RE
 .PP
+\-\-skip\-to=<file>, \-\-rotate\-to=<file>
+.RS 4
+Discard the files before the named <file> from the output (i\&.e\&.
+\fIskip to\fR), or move them to the end of the output (i\&.e\&.
+\fIrotate to\fR)\&. These were invented primarily for use of the
+\fBgit difftool\fR
+command, and may not be very useful otherwise\&.
+.RE
+.PP
 \-R
 .RS 4
 Swap two inputs; that is, show differences from index or on\-disk file to tree contents\&.
@@ -3744,7 +3810,7 @@ By default entries added by "git add \-N" appear as an existing empty file in "g
 For more detailed explanation on these common options, see also \fBgitdiffcore\fR(7)\&.
 .SH "GENERATING PATCH TEXT WITH \-P"
 .sp
-Running \fBgit-diff\fR(1), \fBgit-log\fR(1), \fBgit-show\fR(1), \fBgit-diff-index\fR(1), \fBgit-diff-tree\fR(1), or \fBgit-diff-files\fR(1) with the \fB\-p\fR option produces patch text\&. You can customize the creation of patch text via the \fBGIT_EXTERNAL_DIFF\fR and the \fBGIT_DIFF_OPTS\fR environment variables (see \fBgit\fR(1))\&.
+Running \fBgit-diff\fR(1), \fBgit-log\fR(1), \fBgit-show\fR(1), \fBgit-diff-index\fR(1), \fBgit-diff-tree\fR(1), or \fBgit-diff-files\fR(1) with the \fB\-p\fR option produces patch text\&. You can customize the creation of patch text via the \fBGIT_EXTERNAL_DIFF\fR and the \fBGIT_DIFF_OPTS\fR environment variables (see \fBgit\fR(1)), and the \fBdiff\fR attribute (see \fBgitattributes\fR(5))\&.
 .sp
 What the \-p option produces is slightly different from the traditional diff format:
 .sp
@@ -3874,6 +3940,19 @@ rename to a
 .if n \{\
 .RE
 .\}
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 5.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  5." 4.2
+.\}
+Hunk headers mention the name of the function to which the hunk applies\&. See "Defining a custom hunk\-header" in
+\fBgitattributes\fR(5)
+for details of how to tailor to this to specific languages\&.
 .RE
 .SH "COMBINED DIFF FORMAT"
 .sp
@@ -4194,7 +4273,9 @@ Although we encourage that the commit log messages are encoded in UTF\-8, both t
 \fIgit commit\fR
 and
 \fIgit commit\-tree\fR
-issues a warning if the commit log message given to it does not look like a valid UTF\-8 string, unless you explicitly say your project uses a legacy encoding\&. The way to say this is to have i18n\&.commitencoding in
+issues a warning if the commit log message given to it does not look like a valid UTF\-8 string, unless you explicitly say your project uses a legacy encoding\&. The way to say this is to have
+\fBi18n\&.commitEncoding\fR
+in
 \fB\&.git/config\fR
 file, like this:
 .sp

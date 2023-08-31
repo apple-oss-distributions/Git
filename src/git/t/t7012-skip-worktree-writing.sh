@@ -60,13 +60,6 @@ setup_absent() {
 	git update-index --skip-worktree 1
 }
 
-test_absent() {
-	echo "100644 $EMPTY_BLOB 0	1" > expected &&
-	git ls-files --stage 1 > result &&
-	test_cmp expected result &&
-	test ! -f 1
-}
-
 setup_dirty() {
 	git update-index --force-remove 1 &&
 	echo dirty > 1 &&
@@ -100,18 +93,6 @@ test_expect_success 'index setup' '
 	test_cmp expected result
 '
 
-test_expect_success 'git-add ignores worktree content' '
-	setup_absent &&
-	git add 1 &&
-	test_absent
-'
-
-test_expect_success 'git-add ignores worktree content' '
-	setup_dirty &&
-	git add 1 &&
-	test_dirty
-'
-
 test_expect_success 'git-rm fails if worktree is dirty' '
 	setup_dirty &&
 	test_must_fail git rm 1 &&
@@ -125,13 +106,13 @@ EOF
 test_expect_success 'git-clean, absent case' '
 	setup_absent &&
 	git clean -n > result &&
-	test_i18ncmp expected result
+	test_cmp expected result
 '
 
 test_expect_success 'git-clean, dirty case' '
 	setup_dirty &&
 	git clean -n > result &&
-	test_i18ncmp expected result
+	test_cmp expected result
 '
 
 test_expect_success '--ignore-skip-worktree-entries leaves worktree alone' '

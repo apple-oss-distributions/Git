@@ -22,6 +22,9 @@ all::
 # when attempting to read from an fopen'ed directory (or even to fopen
 # it at all).
 #
+# Define OPEN_RETURNS_EINTR if your open() system call may return EINTR
+# when a signal is received (as opposed to restarting).
+#
 # Define NO_OPENSSL environment variable if you do not have OpenSSL.
 #
 # Define USE_LIBPCRE if you have and want to use libpcre. Various
@@ -29,18 +32,11 @@ all::
 # Perl-compatible regular expressions instead of standard or extended
 # POSIX regular expressions.
 #
-# USE_LIBPCRE is a synonym for USE_LIBPCRE2, define USE_LIBPCRE1
-# instead if you'd like to use the legacy version 1 of the PCRE
-# library. Support for version 1 will likely be removed in some future
-# release of Git, as upstream has all but abandoned it.
-#
-# When using USE_LIBPCRE1, define NO_LIBPCRE1_JIT if you want to
-# disable JIT even if supported by your library.
+# Only libpcre version 2 is supported. USE_LIBPCRE2 is a synonym for
+# USE_LIBPCRE, support for the old USE_LIBPCRE1 has been removed.
 #
 # Define LIBPCREDIR=/foo/bar if your PCRE header and library files are
-# in /foo/bar/include and /foo/bar/lib directories. Which version of
-# PCRE this points to determined by the USE_LIBPCRE1 and USE_LIBPCRE2
-# variables.
+# in /foo/bar/include and /foo/bar/lib directories.
 #
 # Define HAVE_ALLOCA_H if you have working alloca(3) defined in that header.
 #
@@ -582,7 +578,9 @@ GENERATED_H =
 EXTRA_CPPFLAGS =
 FUZZ_OBJS =
 FUZZ_PROGRAMS =
+GIT_OBJS =
 LIB_OBJS =
+OBJECTS =
 PROGRAM_OBJS =
 PROGRAMS =
 EXCLUDED_PROGRAMS =
@@ -591,6 +589,7 @@ SCRIPT_PYTHON =
 SCRIPT_SH =
 SCRIPT_LIB =
 TEST_BUILTINS_OBJS =
+TEST_OBJS =
 TEST_PROGRAMS_NEED_X =
 THIRD_PARTY_SOURCES =
 
@@ -666,6 +665,8 @@ ETAGS_TARGET = TAGS
 FUZZ_OBJS += fuzz-commit-graph.o
 FUZZ_OBJS += fuzz-pack-headers.o
 FUZZ_OBJS += fuzz-pack-idx.o
+.PHONY: fuzz-objs
+fuzz-objs: $(FUZZ_OBJS)
 
 # Always build fuzz objects even if not testing, to prevent bit-rot.
 all:: $(FUZZ_OBJS)
@@ -683,6 +684,8 @@ PROGRAM_OBJS += http-backend.o
 PROGRAM_OBJS += imap-send.o
 PROGRAM_OBJS += sh-i18n--envsubst.o
 PROGRAM_OBJS += shell.o
+.PHONY: program-objs
+program-objs: $(PROGRAM_OBJS)
 
 # Binary suffix, set to .exe for Windows builds
 X =
@@ -690,6 +693,7 @@ X =
 PROGRAMS += $(patsubst %.o,git-%$X,$(PROGRAM_OBJS))
 
 TEST_BUILTINS_OBJS += test-advise.o
+TEST_BUILTINS_OBJS += test-bitmap.o
 TEST_BUILTINS_OBJS += test-bloom.o
 TEST_BUILTINS_OBJS += test-chmtime.o
 TEST_BUILTINS_OBJS += test-config.o
@@ -722,6 +726,7 @@ TEST_BUILTINS_OBJS += test-online-cpus.o
 TEST_BUILTINS_OBJS += test-parse-options.o
 TEST_BUILTINS_OBJS += test-parse-pathspec-file.o
 TEST_BUILTINS_OBJS += test-path-utils.o
+TEST_BUILTINS_OBJS += test-pcre2-config.o
 TEST_BUILTINS_OBJS += test-pkt-line.o
 TEST_BUILTINS_OBJS += test-prio-queue.o
 TEST_BUILTINS_OBJS += test-proc-receive.o
@@ -740,6 +745,7 @@ TEST_BUILTINS_OBJS += test-serve-v2.o
 TEST_BUILTINS_OBJS += test-sha1.o
 TEST_BUILTINS_OBJS += test-sha256.o
 TEST_BUILTINS_OBJS += test-sigchain.o
+TEST_BUILTINS_OBJS += test-simple-ipc.o
 TEST_BUILTINS_OBJS += test-strcmp-offset.o
 TEST_BUILTINS_OBJS += test-string-list.o
 TEST_BUILTINS_OBJS += test-submodule-config.o
@@ -747,6 +753,7 @@ TEST_BUILTINS_OBJS += test-submodule-nested-repo-config.o
 TEST_BUILTINS_OBJS += test-subprocess.o
 TEST_BUILTINS_OBJS += test-trace2.o
 TEST_BUILTINS_OBJS += test-urlmatch-normalization.o
+TEST_BUILTINS_OBJS += test-userdiff.o
 TEST_BUILTINS_OBJS += test-wildmatch.o
 TEST_BUILTINS_OBJS += test-windows-named-pipe.o
 TEST_BUILTINS_OBJS += test-write-cache.o
@@ -840,6 +847,7 @@ LIB_OBJS += bundle.o
 LIB_OBJS += cache-tree.o
 LIB_OBJS += chdir-notify.o
 LIB_OBJS += checkout.o
+LIB_OBJS += chunk-format.o
 LIB_OBJS += color.o
 LIB_OBJS += column.o
 LIB_OBJS += combine-diff.o
@@ -860,6 +868,7 @@ LIB_OBJS += date.o
 LIB_OBJS += decorate.o
 LIB_OBJS += delta-islands.o
 LIB_OBJS += diff-delta.o
+LIB_OBJS += diff-merges.o
 LIB_OBJS += diff-lib.o
 LIB_OBJS += diff-no-index.o
 LIB_OBJS += diff.o
@@ -868,6 +877,7 @@ LIB_OBJS += diffcore-delta.o
 LIB_OBJS += diffcore-order.o
 LIB_OBJS += diffcore-pickaxe.o
 LIB_OBJS += diffcore-rename.o
+LIB_OBJS += diffcore-rotate.o
 LIB_OBJS += dir-iterator.o
 LIB_OBJS += dir.o
 LIB_OBJS += editor.o
@@ -887,6 +897,7 @@ LIB_OBJS += gettext.o
 LIB_OBJS += gpg-interface.o
 LIB_OBJS += graph.o
 LIB_OBJS += grep.o
+LIB_OBJS += hash-lookup.o
 LIB_OBJS += hashmap.o
 LIB_OBJS += help.o
 LIB_OBJS += hex.o
@@ -923,6 +934,8 @@ LIB_OBJS += notes-cache.o
 LIB_OBJS += notes-merge.o
 LIB_OBJS += notes-utils.o
 LIB_OBJS += notes.o
+LIB_OBJS += object-file.o
+LIB_OBJS += object-name.o
 LIB_OBJS += object.o
 LIB_OBJS += oid-array.o
 LIB_OBJS += oidmap.o
@@ -935,6 +948,7 @@ LIB_OBJS += pack-revindex.o
 LIB_OBJS += pack-write.o
 LIB_OBJS += packfile.o
 LIB_OBJS += pager.o
+LIB_OBJS += parallel-checkout.o
 LIB_OBJS += parse-options-cb.o
 LIB_OBJS += parse-options.o
 LIB_OBJS += patch-delta.o
@@ -949,6 +963,7 @@ LIB_OBJS += progress.o
 LIB_OBJS += promisor-remote.o
 LIB_OBJS += prompt.o
 LIB_OBJS += protocol.o
+LIB_OBJS += protocol-caps.o
 LIB_OBJS += prune-packed.o
 LIB_OBJS += quote.o
 LIB_OBJS += range-diff.o
@@ -979,12 +994,10 @@ LIB_OBJS += sequencer.o
 LIB_OBJS += serve.o
 LIB_OBJS += server-info.o
 LIB_OBJS += setup.o
-LIB_OBJS += sha1-file.o
-LIB_OBJS += sha1-lookup.o
-LIB_OBJS += sha1-name.o
 LIB_OBJS += shallow.o
 LIB_OBJS += sideband.o
 LIB_OBJS += sigchain.o
+LIB_OBJS += sparse-index.o
 LIB_OBJS += split-index.o
 LIB_OBJS += stable-qsort.o
 LIB_OBJS += strbuf.o
@@ -1053,6 +1066,7 @@ BUILTIN_OBJS += builtin/check-attr.o
 BUILTIN_OBJS += builtin/check-ignore.o
 BUILTIN_OBJS += builtin/check-mailmap.o
 BUILTIN_OBJS += builtin/check-ref-format.o
+BUILTIN_OBJS += builtin/checkout--worker.o
 BUILTIN_OBJS += builtin/checkout-index.o
 BUILTIN_OBJS += builtin/checkout.o
 BUILTIN_OBJS += builtin/clean.o
@@ -1362,10 +1376,6 @@ endif
 USE_LIBPCRE2 ?= $(USE_LIBPCRE)
 
 ifneq (,$(USE_LIBPCRE2))
-	ifdef USE_LIBPCRE1
-$(error Only set USE_LIBPCRE2 (or its alias USE_LIBPCRE) or USE_LIBPCRE1, not both!)
-	endif
-
 	BASIC_CFLAGS += -DUSE_LIBPCRE2
 	EXTLIBS += -lpcre2-8
 endif
@@ -1551,6 +1561,10 @@ ifdef FREAD_READS_DIRECTORIES
 	COMPAT_CFLAGS += -DFREAD_READS_DIRECTORIES
 	COMPAT_OBJS += compat/fopen.o
 endif
+ifdef OPEN_RETURNS_EINTR
+	COMPAT_CFLAGS += -DOPEN_RETURNS_EINTR
+	COMPAT_OBJS += compat/open.o
+endif
 ifdef NO_SYMLINK_HEAD
 	BASIC_CFLAGS += -DNO_SYMLINK_HEAD
 endif
@@ -1677,6 +1691,32 @@ ifdef NO_UNIX_SOCKETS
 	BASIC_CFLAGS += -DNO_UNIX_SOCKETS
 else
 	LIB_OBJS += unix-socket.o
+	LIB_OBJS += unix-stream-server.o
+endif
+
+# Simple IPC requires threads and platform-specific IPC support.
+# Only platforms that have both should include these source files
+# in the build.
+#
+# On Windows-based systems, Simple IPC requires threads and Windows
+# Named Pipes.  These are always available, so Simple IPC support
+# is optional.
+#
+# On Unix-based systems, Simple IPC requires pthreads and Unix
+# domain sockets.  So support is only enabled when both are present.
+#
+ifdef USE_WIN32_IPC
+	BASIC_CFLAGS += -DSUPPORTS_SIMPLE_IPC
+	LIB_OBJS += compat/simple-ipc/ipc-shared.o
+	LIB_OBJS += compat/simple-ipc/ipc-win32.o
+else
+ifndef NO_PTHREADS
+ifndef NO_UNIX_SOCKETS
+	BASIC_CFLAGS += -DSUPPORTS_SIMPLE_IPC
+	LIB_OBJS += compat/simple-ipc/ipc-shared.o
+	LIB_OBJS += compat/simple-ipc/ipc-unix-socket.o
+endif
+endif
 endif
 
 ifdef NO_ICONV
@@ -1970,6 +2010,7 @@ ETC_GITCONFIG_SQ = $(subst ','\'',$(ETC_GITCONFIG))
 ETC_GITATTRIBUTES_SQ = $(subst ','\'',$(ETC_GITATTRIBUTES))
 
 DESTDIR_SQ = $(subst ','\'',$(DESTDIR))
+NO_GETTEXT_SQ = $(subst ','\'',$(NO_GETTEXT))
 bindir_SQ = $(subst ','\'',$(bindir))
 bindir_relative_SQ = $(subst ','\'',$(bindir_relative))
 mandir_SQ = $(subst ','\'',$(mandir))
@@ -2191,13 +2232,13 @@ $(BUILT_INS): git$X
 
 config-list.h: generate-configlist.sh
 
-config-list.h:
+config-list.h: Documentation/*config.txt Documentation/config/*.txt
 	$(QUIET_GEN)$(SHELL_PATH) ./generate-configlist.sh \
 		>$@+ && mv $@+ $@
 
 command-list.h: generate-cmdlist.sh command-list.txt
 
-command-list.h: $(wildcard Documentation/git*.txt) Documentation/*config.txt Documentation/config/*.txt
+command-list.h: $(wildcard Documentation/git*.txt)
 	$(QUIET_GEN)$(SHELL_PATH) ./generate-cmdlist.sh \
 		$(patsubst %,--exclude-program %,$(EXCLUDED_PROGRAMS)) \
 		command-list.txt >$@+ && mv $@+ $@
@@ -2254,10 +2295,13 @@ perl_localedir_SQ = $(localedir_SQ)
 
 ifndef NO_PERL
 PERL_HEADER_TEMPLATE = perl/header_templates/fixed_prefix.template.pl
-PERL_DEFINES = $(PERL_PATH_SQ):$(PERLLIB_EXTRA_SQ):$(perllibdir_SQ)
-
-PERL_DEFINES := $(PERL_PATH_SQ) $(PERLLIB_EXTRA_SQ) $(perllibdir_SQ)
+PERL_DEFINES =
+PERL_DEFINES += $(PERL_PATH_SQ)
+PERL_DEFINES += $(PERLLIB_EXTRA_SQ)
+PERL_DEFINES += $(perllibdir_SQ)
 PERL_DEFINES += $(RUNTIME_PREFIX)
+PERL_DEFINES += $(NO_PERL_CPAN_FALLBACKS)
+PERL_DEFINES += $(NO_GETTEXT)
 
 # Support Perl runtime prefix. In this mode, a different header is installed
 # into Perl scripts.
@@ -2386,16 +2430,30 @@ XDIFF_OBJS += xdiff/xmerge.o
 XDIFF_OBJS += xdiff/xpatience.o
 XDIFF_OBJS += xdiff/xprepare.o
 XDIFF_OBJS += xdiff/xutils.o
+.PHONY: xdiff-objs
+xdiff-objs: $(XDIFF_OBJS)
 
 TEST_OBJS := $(patsubst %$X,%.o,$(TEST_PROGRAMS)) $(patsubst %,t/helper/%,$(TEST_BUILTINS_OBJS))
-OBJECTS := $(LIB_OBJS) $(BUILTIN_OBJS) $(PROGRAM_OBJS) $(TEST_OBJS) \
-	$(XDIFF_OBJS) \
-	$(FUZZ_OBJS) \
-	common-main.o \
-	git.o
+.PHONY: test-objs
+test-objs: $(TEST_OBJS)
+
+GIT_OBJS += $(LIB_OBJS)
+GIT_OBJS += $(BUILTIN_OBJS)
+GIT_OBJS += common-main.o
+GIT_OBJS += git.o
+.PHONY: git-objs
+git-objs: $(GIT_OBJS)
+
+OBJECTS += $(GIT_OBJS)
+OBJECTS += $(PROGRAM_OBJS)
+OBJECTS += $(TEST_OBJS)
+OBJECTS += $(XDIFF_OBJS)
+OBJECTS += $(FUZZ_OBJS)
 ifndef NO_CURL
 	OBJECTS += http.o http-walker.o remote-curl.o
 endif
+.PHONY: objects
+objects: $(OBJECTS)
 
 dep_files := $(foreach f,$(OBJECTS),$(dir $f).depend/$(notdir $f).d)
 dep_dirs := $(addsuffix .depend,$(sort $(dir $(OBJECTS))))
@@ -2648,9 +2706,10 @@ endif
 NO_PERL_CPAN_FALLBACKS_SQ = $(subst ','\'',$(NO_PERL_CPAN_FALLBACKS))
 endif
 
-perl/build/lib/%.pm: perl/%.pm
+perl/build/lib/%.pm: perl/%.pm GIT-PERL-DEFINES
 	$(QUIET_GEN)mkdir -p $(dir $@) && \
 	sed -e 's|@@LOCALEDIR@@|$(perl_localedir_SQ)|g' \
+	    -e 's|@@NO_GETTEXT@@|$(NO_GETTEXT_SQ)|g' \
 	    -e 's|@@NO_PERL_CPAN_FALLBACKS@@|$(NO_PERL_CPAN_FALLBACKS_SQ)|g' \
 	< $< > $@
 
@@ -2677,12 +2736,14 @@ FIND_SOURCE_FILES = ( \
 	)
 
 $(ETAGS_TARGET): FORCE
-	$(RM) $(ETAGS_TARGET)
-	$(FIND_SOURCE_FILES) | xargs etags -a -o $(ETAGS_TARGET)
+	$(QUIET_GEN)$(RM) "$(ETAGS_TARGET)+" && \
+	$(FIND_SOURCE_FILES) | xargs etags -a -o "$(ETAGS_TARGET)+" && \
+	mv "$(ETAGS_TARGET)+" "$(ETAGS_TARGET)"
 
 tags: FORCE
-	$(RM) tags
-	$(FIND_SOURCE_FILES) | xargs ctags -a
+	$(QUIET_GEN)$(RM) tags+ && \
+	$(FIND_SOURCE_FILES) | xargs ctags -a -o tags+ && \
+	mv tags+ tags
 
 cscope:
 	$(RM) cscope*
@@ -2731,11 +2792,11 @@ GIT-BUILD-OPTIONS: FORCE
 	@echo NO_EXPAT=\''$(subst ','\'',$(subst ','\'',$(NO_EXPAT)))'\' >>$@+
 	@echo USE_LIBPCRE1=\''$(subst ','\'',$(subst ','\'',$(USE_LIBPCRE1)))'\' >>$@+
 	@echo USE_LIBPCRE2=\''$(subst ','\'',$(subst ','\'',$(USE_LIBPCRE2)))'\' >>$@+
-	@echo NO_LIBPCRE1_JIT=\''$(subst ','\'',$(subst ','\'',$(NO_LIBPCRE1_JIT)))'\' >>$@+
 	@echo NO_PERL=\''$(subst ','\'',$(subst ','\'',$(NO_PERL)))'\' >>$@+
 	@echo NO_PTHREADS=\''$(subst ','\'',$(subst ','\'',$(NO_PTHREADS)))'\' >>$@+
 	@echo NO_PYTHON=\''$(subst ','\'',$(subst ','\'',$(NO_PYTHON)))'\' >>$@+
 	@echo NO_UNIX_SOCKETS=\''$(subst ','\'',$(subst ','\'',$(NO_UNIX_SOCKETS)))'\' >>$@+
+	@echo NO_LIBPCRE1_JIT=\''$(subst ','\'',$(subst ','\'',$(NO_LIBPCRE1_JIT)))'\' >>$@+
 	@echo PAGER_ENV=\''$(subst ','\'',$(subst ','\'',$(PAGER_ENV)))'\' >>$@+
 	@echo DC_SHA1=\''$(subst ','\'',$(subst ','\'',$(DC_SHA1)))'\' >>$@+
 	@echo X=\'$(X)\' >>$@+
@@ -3309,11 +3370,11 @@ cover_db_html: cover_db
 # are not necessarily appropriate for general builds, and that vary greatly
 # depending on the compiler version used.
 #
-# An example command to build against libFuzzer from LLVM 4.0.0:
+# An example command to build against libFuzzer from LLVM 11.0.0:
 #
 # make CC=clang CXX=clang++ \
-#      CFLAGS="-fsanitize-coverage=trace-pc-guard -fsanitize=address" \
-#      LIB_FUZZING_ENGINE=/usr/lib/llvm-4.0/lib/libFuzzer.a \
+#      CFLAGS="-fsanitize=fuzzer-no-link,address" \
+#      LIB_FUZZING_ENGINE="-fsanitize=fuzzer" \
 #      fuzz-all
 #
 FUZZ_CXXFLAGS ?= $(CFLAGS)

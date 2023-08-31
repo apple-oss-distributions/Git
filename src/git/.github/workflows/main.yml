@@ -186,6 +186,11 @@ jobs:
         ## Unzip and remove the artifact
         unzip artifacts.zip
         rm artifacts.zip
+    - name: initialize vcpkg
+      uses: actions/checkout@v2
+      with:
+        repository: 'microsoft/vcpkg'
+        path: 'compat/vcbuild/vcpkg'
     - name: download vcpkg artifacts
       shell: powershell
       run: |
@@ -289,7 +294,7 @@ jobs:
           - jobname: osx-gcc
             cc: gcc
             pool: macos-latest
-          - jobname: GETTEXT_POISON
+          - jobname: linux-gcc-default
             cc: gcc
             pool: ubuntu-latest
     env:
@@ -340,7 +345,7 @@ jobs:
     if: needs.ci-config.outputs.enabled == 'yes'
     env:
       jobname: StaticAnalysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v1
     - run: ci/install-dependencies.sh

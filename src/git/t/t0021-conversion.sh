@@ -2,6 +2,9 @@
 
 test_description='blob conversion via gitattributes'
 
+GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+
 . ./test-lib.sh
 
 TEST_ROOT="$PWD"
@@ -31,7 +34,7 @@ filter_git () {
 # Compare two files and ensure that `clean` and `smudge` respectively are
 # called at least once if specified in the `expect` file. The actual
 # invocation count is not relevant because their number can vary.
-# c.f. http://lore.kernel.org/git/xmqqshv18i8i.fsf@gitster.mtv.corp.google.com/
+# c.f. https://lore.kernel.org/git/xmqqshv18i8i.fsf@gitster.mtv.corp.google.com/
 test_cmp_count () {
 	expect=$1
 	actual=$2
@@ -46,7 +49,7 @@ test_cmp_count () {
 
 # Compare two files but exclude all `clean` invocations because Git can
 # call `clean` zero or more times.
-# c.f. http://lore.kernel.org/git/xmqqshv18i8i.fsf@gitster.mtv.corp.google.com/
+# c.f. https://lore.kernel.org/git/xmqqshv18i8i.fsf@gitster.mtv.corp.google.com/
 test_cmp_exclude_clean () {
 	expect=$1
 	actual=$2
@@ -254,6 +257,30 @@ test_expect_success 'required filter clean failure' '
 	test_must_fail git add test.fc
 '
 
+test_expect_success 'required filter with absent clean field' '
+	test_config filter.absentclean.smudge cat &&
+	test_config filter.absentclean.required true &&
+
+	echo "*.ac filter=absentclean" >.gitattributes &&
+
+	echo test >test.ac &&
+	test_must_fail git add test.ac 2>stderr &&
+	test_i18ngrep "fatal: test.ac: clean filter .absentclean. failed" stderr
+'
+
+test_expect_success 'required filter with absent smudge field' '
+	test_config filter.absentsmudge.clean cat &&
+	test_config filter.absentsmudge.required true &&
+
+	echo "*.as filter=absentsmudge" >.gitattributes &&
+
+	echo test >test.as &&
+	git add test.as &&
+	rm -f test.as &&
+	test_must_fail git checkout -- test.as 2>stderr &&
+	test_i18ngrep "fatal: test.as: smudge filter absentsmudge failed" stderr
+'
+
 test_expect_success 'filtering large input to small output should use little memory' '
 	test_config filter.devnull.clean "cat >/dev/null" &&
 	test_config filter.devnull.required true &&
@@ -378,8 +405,8 @@ test_expect_success PERL 'required process filter should filter data' '
 		test_cmp_count expected.log debug.log &&
 
 		git commit -m "test commit 2" &&
-		MASTER=$(git rev-parse --verify master) &&
-		META="ref=refs/heads/master treeish=$MASTER" &&
+		MAIN=$(git rev-parse --verify main) &&
+		META="ref=refs/heads/main treeish=$MAIN" &&
 		rm -f test2.r "testsubdir/test3 '\''sq'\'',\$x=.r" &&
 
 		filter_git checkout --quiet --no-progress . &&
@@ -404,7 +431,7 @@ test_expect_success PERL 'required process filter should filter data' '
 		EOF
 		test_cmp_exclude_clean expected.log debug.log &&
 
-		filter_git checkout --quiet --no-progress master &&
+		filter_git checkout --quiet --no-progress main &&
 		cat >expected.log <<-EOF &&
 			START
 			init handshake complete
@@ -436,15 +463,15 @@ test_expect_success PERL 'required process filter should filter data for various
 		M3=$(git hash-object "testsubdir/test3 '\''sq'\'',\$x=.r") &&
 		EMPTY=$(git hash-object /dev/null) &&
 
-		MASTER=$(git rev-parse --verify master) &&
+		MAIN=$(git rev-parse --verify main) &&
 
 		cp "$TEST_ROOT/test.o" test5.r &&
 		git add test5.r &&
 		git commit -m "test commit 3" &&
 		git checkout empty-branch &&
-		filter_git rebase --onto empty-branch master^^ master &&
-		MASTER2=$(git rev-parse --verify master) &&
-		META="ref=refs/heads/master treeish=$MASTER2" &&
+		filter_git rebase --onto empty-branch main^^ main &&
+		MAIN2=$(git rev-parse --verify main) &&
+		META="ref=refs/heads/main treeish=$MAIN2" &&
 		cat >expected.log <<-EOF &&
 			START
 			init handshake complete
@@ -458,8 +485,8 @@ test_expect_success PERL 'required process filter should filter data for various
 		test_cmp_exclude_clean expected.log debug.log &&
 
 		git reset --hard empty-branch &&
-		filter_git reset --hard $MASTER &&
-		META="treeish=$MASTER" &&
+		filter_git reset --hard $MAIN &&
+		META="treeish=$MAIN" &&
 		cat >expected.log <<-EOF &&
 			START
 			init handshake complete
@@ -471,10 +498,10 @@ test_expect_success PERL 'required process filter should filter data for various
 		EOF
 		test_cmp_exclude_clean expected.log debug.log &&
 
-		git branch old-master $MASTER &&
+		git branch old-main $MAIN &&
 		git reset --hard empty-branch &&
-		filter_git reset --hard old-master &&
-		META="ref=refs/heads/old-master treeish=$MASTER" &&
+		filter_git reset --hard old-main &&
+		META="ref=refs/heads/old-main treeish=$MAIN" &&
 		cat >expected.log <<-EOF &&
 			START
 			init handshake complete
@@ -487,9 +514,9 @@ test_expect_success PERL 'required process filter should filter data for various
 		test_cmp_exclude_clean expected.log debug.log &&
 
 		git checkout -b merge empty-branch &&
-		git branch -f master $MASTER2 &&
-		filter_git merge master &&
-		META="treeish=$MASTER2" &&
+		git branch -f main $MAIN2 &&
+		filter_git merge main &&
+		META="treeish=$MAIN2" &&
 		cat >expected.log <<-EOF &&
 			START
 			init handshake complete
@@ -502,8 +529,8 @@ test_expect_success PERL 'required process filter should filter data for various
 		EOF
 		test_cmp_exclude_clean expected.log debug.log &&
 
-		filter_git archive master >/dev/null &&
-		META="ref=refs/heads/master treeish=$MASTER2" &&
+		filter_git archive main >/dev/null &&
+		META="ref=refs/heads/main treeish=$MAIN2" &&
 		cat >expected.log <<-EOF &&
 			START
 			init handshake complete
@@ -516,7 +543,7 @@ test_expect_success PERL 'required process filter should filter data for various
 		EOF
 		test_cmp_exclude_clean expected.log debug.log &&
 
-		TREE="$(git rev-parse $MASTER2^{tree})" &&
+		TREE="$(git rev-parse $MAIN2^{tree})" &&
 		filter_git archive $TREE >/dev/null &&
 		META="treeish=$TREE" &&
 		cat >expected.log <<-EOF &&
@@ -856,8 +883,8 @@ test_expect_success PERL 'delayed checkout in process filter' '
 	) &&
 
 	S=$(test_file_size "$TEST_ROOT/test.o") &&
-	PM="ref=refs/heads/master treeish=$(git -C repo rev-parse --verify master) " &&
-	M="${PM}blob=$(git -C repo rev-parse --verify master:test.a)" &&
+	PM="ref=refs/heads/main treeish=$(git -C repo rev-parse --verify main) " &&
+	M="${PM}blob=$(git -C repo rev-parse --verify main:test.a)" &&
 	cat >a.exp <<-EOF &&
 		START
 		init handshake complete

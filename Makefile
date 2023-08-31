@@ -30,7 +30,7 @@ CLTOOLS_INSTALL_DIR=/Library/Developer/CommandLineTools
 endif
 
 ifndef LIBRESSL_PREFIX
-LIBRESSL_PREFIX := /usr/local/libressl-macOS$(MACOSX_DEPLOYMENT_TARGET)
+LIBRESSL_PREFIX := /usr/local/libressl-by-deployment-target/$(MACOSX_DEPLOYMENT_TARGET)
 endif
 
 include $(DEVELOPER_DIR)/AppleInternal/Makefiles/DT_Signing.mk

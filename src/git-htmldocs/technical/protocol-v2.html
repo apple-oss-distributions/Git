@@ -805,8 +805,8 @@ commands be executed.</p></div>
 </li>
 <li>
 <p>
-<em>0002</em> Message Packet (response-end-pkt) - indicates the end of a response
-    for stateless connections
+<em>0002</em> Response End Packet (response-end-pkt) - indicates the end of a
+    response for stateless connections
 </p>
 </li>
 </ul></div>
@@ -975,12 +975,22 @@ ref-prefix &lt;prefix&gt;
     When specified, only references having a prefix matching one of
     the provided prefixes are displayed.</code></pre>
 </div></div>
+<div class="paragraph"><p>If the <em>unborn</em> feature is advertised the following argument can be
+included in the client&#8217;s request.</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>unborn
+    The server will send information about HEAD even if it is a symref
+    pointing to an unborn branch in the form "unborn HEAD
+    symref-target:&lt;target&gt;".</code></pre>
+</div></div>
 <div class="paragraph"><p>The output of ls-refs is as follows:</p></div>
 <div class="literalblock">
 <div class="content">
 <pre><code>output = *ref
          flush-pkt
-ref = PKT-LINE(obj-id SP refname *(SP ref-attribute) LF)
+obj-id-or-unborn = (obj-id | "unborn")
+ref = PKT-LINE(obj-id-or-unborn SP refname *(SP ref-attribute) LF)
 ref-attribute = (symref | peeled)
 symref = "symref-target:" symref-target
 peeled = "peeled:" obj-id</code></pre>
@@ -1144,6 +1154,15 @@ explained below.</p></div>
     sent packfile. Before performing the connectivity check, the
     client should download from all given URIs. Currently, the
     protocols supported are "http" and "https".</code></pre>
+</div></div>
+<div class="paragraph"><p>If the <em>wait-for-done</em> feature is advertised, the following argument
+can be included in the client&#8217;s request.</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>wait-for-done
+    Indicates to the server that it should never send "ready", but
+    should wait for the client to say "done" before sending the
+    packfile.</code></pre>
 </div></div>
 <div class="paragraph"><p>The response of <code>fetch</code> is broken into a number of sections separated by
 delimiter packets (0001), with each section beginning with its section
@@ -1395,6 +1414,48 @@ current implementation uses trace2 session IDs (see
 <a href="api-trace2.html">api-trace2</a> for details), but this may change and users of
 the session ID should not rely on this fact.</p></div>
 </div>
+<div class="sect2">
+<h3 id="_object_info">object-info</h3>
+<div class="paragraph"><p><code>object-info</code> is the command to retrieve information about one or more objects.
+Its main purpose is to allow a client to make decisions based on this
+information without having to fully fetch objects. Object size is the only
+information that is currently supported.</p></div>
+<div class="paragraph"><p>An <code>object-info</code> request takes the following arguments:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>size
+Requests size information to be returned for each listed object id.</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>oid &lt;oid&gt;
+Indicates to the server an object which the client wants to obtain
+information for.</code></pre>
+</div></div>
+<div class="paragraph"><p>The response of <code>object-info</code> is a list of the the requested object ids
+and associated requested information, each separated by a single space.</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>output = info flush-pkt</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>info = PKT-LINE(attrs) LF)
+        *PKT-LINE(obj-info LF)</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>attrs = attr | attrs SP attrs</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>attr = "size"</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>obj-info = obj-id SP obj-size</code></pre>
+</div></div>
+</div>
 </div>
 </div>
 </div>
@@ -1402,7 +1463,7 @@ the session ID should not rely on this fact.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-12-08 16:10:07 PST
+ 2021-05-17 06:37:54 JST
 </div>
 </div>
 </body>

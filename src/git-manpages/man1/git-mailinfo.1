@@ -2,12 +2,12 @@
 .\"     Title: git-mailinfo
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GIT\-MAILINFO" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GIT\-MAILINFO" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,9 @@ git-mailinfo \- Extracts patch and authorship from a single e\-mail message
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit mailinfo\fR [\-k|\-b] [\-u | \-\-encoding=<encoding> | \-n] [\-\-[no\-]scissors] <msg> <patch>
+\fIgit mailinfo\fR [\-k|\-b] [\-u | \-\-encoding=<encoding> | \-n]
+               [\-\-[no\-]scissors] [\-\-quoted\-cr=<action>]
+               <msg> <patch>
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -102,14 +104,18 @@ pairs are stripped\&. This option limits the stripping to only the pairs whose b
 .PP
 \-u
 .RS 4
-The commit log message, author name and author email are taken from the e\-mail, and after minimally decoding MIME transfer encoding, re\-coded in the charset specified by i18n\&.commitencoding (defaulting to UTF\-8) by transliterating them\&. This used to be optional but now it is the default\&.
+The commit log message, author name and author email are taken from the e\-mail, and after minimally decoding MIME transfer encoding, re\-coded in the charset specified by
+\fBi18n\&.commitEncoding\fR
+(defaulting to UTF\-8) by transliterating them\&. This used to be optional but now it is the default\&.
 .sp
 Note that the patch is always used as\-is without charset conversion, even with this flag\&.
 .RE
 .PP
 \-\-encoding=<encoding>
 .RS 4
-Similar to \-u\&. But when re\-coding, the charset specified here is used instead of the one specified by i18n\&.commitencoding or UTF\-8\&.
+Similar to \-u\&. But when re\-coding, the charset specified here is used instead of the one specified by
+\fBi18n\&.commitEncoding\fR
+or UTF\-8\&.
 .RE
 .PP
 \-n
@@ -134,6 +140,51 @@ This can be enabled by default with the configuration option mailinfo\&.scissors
 \-\-no\-scissors
 .RS 4
 Ignore scissors lines\&. Useful for overriding mailinfo\&.scissors settings\&.
+.RE
+.PP
+\-\-quoted\-cr=<action>
+.RS 4
+Action when processes email messages sent with base64 or quoted\-printable encoding, and the decoded lines end with a CRLF instead of a simple LF\&.
+.sp
+The valid actions are:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBnowarn\fR: Git will do nothing when such a CRLF is found\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBwarn\fR: Git will issue a warning for each message if such a CRLF is found\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBstrip\fR: Git will convert those CRLF to LF\&.
+.RE
+.sp
+The default action could be set by configuration option
+\fBmailinfo\&.quotedCR\fR\&. If no such configuration option has been set,
+\fBwarn\fR
+will be used\&.
 .RE
 .PP
 <msg>

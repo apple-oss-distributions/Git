@@ -2,12 +2,12 @@
 .\"     Title: git-config
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GIT\-CONFIG" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GIT\-CONFIG" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -542,6 +542,13 @@ GIT_CONFIG
 Take the configuration from the given file instead of \&.git/config\&. Using the "\-\-global" option forces this to ~/\&.gitconfig\&. Using the "\-\-system" option forces this to $(prefix)/etc/gitconfig\&.
 .RE
 .PP
+GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM
+.RS 4
+Take the configuration from the given files instead from global or system\-level configuration\&. See
+\fBgit\fR(1)
+for details\&.
+.RE
+.PP
 GIT_CONFIG_NOSYSTEM
 .RS 4
 Whether to skip reading settings from the system\-wide $(prefix)/etc/gitconfig file\&. See
@@ -804,7 +811,7 @@ Sections can be further divided into subsections\&. To begin a subsection put it
 .\}
 .sp
 .sp
-Subsection names are case sensitive and can contain any characters except newline and the null byte\&. Doublequote \fB"\fR and backslash can be included by escaping them as \fB\e"\fR and \fB\e\e\fR, respectively\&. Backslashes preceding other characters are dropped when reading; for example, \fB\et\fR is read as \fBt\fR and \fB\e0\fR is read as \fB0\fR Section headers cannot span multiple lines\&. Variables may belong directly to a section or to a given subsection\&. You can have \fB[section]\fR if you have \fB[section "subsection"]\fR, but you don\(cqt need to\&.
+Subsection names are case sensitive and can contain any characters except newline and the null byte\&. Doublequote \fB"\fR and backslash can be included by escaping them as \fB\e"\fR and \fB\e\e\fR, respectively\&. Backslashes preceding other characters are dropped when reading; for example, \fB\et\fR is read as \fBt\fR and \fB\e0\fR is read as \fB0\fR\&. Section headers cannot span multiple lines\&. Variables may belong directly to a section or to a given subsection\&. You can have \fB[section]\fR if you have \fB[section "subsection"]\fR, but you don\(cqt need to\&.
 .sp
 There is also a deprecated \fB[section\&.subsection]\fR syntax\&. With this syntax, the subsection name is converted to lower\-case and is also compared case sensitively\&. These subsection names follow the same restrictions as section names\&.
 .sp
@@ -1361,6 +1368,15 @@ Advice shown if a user attempts to add an ignored file to the index\&.
 addEmptyPathspec
 .RS 4
 Advice shown if a user runs the add command without providing the pathspec parameter\&.
+.RE
+.PP
+updateSparsePath
+.RS 4
+Advice shown when either
+\fBgit-add\fR(1)
+or
+\fBgit-rm\fR(1)
+is asked to update index entries outside the current sparse checkout\&.
 .RE
 .RE
 .PP
@@ -2546,6 +2562,20 @@ and
 \fBgit-checkout\fR(1)\&.
 .RE
 .PP
+checkout\&.workers
+.RS 4
+The number of parallel workers to use when updating the working tree\&. The default is one, i\&.e\&. sequential execution\&. If set to a value less than one, Git will use as many workers as the number of logical cores available\&. This setting and
+\fBcheckout\&.thresholdForParallelism\fR
+affect all commands that perform checkout\&. E\&.g\&. checkout, clone, reset, sparse\-checkout, etc\&.
+.sp
+Note: parallel checkout usually delivers better performance for repositories located on SSDs or over NFS\&. For repositories on spinning disks and/or machines with a small number of cores, the default sequential checkout often performs better\&. The size and compression level of a repository might also influence how well the parallel version performs\&.
+.RE
+.PP
+checkout\&.thresholdForParallelism
+.RS 4
+When running parallel checkout with a small number of files, the cost of subprocess spawning and inter\-process communication might outweigh the parallelization gains\&. This setting allows to define the minimum number of files for which parallel checkout should be attempted\&. The default is 100\&.
+.RE
+.PP
 clean\&.requireForce
 .RS 4
 A boolean to make git\-clean do nothing unless given \-f, \-i or \-n\&. Defaults to true\&.
@@ -2558,6 +2588,14 @@ The name of the remote to create when cloning a repository\&. Defaults to
 \fB\-\-origin\fR
 command\-line option to
 \fBgit-clone\fR(1)\&.
+.RE
+.PP
+clone\&.rejectShallow
+.RS 4
+Reject to clone a repository if it is a shallow one, can be overridden by passing option
+\fB\-\-reject\-shallow\fR
+in command line\&. See
+\fBgit-clone\fR(1)
 .RE
 .PP
 color\&.advice
@@ -3128,6 +3166,11 @@ A boolean or int to specify the level of verbose with
 \fBgit-commit\fR(1)\&.
 .RE
 .PP
+commitGraph\&.generationVersion
+.RS 4
+Specifies the type of generation number version to use when writing or reading the commit\-graph file\&. If version 1 is specified, then the corrected commit dates will not be written or read\&. Defaults to 2\&.
+.RE
+.PP
 commitGraph\&.maxNewFilters
 .RS 4
 Specifies the default value for the
@@ -3612,6 +3655,17 @@ gvimdiff
 .sp -1
 .IP \(bu 2.3
 .\}
+gvimdiff1
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 gvimdiff2
 .RE
 .sp
@@ -3668,6 +3722,17 @@ meld
 .IP \(bu 2.3
 .\}
 nvimdiff
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff1
 .RE
 .sp
 .RS 4
@@ -3745,6 +3810,17 @@ tkdiff
 .IP \(bu 2.3
 .\}
 vimdiff
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+vimdiff1
 .RE
 .sp
 .RS 4
@@ -5637,6 +5713,16 @@ if index\&.threads has been explicitly enabled,
 otherwise\&.
 .RE
 .PP
+index\&.sparse
+.RS 4
+When enabled, write the index using sparse\-directory entries\&. This has no effect unless
+\fBcore\&.sparseCheckout\fR
+and
+\fBcore\&.sparseCheckoutCone\fR
+are both enabled\&. Defaults to
+\fIfalse\fR\&.
+.RE
+.PP
 index\&.threads
 .RS 4
 Specifies the number of threads to spawn when loading the index\&. This is meant to reduce index load time on multiprocessor machines\&. Specifying 0 or
@@ -5662,7 +5748,7 @@ Specify the directory from which templates will be copied\&. (See the "TEMPLATE 
 .PP
 init\&.defaultBranch
 .RS 4
-Allows overriding the default branch name e\&.g\&. when initializing a new repository or when cloning an empty repository\&.
+Allows overriding the default branch name e\&.g\&. when initializing a new repository\&.
 .RE
 .PP
 instaweb\&.browser
@@ -5769,6 +5855,16 @@ command\-line option, but the config option can be overridden by the
 option\&.
 .RE
 .PP
+log\&.diffMerges
+.RS 4
+Set default diff format to be used for merge commits\&. See
+\fB\-\-diff\-merges\fR
+in
+\fBgit-log\fR(1)
+for details\&. Defaults to
+\fBseparate\fR\&.
+.RE
+.PP
 log\&.follow
 .RS 4
 If
@@ -5813,6 +5909,11 @@ If true, makes
 assume
 \fB\-\-use\-mailmap\fR, otherwise assume
 \fB\-\-no\-use\-mailmap\fR\&. True by default\&.
+.RE
+.PP
+lsrefs\&.unborn
+.RS 4
+May be "advertise" (the default), "allow", or "ignore"\&. If "advertise", the server will respond to the client sending "unborn" (as described in protocol\-v2\&.txt) and will advertise support for this feature during the protocol v2 capability advertisement\&. "allow" is the same as "advertise" except that the server will not advertise support for this feature; this is useful for load\-balanced servers that cannot be updated atomically (for example), since the administrator could configure "allow", then after a delay, configure "advertise"\&.
 .RE
 .PP
 mailinfo\&.scissors
@@ -5887,11 +5988,13 @@ task, but runs the
 \fBprefetch\fR
 and
 \fBcommit\-graph\fR
-tasks hourly and the
+tasks hourly, the
 \fBloose\-objects\fR
 and
 \fBincremental\-repack\fR
-tasks daily\&.
+tasks daily, and the
+\fBpack\-refs\fR
+task weekly\&.
 .RE
 .RE
 .PP
@@ -6243,6 +6346,17 @@ gvimdiff
 .sp -1
 .IP \(bu 2.3
 .\}
+gvimdiff1
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 gvimdiff2
 .RE
 .sp
@@ -6288,6 +6402,17 @@ meld
 .IP \(bu 2.3
 .\}
 nvimdiff
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+nvimdiff1
 .RE
 .sp
 .RS 4
@@ -6386,6 +6511,17 @@ vimdiff
 .sp -1
 .IP \(bu 2.3
 .\}
+vimdiff1
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 vimdiff2
 .RE
 .sp
@@ -6469,6 +6605,15 @@ is the name of a temporary file containing the contents of the file from the bra
 contains the name of the file to which the merge tool should write the results of a successful merge\&.
 .RE
 .PP
+mergetool\&.<tool>\&.hideResolved
+.RS 4
+Allows the user to override the global
+\fBmergetool\&.hideResolved\fR
+value for a specific tool\&. See
+\fBmergetool\&.hideResolved\fR
+for the full description\&.
+.RE
+.PP
 mergetool\&.<tool>\&.trustExitCode
 .RS 4
 For a custom merge command, specify whether the exit code of the merge command can be used to determine whether the merge was successful\&. If this is not set to true then the merge target file timestamp is checked and the merge assumed to have been successful if the file has been updated, otherwise the user is prompted to indicate the success of the merge\&.
@@ -6521,6 +6666,24 @@ when available\&. A value of
 avoids using
 \fB\-\-auto\-merge\fR
 altogether, and is the default value\&.
+.RE
+.PP
+mergetool\&.hideResolved
+.RS 4
+During a merge Git will automatically resolve as many conflicts as possible and write the
+\fIMERGED\fR
+file containing conflict markers around any conflicts that it cannot resolve;
+\fILOCAL\fR
+and
+\fIREMOTE\fR
+normally represent the versions of the file from before Git\(cqs conflict resolution\&. This flag causes
+\fILOCAL\fR
+and
+\fIREMOTE\fR
+to be overwriten so that only the unresolved conflicts are presented to the merge tool\&. Can be configured per\-tool via the
+\fBmergetool\&.<tool>\&.hideResolved\fR
+configuration variable\&. Defaults to
+\fBfalse\fR\&.
 .RE
 .PP
 mergetool\&.keepBackup
@@ -6740,6 +6903,21 @@ option is present\&. This algorithm only walks trees that appear in paths that i
 \fBtrue\fR\&.
 .RE
 .PP
+pack\&.preferBitmapTips
+.RS 4
+When selecting which commits will receive bitmaps, prefer a commit at the tip of any reference that is a suffix of any value of this configuration over any other commits in the "selection window"\&.
+.sp
+Note that setting this configuration to
+\fBrefs/foo\fR
+does not mean that the commits at the tips of
+\fBrefs/foo/bar\fR
+and
+\fBrefs/foo/baz\fR
+will necessarily be selected\&. This is because commits are selected for bitmaps from within a series of windows of variable length\&.
+.sp
+If a commit at the tip of any reference which is a suffix of any value of this configuration is seen in a window, it is immediately given preference over any other commit in that window\&.
+.RE
+.PP
 pack\&.writeBitmaps (deprecated)
 .RS 4
 This is a deprecated synonym for
@@ -6749,6 +6927,14 @@ This is a deprecated synonym for
 pack\&.writeBitmapHashCache
 .RS 4
 When true, git will include a "hash cache" section in the bitmap index (if one is written)\&. This cache can be used to feed git\(cqs delta heuristics, potentially leading to better deltas between bitmapped and non\-bitmapped objects (e\&.g\&., when serving a fetch between an older, bitmapped pack and objects that have been pushed since the last gc)\&. The downside is that it consumes 4 bytes per object of disk space\&. Defaults to true\&.
+.RE
+.PP
+pack\&.writeReverseIndex
+.RS 4
+When true, git will write a corresponding \&.rev file (see:
+\m[blue]\fBDocumentation/technical/pack\-format\&.txt\fR\m[]\&\s-2\u[1]\d\s+2) for each new packfile that it writes in all places except for
+\fBgit-fast-import\fR(1)
+and in the bulk checkin mechanism\&. Defaults to false\&.
 .RE
 .PP
 pager\&.<cmd>
@@ -6940,7 +7126,7 @@ If set, clients will attempt to communicate with a server using the specified pr
 .\}
 \fB2\fR
 \-
-\m[blue]\fBwire protocol version 2\fR\m[]\&\s-2\u[1]\d\s+2\&.
+\m[blue]\fBwire protocol version 2\fR\m[]\&\s-2\u[2]\d\s+2\&.
 .RE
 .RE
 .PP
@@ -7202,9 +7388,9 @@ in the command line\&. Adding
 at the time of push overrides this configuration setting\&.
 .RE
 .PP
-rebase\&.useBuiltin
+push\&.negotiate
 .RS 4
-Unused configuration variable\&. Used in Git versions 2\&.20 and 2\&.21 as an escape hatch to enable the legacy shellscript implementation of rebase\&. Now the built\-in rewrite of it in C is always used\&. Setting this will emit a warning, to alert any remaining users that setting this now does nothing\&.
+If set to "true", attempt to reduce the size of the packfile sent by rounds of negotiation in which the client and the server attempt to find commits in common\&. If "false", Git will rely solely on the server\(cqs ref advertisement to find commits in common\&.
 .RE
 .PP
 rebase\&.backend
@@ -7296,6 +7482,13 @@ commands that failed\&. This only makes sense in interactive mode (or when an
 option was provided)\&. This is the same as specifying the
 \fB\-\-reschedule\-failed\-exec\fR
 option\&.
+.RE
+.PP
+rebase\&.forkPoint
+.RS 4
+If set to false set
+\fB\-\-no\-fork\-point\fR
+option by default\&.
 .RE
 .PP
 receive\&.advertiseAtomic
@@ -8001,6 +8194,16 @@ stash\&.useBuiltin
 Unused configuration variable\&. Used in Git versions 2\&.22 to 2\&.26 as an escape hatch to enable the legacy shellscript implementation of stash\&. Now the built\-in rewrite of it in C is always used\&. Setting this will emit a warning, to alert any remaining users that setting this now does nothing\&.
 .RE
 .PP
+stash\&.showIncludeUntracked
+.RS 4
+If this is set to true, the
+\fBgit stash show\fR
+command will show the untracked files of a stash entry\&. Defaults to false\&. See description of
+\fIshow\fR
+command in
+\fBgit-stash\fR(1)\&.
+.RE
+.PP
 stash\&.showPatch
 .RS 4
 If this is set to true, the
@@ -8526,7 +8729,8 @@ will support partial clone and partial fetch object filtering\&.
 .PP
 uploadpackfilter\&.allow
 .RS 4
-Provides a default value for unspecified object filters (see: the below configuration variable)\&. Defaults to
+Provides a default value for unspecified object filters (see: the below configuration variable)\&. If set to
+\fBtrue\fR, this will also enable all filters which get added in the future\&. Defaults to
 \fBtrue\fR\&.
 .RE
 .PP
@@ -8538,6 +8742,7 @@ Explicitly allow or ban the object filter corresponding to
 may be one of:
 \fBblob:none\fR,
 \fBblob:limit\fR,
+\fBobject:type\fR,
 \fBtree\fR,
 \fBsparse:oid\fR, or
 \fBcombine\fR\&. If using combined filters, both
@@ -8725,6 +8930,11 @@ and running \fBgit config section\&.Subsection\&.key value2\fR will result in
 Part of the \fBgit\fR(1) suite
 .SH "NOTES"
 .IP " 1." 4
+Documentation/technical/pack-format.txt
+.RS 4
+\%git-htmldocs/../technical/pack-format.html
+.RE
+.IP " 2." 4
 wire protocol version 2
 .RS 4
 \%git-htmldocs/technical/protocol-v2.html

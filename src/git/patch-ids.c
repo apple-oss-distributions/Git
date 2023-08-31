@@ -1,7 +1,7 @@
 #include "cache.h"
 #include "diff.h"
 #include "commit.h"
-#include "sha1-lookup.h"
+#include "hash-lookup.h"
 #include "patch-ids.h"
 
 static int patch_id_defined(struct commit *commit)
@@ -124,7 +124,7 @@ struct patch_id *add_commit_patch_id(struct commit *commit,
 	if (!patch_id_defined(commit))
 		return NULL;
 
-	key = xcalloc(1, sizeof(*key));
+	CALLOC_ARRAY(key, 1);
 	if (init_patch_id_entry(key, commit, ids)) {
 		free(key);
 		return NULL;

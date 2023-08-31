@@ -2,12 +2,12 @@
 .\"     Title: git-am
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 02/08/2021
+.\"      Date: 06/06/2021
 .\"    Manual: Git Manual
-.\"    Source: Git 2.30.1.378.g1d4f2316c5
+.\"    Source: Git 2.32.0
 .\"  Language: English
 .\"
-.TH "GIT\-AM" "1" "02/08/2021" "Git 2\&.30\&.1\&.378\&.g1d4f23" "Git Manual"
+.TH "GIT\-AM" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -38,6 +38,7 @@ git-am \- Apply a series of patches from a mailbox
          [\-\-whitespace=<option>] [\-C<n>] [\-p<n>] [\-\-directory=<dir>]
          [\-\-exclude=<path>] [\-\-include=<path>] [\-\-reject] [\-q | \-\-quiet]
          [\-\-[no\-]scissors] [\-S[<keyid>]] [\-\-patch\-format=<format>]
+         [\-\-quoted\-cr=<action>]
          [(<mbox> | <Maildir>)\&...]
 \fIgit am\fR (\-\-continue | \-\-skip | \-\-abort | \-\-quit | \-\-show\-current\-patch[=(diff|raw)])
 .fi
@@ -109,6 +110,14 @@ Ignore scissors lines (see
 \fBgit-mailinfo\fR(1))\&.
 .RE
 .PP
+\-\-quoted\-cr=<action>
+.RS 4
+This flag will be passed down to
+\fIgit mailinfo\fR
+(see
+\fBgit-mailinfo\fR(1))\&.
+.RE
+.PP
 \-m, \-\-message\-id
 .RS 4
 Pass the
@@ -142,7 +151,7 @@ flag to
 \fIgit mailinfo\fR
 (see
 \fBgit-mailinfo\fR(1))\&. The proposed commit log message taken from the e\-mail is re\-coded into UTF\-8 encoding (configuration variable
-\fBi18n\&.commitencoding\fR
+\fBi18n\&.commitEncoding\fR
 can be used to specify project\(cqs preferred encoding if it is not UTF\-8)\&.
 .sp
 This was optional in prior versions of git, but now it is the default\&. You can use

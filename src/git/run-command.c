@@ -551,8 +551,11 @@ static int wait_or_whine(pid_t pid, const char *argv0, int in_signal)
 
 	while ((waiting = waitpid(pid, &status, 0)) < 0 && errno == EINTR)
 		;	/* nothing */
-	if (in_signal)
-		return 0;
+	if (in_signal) {
+		if (WIFEXITED(status))
+			code = WEXITSTATUS(status);
+		return code;
+	}
 
 	if (waiting < 0) {
 		failed_errno = errno;
@@ -1635,8 +1638,8 @@ static void pp_init(struct parallel_processes *pp,
 	pp->nr_processes = 0;
 	pp->output_owner = 0;
 	pp->shutdown = 0;
-	pp->children = xcalloc(n, sizeof(*pp->children));
-	pp->pfd = xcalloc(n, sizeof(*pp->pfd));
+	CALLOC_ARRAY(pp->children, n);
+	CALLOC_ARRAY(pp->pfd, n);
 	strbuf_init(&pp->buffered_output, 0);
 
 	for (i = 0; i < n; i++) {
