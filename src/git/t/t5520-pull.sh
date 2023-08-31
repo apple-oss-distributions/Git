@@ -136,12 +136,12 @@ test_expect_success 'the default remote . should not break explicit pull' '
 	git reset --hard HEAD^ &&
 	echo file >expect &&
 	test_cmp expect file &&
-	git pull . second &&
+	git pull --no-rebase . second &&
 	echo modified >expect &&
 	test_cmp expect file &&
 	git reflog -1 >reflog.actual &&
 	sed "s/^[0-9a-f][0-9a-f]*/OBJID/" reflog.actual >reflog.fuzzy &&
-	echo "OBJID HEAD@{0}: pull . second: Fast-forward" >reflog.expected &&
+	echo "OBJID HEAD@{0}: pull --no-rebase . second: Fast-forward" >reflog.expected &&
 	test_cmp reflog.expected reflog.fuzzy
 '
 
@@ -226,7 +226,7 @@ test_expect_success 'fail if the index has unresolved entries' '
 	test_commit modified2 file &&
 	git ls-files -u >unmerged &&
 	test_must_be_empty unmerged &&
-	test_must_fail git pull . second &&
+	test_must_fail git pull --no-rebase . second &&
 	git ls-files -u >unmerged &&
 	test_file_not_empty unmerged &&
 	cp file expected &&
@@ -330,6 +330,19 @@ test_expect_success '--rebase --autostash fast forward' '
 	test_cmp_rev HEAD to-rebase-ff
 '
 
+test_expect_success '--rebase with rebase.autostash succeeds on ff' '
+	test_when_finished "rm -fr src dst actual" &&
+	git init src &&
+	test_commit -C src "initial" file "content" &&
+	git clone src dst &&
+	test_commit -C src --printf "more_content" file "more content\ncontent\n" &&
+	echo "dirty" >>dst/file &&
+	test_config -C dst rebase.autostash true &&
+	git -C dst pull --rebase >actual 2>&1 &&
+	grep -q "Fast-forward" actual &&
+	grep -q "Applied autostash." actual
+'
+
 test_expect_success '--rebase with conflicts shows advice' '
 	test_when_finished "git rebase --abort; git checkout -f to-rebase" &&
 	git checkout -b seq &&
@@ -409,37 +422,37 @@ test_expect_success 'pull --rebase --no-autostash & rebase.autostash unset' '
 
 test_expect_success 'pull succeeds with dirty working directory and merge.autostash set' '
 	test_config merge.autostash true &&
-	test_pull_autostash 2
+	test_pull_autostash 2 --no-rebase
 '
 
 test_expect_success 'pull --autostash & merge.autostash=true' '
 	test_config merge.autostash true &&
-	test_pull_autostash 2 --autostash
+	test_pull_autostash 2 --autostash --no-rebase
 '
 
 test_expect_success 'pull --autostash & merge.autostash=false' '
 	test_config merge.autostash false &&
-	test_pull_autostash 2 --autostash
+	test_pull_autostash 2 --autostash --no-rebase
 '
 
 test_expect_success 'pull --autostash & merge.autostash unset' '
 	test_unconfig merge.autostash &&
-	test_pull_autostash 2 --autostash
+	test_pull_autostash 2 --autostash --no-rebase
 '
 
 test_expect_success 'pull --no-autostash & merge.autostash=true' '
 	test_config merge.autostash true &&
-	test_pull_autostash_fail --no-autostash
+	test_pull_autostash_fail --no-autostash --no-rebase
 '
 
 test_expect_success 'pull --no-autostash & merge.autostash=false' '
 	test_config merge.autostash false &&
-	test_pull_autostash_fail --no-autostash
+	test_pull_autostash_fail --no-autostash --no-rebase
 '
 
 test_expect_success 'pull --no-autostash & merge.autostash unset' '
 	test_unconfig merge.autostash &&
-	test_pull_autostash_fail --no-autostash
+	test_pull_autostash_fail --no-autostash --no-rebase
 '
 
 test_expect_success 'pull.rebase' '
@@ -546,15 +559,6 @@ test_expect_success 'pull.rebase=1 is treated as true and flattens keep-merge' '
 	test_cmp expect actual
 '
 
-test_expect_success REBASE_P \
-	'pull.rebase=preserve rebases and merges keep-merge' '
-	git reset --hard before-preserve-rebase &&
-	test_config pull.rebase preserve &&
-	git pull . copy &&
-	test_cmp_rev HEAD^^ copy &&
-	test_cmp_rev HEAD^2 keep-merge
-'
-
 test_expect_success 'pull.rebase=interactive' '
 	write_script "$TRASH_DIRECTORY/fake-editor" <<-\EOF &&
 	echo I was here >fake.out &&
@@ -598,7 +602,7 @@ test_expect_success '--rebase=false create a new merge commit' '
 
 test_expect_success '--rebase=true rebases and flattens keep-merge' '
 	git reset --hard before-preserve-rebase &&
-	test_config pull.rebase preserve &&
+	test_config pull.rebase merges &&
 	git pull --rebase=true . copy &&
 	test_cmp_rev HEAD^^ copy &&
 	echo file3 >expect &&
@@ -606,23 +610,14 @@ test_expect_success '--rebase=true rebases and flattens keep-merge' '
 	test_cmp expect actual
 '
 
-test_expect_success REBASE_P \
-	'--rebase=preserve rebases and merges keep-merge' '
-	git reset --hard before-preserve-rebase &&
-	test_config pull.rebase true &&
-	git pull --rebase=preserve . copy &&
-	test_cmp_rev HEAD^^ copy &&
-	test_cmp_rev HEAD^2 keep-merge
-'
-
 test_expect_success '--rebase=invalid fails' '
 	git reset --hard before-preserve-rebase &&
 	test_must_fail git pull --rebase=invalid . copy
 '
 
-test_expect_success '--rebase overrides pull.rebase=preserve and flattens keep-merge' '
+test_expect_success '--rebase overrides pull.rebase=merges and flattens keep-merge' '
 	git reset --hard before-preserve-rebase &&
-	test_config pull.rebase preserve &&
+	test_config pull.rebase merges &&
 	git pull --rebase . copy &&
 	test_cmp_rev HEAD^^ copy &&
 	echo file3 >expect &&
@@ -746,14 +741,8 @@ test_expect_success 'pull --rebase fails on corrupt HEAD' '
 '
 
 test_expect_success 'setup for detecting upstreamed changes' '
-	mkdir src &&
-	(
-		cd src &&
-		git init &&
-		printf "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n" > stuff &&
-		git add stuff &&
-		git commit -m "Initial revision"
-	) &&
+	test_create_repo src &&
+	test_commit -C src --printf one stuff "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n" &&
 	git clone src dst &&
 	(
 		cd src &&

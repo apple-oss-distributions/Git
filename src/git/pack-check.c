@@ -127,7 +127,7 @@ static int verify_packfile(struct repository *r,
 
 		if (type == OBJ_BLOB && big_file_threshold <= size) {
 			/*
-			 * Let check_object_signature() check it with
+			 * Let stream_object_signature() check it with
 			 * the streaming interface; no point slurping
 			 * the data in-core only to discard.
 			 */
@@ -142,7 +142,11 @@ static int verify_packfile(struct repository *r,
 			err = error("cannot unpack %s from %s at offset %"PRIuMAX"",
 				    oid_to_hex(&oid), p->pack_name,
 				    (uintmax_t)entries[i].offset);
-		else if (check_object_signature(r, &oid, data, size, type_name(type)))
+		else if (data && check_object_signature(r, &oid, data, size,
+							type) < 0)
+			err = error("packed %s from %s is corrupt",
+				    oid_to_hex(&oid), p->pack_name);
+		else if (!data && stream_object_signature(r, &oid) < 0)
 			err = error("packed %s from %s is corrupt",
 				    oid_to_hex(&oid), p->pack_name);
 		else if (fn) {
@@ -164,22 +168,13 @@ static int verify_packfile(struct repository *r,
 
 int verify_pack_index(struct packed_git *p)
 {
-	size_t len;
-	const unsigned char *index_base;
-	git_hash_ctx ctx;
-	unsigned char hash[GIT_MAX_RAWSZ];
 	int err = 0;
 
 	if (open_pack_index(p))
 		return error("packfile %s index not opened", p->pack_name);
-	index_base = p->index_data;
-	len = p->index_size - the_hash_algo->rawsz;
 
 	/* Verify SHA1 sum of the index file */
-	the_hash_algo->init_fn(&ctx);
-	the_hash_algo->update_fn(&ctx, index_base, len);
-	the_hash_algo->final_fn(hash, &ctx);
-	if (!hasheq(hash, index_base + len))
+	if (!hashfile_checksum_valid(p->index_data, p->index_size))
 		err = error("Packfile index for %s hash mismatch",
 			    p->pack_name);
 	return err;

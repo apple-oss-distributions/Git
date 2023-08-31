@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-repack(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -749,7 +749,7 @@ git-repack(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git repack</em> [-a] [-A] [-d] [-f] [-F] [-l] [-n] [-q] [-b] [--window=&lt;n&gt;] [--depth=&lt;n&gt;] [--threads=&lt;n&gt;] [--keep-pack=&lt;pack-name&gt;]</pre>
+<pre class="content"><em>git repack</em> [-a] [-A] [-d] [-f] [-F] [-l] [-n] [-q] [-b] [-m] [--window=&lt;n&gt;] [--depth=&lt;n&gt;] [--threads=&lt;n&gt;] [--keep-pack=&lt;pack-name&gt;] [--write-midx]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -820,6 +820,27 @@ to the new separate pack will be written.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+--cruft
+</dt>
+<dd>
+<p>
+        Same as <code>-a</code>, unless <code>-d</code> is used. Then any unreachable objects
+        are packed into a separate cruft pack. Unreachable objects can
+        be pruned using the normal expiry rules with the next <code>git gc</code>
+        invocation (see <a href="git-gc.html">git-gc(1)</a>). Incompatible with <code>-k</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+--cruft-expiration=&lt;approxidate&gt;
+</dt>
+<dd>
+<p>
+        Expire unreachable objects older than <code>&lt;approxidate&gt;</code>
+        immediately instead of waiting for the next <code>git gc</code> invocation.
+        Only useful with <code>--cruft -d</code>.
+</p>
+</dd>
+<dt class="hdlist1">
 -l
 </dt>
 <dd>
@@ -849,10 +870,13 @@ to the new separate pack will be written.</p></div>
 <dt class="hdlist1">
 -q
 </dt>
+<dt class="hdlist1">
+--quiet
+</dt>
 <dd>
 <p>
-        Pass the <code>-q</code> option to <em>git pack-objects</em>. See
-        <a href="git-pack-objects.html">git-pack-objects(1)</a>.
+        Show no progress over the standard error stream and pass the <code>-q</code>
+        option to <em>git pack-objects</em>. See <a href="git-pack-objects.html">git-pack-objects(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -922,7 +946,9 @@ depth is 4095.</p></div>
         If specified, multiple packfiles may be created, which also
         prevents the creation of a bitmap index.
         The default is unlimited, unless the config variable
-        <code>pack.packSizeLimit</code> is set.
+        <code>pack.packSizeLimit</code> is set. Note that this option may result in
+        a larger and slower repository; see the discussion in
+        <code>pack.packSizeLimit</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -934,10 +960,11 @@ depth is 4095.</p></div>
 <dd>
 <p>
         Write a reachability bitmap index as part of the repack. This
-        only makes sense when used with <code>-a</code> or <code>-A</code>, as the bitmaps
+        only makes sense when used with <code>-a</code>, <code>-A</code> or <code>-m</code>, as the bitmaps
         must be able to refer to all reachable objects. This option
-        overrides the setting of <code>repack.writeBitmaps</code>.  This option
-        has no effect if multiple packfiles are created.
+        overrides the setting of <code>repack.writeBitmaps</code>. This option
+        has no effect if multiple packfiles are created, unless writing a
+        MIDX (in which case a multi-pack bitmap is created).
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1029,6 +1056,21 @@ this "roll-up", without respect to their reachability. This is subject
 to change in the future. This option (implying a drastically different
 repack mode) is not guaranteed to work with all other combinations of
 option to <code>git repack</code>.</p></div>
+<div class="paragraph"><p>When writing a multi-pack bitmap, <code>git repack</code> selects the largest resulting
+pack as the preferred pack for object selection by the MIDX (see
+<a href="git-multi-pack-index.html">git-multi-pack-index(1)</a>).</p></div>
+</dd>
+<dt class="hdlist1">
+-m
+</dt>
+<dt class="hdlist1">
+--write-midx
+</dt>
+<dd>
+<p>
+        Write a multi-pack index (see <a href="git-multi-pack-index.html">git-multi-pack-index(1)</a>)
+        containing the non-redundant packs.
+</p>
 </dd>
 </dl></div>
 </div>
@@ -1070,7 +1112,7 @@ attribute <code>delta</code> set to false.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-05-17 06:37:54 JST
+ 2022-06-03 15:24:31 PDT
 </div>
 </div>
 </body>

@@ -1072,7 +1072,7 @@ static struct blame_entry *blame_merge(struct blame_entry *list1,
 	if (p1->s_lno <= p2->s_lno) {
 		do {
 			tail = &p1->next;
-			if ((p1 = *tail) == NULL) {
+			if (!(p1 = *tail)) {
 				*tail = p2;
 				return list1;
 			}
@@ -1082,7 +1082,7 @@ static struct blame_entry *blame_merge(struct blame_entry *list1,
 		*tail = p2;
 		do {
 			tail = &p2->next;
-			if ((p2 = *tail) == NULL)  {
+			if (!(p2 = *tail))  {
 				*tail = p1;
 				return list1;
 			}
@@ -1090,7 +1090,7 @@ static struct blame_entry *blame_merge(struct blame_entry *list1,
 		*tail = p1;
 		do {
 			tail = &p1->next;
-			if ((p1 = *tail) == NULL) {
+			if (!(p1 = *tail)) {
 				*tail = p2;
 				return list1;
 			}
@@ -1403,7 +1403,6 @@ static struct blame_origin *find_origin(struct repository *r,
 		}
 	}
 	diff_flush(&diff_opts);
-	clear_pathspec(&diff_opts.pathspec);
 	return porigin;
 }
 
@@ -1447,7 +1446,6 @@ static struct blame_origin *find_rename(struct repository *r,
 		}
 	}
 	diff_flush(&diff_opts);
-	clear_pathspec(&diff_opts.pathspec);
 	return porigin;
 }
 
@@ -2328,7 +2326,6 @@ static void find_copy_in_parent(struct blame_scoreboard *sb,
 	} while (unblamed);
 	target->suspects = reverse_blame(leftover, NULL);
 	diff_flush(&diff_opts);
-	clear_pathspec(&diff_opts.pathspec);
 }
 
 /*
@@ -2615,7 +2612,7 @@ void assign_blame(struct blame_scoreboard *sb, int opt)
 		else {
 			commit->object.flags |= UNINTERESTING;
 			if (commit->object.parsed)
-				mark_parents_uninteresting(commit);
+				mark_parents_uninteresting(sb->revs, commit);
 		}
 		/* treat root commit as boundary */
 		if (!commit->parents && !sb->show_root)

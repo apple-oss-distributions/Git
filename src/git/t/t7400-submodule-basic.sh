@@ -51,7 +51,7 @@ test_expect_success 'submodule update aborts on missing gitmodules url' '
 
 test_expect_success 'add aborts on repository with no commits' '
 	cat >expect <<-\EOF &&
-	'"'repo-no-commits'"' does not have a commit checked out
+	fatal: '"'repo-no-commits'"' does not have a commit checked out
 	EOF
 	git init repo-no-commits &&
 	test_must_fail git submodule add ../a ./repo-no-commits 2>actual &&
@@ -193,6 +193,17 @@ test_expect_success 'submodule add to .gitignored path with --force' '
 	(
 		cd addtest-ignore &&
 		git submodule add --force "$submodurl" submod
+	)
+'
+
+test_expect_success 'submodule add to path with tracked content fails' '
+	(
+		cd addtest &&
+		echo "fatal: '\''dir-tracked'\'' already exists in the index" >expect &&
+		mkdir dir-tracked &&
+		test_commit foo dir-tracked/bar &&
+		test_must_fail git submodule add "$submodurl" dir-tracked >actual 2>&1 &&
+		test_cmp expect actual
 	)
 '
 
@@ -1171,18 +1182,17 @@ test_expect_success 'submodule deinit is silent when used on an uninitialized su
 	rmdir init example2
 '
 
-test_expect_success 'submodule deinit fails when submodule has a .git directory even when forced' '
+test_expect_success 'submodule deinit absorbs .git directory if .git is a directory' '
 	git submodule update --init &&
 	(
 		cd init &&
 		rm .git &&
-		cp -R ../.git/modules/example .git &&
+		mv ../.git/modules/example .git &&
 		GIT_WORK_TREE=. git config --unset core.worktree
 	) &&
-	test_must_fail git submodule deinit init &&
-	test_must_fail git submodule deinit -f init &&
-	test -d init/.git &&
-	test -n "$(git config --get-regexp "submodule\.example\.")"
+	git submodule deinit init &&
+	test_path_is_missing init/.git &&
+	test -z "$(git config --get-regexp "submodule\.example\.")"
 '
 
 test_expect_success 'submodule with UTF-8 name' '

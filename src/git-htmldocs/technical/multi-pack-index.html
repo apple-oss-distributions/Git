@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>Multi-Pack-Index (MIDX) Design Notes</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -768,7 +768,7 @@ A sorted list of object IDs.
 <p>
 A list of metadata for the ith object ID including:
 </p>
-</li>
+<div class="ulist"><ul>
 <li>
 <p>
 A value j referring to the jth packfile.
@@ -779,11 +779,20 @@ A value j referring to the jth packfile.
 An offset within the jth packfile for the object.
 </p>
 </li>
+</ul></div>
+</li>
 <li>
 <p>
 If large offsets are required, we use another list of large
   offsets similar to version 2 pack-indexes.
 </p>
+<div class="ulist"><ul>
+<li>
+<p>
+An optional list of objects in pseudo-pack order (used with MIDX bitmaps).
+</p>
+</li>
+</ul></div>
 </li>
 </ul></div>
 <div class="paragraph"><p>Thus, we can provide O(log N) lookup time for any number
@@ -804,7 +813,9 @@ The MIDX is stored in a file named <em>multi-pack-index</em> in the
 </li>
 <li>
 <p>
-The core.multiPackIndex config setting must be on to consume MIDX files.
+The core.multiPackIndex config setting must be on (which is the
+  default) to consume MIDX files.  Setting it to <code>false</code> prevents
+  Git from reading a MIDX file, even if one exists.
 </p>
 </li>
 <li>
@@ -864,14 +875,10 @@ The multi-pack-index allows many packfiles, especially in a context
 </li>
 <li>
 <p>
-The reachability bitmap is currently paired directly with a single
-  packfile, using the pack-order as the object order to hopefully
-  compress the bitmaps well using run-length encoding. This could be
-  extended to pair a reachability bitmap with a multi-pack-index. If
-  the multi-pack-index is extended to store a "stable object order"
+If the multi-pack-index is extended to store a "stable object order"
   (a function Order(hash) = integer that is constant for a given hash,
-  even as the multi-pack-index is updated) then a reachability bitmap
-  could point to a multi-pack-index and be updated independently.
+  even as the multi-pack-index is updated) then MIDX bitmaps could be
+  updated independently of the MIDX.
 </p>
 </li>
 <li>
@@ -884,14 +891,6 @@ Packfiles can be marked as "special" using empty files that share
   pack maintenance in a multi-pack environment. It may also be
   helpful to organize packfiles by object type (commit, tree, blob,
   etc.) and use this metadata to help that maintenance.
-</p>
-</li>
-<li>
-<p>
-The partial clone feature records special "promisor" packs that
-  may point to objects that are not stored locally, but available
-  on request to a server. The multi-pack-index does not currently
-  track these promisor packs.
 </p>
 </li>
 </ul></div>
@@ -913,7 +912,7 @@ The partial clone feature records special "promisor" packs that
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-04-09 06:45:29 JST
+ 2022-02-16 17:29:08 PST
 </div>
 </div>
 </body>

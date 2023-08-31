@@ -278,6 +278,51 @@ test_expect_success '"git bisect run" with more complex "git bisect start"' '
 	git bisect reset
 '
 
+test_expect_success 'bisect run accepts exit code 126 as bad' '
+	test_when_finished "git bisect reset" &&
+	write_script test_script.sh <<-\EOF &&
+	! grep Another hello || exit 126 >/dev/null
+	EOF
+	git bisect start &&
+	git bisect good $HASH1 &&
+	git bisect bad $HASH4 &&
+	git bisect run ./test_script.sh >my_bisect_log.txt &&
+	grep "$HASH3 is the first bad commit" my_bisect_log.txt
+'
+
+test_expect_success POSIXPERM 'bisect run fails with non-executable test script' '
+	test_when_finished "git bisect reset" &&
+	>not-executable.sh &&
+	chmod -x not-executable.sh &&
+	git bisect start &&
+	git bisect good $HASH1 &&
+	git bisect bad $HASH4 &&
+	test_must_fail git bisect run ./not-executable.sh >my_bisect_log.txt &&
+	! grep "is the first bad commit" my_bisect_log.txt
+'
+
+test_expect_success 'bisect run accepts exit code 127 as bad' '
+	test_when_finished "git bisect reset" &&
+	write_script test_script.sh <<-\EOF &&
+	! grep Another hello || exit 127 >/dev/null
+	EOF
+	git bisect start &&
+	git bisect good $HASH1 &&
+	git bisect bad $HASH4 &&
+	git bisect run ./test_script.sh >my_bisect_log.txt &&
+	grep "$HASH3 is the first bad commit" my_bisect_log.txt
+'
+
+test_expect_success 'bisect run fails with missing test script' '
+	test_when_finished "git bisect reset" &&
+	rm -f does-not-exist.sh &&
+	git bisect start &&
+	git bisect good $HASH1 &&
+	git bisect bad $HASH4 &&
+	test_must_fail git bisect run ./does-not-exist.sh >my_bisect_log.txt &&
+	! grep "is the first bad commit" my_bisect_log.txt
+'
+
 # $HASH1 is good, $HASH5 is bad, we skip $HASH3
 # but $HASH4 is good,
 # so we should find $HASH5 as the first bad commit
@@ -960,6 +1005,52 @@ test_expect_success 'bisect handles annotated tags' '
 	git bisect bad tag-two >output &&
 	bad=$(git rev-parse --verify tag-two^{commit}) &&
 	grep "$bad is the first bad commit" output
+'
+
+test_expect_success 'bisect run fails with exit code equals or greater than 128' '
+	write_script test_script.sh <<-\EOF &&
+	exit 128
+	EOF
+	test_must_fail git bisect run ./test_script.sh &&
+	write_script test_script.sh <<-\EOF &&
+	exit 255
+	EOF
+	test_must_fail git bisect run ./test_script.sh
+'
+
+test_expect_success 'bisect visualize with a filename with dash and space' '
+	echo "My test line" >>"./-hello 2" &&
+	git add -- "./-hello 2" &&
+	git commit --quiet -m "Add test line" -- "./-hello 2" &&
+	git bisect visualize -p -- "-hello 2"
+'
+
+test_expect_success 'bisect state output with multiple good commits' '
+	git bisect reset &&
+	git bisect start >output &&
+	grep "waiting for both good and bad commits" output &&
+	git bisect log >output &&
+	grep "waiting for both good and bad commits" output &&
+	git bisect good "$HASH1" >output &&
+	grep "waiting for bad commit, 1 good commit known" output &&
+	git bisect log >output &&
+	grep "waiting for bad commit, 1 good commit known" output &&
+	git bisect good "$HASH2" >output &&
+	grep "waiting for bad commit, 2 good commits known" output &&
+	git bisect log >output &&
+	grep "waiting for bad commit, 2 good commits known" output
+'
+
+test_expect_success 'bisect state output with bad commit' '
+	git bisect reset &&
+	git bisect start >output &&
+	grep "waiting for both good and bad commits" output &&
+	git bisect log >output &&
+	grep "waiting for both good and bad commits" output &&
+	git bisect bad "$HASH4" >output &&
+	grep -F "waiting for good commit(s), bad commit known" output &&
+	git bisect log >output &&
+	grep -F "waiting for good commit(s), bad commit known" output
 '
 
 test_done

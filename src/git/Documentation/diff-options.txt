@@ -34,7 +34,7 @@ endif::git-diff[]
 endif::git-format-patch[]
 
 ifdef::git-log[]
---diff-merges=(off|none|on|first-parent|1|separate|m|combined|c|dense-combined|cc)::
+--diff-merges=(off|none|on|first-parent|1|separate|m|combined|c|dense-combined|cc|remerge|r)::
 --no-diff-merges::
 	Specify diff format to be used for merge commits. Default is
 	{diff-merges-default} unless `--first-parent` is in use, in which case
@@ -63,6 +63,18 @@ ifdef::git-log[]
 	This makes merge commits show the full diff with respect to
 	each of the parents. Separate log entry and diff is generated
 	for each parent.
++
+--diff-merges=remerge:::
+--diff-merges=r:::
+--remerge-diff:::
+	With this option, two-parent merge commits are remerged to
+	create a temporary tree object -- potentially containing files
+	with conflict markers and such.  A diff is then shown between
+	that temporary tree and the actual merge commit.
++
+The output emitted when this option is used is subject to change, and
+so is its interaction with other options (unless explicitly
+documented).
 +
 --diff-merges=combined:::
 --diff-merges=c:::
@@ -588,11 +600,17 @@ When used together with `-B`, omit also the preimage in the deletion part
 of a delete/create pair.
 
 -l<num>::
-	The `-M` and `-C` options require O(n^2) processing time where n
-	is the number of potential rename/copy targets.  This
-	option prevents rename/copy detection from running if
-	the number of rename/copy targets exceeds the specified
-	number.
+	The `-M` and `-C` options involve some preliminary steps that
+	can detect subsets of renames/copies cheaply, followed by an
+	exhaustive fallback portion that compares all remaining
+	unpaired destinations to all relevant sources.  (For renames,
+	only remaining unpaired sources are relevant; for copies, all
+	original sources are relevant.)  For N sources and
+	destinations, this exhaustive check is O(N^2).  This option
+	prevents the exhaustive portion of rename/copy detection from
+	running if the number of source/destination files involved
+	exceeds the specified number.  Defaults to diff.renameLimit.
+	Note that a value of 0 is treated as unlimited.
 
 ifndef::git-format-patch[]
 --diff-filter=[(A|C|D|M|R|T|U|X|B)...[*]]::
@@ -610,11 +628,8 @@ ifndef::git-format-patch[]
 Also, these upper-case letters can be downcased to exclude.  E.g.
 `--diff-filter=ad` excludes added and deleted paths.
 +
-Note that not all diffs can feature all types. For instance, diffs
-from the index to the working tree can never have Added entries
-(because the set of paths included in the diff is limited by what is in
-the index).  Similarly, copied and renamed entries cannot appear if
-detection for those types is disabled.
+Note that not all diffs can feature all types. For instance, copied and
+renamed entries cannot appear if detection for those types is disabled.
 
 -S<string>::
 	Look for differences that change the number of occurrences of

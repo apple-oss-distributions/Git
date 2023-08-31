@@ -117,6 +117,10 @@ int run_diff_files(struct rev_info *revs, unsigned int option)
 		if (!ce_path_match(istate, ce, &revs->prune_data, NULL))
 			continue;
 
+		if (revs->diffopt.prefix &&
+		    strncmp(ce->name, revs->diffopt.prefix, revs->diffopt.prefix_length))
+			continue;
+
 		if (ce_stage(ce)) {
 			struct combine_diff_path *dpath;
 			struct diff_filepair *pair;
@@ -325,6 +329,11 @@ static void show_new_file(struct rev_info *revs,
 	unsigned dirty_submodule = 0;
 	struct index_state *istate = revs->diffopt.repo->index;
 
+	if (new_file && S_ISSPARSEDIR(new_file->ce_mode)) {
+		diff_tree_oid(NULL, &new_file->oid, new_file->name, &revs->diffopt);
+		return;
+	}
+
 	/*
 	 * New file in the index: it might actually be different in
 	 * the working tree.
@@ -346,6 +355,20 @@ static int show_modified(struct rev_info *revs,
 	const struct object_id *oid;
 	unsigned dirty_submodule = 0;
 	struct index_state *istate = revs->diffopt.repo->index;
+
+	assert(S_ISSPARSEDIR(old_entry->ce_mode) ==
+	       S_ISSPARSEDIR(new_entry->ce_mode));
+
+	/*
+	 * If both are sparse directory entries, then expand the
+	 * modifications to the file level. If only one was a sparse
+	 * directory, then they appear as an add and delete instead of
+	 * a modification.
+	 */
+	if (S_ISSPARSEDIR(new_entry->ce_mode)) {
+		diff_tree_oid(&old_entry->oid, &new_entry->oid, new_entry->name, &revs->diffopt);
+		return 0;
+	}
 
 	if (get_stat_data(istate, new_entry, &oid, &mode, cached, match_missing,
 			  &dirty_submodule, &revs->diffopt) < 0) {
@@ -618,7 +641,7 @@ int do_diff_cache(const struct object_id *tree_oid, struct diff_options *opt)
 
 	if (diff_cache(&revs, tree_oid, NULL, 1))
 		exit(128);
-	clear_pathspec(&revs.prune_data);
+	release_revisions(&revs);
 	return 0;
 }
 
@@ -628,6 +651,7 @@ int index_differs_from(struct repository *r,
 {
 	struct rev_info rev;
 	struct setup_revision_opt opt;
+	unsigned has_changes;
 
 	repo_init_revisions(r, &rev, NULL);
 	memset(&opt, 0, sizeof(opt));
@@ -639,8 +663,9 @@ int index_differs_from(struct repository *r,
 		diff_flags_or(&rev.diffopt.flags, flags);
 	rev.diffopt.ita_invisible_in_index = ita_invisible_in_index;
 	run_diff_index(&rev, 1);
-	object_array_clear(&rev.pending);
-	return (rev.diffopt.flags.has_changes != 0);
+	has_changes = rev.diffopt.flags.has_changes;
+	release_revisions(&rev);
+	return (has_changes != 0);
 }
 
 static struct strbuf *idiff_prefix_cb(struct diff_options *opt, void *data)

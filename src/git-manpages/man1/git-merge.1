@@ -2,12 +2,12 @@
 .\"     Title: git-merge
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-MERGE" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-MERGE" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,8 @@ git-merge \- Join two or more development histories together
 \fIgit merge\fR [\-n] [\-\-stat] [\-\-no\-commit] [\-\-squash] [\-\-[no\-]edit]
         [\-\-no\-verify] [\-s <strategy>] [\-X <strategy\-option>] [\-S[<keyid>]]
         [\-\-[no\-]allow\-unrelated\-histories]
-        [\-\-[no\-]rerere\-autoupdate] [\-m <msg>] [\-F <file>] [<commit>\&...]
+        [\-\-[no\-]rerere\-autoupdate] [\-m <msg>] [\-F <file>]
+        [\-\-into\-name <branch>] [<commit>\&...]
 \fIgit merge\fR (\-\-continue | \-\-abort | \-\-quit)
 .fi
 .sp
@@ -192,9 +193,11 @@ With \-\-no\-squash perform the merge and commit the result\&. This option can b
 With \-\-squash, \-\-commit is not allowed, and will fail\&.
 .RE
 .PP
-\-\-no\-verify
+\-\-[no\-]verify
 .RS 4
-This option bypasses the pre\-merge and commit\-msg hooks\&. See also
+By default, the pre\-merge and commit\-msg hooks are run\&. When
+\fB\-\-no\-verify\fR
+is given, these are bypassed\&. See also
 \fBgithooks\fR(5)\&.
 .RE
 .PP
@@ -202,9 +205,9 @@ This option bypasses the pre\-merge and commit\-msg hooks\&. See also
 .RS 4
 Use the given merge strategy; can be supplied more than once to specify them in the order they should be tried\&. If there is no
 \fB\-s\fR
-option, a built\-in list of strategies is used instead (\fIgit merge\-recursive\fR
+option, a built\-in list of strategies is used instead (\fBort\fR
 when merging a single head,
-\fIgit merge\-octopus\fR
+\fBoctopus\fR
 otherwise)\&.
 .RE
 .PP
@@ -240,7 +243,9 @@ Turn progress on/off explicitly\&. If neither is specified, progress is shown if
 .PP
 \-\-autostash, \-\-no\-autostash
 .RS 4
-Automatically create a temporary stash entry before the operation begins, and apply it after the operation ends\&. This means that you can run the operation on a dirty worktree\&. However, use with care: the final stash application after a successful merge might result in non\-trivial conflicts\&.
+Automatically create a temporary stash entry before the operation begins, record it in the special ref
+\fBMERGE_AUTOSTASH\fR
+and apply it after the operation ends\&. This means that you can run the operation on a dirty worktree\&. However, use with care: the final stash application after a successful merge might result in non\-trivial conflicts\&.
 .RE
 .PP
 \-\-allow\-unrelated\-histories
@@ -263,6 +268,12 @@ The
 command can be used to give a good default for automated
 \fIgit merge\fR
 invocations\&. The automated message can include the branch description\&.
+.RE
+.PP
+\-\-into\-name <branch>
+.RS 4
+Prepare the default merge message as if merging to the branch
+\fB<branch>\fR, instead of the name of the real branch to which the merge is made\&.
 .RE
 .PP
 \-F <file>, \-\-file=<file>
@@ -458,7 +469,8 @@ By default, Git uses the same style as the one used by the "merge" program from 
 .\}
 .nf
 Here are lines that are either unchanged from the common
-ancestor, or cleanly resolved because only one side changed\&.
+ancestor, or cleanly resolved because only one side changed,
+or cleanly resolved because both sides changed the same way\&.
 <<<<<<< yours:sample\&.txt
 Conflict resolution is hard;
 let\(aqs go shopping\&.
@@ -476,18 +488,46 @@ The area where a pair of conflicting changes happened is marked with markers \fB
 .sp
 The default format does not show what the original said in the conflicting area\&. You cannot tell how many lines are deleted and replaced with Barbie\(cqs remark on your side\&. The only thing you can tell is that your side wants to say it is hard and you\(cqd prefer to go shopping, while the other side wants to claim it is easy\&.
 .sp
-An alternative style can be used by setting the "merge\&.conflictStyle" configuration variable to "diff3"\&. In "diff3" style, the above conflict may look like this:
+An alternative style can be used by setting the "merge\&.conflictStyle" configuration variable to either "diff3" or "zdiff3"\&. In "diff3" style, the above conflict may look like this:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
 Here are lines that are either unchanged from the common
-ancestor, or cleanly resolved because only one side changed\&.
+ancestor, or cleanly resolved because only one side changed,
+<<<<<<< yours:sample\&.txt
+or cleanly resolved because both sides changed the same way\&.
+Conflict resolution is hard;
+let\(aqs go shopping\&.
+||||||| base:sample\&.txt
+or cleanly resolved because both sides changed identically\&.
+Conflict resolution is hard\&.
+=======
+or cleanly resolved because both sides changed the same way\&.
+Git makes conflict resolution easy\&.
+>>>>>>> theirs:sample\&.txt
+And here is another line that is cleanly resolved or unmodified\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.sp
+while in "zdiff3" style, it may look like this:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+Here are lines that are either unchanged from the common
+ancestor, or cleanly resolved because only one side changed,
+or cleanly resolved because both sides changed the same way\&.
 <<<<<<< yours:sample\&.txt
 Conflict resolution is hard;
 let\(aqs go shopping\&.
-|||||||
+||||||| base:sample\&.txt
+or cleanly resolved because both sides changed identically\&.
 Conflict resolution is hard\&.
 =======
 Git makes conflict resolution easy\&.
@@ -690,17 +730,13 @@ You should refrain from abusing this option to sneak substantial changes into a 
 .sp
 The merge mechanism (\fBgit merge\fR and \fBgit pull\fR commands) allows the backend \fImerge strategies\fR to be chosen with \fB\-s\fR option\&. Some strategies can also take their own options, which can be passed by giving \fB\-X<option>\fR arguments to \fBgit merge\fR and/or \fBgit pull\fR\&.
 .PP
-resolve
+ort
 .RS 4
-This can only resolve two heads (i\&.e\&. the current branch and another branch you pulled from) using a 3\-way merge algorithm\&. It tries to carefully detect criss\-cross merge ambiguities and is considered generally safe and fast\&.
-.RE
-.PP
-recursive
-.RS 4
-This can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this can detect and handle merges involving renames, but currently cannot make use of detected copies\&. This is the default merge strategy when pulling or merging one branch\&.
+This is the default merge strategy when pulling or merging one branch\&. This strategy can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this strategy can detect and handle merges involving renames\&. It does not make use of detected copies\&. The name for this algorithm is an acronym ("Ostensibly Recursive\(cqs Twin") and came from the fact that it was written as a replacement for the previous default algorithm,
+\fBrecursive\fR\&.
 .sp
 The
-\fIrecursive\fR
+\fIort\fR
 strategy can take the following options:
 .PP
 ours
@@ -723,24 +759,6 @@ This is the opposite of
 \fIours\fR, there is no
 \fItheirs\fR
 merge strategy to confuse this merge option with\&.
-.RE
-.PP
-patience
-.RS 4
-With this option,
-\fImerge\-recursive\fR
-spends a little extra time to avoid mismerges that sometimes occur due to unimportant matching lines (e\&.g\&., braces from distinct functions)\&. Use this when the branches to be merged have diverged wildly\&. See also
-\fBgit-diff\fR(1)
-\fB\-\-patience\fR\&.
-.RE
-.PP
-diff\-algorithm=[patience|minimal|histogram|myers]
-.RS 4
-Tells
-\fImerge\-recursive\fR
-to use a different diff algorithm, which can help avoid mismerges that occur due to unimportant matching lines (such as braces from distinct functions)\&. See also
-\fBgit-diff\fR(1)
-\fB\-\-diff\-algorithm\fR\&.
 .RE
 .PP
 ignore\-space\-change, ignore\-all\-space, ignore\-space\-at\-eol, ignore\-cr\-at\-eol
@@ -812,15 +830,6 @@ option\&. This overrides the
 configuration variable\&.
 .RE
 .PP
-no\-renames
-.RS 4
-Turn off rename detection\&. This overrides the
-\fBmerge\&.renames\fR
-configuration variable\&. See also
-\fBgit-diff\fR(1)
-\fB\-\-no\-renames\fR\&.
-.RE
-.PP
 find\-renames[=<n>]
 .RS 4
 Turn on rename detection, optionally setting the similarity threshold\&. This is the default\&. This overrides the
@@ -844,6 +853,54 @@ strategy, where the strategy makes a guess on how two trees must be shifted to m
 .RE
 .RE
 .PP
+recursive
+.RS 4
+This can only resolve two heads using a 3\-way merge algorithm\&. When there is more than one common ancestor that can be used for 3\-way merge, it creates a merged tree of the common ancestors and uses that as the reference tree for the 3\-way merge\&. This has been reported to result in fewer merge conflicts without causing mismerges by tests done on actual merge commits taken from Linux 2\&.6 kernel development history\&. Additionally this can detect and handle merges involving renames\&. It does not make use of detected copies\&. This was the default strategy for resolving two heads from Git v0\&.99\&.9k until v2\&.33\&.0\&.
+.sp
+The
+\fIrecursive\fR
+strategy takes the same options as
+\fIort\fR\&. However, there are three additional options that
+\fIort\fR
+ignores (not documented above) that are potentially useful with the
+\fIrecursive\fR
+strategy:
+.PP
+patience
+.RS 4
+Deprecated synonym for
+\fBdiff\-algorithm=patience\fR\&.
+.RE
+.PP
+diff\-algorithm=[patience|minimal|histogram|myers]
+.RS 4
+Use a different diff algorithm while merging, which can help avoid mismerges that occur due to unimportant matching lines (such as braces from distinct functions)\&. See also
+\fBgit-diff\fR(1)
+\fB\-\-diff\-algorithm\fR\&. Note that
+\fBort\fR
+specifically uses
+\fBdiff\-algorithm=histogram\fR, while
+\fBrecursive\fR
+defaults to the
+\fBdiff\&.algorithm\fR
+config setting\&.
+.RE
+.PP
+no\-renames
+.RS 4
+Turn off rename detection\&. This overrides the
+\fBmerge\&.renames\fR
+configuration variable\&. See also
+\fBgit-diff\fR(1)
+\fB\-\-no\-renames\fR\&.
+.RE
+.RE
+.PP
+resolve
+.RS 4
+This can only resolve two heads (i\&.e\&. the current branch and another branch you pulled from) using a 3\-way merge algorithm\&. It tries to carefully detect criss\-cross merge ambiguities\&. It does not handle renames\&.
+.RE
+.PP
 octopus
 .RS 4
 This resolves cases with more than two heads, but refuses to do a complex merge that needs manual resolution\&. It is primarily meant to be used for bundling topic branch heads together\&. This is the default merge strategy when pulling or merging more than one branch\&.
@@ -858,10 +915,12 @@ merge strategy\&.
 .PP
 subtree
 .RS 4
-This is a modified recursive strategy\&. When merging trees A and B, if B corresponds to a subtree of A, B is first adjusted to match the tree structure of A, instead of reading the trees at the same level\&. This adjustment is also done to the common ancestor tree\&.
+This is a modified
+\fBort\fR
+strategy\&. When merging trees A and B, if B corresponds to a subtree of A, B is first adjusted to match the tree structure of A, instead of reading the trees at the same level\&. This adjustment is also done to the common ancestor tree\&.
 .RE
 .sp
-With the strategies that use 3\-way merge (including the default, \fIrecursive\fR), if a change is made on both branches, but later reverted on one of the branches, that change will be present in the merged result; some people find this behavior confusing\&. It occurs because only the heads and the merge base are considered when performing a merge, not the individual commits\&. The merge algorithm therefore considers the reverted change as no change at all, and substitutes the changed version instead\&.
+With the strategies that use 3\-way merge (including the default, \fIort\fR), if a change is made on both branches, but later reverted on one of the branches, that change will be present in the merged result; some people find this behavior confusing\&. It occurs because only the heads and the merge base are considered when performing a merge, not the individual commits\&. The merge algorithm therefore considers the reverted change as no change at all, and substitutes the changed version instead\&.
 .SH "CONFIGURATION"
 .PP
 merge\&.conflictStyle
@@ -876,7 +935,7 @@ marker\&. An alternate style, "diff3", adds a
 \fB|||||||\fR
 marker and the original text before the
 \fB=======\fR
-marker\&.
+marker\&. The "merge" style tends to produce smaller conflict regions than diff3, both because of the exclusion of the original text, and because when a subset of lines match on the two sides they are just pulled out of the conflict region\&. Another alternate style, "zdiff3", is similar to diff3 but removes matching lines on the two sides from the conflict region when those matching lines appear near either the beginning or end of a conflict region\&.
 .RE
 .PP
 merge\&.defaultToUpstream
@@ -887,7 +946,7 @@ that name the branches at the remote named by
 \fBbranch\&.<current branch>\&.remote\fR
 are consulted, and then they are mapped via
 \fBremote\&.<remote>\&.fetch\fR
-to their corresponding remote\-tracking branches, and the tips of these tracking branches are merged\&.
+to their corresponding remote\-tracking branches, and the tips of these tracking branches are merged\&. Defaults to true\&.
 .RE
 .PP
 merge\&.ff
@@ -931,7 +990,7 @@ is used for backward compatibility\&.
 .PP
 merge\&.renameLimit
 .RS 4
-The number of files to consider when performing rename detection during a merge; if not specified, defaults to the value of diff\&.renameLimit\&. This setting has no effect if rename detection is turned off\&.
+The number of files to consider in the exhaustive portion of rename detection during a merge\&. If not specified, defaults to the value of diff\&.renameLimit\&. If neither merge\&.renameLimit nor diff\&.renameLimit are specified, currently defaults to 7000\&. This setting has no effect if rename detection is turned off\&.
 .RE
 .PP
 merge\&.renames
@@ -976,368 +1035,184 @@ merge\&.guitool
 Controls which merge tool is used by
 \fBgit-mergetool\fR(1)
 when the \-g/\-\-gui flag is specified\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom merge tool and requires that a corresponding mergetool\&.<guitool>\&.cmd variable is defined\&.
-.sp
+.PP
+\fBaraxis\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-araxis
+Use Araxis Merge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBbc\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-bc
+Use Beyond Compare (requires a graphical session)
 .RE
-.sp
+.PP
+\fBbc3\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-bc3
+Use Beyond Compare (requires a graphical session)
 .RE
-.sp
+.PP
+\fBbc4\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-bc4
+Use Beyond Compare (requires a graphical session)
 .RE
-.sp
+.PP
+\fBcodecompare\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-codecompare
+Use Code Compare (requires a graphical session)
 .RE
-.sp
+.PP
+\fBdeltawalker\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-deltawalker
+Use DeltaWalker (requires a graphical session)
 .RE
-.sp
+.PP
+\fBdiffmerge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-diffmerge
+Use DiffMerge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBdiffuse\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-diffuse
+Use Diffuse (requires a graphical session)
 .RE
-.sp
+.PP
+\fBecmerge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-ecmerge
+Use ECMerge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBemerge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-emerge
+Use Emacs\(aq Emerge
 .RE
-.sp
+.PP
+\fBexamdiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-examdiff
+Use ExamDiff Pro (requires a graphical session)
 .RE
-.sp
+.PP
+\fBguiffy\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-guiffy
+Use Guiffy\(cqs Diff Tool (requires a graphical session)
 .RE
-.sp
+.PP
+\fBgvimdiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-gvimdiff
+Use gVim (requires a graphical session) with a custom layout (see
+\fBgit help mergetool\fR\(aqs
+\fBBACKEND SPECIFIC HINTS\fR
+section)
 .RE
-.sp
+.PP
+\fBgvimdiff1\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-gvimdiff1
+Use gVim (requires a graphical session) with a 2 panes layout (LOCAL and REMOTE)
 .RE
-.sp
+.PP
+\fBgvimdiff2\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-gvimdiff2
+Use gVim (requires a graphical session) with a 3 panes layout (LOCAL, MERGED and REMOTE)
 .RE
-.sp
+.PP
+\fBgvimdiff3\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-gvimdiff3
+Use gVim (requires a graphical session) where only the MERGED file is shown
 .RE
-.sp
+.PP
+\fBkdiff3\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-kdiff3
+Use KDiff3 (requires a graphical session)
 .RE
-.sp
+.PP
+\fBmeld\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-meld
+Use Meld (requires a graphical session) with optional
+\fBauto merge\fR
+(see
+\fBgit help mergetool\fR\(aqs
+\fBCONFIGURATION\fR
+section)
 .RE
-.sp
+.PP
+\fBnvimdiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-nvimdiff
+Use Neovim with a custom layout (see
+\fBgit help mergetool\fR\(aqs
+\fBBACKEND SPECIFIC HINTS\fR
+section)
 .RE
-.sp
+.PP
+\fBnvimdiff1\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-nvimdiff1
+Use Neovim with a 2 panes layout (LOCAL and REMOTE)
 .RE
-.sp
+.PP
+\fBnvimdiff2\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-nvimdiff2
+Use Neovim with a 3 panes layout (LOCAL, MERGED and REMOTE)
 .RE
-.sp
+.PP
+\fBnvimdiff3\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-nvimdiff3
+Use Neovim where only the MERGED file is shown
 .RE
-.sp
+.PP
+\fBopendiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-opendiff
+Use FileMerge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBp4merge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-p4merge
+Use HelixCore P4Merge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBsmerge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-smerge
+Use Sublime Merge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBtkdiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-tkdiff
+Use TkDiff (requires a graphical session)
 .RE
-.sp
+.PP
+\fBtortoisemerge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-tortoisemerge
+Use TortoiseMerge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBvimdiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-vimdiff
+Use Vim with a custom layout (see
+\fBgit help mergetool\fR\(aqs
+\fBBACKEND SPECIFIC HINTS\fR
+section)
 .RE
-.sp
+.PP
+\fBvimdiff1\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-vimdiff1
+Use Vim with a 2 panes layout (LOCAL and REMOTE)
 .RE
-.sp
+.PP
+\fBvimdiff2\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-vimdiff2
+Use Vim with a 3 panes layout (LOCAL, MERGED and REMOTE)
 .RE
-.sp
+.PP
+\fBvimdiff3\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-vimdiff3
+Use Vim where only the MERGED file is shown
 .RE
-.sp
+.PP
+\fBwinmerge\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-winmerge
+Use WinMerge (requires a graphical session)
 .RE
-.sp
+.PP
+\fBxxdiff\fR
 .RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-xxdiff
+Use xxdiff (requires a graphical session)
 .RE
 .RE
 .PP

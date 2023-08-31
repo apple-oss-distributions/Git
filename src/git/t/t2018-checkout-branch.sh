@@ -85,6 +85,19 @@ test_expect_success 'setup' '
 	git branch -m branch1
 '
 
+test_expect_success 'checkout a branch without refs/heads/* prefix' '
+	git clone --no-tags . repo-odd-prefix &&
+	(
+		cd repo-odd-prefix &&
+
+		origin=$(git symbolic-ref refs/remotes/origin/HEAD) &&
+		git symbolic-ref refs/heads/a-branch "$origin" &&
+
+		git checkout -f a-branch &&
+		git checkout -f a-branch
+	)
+'
+
 test_expect_success 'checkout -b to a new branch, set to HEAD' '
 	test_when_finished "
 		git checkout branch1 &&
@@ -148,7 +161,7 @@ test_expect_success 'checkout -b to an existing branch fails' '
 test_expect_success 'checkout -b to @{-1} fails with the right branch name' '
 	git checkout branch1 &&
 	git checkout branch2 &&
-	echo  >expect "fatal: A branch named '\''branch1'\'' already exists." &&
+	echo  >expect "fatal: a branch named '\''branch1'\'' already exists" &&
 	test_must_fail git checkout -b @{-1} 2>actual &&
 	test_cmp expect actual
 '

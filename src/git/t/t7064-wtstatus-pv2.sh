@@ -4,10 +4,6 @@ test_description='git status --porcelain=v2
 
 This test exercises porcelain V2 output for git status.'
 
-
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 
@@ -110,6 +106,21 @@ test_expect_success 'after first commit, create unstaged changes' '
 	EOF
 
 	git status --porcelain=v2 --branch --untracked-files=all >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'after first commit, stash existing changes' '
+	cat >expect <<-EOF &&
+	# branch.oid $H0
+	# branch.head initial-branch
+	# stash 2
+	EOF
+
+	test_when_finished "git stash pop && git stash pop" &&
+
+	git stash -- file_x &&
+	git stash &&
+	git status --porcelain=v2 --branch --show-stash --untracked-files=no >actual &&
 	test_cmp expect actual
 '
 
@@ -373,10 +384,7 @@ test_expect_success 'verify upstream fields in branch header' '
 
 		## Test upstream-gone case. Fake this by pointing
 		## origin/initial-branch at a non-existing commit.
-		OLD=$(git rev-parse origin/initial-branch) &&
-		NEW=$ZERO_OID &&
-		mv .git/packed-refs .git/old-packed-refs &&
-		sed "s/$OLD/$NEW/g" <.git/old-packed-refs >.git/packed-refs &&
+		git update-ref -d refs/remotes/origin/initial-branch &&
 
 		HUF=$(git rev-parse HEAD) &&
 

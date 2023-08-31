@@ -81,8 +81,10 @@ static void insert_one_record(struct shortlog *log,
 		format_subject(&subject, oneline, " ");
 		buffer = strbuf_detach(&subject, NULL);
 
-		if (item->util == NULL)
-			item->util = xcalloc(1, sizeof(struct string_list));
+		if (!item->util) {
+			item->util = xmalloc(sizeof(struct string_list));
+			string_list_init_nodup(item->util);
+		}
 		string_list_append(item->util, buffer);
 	}
 }
@@ -374,6 +376,9 @@ int cmd_shortlog(int argc, const char **argv, const char *prefix)
 
 	for (;;) {
 		switch (parse_options_step(&ctx, options, shortlog_usage)) {
+		case PARSE_OPT_NON_OPTION:
+		case PARSE_OPT_UNKNOWN:
+			break;
 		case PARSE_OPT_HELP:
 		case PARSE_OPT_ERROR:
 			exit(129);
@@ -385,6 +390,7 @@ int cmd_shortlog(int argc, const char **argv, const char *prefix)
 		parse_revision_opt(&rev, &ctx, options, shortlog_usage);
 	}
 parse_done:
+	revision_opts_finish(&rev);
 	argc = parse_options_end(&ctx);
 
 	if (nongit && argc > 1) {
@@ -416,6 +422,8 @@ parse_done:
 	else
 		get_from_rev(&rev, &log);
 
+	release_revisions(&rev);
+
 	shortlog_output(&log);
 	if (log.file != stdout)
 		fclose(log.file);
@@ -431,7 +439,7 @@ static void add_wrapped_shortlog_msg(struct strbuf *sb, const char *s,
 
 void shortlog_output(struct shortlog *log)
 {
-	int i, j;
+	size_t i, j;
 	struct strbuf sb = STRBUF_INIT;
 
 	if (log->sort_by_number)
@@ -444,10 +452,10 @@ void shortlog_output(struct shortlog *log)
 				(int)UTIL_TO_INT(item), item->string);
 		} else {
 			struct string_list *onelines = item->util;
-			fprintf(log->file, "%s (%d):\n",
-				item->string, onelines->nr);
-			for (j = onelines->nr - 1; j >= 0; j--) {
-				const char *msg = onelines->items[j].string;
+			fprintf(log->file, "%s (%"PRIuMAX"):\n",
+				item->string, (uintmax_t)onelines->nr);
+			for (j = onelines->nr; j >= 1; j--) {
+				const char *msg = onelines->items[j - 1].string;
 
 				if (log->wrap_lines) {
 					strbuf_reset(&sb);

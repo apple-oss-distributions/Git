@@ -69,7 +69,8 @@ linkgit:git-add[1]).
 
 --hard::
 	Resets the index and working tree. Any changes to tracked files in the
-	working tree since `<commit>` are discarded.
+	working tree since `<commit>` are discarded.  Any untracked files or
+	directories in the way of writing any tracked files are simply deleted.
 
 --merge::
 	Resets the index and updates the files in the working tree that are
@@ -104,10 +105,11 @@ OPTIONS
 
 -q::
 --quiet::
---no-quiet::
-	Be quiet, only report errors. The default behavior is set by the
-	`reset.quiet` config option. `--quiet` and `--no-quiet` will
-	override the default behavior.
+	Be quiet, only report errors.
+
+--refresh::
+--no-refresh::
+	Refresh the index after a mixed reset. Enabled by default.
 
 --pathspec-from-file=<file>::
 	Pathspec is passed in `<file>` instead of commandline args. If

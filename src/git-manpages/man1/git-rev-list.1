@@ -2,12 +2,12 @@
 .\"     Title: git-rev-list
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-LIST" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-REV\-LIST" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -109,6 +109,11 @@ commits before starting to show the commit output\&.
 \-\-since=<date>, \-\-after=<date>
 .RS 4
 Show commits more recent than a specific date\&.
+.RE
+.PP
+\-\-since\-as\-filter=<date>
+.RS 4
+Show all commits more recent than a specific date\&. This visits all commits in the range, rather than stopping at the first commit which is older than a specific date\&.
 .RE
 .PP
 \-\-until=<date>, \-\-before=<date>
@@ -225,7 +230,13 @@ reset these limits (to no limit) again\&. Equivalent forms are
 .PP
 \-\-first\-parent
 .RS 4
-Follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&.
+When finding commits to include, follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&.
+.RE
+.PP
+\-\-exclude\-first\-parent\-only
+.RS 4
+When finding commits to exclude (with a
+\fI^\fR), follow only the first parent commit upon seeing a merge commit\&. This can be used to find the set of changes in a topic branch from the point where it diverged from the remote branch, given that arbitrary merges can be valid topic branch changes\&.
 .RE
 .PP
 \-\-not
@@ -1439,7 +1450,7 @@ The form
 \fI\-\-filter=sparse:oid=<blob\-ish>\fR
 uses a sparse\-checkout specification contained in the blob (or blob\-expression)
 \fI<blob\-ish>\fR
-to omit blobs that would not be not required for a sparse checkout on the requested refs\&.
+to omit blobs that would not be required for a sparse checkout on the requested refs\&.
 .sp
 The form
 \fI\-\-filter=tree:<depth>\fR
@@ -1597,10 +1608,10 @@ This is a shorthand for "\-\-pretty=oneline \-\-abbrev\-commit" used together\&.
 .PP
 \-\-encoding=<encoding>
 .RS 4
-The commit objects record the encoding used for the log message in their encoding header; this option can be used to tell the command to re\-code the commit log message in the encoding preferred by the user\&. For non plumbing commands this defaults to UTF\-8\&. Note that if an object claims to be encoded in
+Commit objects record the character encoding used for the log message in their encoding header; this option can be used to tell the command to re\-code the commit log message in the encoding preferred by the user\&. For non plumbing commands this defaults to UTF\-8\&. Note that if an object claims to be encoded in
 \fBX\fR
 and we are outputting in
-\fBX\fR, we will output the object verbatim; this means that invalid sequences in the original commit may be copied to the output\&.
+\fBX\fR, we will output the object verbatim; this means that invalid sequences in the original commit may be copied to the output\&. Likewise, if iconv(3) fails to convert the commit, we will quietly output the original object verbatim\&.
 .RE
 .PP
 \-\-expand\-tabs=<n>, \-\-expand\-tabs, \-\-no\-expand\-tabs
@@ -1730,7 +1741,7 @@ has no effect\&.
 feeds the format
 \fB\&.\&.\&.\fR
 to your system
-\fBstrftime\fR, except for %z and %Z, which are handled internally\&. Use
+\fBstrftime\fR, except for %s, %z, and %Z, which are handled internally\&. Use
 \fB\-\-date=format:%c\fR
 to show the date in your system locale\(cqs preferred format\&. See the
 \fBstrftime\fR
@@ -1768,6 +1779,17 @@ the time zone is omitted when the local time zone is used
 \-\-header
 .RS 4
 Print the contents of the commit in raw\-format; each record is separated with a NUL character\&.
+.RE
+.PP
+\-\-no\-commit\-header
+.RS 4
+Suppress the header line containing "commit" and the object ID printed before the specified format\&. This has no effect on the built\-in formats; only custom formats are affected\&.
+.RE
+.PP
+\-\-commit\-header
+.RS 4
+Overrides a previous
+\fB\-\-no\-commit\-header\fR\&.
 .RE
 .PP
 \-\-parents
@@ -1884,7 +1906,7 @@ There are several built\-in formats, and you can define additional formats by se
 .RS 4
 .\}
 .nf
-<hash> <title line>
+<hash> <title\-line>
 .fi
 .if n \{\
 .RE
@@ -1918,7 +1940,7 @@ Author: <author>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -1941,7 +1963,7 @@ Author: <author>
 .nf
 commit <hash>
 Author: <author>
-Date:   <author date>
+Date:   <author\-date>
 .fi
 .if n \{\
 .RE
@@ -1951,7 +1973,7 @@ Date:   <author date>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -1961,7 +1983,7 @@ Date:   <author date>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -1994,7 +2016,7 @@ Commit: <committer>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -2004,7 +2026,7 @@ Commit: <committer>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -2027,9 +2049,9 @@ Commit: <committer>
 .nf
 commit <hash>
 Author:     <author>
-AuthorDate: <author date>
+AuthorDate: <author\-date>
 Commit:     <committer>
-CommitDate: <committer date>
+CommitDate: <committer\-date>
 .fi
 .if n \{\
 .RE
@@ -2039,7 +2061,7 @@ CommitDate: <committer date>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -2049,7 +2071,7 @@ CommitDate: <committer date>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -2070,7 +2092,7 @@ CommitDate: <committer date>
 .RS 4
 .\}
 .nf
-<abbrev hash> (<title line>, <short author date>)
+<abbrev\-hash> (<title\-line>, <short\-author\-date>)
 .fi
 .if n \{\
 .RE
@@ -2105,8 +2127,8 @@ and
 .nf
 From <hash> <date>
 From: <author>
-Date: <author date>
-Subject: [PATCH] <title line>
+Date: <author\-date>
+Subject: [PATCH] <title\-line>
 .fi
 .if n \{\
 .RE
@@ -2116,7 +2138,7 @@ Subject: [PATCH] <title line>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -2164,10 +2186,10 @@ information show the true parent commits, without taking grafts or history simpl
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIformat:<string>\fR
+\fIformat:<format\-string>\fR
 .sp
 The
-\fIformat:<string>\fR
+\fIformat:<format\-string>\fR
 format allows you to specify which information you want to show\&. It works a little bit like printf format, with the notable exception that you get a newline with
 \fI%n\fR
 instead of
@@ -2550,6 +2572,28 @@ string may be followed by a colon and zero or more comma\-separated options\&. D
 .sp -1
 .IP \(bu 2.3
 .\}
+\fItags[=<bool\-value>]\fR: Instead of only considering annotated tags, consider lightweight tags as well\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIabbrev=<number>\fR: Instead of using the default number of hexadecimal digits (which will vary according to the number of objects in the repository with a default of 7) of the abbreviated object name, use <number> digits, or as many digits as needed to form a unique object name\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fImatch=<pattern>\fR: Only consider tags matching the given
 \fBglob(7)\fR
 pattern, excluding the "refs/tags/" prefix\&.
@@ -2698,15 +2742,6 @@ display the trailers of the body as interpreted by
 \fBtrailers\fR
 string may be followed by a colon and zero or more comma\-separated options\&. If any option is provided multiple times the last occurrence wins\&.
 .sp
-The boolean options accept an optional value
-\fB[=<BOOL>]\fR\&. The values
-\fBtrue\fR,
-\fBfalse\fR,
-\fBon\fR,
-\fBoff\fR
-etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in
-\fBgit-config\fR(1)\&. If a boolean option is given with no value, it\(cqs enabled\&.
-.sp
 .RS 4
 .ie n \{\
 \h'-04'\(bu\h'+03'\c
@@ -2715,7 +2750,7 @@ etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIkey=<K>\fR: only show trailers with specified key\&. Matching is done case\-insensitively and trailing colon is optional\&. If option is given multiple times trailer lines matching any of the keys are shown\&. This option automatically enables the
+\fIkey=<key>\fR: only show trailers with specified <key>\&. Matching is done case\-insensitively and trailing colon is optional\&. If option is given multiple times trailer lines matching any of the keys are shown\&. This option automatically enables the
 \fBonly\fR
 option so that non\-trailer lines in the trailer block are hidden\&. If that is not desired it can be disabled with
 \fBonly=false\fR\&. E\&.g\&.,
@@ -2732,7 +2767,7 @@ shows trailer lines with key
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIonly[=<BOOL>]\fR: select whether non\-trailer lines from the trailer block should be included\&.
+\fIonly[=<bool>]\fR: select whether non\-trailer lines from the trailer block should be included\&.
 .RE
 .sp
 .RS 4
@@ -2743,7 +2778,7 @@ shows trailer lines with key
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIseparator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer line is terminated with a line feed character\&. The string SEP may contain the literal formatting codes described above\&. To use comma as separator one must use
+\fIseparator=<sep>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer line is terminated with a line feed character\&. The string <sep> may contain the literal formatting codes described above\&. To use comma as separator one must use
 \fB%x2C\fR
 as it would otherwise be parsed as next option\&. E\&.g\&.,
 \fB%(trailers:key=Ticket,separator=%x2C )\fR
@@ -2758,7 +2793,7 @@ shows all trailer lines whose key is "Ticket" separated by a comma and a space\&
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIunfold[=<BOOL>]\fR: make it behave as if interpret\-trailer\(cqs
+\fIunfold[=<bool>]\fR: make it behave as if interpret\-trailer\(cqs
 \fB\-\-unfold\fR
 option was given\&. E\&.g\&.,
 \fB%(trailers:only,unfold=true)\fR
@@ -2773,7 +2808,7 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIkeyonly[=<BOOL>]\fR: only show the key part of the trailer\&.
+\fIkeyonly[=<bool>]\fR: only show the key part of the trailer\&.
 .RE
 .sp
 .RS 4
@@ -2784,7 +2819,7 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIvalueonly[=<BOOL>]\fR: only show the value part of the trailer\&.
+\fIvalueonly[=<bool>]\fR: only show the value part of the trailer\&.
 .RE
 .sp
 .RS 4
@@ -2795,8 +2830,8 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIkey_value_separator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer key\-value pair is separated by ": "\&. Otherwise it shares the same semantics as
-\fIseparator=<SEP>\fR
+\fIkey_value_separator=<sep>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer key\-value pair is separated by ": "\&. Otherwise it shares the same semantics as
+\fIseparator=<sep>\fR
 above\&.
 .RE
 .RE
@@ -2818,6 +2853,8 @@ above\&.
 Some placeholders may depend on other options given to the revision traversal engine\&. For example, the \fB%g*\fR reflog options will insert an empty string unless we are traversing reflog entries (e\&.g\&., by \fBgit log \-g\fR)\&. The \fB%d\fR and \fB%D\fR placeholders will use the "short" decoration format if \fB\-\-decorate\fR was not already provided on the command line\&.
 .sp .5v
 .RE
+.sp
+The boolean options accept an optional value \fB[=<bool\-value>]\fR\&. The values \fBtrue\fR, \fBfalse\fR, \fBon\fR, \fBoff\fR etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in \fBgit-config\fR(1)\&. If a boolean option is given with no value, it\(cqs enabled\&.
 .sp
 If you add a \fB+\fR (plus sign) after \fI%\fR of a placeholder, a line\-feed is inserted immediately before the expansion if and only if the placeholder expands to a non\-empty string\&.
 .sp

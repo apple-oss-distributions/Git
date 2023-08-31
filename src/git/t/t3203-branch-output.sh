@@ -1,9 +1,6 @@
 #!/bin/sh
 
 test_description='git branch display tests'
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
 
@@ -338,6 +335,10 @@ test_expect_success 'git branch --format option' '
 	EOF
 	git branch --format="Refname is %(refname)" >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success 'git branch with --format=%(rest) must fail' '
+	test_must_fail git branch --format="%(rest)" >actual
 '
 
 test_expect_success 'worktree colors correct' '

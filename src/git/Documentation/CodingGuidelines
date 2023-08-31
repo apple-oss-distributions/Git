@@ -26,6 +26,13 @@ code.  For Git in general, a few rough rules are:
    go and fix it up."
    Cf. http://lkml.iu.edu/hypermail/linux/kernel/1001.3/01069.html
 
+ - Log messages to explain your changes are as important as the
+   changes themselves.  Clearly written code and in-code comments
+   explain how the code works and what is assumed from the surrounding
+   context.  The log messages explain what the changes wanted to
+   achieve and why the changes were necessary (more on this in the
+   accompanying SubmittingPatches document).
+
 Make your code readable and sensible, and don't try to be clever.
 
 As for more concrete guidelines, just imitate the existing code
@@ -36,7 +43,10 @@ the overall style of existing code. Modifications to existing
 code is expected to match the style the surrounding code already
 uses (even if it doesn't match the overall style of existing code).
 
-But if you must have a list of rules, here they are.
+But if you must have a list of rules, here are some language
+specific ones. Note that Documentation/ToolsForGit.txt document
+has a collection of tips to help you use some external tools
+to conform to these guidelines.
 
 For shell scripts specifically (not exhaustive):
 
@@ -210,6 +220,9 @@ For C programs:
    . since mid 2017 with 512f41cf, we have been using designated
      initializers for array (e.g. "int array[10] = { [5] = 2 }").
 
+   . since early 2021 with 765dc168882, we have been using variadic
+     macros, mostly for printf-like trace and debug macros.
+
    These used to be forbidden, but we have not heard any breakage
    report, and they are assumed to be safe.
 
@@ -217,7 +230,10 @@ For C programs:
    the first statement (i.e. -Wdeclaration-after-statement).
 
  - Declaring a variable in the for loop "for (int i = 0; i < 10; i++)"
-   is still not allowed in this codebase.
+   is still not allowed in this codebase.  We are in the process of
+   allowing it by waiting to see that 44ba10d6 (revision: use C99
+   declaration of variable in for() loop, 2021-11-14) does not get
+   complaints.  Let's revisit this around November 2022.
 
  - NULL pointers shall be written as NULL, not as 0.
 
@@ -479,17 +495,6 @@ For Perl programs:
 
  - Learn and use Git.pm if you need that functionality.
 
- - For Emacs, it's useful to put the following in
-   GIT_CHECKOUT/.dir-locals.el, assuming you use cperl-mode:
-
-    ;; note the first part is useful for C editing, too
-    ((nil . ((indent-tabs-mode . t)
-                  (tab-width . 8)
-                  (fill-column . 80)))
-     (cperl-mode . ((cperl-indent-level . 8)
-                    (cperl-extra-newline-before-brace . nil)
-                    (cperl-merge-trailing-else . t))))
-
 For Python scripts:
 
  - We follow PEP-8 (http://www.python.org/dev/peps/pep-0008/).
@@ -498,6 +503,33 @@ For Python scripts:
 
  - Where required libraries do not restrict us to Python 2, we try to
    also be compatible with Python 3.1 and later.
+
+
+Program Output
+
+ We make a distinction between a Git command's primary output and
+ output which is merely chatty feedback (for instance, status
+ messages, running transcript, or progress display), as well as error
+ messages. Roughly speaking, a Git command's primary output is that
+ which one might want to capture to a file or send down a pipe; its
+ chatty output should not interfere with these use-cases.
+
+ As such, primary output should be sent to the standard output stream
+ (stdout), and chatty output should be sent to the standard error
+ stream (stderr). Examples of commands which produce primary output
+ include `git log`, `git show`, and `git branch --list` which generate
+ output on the stdout stream.
+
+ Not all Git commands have primary output; this is often true of
+ commands whose main function is to perform an action. Some action
+ commands are silent, whereas others are chatty. An example of a
+ chatty action commands is `git clone` with its "Cloning into
+ '<path>'..." and "Checking connectivity..." status messages which it
+ sends to the stderr stream.
+
+ Error messages from Git commands should always be sent to the stderr
+ stream.
+
 
 Error Messages
 
@@ -550,6 +582,51 @@ Writing Documentation:
  (if you wish to correct the English of some of the existing
  documentation, please see the documentation-related advice in the
  Documentation/SubmittingPatches file).
+
+ In order to ensure the documentation is inclusive, avoid assuming
+ that an unspecified example person is male or female, and think
+ twice before using "he", "him", "she", or "her".  Here are some
+ tips to avoid use of gendered pronouns:
+
+  - Prefer succinctness and matter-of-factly describing functionality
+    in the abstract.  E.g.
+
+     --short:: Emit output in the short-format.
+
+    and avoid something like these overly verbose alternatives:
+
+     --short:: Use this to emit output in the short-format.
+     --short:: You can use this to get output in the short-format.
+     --short:: A user who prefers shorter output could....
+     --short:: Should a person and/or program want shorter output, he
+               she/they/it can...
+
+    This practice often eliminates the need to involve human actors in
+    your description, but it is a good practice regardless of the
+    avoidance of gendered pronouns.
+
+  - When it becomes awkward to stick to this style, prefer "you" when
+    addressing the the hypothetical user, and possibly "we" when
+    discussing how the program might react to the user.  E.g.
+
+      You can use this option instead of --xyz, but we might remove
+      support for it in future versions.
+
+    while keeping in mind that you can probably be less verbose, e.g.
+
+      Use this instead of --xyz. This option might be removed in future
+      versions.
+
+  - If you still need to refer to an example person that is
+    third-person singular, you may resort to "singular they" to avoid
+    "he/she/him/her", e.g.
+
+      A contributor asks their upstream to pull from them.
+
+    Note that this sounds ungrammatical and unnatural to those who
+    learned that "they" is only used for third-person plural, e.g.
+    those who learn English as a second language in some parts of the
+    world.
 
  Every user-visible change should be reflected in the documentation.
  The same general rule as for code applies -- imitate the existing

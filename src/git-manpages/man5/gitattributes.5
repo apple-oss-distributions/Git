@@ -2,12 +2,12 @@
 .\"     Title: gitattributes
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GITATTRIBUTES" "5" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GITATTRIBUTES" "5" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -171,7 +171,7 @@ Any other value causes Git to act as if \fBtext\fR has been left unspecified\&.
 \fBeol\fR
 .RS 4
 .sp
-This attribute sets a specific line\-ending style to be used in the working directory\&. It enables end\-of\-line conversion without any content checks, effectively setting the \fBtext\fR attribute\&. Note that setting this attribute on paths which are in the index with CRLF line endings may make the paths to be considered dirty\&. Adding the path to the index again will normalize the line endings in the index\&.
+This attribute sets a specific line\-ending style to be used in the working directory\&. This attribute has effect only if the \fBtext\fR attribute is set or unspecified, or if it is set to \fBauto\fR, the file is detected as text, and it is stored with LF endings in the index\&. Note that setting this attribute on paths which are in the index with CRLF line endings may make the paths to be considered dirty unless \fBtext=auto\fR is set\&. Adding the path to the index again will normalize the line endings in the index\&.
 .PP
 Set to string value "crlf"
 .RS 4
@@ -1094,6 +1094,18 @@ suitable for HTML/XHTML documents\&.
 .\}
 \fBjava\fR
 suitable for source code in the Java language\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBkotlin\fR
+suitable for source code in the Kotlin language\&.
 .RE
 .sp
 .RS 4

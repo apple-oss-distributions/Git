@@ -65,7 +65,7 @@ xdchange_t *xdl_get_hunk(xdchange_t **xscr, xdemitconf_t const *xecfg)
 			*xscr = xch;
 	}
 
-	if (*xscr == NULL)
+	if (!*xscr)
 		return NULL;
 
 	lxch = *xscr;
@@ -278,7 +278,8 @@ pre_context_calculation:
 				      s1 - 1, funclineprev);
 			funclineprev = s1 - 1;
 		}
-		if (xdl_emit_hunk_hdr(s1 + 1, e1 - s1, s2 + 1, e2 - s2,
+		if (!(xecfg->flags & XDL_EMIT_NO_HUNK_HDR) &&
+		    xdl_emit_hunk_hdr(s1 + 1, e1 - s1, s2 + 1, e2 - s2,
 				      func_line.buf, func_line.len, ecb) < 0)
 			return -1;
 

@@ -431,6 +431,52 @@ const char *show_ident_date(const struct ident_split *ident,
 	return show_date(date, tz, mode);
 }
 
+static inline void strbuf_add_with_color(struct strbuf *sb, const char *color,
+					 const char *buf, size_t buflen)
+{
+	strbuf_addstr(sb, color);
+	strbuf_add(sb, buf, buflen);
+	if (*color)
+		strbuf_addstr(sb, GIT_COLOR_RESET);
+}
+
+static void append_line_with_color(struct strbuf *sb, struct grep_opt *opt,
+				   const char *line, size_t linelen,
+				   int color, enum grep_context ctx,
+				   enum grep_header_field field)
+{
+	const char *buf, *eol, *line_color, *match_color;
+	regmatch_t match;
+	int eflags = 0;
+
+	buf = line;
+	eol = buf + linelen;
+
+	if (!opt || !want_color(color) || opt->invert)
+		goto end;
+
+	line_color = opt->colors[GREP_COLOR_SELECTED];
+	match_color = opt->colors[GREP_COLOR_MATCH_SELECTED];
+
+	while (grep_next_match(opt, buf, eol, ctx, &match, field, eflags)) {
+		if (match.rm_so == match.rm_eo)
+			break;
+
+		strbuf_add_with_color(sb, line_color, buf, match.rm_so);
+		strbuf_add_with_color(sb, match_color, buf + match.rm_so,
+				      match.rm_eo - match.rm_so);
+		buf += match.rm_eo;
+		eflags = REG_NOTBOL;
+	}
+
+	if (eflags)
+		strbuf_add_with_color(sb, line_color, buf, eol - buf);
+	else {
+end:
+		strbuf_add(sb, buf, eol - buf);
+	}
+}
+
 void pp_user_info(struct pretty_print_context *pp,
 		  const char *what, struct strbuf *sb,
 		  const char *line, const char *encoding)
@@ -496,9 +542,26 @@ void pp_user_info(struct pretty_print_context *pp,
 			strbuf_addch(sb, '\n');
 		strbuf_addf(sb, " <%.*s>\n", (int)maillen, mailbuf);
 	} else {
-		strbuf_addf(sb, "%s: %.*s%.*s <%.*s>\n", what,
-			    (pp->fmt == CMIT_FMT_FULLER) ? 4 : 0, "    ",
-			    (int)namelen, namebuf, (int)maillen, mailbuf);
+		struct strbuf id = STRBUF_INIT;
+		enum grep_header_field field = GREP_HEADER_FIELD_MAX;
+		struct grep_opt *opt = pp->rev ? &pp->rev->grep_filter : NULL;
+
+		if (!strcmp(what, "Author"))
+			field = GREP_HEADER_AUTHOR;
+		else if (!strcmp(what, "Commit"))
+			field = GREP_HEADER_COMMITTER;
+
+		strbuf_addf(sb, "%s: ", what);
+		if (pp->fmt == CMIT_FMT_FULLER)
+			strbuf_addchars(sb, ' ', 4);
+
+		strbuf_addf(&id, "%.*s <%.*s>", (int)namelen, namebuf,
+			    (int)maillen, mailbuf);
+
+		append_line_with_color(sb, opt, id.buf, id.len, pp->color,
+				       GREP_CONTEXT_HEAD, field);
+		strbuf_addch(sb, '\n');
+		strbuf_release(&id);
 	}
 
 	switch (pp->fmt) {
@@ -1212,28 +1275,66 @@ int format_set_trailers_options(struct process_trailer_options *opts,
 
 static size_t parse_describe_args(const char *start, struct strvec *args)
 {
-	const char *options[] = { "match", "exclude" };
+	struct {
+		char *name;
+		enum {
+			DESCRIBE_ARG_BOOL,
+			DESCRIBE_ARG_INTEGER,
+			DESCRIBE_ARG_STRING,
+		} type;
+	}  option[] = {
+		{ "tags", DESCRIBE_ARG_BOOL},
+		{ "abbrev", DESCRIBE_ARG_INTEGER },
+		{ "exclude", DESCRIBE_ARG_STRING },
+		{ "match", DESCRIBE_ARG_STRING },
+	};
 	const char *arg = start;
 
 	for (;;) {
-		const char *matched = NULL;
+		int found = 0;
 		const char *argval;
 		size_t arglen = 0;
+		int optval = 0;
 		int i;
 
-		for (i = 0; i < ARRAY_SIZE(options); i++) {
-			if (match_placeholder_arg_value(arg, options[i], &arg,
-							&argval, &arglen)) {
-				matched = options[i];
+		for (i = 0; !found && i < ARRAY_SIZE(option); i++) {
+			switch (option[i].type) {
+			case DESCRIBE_ARG_BOOL:
+				if (match_placeholder_bool_arg(arg, option[i].name, &arg, &optval)) {
+					if (optval)
+						strvec_pushf(args, "--%s", option[i].name);
+					else
+						strvec_pushf(args, "--no-%s", option[i].name);
+					found = 1;
+				}
+				break;
+			case DESCRIBE_ARG_INTEGER:
+				if (match_placeholder_arg_value(arg, option[i].name, &arg,
+								&argval, &arglen)) {
+					char *endptr;
+					if (!arglen)
+						return 0;
+					strtol(argval, &endptr, 10);
+					if (endptr - argval != arglen)
+						return 0;
+					strvec_pushf(args, "--%s=%.*s", option[i].name, (int)arglen, argval);
+					found = 1;
+				}
+				break;
+			case DESCRIBE_ARG_STRING:
+				if (match_placeholder_arg_value(arg, option[i].name, &arg,
+								&argval, &arglen)) {
+					if (!arglen)
+						return 0;
+					strvec_pushf(args, "--%s=%.*s", option[i].name, (int)arglen, argval);
+					found = 1;
+				}
 				break;
 			}
 		}
-		if (!matched)
+		if (!found)
 			break;
 
-		if (!arglen)
-			return 0;
-		strvec_pushf(args, "--%s=%.*s", matched, (int)arglen, argval);
 	}
 	return arg - start;
 }
@@ -1432,8 +1533,8 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 			check_commit_signature(c->commit, &(c->signature_check));
 		switch (placeholder[1]) {
 		case 'G':
-			if (c->signature_check.gpg_output)
-				strbuf_addstr(sb, c->signature_check.gpg_output);
+			if (c->signature_check.output)
+				strbuf_addstr(sb, c->signature_check.output);
 			break;
 		case '?':
 			switch (c->signature_check.result) {
@@ -1735,6 +1836,10 @@ static size_t userformat_want_item(struct strbuf *sb, const char *placeholder,
 	case 'S':
 		w->source = 1;
 		break;
+	case 'd':
+	case 'D':
+		w->decorate = 1;
+		break;
 	}
 	return 0;
 }
@@ -1931,8 +2036,9 @@ static int pp_utf8_width(const char *start, const char *end)
 	return width;
 }
 
-static void strbuf_add_tabexpand(struct strbuf *sb, int tabwidth,
-				 const char *line, int linelen)
+static void strbuf_add_tabexpand(struct strbuf *sb, struct grep_opt *opt,
+				 int color, int tabwidth, const char *line,
+				 int linelen)
 {
 	const char *tab;
 
@@ -1949,7 +2055,9 @@ static void strbuf_add_tabexpand(struct strbuf *sb, int tabwidth,
 			break;
 
 		/* Output the data .. */
-		strbuf_add(sb, line, tab - line);
+		append_line_with_color(sb, opt, line, tab - line, color,
+				       GREP_CONTEXT_BODY,
+				       GREP_HEADER_FIELD_MAX);
 
 		/* .. and the de-tabified tab */
 		strbuf_addchars(sb, ' ', tabwidth - (width % tabwidth));
@@ -1964,7 +2072,8 @@ static void strbuf_add_tabexpand(struct strbuf *sb, int tabwidth,
 	 * worrying about width - there's nothing more to
 	 * align.
 	 */
-	strbuf_add(sb, line, linelen);
+	append_line_with_color(sb, opt, line, linelen, color, GREP_CONTEXT_BODY,
+			       GREP_HEADER_FIELD_MAX);
 }
 
 /*
@@ -1976,11 +2085,16 @@ static void pp_handle_indent(struct pretty_print_context *pp,
 			     struct strbuf *sb, int indent,
 			     const char *line, int linelen)
 {
+	struct grep_opt *opt = pp->rev ? &pp->rev->grep_filter : NULL;
+
 	strbuf_addchars(sb, ' ', indent);
 	if (pp->expand_tabs_in_log)
-		strbuf_add_tabexpand(sb, pp->expand_tabs_in_log, line, linelen);
+		strbuf_add_tabexpand(sb, opt, pp->color, pp->expand_tabs_in_log,
+				     line, linelen);
 	else
-		strbuf_add(sb, line, linelen);
+		append_line_with_color(sb, opt, line, linelen, pp->color,
+				       GREP_CONTEXT_BODY,
+				       GREP_HEADER_FIELD_MAX);
 }
 
 static int is_mboxrd_from(const char *line, int len)
@@ -1998,7 +2112,9 @@ void pp_remainder(struct pretty_print_context *pp,
 		  struct strbuf *sb,
 		  int indent)
 {
+	struct grep_opt *opt = pp->rev ? &pp->rev->grep_filter : NULL;
 	int first = 1;
+
 	for (;;) {
 		const char *line = *msg_p;
 		int linelen = get_one_line(line);
@@ -2019,14 +2135,17 @@ void pp_remainder(struct pretty_print_context *pp,
 		if (indent)
 			pp_handle_indent(pp, sb, indent, line, linelen);
 		else if (pp->expand_tabs_in_log)
-			strbuf_add_tabexpand(sb, pp->expand_tabs_in_log,
-					     line, linelen);
+			strbuf_add_tabexpand(sb, opt, pp->color,
+					     pp->expand_tabs_in_log, line,
+					     linelen);
 		else {
 			if (pp->fmt == CMIT_FMT_MBOXRD &&
 					is_mboxrd_from(line, linelen))
 				strbuf_addch(sb, '>');
 
-			strbuf_add(sb, line, linelen);
+			append_line_with_color(sb, opt, line, linelen,
+					       pp->color, GREP_CONTEXT_BODY,
+					       GREP_HEADER_FIELD_MAX);
 		}
 		strbuf_addch(sb, '\n');
 	}

@@ -7,12 +7,34 @@ static struct userdiff_driver *drivers;
 static int ndrivers;
 static int drivers_alloc;
 
-#define PATTERNS(name, pattern, word_regex)			\
-	{ name, NULL, -1, { pattern, REG_EXTENDED },		\
-	  word_regex "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+" }
-#define IPATTERN(name, pattern, word_regex)			\
-	{ name, NULL, -1, { pattern, REG_EXTENDED | REG_ICASE }, \
-	  word_regex "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+" }
+#define PATTERNS(lang, rx, wrx) { \
+	.name = lang, \
+	.binary = -1, \
+	.funcname = { \
+		.pattern = rx, \
+		.cflags = REG_EXTENDED, \
+	}, \
+	.word_regex = wrx "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+", \
+}
+#define IPATTERN(lang, rx, wrx) { \
+	.name = lang, \
+	.binary = -1, \
+	.funcname = { \
+		.pattern = rx, \
+		.cflags = REG_EXTENDED | REG_ICASE, \
+	}, \
+	.word_regex = wrx "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+", \
+}
+
+/*
+ * Built-in drivers for various languages, sorted by their names
+ * (except that the "default" is left at the end).
+ *
+ * When writing or updating patterns, assume that the contents these
+ * patterns are applied to are syntactically correct.  The patterns
+ * can be simple without implementing all syntactical corner cases, as
+ * long as they are sufficiently permissive.
+ */
 static struct userdiff_driver builtin_drivers[] = {
 IPATTERN("ada",
 	 "!^(.*[ \t])?(is[ \t]+new|renames|is[ \t]+separate)([ \t].*)?$\n"
@@ -54,9 +76,15 @@ PATTERNS("cpp",
 	 /* functions/methods, variables, and compounds at top level */
 	 "^((::[[:space:]]*)?[A-Za-z_].*)$",
 	 /* -- */
+	 /* identifiers and keywords */
 	 "[a-zA-Z_][a-zA-Z0-9_]*"
-	 "|[-+0-9.e]+[fFlL]?|0[xXbB]?[0-9a-fA-F]+[lLuU]*"
-	 "|[-+*/<>%&^|=!]=|--|\\+\\+|<<=?|>>=?|&&|\\|\\||::|->\\*?|\\.\\*"),
+	 /* decimal and octal integers as well as floatingpoint numbers */
+	 "|[0-9][0-9.]*([Ee][-+]?[0-9]+)?[fFlLuU]*"
+	 /* hexadecimal and binary integers */
+	 "|0[xXbB][0-9a-fA-F]+[lLuU]*"
+	 /* floatingpoint numbers that begin with a decimal point */
+	 "|\\.[0-9][0-9]*([Ee][-+]?[0-9]+)?[fFlL]?"
+	 "|[-+*/<>%&^|=!]=|--|\\+\\+|<<=?|>>=?|&&|\\|\\||::|->\\*?|\\.\\*|<=>"),
 PATTERNS("csharp",
 	 /* Keywords */
 	 "!^[ \t]*(do|while|for|if|else|instanceof|new|return|switch|case|throw|catch|using)\n"
@@ -65,7 +93,7 @@ PATTERNS("csharp",
 	 /* Properties */
 	 "^[ \t]*(((static|public|internal|private|protected|new|virtual|sealed|override|unsafe)[ \t]+)*[][<>@.~_[:alnum:]]+[ \t]+[@._[:alnum:]]+)[ \t]*$\n"
 	 /* Type definitions */
-	 "^[ \t]*(((static|public|internal|private|protected|new|unsafe|sealed|abstract|partial)[ \t]+)*(class|enum|interface|struct)[ \t]+.*)$\n"
+	 "^[ \t]*(((static|public|internal|private|protected|new|unsafe|sealed|abstract|partial)[ \t]+)*(class|enum|interface|struct|record)[ \t]+.*)$\n"
 	 /* Namespace */
 	 "^[ \t]*(namespace[ \t]+.*)$",
 	 /* -- */
@@ -142,12 +170,28 @@ PATTERNS("html",
 	 "[^<>= \t]+"),
 PATTERNS("java",
 	 "!^[ \t]*(catch|do|for|if|instanceof|new|return|switch|throw|while)\n"
-	 "^[ \t]*(([A-Za-z_][A-Za-z_0-9]*[ \t]+)+[A-Za-z_][A-Za-z_0-9]*[ \t]*\\([^;]*)$",
+	 /* Class, enum, and interface declarations */
+	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface)[ \t]+[A-Za-z][A-Za-z0-9_$]*[ \t]+.*)$\n"
+	 /* Method definitions; note that constructor signatures are not */
+	 /* matched because they are indistinguishable from method calls. */
+	 "^[ \t]*(([A-Za-z_<>&][][?&<>.,A-Za-z_0-9]*[ \t]+)+[A-Za-z_][A-Za-z_0-9]*[ \t]*\\([^;]*)$",
 	 /* -- */
 	 "[a-zA-Z_][a-zA-Z0-9_]*"
 	 "|[-+0-9.e]+[fFlL]?|0[xXbB]?[0-9a-fA-F]+[lL]?"
 	 "|[-+*/<>%&^|=!]="
 	 "|--|\\+\\+|<<=?|>>>?=?|&&|\\|\\|"),
+PATTERNS("kotlin",
+	 "^[ \t]*(([a-z]+[ \t]+)*(fun|class|interface)[ \t]+.*)$",
+	 /* -- */
+	 "[a-zA-Z_][a-zA-Z0-9_]*"
+	 /* hexadecimal and binary numbers */
+	 "|0[xXbB][0-9a-fA-F_]+[lLuU]*"
+	 /* integers and floats */
+	 "|[0-9][0-9_]*([.][0-9_]*)?([Ee][-+]?[0-9]+)?[fFlLuU]*"
+	 /* floating point numbers beginning with decimal point */
+	 "|[.][0-9][0-9_]*([Ee][-+]?[0-9]+)?[fFlLuU]?"
+	 /* unary and binary operators */
+	 "|[-+*/<>%&^|=!]==?|--|\\+\\+|<<=|>>=|&&|\\|\\||->|\\.\\*|!!|[?:.][.:]"),
 PATTERNS("markdown",
 	 "^ {0,3}#{1,6}[ \t].*",
 	 /* -- */
@@ -214,7 +258,7 @@ PATTERNS("perl",
 	 "|<<|<>|<=>|>>"),
 PATTERNS("php",
 	 "^[\t ]*(((public|protected|private|static|abstract|final)[\t ]+)*function.*)$\n"
-	 "^[\t ]*((((final|abstract)[\t ]+)?class|interface|trait).*)$",
+	 "^[\t ]*((((final|abstract)[\t ]+)?class|enum|interface|trait).*)$",
 	 /* -- */
 	 "[a-zA-Z_][a-zA-Z0-9_]*"
 	 "|[-+0-9.e]+|0[xXbB]?[0-9a-fA-F]+"
@@ -255,17 +299,13 @@ PATTERNS("tex", "^(\\\\((sub)*section|chapter|part)\\*{0,1}\\{.*)$",
 #undef IPATTERN
 
 static struct userdiff_driver driver_true = {
-	"diff=true",
-	NULL,
-	0,
-	{ NULL, 0 }
+	.name = "diff=true",
+	.binary = 0,
 };
 
 static struct userdiff_driver driver_false = {
-	"!diff",
-	NULL,
-	1,
-	{ NULL, 0 }
+	.name = "!diff",
+	.binary = 1,
 };
 
 struct find_by_namelen_data {

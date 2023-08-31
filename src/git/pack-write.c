@@ -2,6 +2,11 @@
 #include "pack.h"
 #include "csum-file.h"
 #include "remote.h"
+#include "chunk-format.h"
+#include "pack-mtimes.h"
+#include "oidmap.h"
+#include "chunk-format.h"
+#include "pack-objects.h"
 
 void reset_pack_idx_option(struct pack_idx_option *opts)
 {
@@ -75,9 +80,7 @@ const char *write_idx_file(const char *index_name, struct pack_idx_entry **objec
 			index_name = strbuf_detach(&tmp_file, NULL);
 		} else {
 			unlink(index_name);
-			fd = open(index_name, O_CREAT|O_EXCL|O_WRONLY, 0600);
-			if (fd < 0)
-				die_errno("unable to create '%s'", index_name);
+			fd = xopen(index_name, O_CREAT|O_EXCL|O_WRONLY, 0600);
 		}
 		f = hashfd(fd, index_name);
 	}
@@ -161,9 +164,9 @@ const char *write_idx_file(const char *index_name, struct pack_idx_entry **objec
 	}
 
 	hashwrite(f, sha1, the_hash_algo->rawsz);
-	finalize_hashfile(f, NULL, CSUM_HASH_IN_STREAM | CSUM_CLOSE |
-				    ((opts->flags & WRITE_IDX_VERIFY)
-				    ? 0 : CSUM_FSYNC));
+	finalize_hashfile(f, NULL, FSYNC_COMPONENT_PACK_METADATA,
+			  CSUM_HASH_IN_STREAM | CSUM_CLOSE |
+			  ((opts->flags & WRITE_IDX_VERIFY) ? 0 : CSUM_FSYNC));
 	return index_name;
 }
 
@@ -183,21 +186,9 @@ static int pack_order_cmp(const void *va, const void *vb, void *ctx)
 
 static void write_rev_header(struct hashfile *f)
 {
-	uint32_t oid_version;
-	switch (hash_algo_by_ptr(the_hash_algo)) {
-	case GIT_HASH_SHA1:
-		oid_version = 1;
-		break;
-	case GIT_HASH_SHA256:
-		oid_version = 2;
-		break;
-	default:
-		die("write_rev_header: unknown hash version");
-	}
-
 	hashwrite_be32(f, RIDX_SIGNATURE);
 	hashwrite_be32(f, RIDX_VERSION);
-	hashwrite_be32(f, oid_version);
+	hashwrite_be32(f, oid_version(the_hash_algo));
 }
 
 static void write_rev_index_positions(struct hashfile *f,
@@ -223,6 +214,9 @@ const char *write_rev_file(const char *rev_name,
 	uint32_t *pack_order;
 	uint32_t i;
 	const char *ret;
+
+	if (!(flags & WRITE_REV) && !(flags & WRITE_REV_VERIFY))
+		return NULL;
 
 	ALLOC_ARRAY(pack_order, nr_objects);
 	for (i = 0; i < nr_objects; i++)
@@ -256,9 +250,7 @@ const char *write_rev_file_order(const char *rev_name,
 			rev_name = strbuf_detach(&tmp_file, NULL);
 		} else {
 			unlink(rev_name);
-			fd = open(rev_name, O_CREAT|O_EXCL|O_WRONLY, 0600);
-			if (fd < 0)
-				die_errno("unable to create '%s'", rev_name);
+			fd = xopen(rev_name, O_CREAT|O_EXCL|O_WRONLY, 0600);
 		}
 		f = hashfd(fd, rev_name);
 	} else if (flags & WRITE_REV_VERIFY) {
@@ -282,10 +274,70 @@ const char *write_rev_file_order(const char *rev_name,
 	if (rev_name && adjust_shared_perm(rev_name) < 0)
 		die(_("failed to make %s readable"), rev_name);
 
-	finalize_hashfile(f, NULL, CSUM_HASH_IN_STREAM | CSUM_CLOSE |
-				    ((flags & WRITE_IDX_VERIFY) ? 0 : CSUM_FSYNC));
+	finalize_hashfile(f, NULL, FSYNC_COMPONENT_PACK_METADATA,
+			  CSUM_HASH_IN_STREAM | CSUM_CLOSE |
+			  ((flags & WRITE_IDX_VERIFY) ? 0 : CSUM_FSYNC));
 
 	return rev_name;
+}
+
+static void write_mtimes_header(struct hashfile *f)
+{
+	hashwrite_be32(f, MTIMES_SIGNATURE);
+	hashwrite_be32(f, MTIMES_VERSION);
+	hashwrite_be32(f, oid_version(the_hash_algo));
+}
+
+/*
+ * Writes the object mtimes of "objects" for use in a .mtimes file.
+ * Note that objects must be in lexicographic (index) order, which is
+ * the expected ordering of these values in the .mtimes file.
+ */
+static void write_mtimes_objects(struct hashfile *f,
+				 struct packing_data *to_pack,
+				 struct pack_idx_entry **objects,
+				 uint32_t nr_objects)
+{
+	uint32_t i;
+	for (i = 0; i < nr_objects; i++) {
+		struct object_entry *e = (struct object_entry*)objects[i];
+		hashwrite_be32(f, oe_cruft_mtime(to_pack, e));
+	}
+}
+
+static void write_mtimes_trailer(struct hashfile *f, const unsigned char *hash)
+{
+	hashwrite(f, hash, the_hash_algo->rawsz);
+}
+
+static const char *write_mtimes_file(struct packing_data *to_pack,
+				     struct pack_idx_entry **objects,
+				     uint32_t nr_objects,
+				     const unsigned char *hash)
+{
+	struct strbuf tmp_file = STRBUF_INIT;
+	const char *mtimes_name;
+	struct hashfile *f;
+	int fd;
+
+	if (!to_pack)
+		BUG("cannot call write_mtimes_file with NULL packing_data");
+
+	fd = odb_mkstemp(&tmp_file, "pack/tmp_mtimes_XXXXXX");
+	mtimes_name = strbuf_detach(&tmp_file, NULL);
+	f = hashfd(fd, mtimes_name);
+
+	write_mtimes_header(f);
+	write_mtimes_objects(f, to_pack, objects, nr_objects);
+	write_mtimes_trailer(f, hash);
+
+	if (adjust_shared_perm(mtimes_name) < 0)
+		die(_("failed to make %s readable"), mtimes_name);
+
+	finalize_hashfile(f, NULL, FSYNC_COMPONENT_PACK_METADATA,
+			  CSUM_HASH_IN_STREAM | CSUM_CLOSE | CSUM_FSYNC);
+
+	return mtimes_name;
 }
 
 off_t write_pack_header(struct hashfile *f, uint32_t nr_entries)
@@ -391,7 +443,7 @@ void fixup_pack_header_footer(int pack_fd,
 		the_hash_algo->final_fn(partial_pack_hash, &old_hash_ctx);
 	the_hash_algo->final_fn(new_pack_hash, &new_hash_ctx);
 	write_or_die(pack_fd, new_pack_hash, the_hash_algo->rawsz);
-	fsync_or_die(pack_fd, pack_name);
+	fsync_component_or_die(FSYNC_COMPONENT_PACK, pack_fd, pack_name);
 }
 
 char *index_pack_lockfile(int ip_out, int *is_well_formed)
@@ -462,49 +514,58 @@ struct hashfile *create_tmp_packfile(char **pack_tmp_name)
 	return hashfd(fd, *pack_tmp_name);
 }
 
-void finish_tmp_packfile(struct strbuf *name_buffer,
+static void rename_tmp_packfile(struct strbuf *name_prefix, const char *source,
+				const char *ext)
+{
+	size_t name_prefix_len = name_prefix->len;
+
+	strbuf_addstr(name_prefix, ext);
+	if (rename(source, name_prefix->buf))
+		die_errno("unable to rename temporary file to '%s'",
+			  name_prefix->buf);
+	strbuf_setlen(name_prefix, name_prefix_len);
+}
+
+void rename_tmp_packfile_idx(struct strbuf *name_buffer,
+			     char **idx_tmp_name)
+{
+	rename_tmp_packfile(name_buffer, *idx_tmp_name, "idx");
+}
+
+void stage_tmp_packfiles(struct strbuf *name_buffer,
 			 const char *pack_tmp_name,
 			 struct pack_idx_entry **written_list,
 			 uint32_t nr_written,
+			 struct packing_data *to_pack,
 			 struct pack_idx_option *pack_idx_opts,
-			 unsigned char hash[])
+			 unsigned char hash[],
+			 char **idx_tmp_name)
 {
-	const char *idx_tmp_name, *rev_tmp_name = NULL;
-	int basename_len = name_buffer->len;
+	const char *rev_tmp_name = NULL;
+	const char *mtimes_tmp_name = NULL;
 
 	if (adjust_shared_perm(pack_tmp_name))
 		die_errno("unable to make temporary pack file readable");
 
-	idx_tmp_name = write_idx_file(NULL, written_list, nr_written,
-				      pack_idx_opts, hash);
-	if (adjust_shared_perm(idx_tmp_name))
+	*idx_tmp_name = (char *)write_idx_file(NULL, written_list, nr_written,
+					       pack_idx_opts, hash);
+	if (adjust_shared_perm(*idx_tmp_name))
 		die_errno("unable to make temporary index file readable");
 
 	rev_tmp_name = write_rev_file(NULL, written_list, nr_written, hash,
 				      pack_idx_opts->flags);
 
-	strbuf_addf(name_buffer, "%s.pack", hash_to_hex(hash));
-
-	if (rename(pack_tmp_name, name_buffer->buf))
-		die_errno("unable to rename temporary pack file");
-
-	strbuf_setlen(name_buffer, basename_len);
-
-	strbuf_addf(name_buffer, "%s.idx", hash_to_hex(hash));
-	if (rename(idx_tmp_name, name_buffer->buf))
-		die_errno("unable to rename temporary index file");
-
-	strbuf_setlen(name_buffer, basename_len);
-
-	if (rev_tmp_name) {
-		strbuf_addf(name_buffer, "%s.rev", hash_to_hex(hash));
-		if (rename(rev_tmp_name, name_buffer->buf))
-			die_errno("unable to rename temporary reverse-index file");
+	if (pack_idx_opts->flags & WRITE_MTIMES) {
+		mtimes_tmp_name = write_mtimes_file(to_pack, written_list,
+						    nr_written,
+						    hash);
 	}
 
-	strbuf_setlen(name_buffer, basename_len);
-
-	free((void *)idx_tmp_name);
+	rename_tmp_packfile(name_buffer, pack_tmp_name, "pack");
+	if (rev_tmp_name)
+		rename_tmp_packfile(name_buffer, rev_tmp_name, "rev");
+	if (mtimes_tmp_name)
+		rename_tmp_packfile(name_buffer, mtimes_tmp_name, "mtimes");
 }
 
 void write_promisor_file(const char *promisor_name, struct ref **sought, int nr_sought)

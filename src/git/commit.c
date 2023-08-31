@@ -21,10 +21,12 @@
 #include "commit-reach.h"
 #include "run-command.h"
 #include "shallow.h"
+#include "hook.h"
 
 static struct commit_extra_header *read_commit_extra_header_lines(const char *buf, size_t len, const char **);
 
 int save_commit_buffer = 1;
+int no_graft_file_deprecated_advice;
 
 const char *commit_type = "commit";
 
@@ -118,6 +120,17 @@ int commit_graft_pos(struct repository *r, const struct object_id *oid)
 		       commit_graft_oid_access);
 }
 
+static void unparse_commit(struct repository *r, const struct object_id *oid)
+{
+	struct commit *c = lookup_commit(r, oid);
+
+	if (!c->object.parsed)
+		return;
+	free_commit_list(c->parents);
+	c->parents = NULL;
+	c->object.parsed = 0;
+}
+
 int register_commit_graft(struct repository *r, struct commit_graft *graft,
 			  int ignore_dups)
 {
@@ -143,6 +156,7 @@ int register_commit_graft(struct repository *r, struct commit_graft *graft,
 			(r->parsed_objects->grafts_nr - pos - 1) *
 			sizeof(*r->parsed_objects->grafts));
 	r->parsed_objects->grafts[pos] = graft;
+	unparse_commit(r, &graft->oid);
 	return 0;
 }
 
@@ -190,7 +204,8 @@ static int read_graft_file(struct repository *r, const char *graft_file)
 	struct strbuf buf = STRBUF_INIT;
 	if (!fp)
 		return -1;
-	if (advice_graft_file_deprecated)
+	if (!no_graft_file_deprecated_advice &&
+	    advice_enabled(ADVICE_GRAFT_FILE_DEPRECATED))
 		advise(_("Support for <GIT_DIR>/info/grafts is deprecated\n"
 			 "and will be removed in a future Git version.\n"
 			 "\n"
@@ -244,6 +259,18 @@ int for_each_commit_graft(each_commit_graft_fn fn, void *cb_data)
 	for (i = ret = 0; i < the_repository->parsed_objects->grafts_nr && !ret; i++)
 		ret = fn(the_repository->parsed_objects->grafts[i], cb_data);
 	return ret;
+}
+
+void reset_commit_grafts(struct repository *r)
+{
+	int i;
+
+	for (i = 0; i < r->parsed_objects->grafts_nr; i++) {
+		unparse_commit(r, &r->parsed_objects->grafts[i]->oid);
+		free(r->parsed_objects->grafts[i]);
+	}
+	r->parsed_objects->grafts_nr = 0;
+	r->parsed_objects->commit_graft_prepared = 0;
 }
 
 struct commit_buffer {
@@ -394,17 +421,14 @@ int parse_commit_buffer(struct repository *r, struct commit *item, const void *b
 
 	if (item->object.parsed)
 		return 0;
-
-	if (item->parents) {
-		/*
-		 * Presumably this is leftover from an earlier failed parse;
-		 * clear it out in preparation for us re-parsing (we'll hit the
-		 * same error, but that's good, since it lets our caller know
-		 * the result cannot be trusted.
-		 */
-		free_commit_list(item->parents);
-		item->parents = NULL;
-	}
+	/*
+	 * Presumably this is leftover from an earlier failed parse;
+	 * clear it out in preparation for us re-parsing (we'll hit the
+	 * same error, but that's good, since it lets our caller know
+	 * the result cannot be trusted.
+	 */
+	free_commit_list(item->parents);
+	item->parents = NULL;
 
 	tail += size;
 	if (tail <= bufptr + tree_entry_len + 1 || memcmp(bufptr, "tree ", 5) ||
@@ -1178,7 +1202,7 @@ static void handle_signed_tag(struct commit *parent, struct commit_extra_header 
 	/*
 	 * We could verify this signature and either omit the tag when
 	 * it does not validate, but the integrator may not have the
-	 * public key of the signer of the tag he is merging, while a
+	 * public key of the signer of the tag being merged, while a
 	 * later auditor may have it while auditing, so let's not run
 	 * verify-signed-buffer here for now...
 	 *
@@ -1210,8 +1234,10 @@ int check_commit_signature(const struct commit *commit, struct signature_check *
 
 	if (parse_signed_commit(commit, &payload, &signature, the_hash_algo) <= 0)
 		goto out;
-	ret = check_signature(payload.buf, payload.len, signature.buf,
-		signature.len, sigc);
+
+	sigc->payload_type = SIGNATURE_PAYLOAD_COMMIT;
+	sigc->payload = strbuf_detach(&payload, &sigc->payload_len);
+	ret = check_signature(sigc, signature.buf, signature.len);
 
  out:
 	strbuf_release(&payload);
@@ -1500,7 +1526,7 @@ static int verify_utf8(struct strbuf *buf)
 static const char commit_utf8_warn[] =
 N_("Warning: commit message did not conform to UTF-8.\n"
    "You may want to amend it after fixing the message, or set the config\n"
-   "variable i18n.commitencoding to the encoding your project uses.\n");
+   "variable i18n.commitEncoding to the encoding your project uses.\n");
 
 int commit_tree_extended(const char *msg, size_t msg_len,
 			 const struct object_id *tree,
@@ -1563,7 +1589,7 @@ int commit_tree_extended(const char *msg, size_t msg_len,
 		goto out;
 	}
 
-	result = write_object_file(buffer.buf, buffer.len, commit_type, ret);
+	result = write_object_file(buffer.buf, buffer.len, OBJ_COMMIT, ret);
 out:
 	strbuf_release(&buffer);
 	return result;
@@ -1627,12 +1653,20 @@ struct commit_list **commit_list_append(struct commit *commit,
 	return &new_commit->next;
 }
 
-const char *find_commit_header(const char *msg, const char *key, size_t *out_len)
+const char *find_header_mem(const char *msg, size_t len,
+			const char *key, size_t *out_len)
 {
 	int key_len = strlen(key);
 	const char *line = msg;
 
-	while (line) {
+	/*
+	 * NEEDSWORK: It's possible for strchrnul() to scan beyond the range
+	 * given by len. However, current callers are safe because they compute
+	 * len by scanning a NUL-terminated block of memory starting at msg.
+	 * Nonetheless, it would be better to ensure the function does not look
+	 * at msg beyond the len provided by the caller.
+	 */
+	while (line && line < msg + len) {
 		const char *eol = strchrnul(line, '\n');
 
 		if (line == eol)
@@ -1649,6 +1683,10 @@ const char *find_commit_header(const char *msg, const char *key, size_t *out_len
 	return NULL;
 }
 
+const char *find_commit_header(const char *msg, const char *key, size_t *out_len)
+{
+	return find_header_mem(msg, strlen(msg), key, out_len);
+}
 /*
  * Inspect the given string and determine the true "end" of the log message, in
  * order to find where to put a new Signed-off-by trailer.  Ignored are
@@ -1696,24 +1734,25 @@ size_t ignore_non_trailer(const char *buf, size_t len)
 }
 
 int run_commit_hook(int editor_is_used, const char *index_file,
-		    const char *name, ...)
+		    int *invoked_hook, const char *name, ...)
 {
-	struct strvec hook_env = STRVEC_INIT;
+	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
 	va_list args;
-	int ret;
+	const char *arg;
 
-	strvec_pushf(&hook_env, "GIT_INDEX_FILE=%s", index_file);
+	strvec_pushf(&opt.env, "GIT_INDEX_FILE=%s", index_file);
 
 	/*
 	 * Let the hook know that no editor will be launched.
 	 */
 	if (!editor_is_used)
-		strvec_push(&hook_env, "GIT_EDITOR=:");
+		strvec_push(&opt.env, "GIT_EDITOR=:");
 
 	va_start(args, name);
-	ret = run_hook_ve(hook_env.v, name, args);
+	while ((arg = va_arg(args, const char *)))
+		strvec_push(&opt.args, arg);
 	va_end(args);
-	strvec_clear(&hook_env);
 
-	return ret;
+	opt.invoked_hook = invoked_hook;
+	return run_hooks_opt(name, &opt);
 }

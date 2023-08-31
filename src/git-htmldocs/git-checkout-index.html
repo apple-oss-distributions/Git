@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-checkout-index(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -752,6 +752,7 @@ git-checkout-index(1) Manual Page
 <pre class="content"><em>git checkout-index</em> [-u] [-q] [-a] [-f] [-n] [--prefix=&lt;string&gt;]
                    [--stage=&lt;number&gt;|all]
                    [--temp]
+                   [--ignore-skip-worktree-bits]
                    [-z] [--stdin]
                    [--] [&lt;file&gt;&#8230;]</pre>
 <div class="attribution">
@@ -811,8 +812,9 @@ git-checkout-index(1) Manual Page
 </dt>
 <dd>
 <p>
-        checks out all files in the index.  Cannot be used
-        together with explicit filenames.
+        checks out all files in the index except for those with the
+        skip-worktree bit set (see <code>--ignore-skip-worktree-bits</code>).
+        Cannot be used together with explicit filenames.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -854,6 +856,15 @@ git-checkout-index(1) Manual Page
         Instead of copying the files to the working directory
         write the content to temporary files.  The temporary name
         associations will be written to stdout.
+</p>
+</dd>
+<dt class="hdlist1">
+--ignore-skip-worktree-bits
+</dt>
+<dd>
+<p>
+        Check out all files, including those with the skip-worktree bit
+        set.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1009,7 +1020,7 @@ into the file <code>.merged-Makefile</code>.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2013-08-21 00:40:27 JST
+ 2022-02-17 16:38:18 PST
 </div>
 </div>
 </body>

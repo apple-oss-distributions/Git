@@ -27,9 +27,9 @@ test_expect_success 'list refs with git:// using protocol v2' '
 		ls-remote --symref "$GIT_DAEMON_URL/parent" >actual &&
 
 	# Client requested to use protocol v2
-	grep "git> .*\\\0\\\0version=2\\\0$" log &&
+	grep "ls-remote> .*\\\0\\\0version=2\\\0$" log &&
 	# Server responded using protocol v2
-	grep "git< version 2" log &&
+	grep "ls-remote< version 2" log &&
 
 	git ls-remote --symref "$GIT_DAEMON_URL/parent" >expect &&
 	test_cmp expect actual
@@ -151,7 +151,7 @@ test_expect_success 'list refs with file:// using protocol v2' '
 		ls-remote --symref "file://$(pwd)/file_parent" >actual &&
 
 	# Server responded using protocol v2
-	grep "git< version 2" log &&
+	grep "ls-remote< version 2" log &&
 
 	git ls-remote --symref "file://$(pwd)/file_parent" >expect &&
 	test_cmp expect actual
@@ -235,6 +235,19 @@ test_expect_success '...but not if explicitly forbidden by config' '
 	git -c init.defaultBranch=main -c protocol.version=2 \
 		clone "file://$(pwd)/file_empty_parent" file_empty_child &&
 	! grep "refs/heads/mydefaultbranch" file_empty_child/.git/HEAD
+'
+
+test_expect_success 'bare clone propagates empty default branch' '
+	test_when_finished "rm -rf file_empty_parent file_empty_child.git" &&
+
+	GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME= \
+	git -c init.defaultBranch=mydefaultbranch init file_empty_parent &&
+
+	GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME= \
+	git -c init.defaultBranch=main -c protocol.version=2 \
+		clone --bare \
+		"file://$(pwd)/file_empty_parent" file_empty_child.git &&
+	grep "refs/heads/mydefaultbranch" file_empty_child.git/HEAD
 '
 
 test_expect_success 'fetch with file:// using protocol v2' '
@@ -599,6 +612,34 @@ setup_negotiate_only () {
 	test_commit -C client three
 }
 
+test_expect_success 'usage: --negotiate-only without --negotiation-tip' '
+	SERVER="server" &&
+	URI="file://$(pwd)/server" &&
+
+	setup_negotiate_only "$SERVER" "$URI" &&
+
+	cat >err.expect <<-\EOF &&
+	fatal: --negotiate-only needs one or more --negotiation-tip=*
+	EOF
+
+	test_must_fail git -c protocol.version=2 -C client fetch \
+		--negotiate-only \
+		origin 2>err.actual &&
+	test_cmp err.expect err.actual
+'
+
+test_expect_success 'usage: --negotiate-only with --recurse-submodules' '
+	cat >err.expect <<-\EOF &&
+	fatal: options '\''--negotiate-only'\'' and '\''--recurse-submodules'\'' cannot be used together
+	EOF
+
+	test_must_fail git -c protocol.version=2 -C client fetch \
+		--negotiate-only \
+		--recurse-submodules \
+		origin 2>err.actual &&
+	test_cmp err.expect err.actual
+'
+
 test_expect_success 'file:// --negotiate-only' '
 	SERVER="server" &&
 	URI="file://$(pwd)/server" &&
@@ -718,7 +759,7 @@ test_expect_success 'clone big repository with http:// using protocol v2' '
 		echo "data 0" &&
 		echo "M 644 inline bla.txt" &&
 		echo "data 4" &&
-		echo "bla"
+		echo "bla" || return 1
 	done | git -C "$HTTPD_DOCUMENT_ROOT_PATH/big" fast-import &&
 
 	GIT_TRACE_PACKET="$(pwd)/log" GIT_TRACE_CURL="$(pwd)/log" git \
@@ -913,7 +954,7 @@ test_expect_success 'part of packfile response provided as URI' '
 			then
 				>h2found
 			fi
-		fi
+		fi || return 1
 	done &&
 	test -f hfound &&
 	test -f h2found &&
@@ -1076,6 +1117,57 @@ test_expect_success 'packfile-uri with transfer.fsckobjects fails when .gitmodul
 		-c fetch.uriprotocols=http,https \
 		clone "$HTTPD_URL/smart/http_parent" http_child 2>err &&
 	test_i18ngrep "disallowed submodule name" err
+'
+
+test_expect_success 'packfile-uri path redacted in trace' '
+	P="$HTTPD_DOCUMENT_ROOT_PATH/http_parent" &&
+	rm -rf "$P" http_child log &&
+
+	git init "$P" &&
+	git -C "$P" config "uploadpack.allowsidebandall" "true" &&
+
+	echo my-blob >"$P/my-blob" &&
+	git -C "$P" add my-blob &&
+	git -C "$P" commit -m x &&
+
+	git -C "$P" hash-object my-blob >objh &&
+	git -C "$P" pack-objects "$HTTPD_DOCUMENT_ROOT_PATH/mypack" <objh >packh &&
+	git -C "$P" config --add \
+		"uploadpack.blobpackfileuri" \
+		"$(cat objh) $(cat packh) $HTTPD_URL/dumb/mypack-$(cat packh).pack" &&
+
+	GIT_TRACE_PACKET="$(pwd)/log" \
+	git -c protocol.version=2 \
+		-c fetch.uriprotocols=http,https \
+		clone "$HTTPD_URL/smart/http_parent" http_child &&
+
+	grep -F "clone< \\1$(cat packh) $HTTPD_URL/<redacted>" log
+'
+
+test_expect_success 'packfile-uri path not redacted in trace when GIT_TRACE_REDACT=0' '
+	P="$HTTPD_DOCUMENT_ROOT_PATH/http_parent" &&
+	rm -rf "$P" http_child log &&
+
+	git init "$P" &&
+	git -C "$P" config "uploadpack.allowsidebandall" "true" &&
+
+	echo my-blob >"$P/my-blob" &&
+	git -C "$P" add my-blob &&
+	git -C "$P" commit -m x &&
+
+	git -C "$P" hash-object my-blob >objh &&
+	git -C "$P" pack-objects "$HTTPD_DOCUMENT_ROOT_PATH/mypack" <objh >packh &&
+	git -C "$P" config --add \
+		"uploadpack.blobpackfileuri" \
+		"$(cat objh) $(cat packh) $HTTPD_URL/dumb/mypack-$(cat packh).pack" &&
+
+	GIT_TRACE_PACKET="$(pwd)/log" \
+	GIT_TRACE_REDACT=0 \
+	git -c protocol.version=2 \
+		-c fetch.uriprotocols=http,https \
+		clone "$HTTPD_URL/smart/http_parent" http_child &&
+
+	grep -F "clone< \\1$(cat packh) $HTTPD_URL/dumb/mypack-$(cat packh).pack" log
 '
 
 test_expect_success 'http:// --negotiate-only' '

@@ -2,12 +2,12 @@
 .\"     Title: git-switch
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-SWITCH" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-SWITCH" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -209,7 +209,7 @@ The same as
 \fB\-\-merge\fR
 option above, but changes the way the conflicting hunks are presented, overriding the
 \fBmerge\&.conflictStyle\fR
-configuration variable\&. Possible values are "merge" (default) and "diff3" (in addition to what is shown by "merge" style, shows the original contents)\&.
+configuration variable\&. Possible values are "merge" (default), "diff3", and "zdiff3"\&.
 .RE
 .PP
 \-q, \-\-quiet
@@ -225,7 +225,7 @@ is specified\&. This flag enables progress reporting even if not attached to a t
 \fB\-\-quiet\fR\&.
 .RE
 .PP
-\-t, \-\-track
+\-t, \-\-track [direct|inherit]
 .RS 4
 When creating a new branch, set up "upstream" configuration\&.
 \fB\-c\fR

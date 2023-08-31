@@ -43,6 +43,7 @@ struct options {
 		/* see documentation of corresponding flag in fetch-pack.h */
 		from_promisor : 1,
 
+		refetch : 1,
 		atomic : 1,
 		object_format : 1,
 		force_if_includes : 1;
@@ -185,8 +186,6 @@ static int set_option(const char *name, const char *value)
 						 strbuf_detach(&unquoted, NULL));
 		}
 		return 0;
-
-#if LIBCURL_VERSION_NUM >= 0x070a08
 	} else if (!strcmp(name, "family")) {
 		if (!strcmp(value, "ipv4"))
 			git_curl_ipresolve = CURL_IPRESOLVE_V4;
@@ -197,9 +196,11 @@ static int set_option(const char *name, const char *value)
 		else
 			return -1;
 		return 0;
-#endif /* LIBCURL_VERSION_NUM >= 0x070a08 */
 	} else if (!strcmp(name, "from-promisor")) {
 		options.from_promisor = 1;
+		return 0;
+	} else if (!strcmp(name, "refetch")) {
+		options.refetch = 1;
 		return 0;
 	} else if (!strcmp(name, "filter")) {
 		options.filter = xstrdup(value);
@@ -502,6 +503,10 @@ static struct discovery *discover_refs(const char *service, int for_push)
 		show_http_message(&type, &charset, &buffer);
 		die(_("Authentication failed for '%s'"),
 		    transport_anonymize_url(url.buf));
+	case HTTP_NOMATCHPUBLICKEY:
+		show_http_message(&type, &charset, &buffer);
+		die(_("unable to access '%s' with http.pinnedPubkey configuration: %s"),
+		    transport_anonymize_url(url.buf), curl_errorstr);
 	default:
 		show_http_message(&type, &charset, &buffer);
 		die(_("unable to access '%s': %s"),
@@ -653,7 +658,7 @@ static int rpc_read_from_out(struct rpc_state *rpc, int options,
 			memcpy(buf - 4, "0000", 4);
 			break;
 		case PACKET_READ_RESPONSE_END:
-			die(_("remote server sent stateless separator"));
+			die(_("remote server sent unexpected response end packet"));
 		}
 	}
 
@@ -709,7 +714,6 @@ static size_t rpc_out(void *ptr, size_t eltsize,
 	return avail;
 }
 
-#ifndef NO_CURL_IOCTL
 static curlioerr rpc_ioctl(CURL *handle, int cmd, void *clientp)
 {
 	struct rpc_state *rpc = clientp;
@@ -730,7 +734,6 @@ static curlioerr rpc_ioctl(CURL *handle, int cmd, void *clientp)
 		return CURLIOE_UNKNOWNCMD;
 	}
 }
-#endif
 
 struct check_pktline_state {
 	char len_buf[4];
@@ -858,7 +861,7 @@ static int probe_rpc(struct rpc_state *rpc, struct slot_results *results)
 	curl_easy_setopt(slot->curl, CURLOPT_POSTFIELDSIZE, 4);
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(slot->curl, CURLOPT_WRITEFUNCTION, fwrite_buffer);
-	curl_easy_setopt(slot->curl, CURLOPT_FILE, &buf);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEDATA, &buf);
 
 	err = run_slot(slot, results);
 
@@ -949,10 +952,8 @@ retry:
 		rpc->initial_buffer = 1;
 		curl_easy_setopt(slot->curl, CURLOPT_READFUNCTION, rpc_out);
 		curl_easy_setopt(slot->curl, CURLOPT_INFILE, rpc);
-#ifndef NO_CURL_IOCTL
 		curl_easy_setopt(slot->curl, CURLOPT_IOCTLFUNCTION, rpc_ioctl);
 		curl_easy_setopt(slot->curl, CURLOPT_IOCTLDATA, rpc);
-#endif
 		if (options.verbosity > 1) {
 			fprintf(stderr, "POST %s (chunked)\n", rpc->service_name);
 			fflush(stderr);
@@ -1023,7 +1024,7 @@ retry:
 	rpc_in_data.slot = slot;
 	rpc_in_data.check_pktline = stateless_connect;
 	memset(&rpc_in_data.pktline_state, 0, sizeof(rpc_in_data.pktline_state));
-	curl_easy_setopt(slot->curl, CURLOPT_FILE, &rpc_in_data);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEDATA, &rpc_in_data);
 	curl_easy_setopt(slot->curl, CURLOPT_FAILONERROR, 0);
 
 
@@ -1064,7 +1065,7 @@ static int rpc_service(struct rpc_state *rpc, struct discovery *heads,
 	client.in = -1;
 	client.out = -1;
 	client.git_cmd = 1;
-	client.argv = client_argv;
+	strvec_pushv(&client.args, client_argv);
 	if (start_command(&client))
 		exit(1);
 	write_or_die(client.in, preamble->buf, preamble->len);
@@ -1091,7 +1092,7 @@ static int rpc_service(struct rpc_state *rpc, struct discovery *heads,
 		rpc->protocol_header = NULL;
 
 	while (!err) {
-		int n = packet_read(rpc->out, NULL, NULL, rpc->buf, rpc->alloc, 0);
+		int n = packet_read(rpc->out, rpc->buf, rpc->alloc, 0);
 		if (!n)
 			break;
 		rpc->pos = 0;
@@ -1185,6 +1186,8 @@ static int fetch_git(struct discovery *heads,
 		strvec_push(&args, "--deepen-relative");
 	if (options.from_promisor)
 		strvec_push(&args, "--from-promisor");
+	if (options.refetch)
+		strvec_push(&args, "--refetch");
 	if (options.filter)
 		strvec_pushf(&args, "--filter=%s", options.filter);
 	strvec_push(&args, url.buf);
@@ -1475,18 +1478,19 @@ int cmd_main(int argc, const char **argv)
 {
 	struct strbuf buf = STRBUF_INIT;
 	int nongit;
+	int ret = 1;
 
 	setup_git_directory_gently(&nongit);
 	if (argc < 2) {
 		error(_("remote-curl: usage: git remote-curl <remote> [<url>]"));
-		return 1;
+		goto cleanup;
 	}
 
 	options.verbosity = 1;
 	options.progress = !!isatty(2);
 	options.thin = 1;
-	string_list_init(&options.deepen_not, 1);
-	string_list_init(&options.push_options, 1);
+	string_list_init_dup(&options.deepen_not);
+	string_list_init_dup(&options.push_options);
 
 	/*
 	 * Just report "remote-curl" here (folding all the various aliases
@@ -1511,7 +1515,7 @@ int cmd_main(int argc, const char **argv)
 		if (strbuf_getline_lf(&buf, stdin) == EOF) {
 			if (ferror(stdin))
 				error(_("remote-curl: error reading command stream from git"));
-			return 1;
+			goto cleanup;
 		}
 		if (buf.len == 0)
 			break;
@@ -1559,12 +1563,15 @@ int cmd_main(int argc, const char **argv)
 				break;
 		} else {
 			error(_("remote-curl: unknown command '%s' from git"), buf.buf);
-			return 1;
+			goto cleanup;
 		}
 		strbuf_reset(&buf);
 	} while (1);
 
 	http_cleanup();
+	ret = 0;
+cleanup:
+	strbuf_release(&buf);
 
-	return 0;
+	return ret;
 }

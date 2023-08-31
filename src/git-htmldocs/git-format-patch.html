@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-format-patch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -758,7 +758,7 @@ git-format-patch(1) Manual Page
                    [-n | --numbered | -N | --no-numbered]
                    [--start-number &lt;n&gt;] [--numbered-files]
                    [--in-reply-to=&lt;message id&gt;] [--suffix=.&lt;sfx&gt;]
-                   [--ignore-if-in-upstream]
+                   [--ignore-if-in-upstream] [--always]
                    [--cover-from-description=&lt;mode&gt;]
                    [--rfc] [--subject-prefix=&lt;subject prefix&gt;]
                    [(--reroll-count|-v) &lt;n&gt;]
@@ -1326,11 +1326,17 @@ of a delete/create pair.</p></div>
 </dt>
 <dd>
 <p>
-        The <code>-M</code> and <code>-C</code> options require O(n^2) processing time where n
-        is the number of potential rename/copy targets.  This
-        option prevents rename/copy detection from running if
-        the number of rename/copy targets exceeds the specified
-        number.
+        The <code>-M</code> and <code>-C</code> options involve some preliminary steps that
+        can detect subsets of renames/copies cheaply, followed by an
+        exhaustive fallback portion that compares all remaining
+        unpaired destinations to all relevant sources.  (For renames,
+        only remaining unpaired sources are relevant; for copies, all
+        original sources are relevant.)  For N sources and
+        destinations, this exhaustive check is O(N^2).  This option
+        prevents the exhaustive portion of rename/copy detection from
+        running if the number of source/destination files involved
+        exceeds the specified number.  Defaults to diff.renameLimit.
+        Note that a value of 0 is treated as unlimited.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1785,6 +1791,15 @@ will want to ensure that threading is disabled for <code>git send-email</code>.<
         from &lt;since&gt; but not from &lt;until&gt; and compare them with the
         patches being generated, and any patch that matches is
         ignored.
+</p>
+</dd>
+<dt class="hdlist1">
+--always
+</dt>
+<dd>
+<p>
+        Include patches for commits that do not introduce any change,
+        which are omitted by default.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2468,10 +2483,10 @@ prerequisite-patch-id: Z</code></pre>
 <div class="paragraph"><p>You can also use <code>git format-patch --base=P -3 C</code> to generate patches
 for A, B and C, and the identifiers for P, X, Y, Z are appended at the
 end of the first message.</p></div>
-<div class="paragraph"><p>If set <code>--base=auto</code> in cmdline, it will track base commit automatically,
-the base commit will be the merge base of tip commit of the remote-tracking
+<div class="paragraph"><p>If set <code>--base=auto</code> in cmdline, it will automatically compute
+the base commit as the merge base of tip commit of the remote-tracking
 branch and revision-range specified in cmdline.
-For a local branch, you need to track a remote branch by <code>git branch
+For a local branch, you need to make it to track a remote branch by <code>git branch
 --set-upstream-to</code> before using this option.</p></div>
 </div>
 </div>
@@ -2563,7 +2578,7 @@ merge commit.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-05-12 14:17:56 JST
+ 2022-01-05 14:13:29 PST
 </div>
 </div>
 </body>

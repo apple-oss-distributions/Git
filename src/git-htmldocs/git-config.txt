@@ -9,20 +9,20 @@ git-config - Get and set repository or global options
 SYNOPSIS
 --------
 [verse]
-'git config' [<file-option>] [--type=<type>] [--fixed-value] [--show-origin] [--show-scope] [-z|--null] name [value [value-pattern]]
-'git config' [<file-option>] [--type=<type>] --add name value
-'git config' [<file-option>] [--type=<type>] [--fixed-value] --replace-all name value [value-pattern]
-'git config' [<file-option>] [--type=<type>] [--show-origin] [--show-scope] [-z|--null] [--fixed-value] --get name [value-pattern]
-'git config' [<file-option>] [--type=<type>] [--show-origin] [--show-scope] [-z|--null] [--fixed-value] --get-all name [value-pattern]
-'git config' [<file-option>] [--type=<type>] [--show-origin] [--show-scope] [-z|--null] [--fixed-value] [--name-only] --get-regexp name_regex [value-pattern]
-'git config' [<file-option>] [--type=<type>] [-z|--null] --get-urlmatch name URL
-'git config' [<file-option>] [--fixed-value] --unset name [value-pattern]
-'git config' [<file-option>] [--fixed-value] --unset-all name [value-pattern]
-'git config' [<file-option>] --rename-section old_name new_name
-'git config' [<file-option>] --remove-section name
+'git config' [<file-option>] [--type=<type>] [--fixed-value] [--show-origin] [--show-scope] [-z|--null] <name> [<value> [<value-pattern>]]
+'git config' [<file-option>] [--type=<type>] --add <name> <value>
+'git config' [<file-option>] [--type=<type>] [--fixed-value] --replace-all <name> <value> [<value-pattern>]
+'git config' [<file-option>] [--type=<type>] [--show-origin] [--show-scope] [-z|--null] [--fixed-value] --get <name> [<value-pattern>]
+'git config' [<file-option>] [--type=<type>] [--show-origin] [--show-scope] [-z|--null] [--fixed-value] --get-all <name> [<value-pattern>]
+'git config' [<file-option>] [--type=<type>] [--show-origin] [--show-scope] [-z|--null] [--fixed-value] [--name-only] --get-regexp <name-regex> [<value-pattern>]
+'git config' [<file-option>] [--type=<type>] [-z|--null] --get-urlmatch <name> <URL>
+'git config' [<file-option>] [--fixed-value] --unset <name> [<value-pattern>]
+'git config' [<file-option>] [--fixed-value] --unset-all <name> [<value-pattern>]
+'git config' [<file-option>] --rename-section <old-name> <new-name>
+'git config' [<file-option>] --remove-section <name>
 'git config' [<file-option>] [--show-origin] [--show-scope] [-z|--null] [--name-only] -l | --list
-'git config' [<file-option>] --get-color name [default]
-'git config' [<file-option>] --get-colorbool name [stdout-is-tty]
+'git config' [<file-option>] --get-color <name> [<default>]
+'git config' [<file-option>] --get-colorbool <name> [<stdout-is-tty>]
 'git config' [<file-option>] -e | --edit
 
 DESCRIPTION
@@ -71,6 +71,10 @@ codes are:
 
 On success, the command returns the exit code 0.
 
+A list of all available configuration variables can be obtained using the
+`git help --config` command.
+
+[[OPTIONS]]
 OPTIONS
 -------
 
@@ -98,9 +102,9 @@ OPTIONS
 	in which section and variable names are lowercased, but subsection
 	names are not.
 
---get-urlmatch name URL::
+--get-urlmatch <name> <URL>::
 	When given a two-part name section.key, the value for
-	section.<url>.key whose <url> part matches the best to the
+	section.<URL>.key whose <URL> part matches the best to the
 	given URL is returned (if no such key exists, the value for
 	section.key is used as a fallback).  When given just the
 	section as name, do so for all the keys in the section and
@@ -137,15 +141,25 @@ from all available files.
 See also <<FILES>>.
 
 --worktree::
-	Similar to `--local` except that `.git/config.worktree` is
+	Similar to `--local` except that `$GIT_DIR/config.worktree` is
 	read from or written to if `extensions.worktreeConfig` is
-	present. If not it's the same as `--local`.
+	enabled. If not it's the same as `--local`. Note that `$GIT_DIR`
+	is equal to `$GIT_COMMON_DIR` for the main working tree, but is of
+	the form `$GIT_DIR/worktrees/<id>/` for other working trees. See
+	linkgit:git-worktree[1] to learn how to enable
+	`extensions.worktreeConfig`.
 
--f config-file::
---file config-file::
-	Use the given config file instead of the one specified by GIT_CONFIG.
+-f <config-file>::
+--file <config-file>::
+	For writing options: write to the specified file rather than the
+	repository `.git/config`.
++
+For reading options: read only from the specified file rather than from all
+available files.
++
+See also <<FILES>>.
 
---blob blob::
+--blob <blob>::
 	Similar to `--file` but use the given blob instead of a file. E.g.
 	you can use 'master:.gitmodules' to read values from the file
 	'.gitmodules' in the master branch. See "SPECIFYING REVISIONS"
@@ -234,20 +248,20 @@ Valid `<type>`'s include:
 --show-scope::
 	Similar to `--show-origin` in that it augments the output of
 	all queried config options with the scope of that value
-	(local, global, system, command).
+	(worktree, local, global, system, command).
 
---get-colorbool name [stdout-is-tty]::
+--get-colorbool <name> [<stdout-is-tty>]::
 
-	Find the color setting for `name` (e.g. `color.diff`) and output
-	"true" or "false".  `stdout-is-tty` should be either "true" or
+	Find the color setting for `<name>` (e.g. `color.diff`) and output
+	"true" or "false".  `<stdout-is-tty>` should be either "true" or
 	"false", and is taken into account when configuration says
-	"auto".  If `stdout-is-tty` is missing, then checks the standard
+	"auto".  If `<stdout-is-tty>` is missing, then checks the standard
 	output of the command itself, and exits with status 0 if color
 	is to be used, or exits with status 1 otherwise.
 	When the color setting for `name` is undefined, the command uses
 	`color.ui` as fallback.
 
---get-color name [default]::
+--get-color <name> [<default>]::
 
 	Find the color configured for `name` (e.g. `color.diff.new`) and
 	output it as the ANSI color escape sequence to the standard
@@ -325,20 +339,13 @@ All writing options will per default write to the repository specific
 configuration file. Note that this also affects options like `--replace-all`
 and `--unset`. *'git config' will only ever change one file at a time*.
 
-You can override these rules either by command-line options or by environment
-variables. The `--global`, `--system` and `--worktree` options will limit
-the file used to the global, system-wide or per-worktree file respectively.
-The `GIT_CONFIG` environment variable has a similar effect, but you
-can specify any filename you want.
+You can override these rules using the `--global`, `--system`,
+`--local`, `--worktree`, and `--file` command-line options; see
+<<OPTIONS>> above.
 
 
 ENVIRONMENT
 -----------
-
-GIT_CONFIG::
-	Take the configuration from the given file instead of .git/config.
-	Using the "--global" option forces this to ~/.gitconfig. Using the
-	"--system" option forces this to $(prefix)/etc/gitconfig.
 
 GIT_CONFIG_GLOBAL::
 GIT_CONFIG_SYSTEM::
@@ -367,6 +374,12 @@ This is useful for cases where you want to spawn multiple git commands
 with a common configuration but cannot depend on a configuration file,
 for example when writing scripts.
 
+GIT_CONFIG::
+	If no `--file` option is provided to `git config`, use the file
+	given by `GIT_CONFIG` as if it were provided via `--file`. This
+	variable has no effect on other Git commands, and is mostly for
+	historical compatibility; there is generally no reason to use it
+	instead of the `--file` option.
 
 [[EXAMPLES]]
 EXAMPLES

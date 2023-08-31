@@ -63,6 +63,12 @@ struct hostinfo {
 	unsigned int hostname_lookup_done:1;
 	unsigned int saw_extended_args:1;
 };
+#define HOSTINFO_INIT { \
+	.hostname = STRBUF_INIT, \
+	.canon_hostname = STRBUF_INIT, \
+	.ip_address = STRBUF_INIT, \
+	.tcp_port = STRBUF_INIT, \
+}
 
 static void lookup_hostname(struct hostinfo *hi);
 
@@ -226,13 +232,13 @@ static const char *path_ok(const char *directory, struct hostinfo *hi)
 
 		rlen = strlcpy(interp_path, expanded_path.buf,
 			       sizeof(interp_path));
+		strbuf_release(&expanded_path);
 		if (rlen >= sizeof(interp_path)) {
 			logerror("interpolated path too large: %s",
 				 interp_path);
 			return NULL;
 		}
 
-		strbuf_release(&expanded_path);
 		loginfo("Interpolated dir '%s'", interp_path);
 
 		dir = interp_path;
@@ -320,22 +326,18 @@ static int run_access_hook(struct daemon_service *service, const char *dir,
 {
 	struct child_process child = CHILD_PROCESS_INIT;
 	struct strbuf buf = STRBUF_INIT;
-	const char *argv[8];
-	const char **arg = argv;
 	char *eol;
 	int seen_errors = 0;
 
-	*arg++ = access_hook;
-	*arg++ = service->name;
-	*arg++ = path;
-	*arg++ = hi->hostname.buf;
-	*arg++ = get_canon_hostname(hi);
-	*arg++ = get_ip_address(hi);
-	*arg++ = hi->tcp_port.buf;
-	*arg = NULL;
+	strvec_push(&child.args, access_hook);
+	strvec_push(&child.args, service->name);
+	strvec_push(&child.args, path);
+	strvec_push(&child.args, hi->hostname.buf);
+	strvec_push(&child.args, get_canon_hostname(hi));
+	strvec_push(&child.args, get_ip_address(hi));
+	strvec_push(&child.args, hi->tcp_port.buf);
 
 	child.use_shell = 1;
-	child.argv = argv;
 	child.no_stdin = 1;
 	child.no_stderr = 1;
 	child.out = -1;
@@ -445,7 +447,7 @@ static void copy_to_log(int fd)
 	FILE *fp;
 
 	fp = fdopen(fd, "r");
-	if (fp == NULL) {
+	if (!fp) {
 		logerror("fdopen of error channel failed");
 		close(fd);
 		return;
@@ -482,7 +484,7 @@ static int upload_pack(const struct strvec *env)
 	strvec_pushl(&cld.args, "upload-pack", "--strict", NULL);
 	strvec_pushf(&cld.args, "--timeout=%u", timeout);
 
-	strvec_pushv(&cld.env_array, env->v);
+	strvec_pushv(&cld.env, env->v);
 
 	return run_service_command(&cld);
 }
@@ -492,7 +494,7 @@ static int upload_archive(const struct strvec *env)
 	struct child_process cld = CHILD_PROCESS_INIT;
 	strvec_push(&cld.args, "upload-archive");
 
-	strvec_pushv(&cld.env_array, env->v);
+	strvec_pushv(&cld.env, env->v);
 
 	return run_service_command(&cld);
 }
@@ -502,7 +504,7 @@ static int receive_pack(const struct strvec *env)
 	struct child_process cld = CHILD_PROCESS_INIT;
 	strvec_push(&cld.args, "receive-pack");
 
-	strvec_pushv(&cld.env_array, env->v);
+	strvec_pushv(&cld.env, env->v);
 
 	return run_service_command(&cld);
 }
@@ -727,15 +729,6 @@ static void lookup_hostname(struct hostinfo *hi)
 	}
 }
 
-static void hostinfo_init(struct hostinfo *hi)
-{
-	memset(hi, 0, sizeof(*hi));
-	strbuf_init(&hi->hostname, 0);
-	strbuf_init(&hi->canon_hostname, 0);
-	strbuf_init(&hi->ip_address, 0);
-	strbuf_init(&hi->tcp_port, 0);
-}
-
 static void hostinfo_clear(struct hostinfo *hi)
 {
 	strbuf_release(&hi->hostname);
@@ -760,17 +753,15 @@ static int execute(void)
 	char *line = packet_buffer;
 	int pktlen, len, i;
 	char *addr = getenv("REMOTE_ADDR"), *port = getenv("REMOTE_PORT");
-	struct hostinfo hi;
+	struct hostinfo hi = HOSTINFO_INIT;
 	struct strvec env = STRVEC_INIT;
-
-	hostinfo_init(&hi);
 
 	if (addr)
 		loginfo("Connection from %s:%s", addr, port);
 
 	set_keep_alive(0);
 	alarm(init_timeout ? init_timeout : timeout);
-	pktlen = packet_read(0, NULL, NULL, packet_buffer, sizeof(packet_buffer), 0);
+	pktlen = packet_read(0, packet_buffer, sizeof(packet_buffer), 0);
 	alarm(0);
 
 	len = strlen(line);
@@ -913,21 +904,21 @@ static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 		char buf[128] = "";
 		struct sockaddr_in *sin_addr = (void *) addr;
 		inet_ntop(addr->sa_family, &sin_addr->sin_addr, buf, sizeof(buf));
-		strvec_pushf(&cld.env_array, "REMOTE_ADDR=%s", buf);
-		strvec_pushf(&cld.env_array, "REMOTE_PORT=%d",
+		strvec_pushf(&cld.env, "REMOTE_ADDR=%s", buf);
+		strvec_pushf(&cld.env, "REMOTE_PORT=%d",
 			     ntohs(sin_addr->sin_port));
 #ifndef NO_IPV6
 	} else if (addr->sa_family == AF_INET6) {
 		char buf[128] = "";
 		struct sockaddr_in6 *sin6_addr = (void *) addr;
 		inet_ntop(AF_INET6, &sin6_addr->sin6_addr, buf, sizeof(buf));
-		strvec_pushf(&cld.env_array, "REMOTE_ADDR=[%s]", buf);
-		strvec_pushf(&cld.env_array, "REMOTE_PORT=%d",
+		strvec_pushf(&cld.env, "REMOTE_ADDR=[%s]", buf);
+		strvec_pushf(&cld.env, "REMOTE_PORT=%d",
 			     ntohs(sin6_addr->sin6_port));
 #endif
 	}
 
-	cld.argv = cld_argv.v;
+	strvec_pushv(&cld.args, cld_argv.v);
 	cld.in = incoming;
 	cld.out = dup(incoming);
 

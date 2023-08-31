@@ -2,12 +2,12 @@
 .\"     Title: git-pack-objects
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-PACK\-OBJECTS" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-PACK\-OBJECTS" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -36,8 +36,9 @@ git-pack-objects \- Create a packed archive of objects
         [\-\-no\-reuse\-delta] [\-\-delta\-base\-offset] [\-\-non\-empty]
         [\-\-local] [\-\-incremental] [\-\-window=<n>] [\-\-depth=<n>]
         [\-\-revs [\-\-unpacked | \-\-all]] [\-\-keep\-pack=<pack\-name>]
-        [\-\-stdout [\-\-filter=<filter\-spec>] | base\-name]
-        [\-\-shallow] [\-\-keep\-true\-parents] [\-\-[no\-]sparse] < object\-list
+        [\-\-cruft] [\-\-cruft\-expiration=<time>]
+        [\-\-stdout [\-\-filter=<filter\-spec>] | <base\-name>]
+        [\-\-shallow] [\-\-keep\-true\-parents] [\-\-[no\-]sparse] < <object\-list>
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -112,6 +113,39 @@ Incompatible with
 \fB\-\-unpacked\fR, which is compatible\&.
 .RE
 .PP
+\-\-cruft
+.RS 4
+Packs unreachable objects into a separate "cruft" pack, denoted by the existence of a
+\fB\&.mtimes\fR
+file\&. Typically used by
+\fBgit repack \-\-cruft\fR\&. Callers provide a list of pack names and indicate which packs will remain in the repository, along with which packs will be deleted (indicated by the
+\fB\-\fR
+prefix)\&. The contents of the cruft pack are all objects not contained in the surviving packs which have not exceeded the grace period (see
+\fB\-\-cruft\-expiration\fR
+below), or which have exceeded the grace period, but are reachable from an other object which hasn\(cqt\&.
+.sp
+When the input lists a pack containing all reachable objects (and lists all other packs as pending deletion), the corresponding cruft pack will contain all unreachable objects (with mtime newer than the
+\fB\-\-cruft\-expiration\fR) along with any unreachable objects whose mtime is older than the
+\fB\-\-cruft\-expiration\fR, but are reachable from an unreachable object whose mtime is newer than the
+\fB\-\-cruft\-expiration\fR)\&.
+.sp
+Incompatible with
+\fB\-\-unpack\-unreachable\fR,
+\fB\-\-keep\-unreachable\fR,
+\fB\-\-pack\-loose\-unreachable\fR,
+\fB\-\-stdin\-packs\fR, as well as any other options which imply
+\fB\-\-revs\fR\&. Also incompatible with
+\fB\-\-max\-pack\-size\fR; when this option is set, the maximum pack size is not inferred from
+\fBpack\&.packSizeLimit\fR\&.
+.RE
+.PP
+\-\-cruft\-expiration=<approxidate>
+.RS 4
+If specified, objects are eliminated from the cruft pack if they have an mtime older than
+\fB<approxidate>\fR\&. If unspecified (and given
+\fB\-\-cruft\fR), then no objects are eliminated\&.
+.RE
+.PP
 \-\-window=<n>, \-\-depth=<n>
 .RS 4
 These two options affect how the objects contained in the pack are stored using delta compression\&. The objects are first internally sorted by type, size and optionally names and compared against the other objects within \-\-window to see if using delta compression saves space\&. \-\-depth limits the maximum delta depth; making it too deep affects the performance on the unpacker side, because delta data needs to be applied that many times to get to the necessary object\&.
@@ -133,9 +167,10 @@ configuration variable\&.
 .PP
 \-\-max\-pack\-size=<n>
 .RS 4
-In unusual scenarios, you may not be able to create files larger than a certain size on your filesystem, and this option can be used to tell the command to split the output packfile into multiple independent packfiles, each not larger than the given size\&. The size can be suffixed with "k", "m", or "g"\&. The minimum size allowed is limited to 1 MiB\&. This option prevents the creation of a bitmap index\&. The default is unlimited, unless the config variable
+In unusual scenarios, you may not be able to create files larger than a certain size on your filesystem, and this option can be used to tell the command to split the output packfile into multiple independent packfiles, each not larger than the given size\&. The size can be suffixed with "k", "m", or "g"\&. The minimum size allowed is limited to 1 MiB\&. The default is unlimited, unless the config variable
 \fBpack\&.packSizeLimit\fR
-is set\&.
+is set\&. Note that this option may result in a larger and slower repository; see the discussion in
+\fBpack\&.packSizeLimit\fR\&.
 .RE
 .PP
 \-\-honor\-pack\-keep

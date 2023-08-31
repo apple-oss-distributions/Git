@@ -34,6 +34,110 @@ test_expect_success 'setup' '
 	} >expect
 '
 
+test_expect_success 'setup pack-object <stdin' '
+	git init pack-object-stdin &&
+	test_commit -C pack-object-stdin one &&
+	test_commit -C pack-object-stdin two
+
+'
+
+test_expect_success 'pack-object <stdin parsing: basic [|--revs]' '
+	cat >in <<-EOF &&
+	$(git -C pack-object-stdin rev-parse one)
+	EOF
+
+	git -C pack-object-stdin pack-objects basic-stdin <in &&
+	idx=$(echo pack-object-stdin/basic-stdin-*.idx) &&
+	git show-index <"$idx" >actual &&
+	test_line_count = 1 actual &&
+
+	git -C pack-object-stdin pack-objects --revs basic-stdin-revs <in &&
+	idx=$(echo pack-object-stdin/basic-stdin-revs-*.idx) &&
+	git show-index <"$idx" >actual &&
+	test_line_count = 3 actual
+'
+
+test_expect_success 'pack-object <stdin parsing: [|--revs] bad line' '
+	cat >in <<-EOF &&
+	$(git -C pack-object-stdin rev-parse one)
+	garbage
+	$(git -C pack-object-stdin rev-parse two)
+	EOF
+
+	sed "s/^> //g" >err.expect <<-EOF &&
+	fatal: expected object ID, got garbage:
+	>  garbage
+
+	EOF
+	test_must_fail git -C pack-object-stdin pack-objects bad-line-stdin <in 2>err.actual &&
+	test_cmp err.expect err.actual &&
+
+	cat >err.expect <<-EOF &&
+	fatal: bad revision '"'"'garbage'"'"'
+	EOF
+	test_must_fail git -C pack-object-stdin pack-objects --revs bad-line-stdin-revs <in 2>err.actual &&
+	test_cmp err.expect err.actual
+'
+
+test_expect_success 'pack-object <stdin parsing: [|--revs] empty line' '
+	cat >in <<-EOF &&
+	$(git -C pack-object-stdin rev-parse one)
+
+	$(git -C pack-object-stdin rev-parse two)
+	EOF
+
+	sed -e "s/^> //g" -e "s/Z$//g" >err.expect <<-EOF &&
+	fatal: expected object ID, got garbage:
+	>  Z
+
+	EOF
+	test_must_fail git -C pack-object-stdin pack-objects empty-line-stdin <in 2>err.actual &&
+	test_cmp err.expect err.actual &&
+
+	git -C pack-object-stdin pack-objects --revs empty-line-stdin-revs <in &&
+	idx=$(echo pack-object-stdin/empty-line-stdin-revs-*.idx) &&
+	git show-index <"$idx" >actual &&
+	test_line_count = 3 actual
+'
+
+test_expect_success 'pack-object <stdin parsing: [|--revs] with --stdin' '
+	cat >in <<-EOF &&
+	$(git -C pack-object-stdin rev-parse one)
+	$(git -C pack-object-stdin rev-parse two)
+	EOF
+
+	# There is the "--stdin-packs is incompatible with --revs"
+	# test below, but we should make sure that the revision.c
+	# --stdin is not picked up
+	cat >err.expect <<-EOF &&
+	fatal: disallowed abbreviated or ambiguous option '"'"'stdin'"'"'
+	EOF
+	test_must_fail git -C pack-object-stdin pack-objects stdin-with-stdin-option --stdin <in 2>err.actual &&
+	test_cmp err.expect err.actual &&
+
+	test_must_fail git -C pack-object-stdin pack-objects --stdin --revs stdin-with-stdin-option-revs 2>err.actual <in &&
+	test_cmp err.expect err.actual
+'
+
+test_expect_success 'pack-object <stdin parsing: --stdin-packs handles garbage' '
+	cat >in <<-EOF &&
+	$(git -C pack-object-stdin rev-parse one)
+	$(git -C pack-object-stdin rev-parse two)
+	EOF
+
+	# That we get "two" and not "one" has to do with OID
+	# ordering. It happens to be the same here under SHA-1 and
+	# SHA-256. See commentary in pack-objects.c
+	cat >err.expect <<-EOF &&
+	fatal: could not find pack '"'"'$(git -C pack-object-stdin rev-parse two)'"'"'
+	EOF
+	test_must_fail git \
+		-C pack-object-stdin \
+		pack-objects stdin-with-stdin-option --stdin-packs \
+		<in 2>err.actual &&
+	test_cmp err.expect err.actual
+'
+
 # usage: check_deltas <stderr_from_pack_objects> <cmp_op> <nr_deltas>
 # e.g.: check_deltas stderr -gt 0
 check_deltas() {
@@ -57,22 +161,27 @@ test_expect_success 'pack-objects with bogus arguments' '
 '
 
 check_unpack () {
+	local packname="$1" &&
+	local object_list="$2" &&
+	local git_config="$3" &&
 	test_when_finished "rm -rf git2" &&
-	git init --bare git2 &&
-	git -C git2 unpack-objects -n <"$1".pack &&
-	git -C git2 unpack-objects <"$1".pack &&
-	(cd .git && find objects -type f -print) |
-	while read path
-	do
-		cmp git2/$path .git/$path || {
-			echo $path differs.
-			return 1
-		}
-	done
+	git $git_config init --bare git2 &&
+	(
+		git $git_config -C git2 unpack-objects -n <"$packname".pack &&
+		git $git_config -C git2 unpack-objects <"$packname".pack &&
+		git $git_config -C git2 cat-file --batch-check="%(objectname)"
+	) <"$object_list" >current &&
+	cmp "$object_list" current
 }
 
 test_expect_success 'unpack without delta' '
-	check_unpack test-1-${packname_1}
+	check_unpack test-1-${packname_1} obj-list
+'
+
+BATCH_CONFIGURATION='-c core.fsync=loose-object -c core.fsyncmethod=batch'
+
+test_expect_success 'unpack without delta (core.fsyncmethod=batch)' '
+	check_unpack test-1-${packname_1} obj-list "$BATCH_CONFIGURATION"
 '
 
 test_expect_success 'pack with REF_DELTA' '
@@ -81,7 +190,11 @@ test_expect_success 'pack with REF_DELTA' '
 '
 
 test_expect_success 'unpack with REF_DELTA' '
-	check_unpack test-2-${packname_2}
+	check_unpack test-2-${packname_2} obj-list
+'
+
+test_expect_success 'unpack with REF_DELTA (core.fsyncmethod=batch)' '
+       check_unpack test-2-${packname_2} obj-list "$BATCH_CONFIGURATION"
 '
 
 test_expect_success 'pack with OFS_DELTA' '
@@ -91,7 +204,11 @@ test_expect_success 'pack with OFS_DELTA' '
 '
 
 test_expect_success 'unpack with OFS_DELTA' '
-	check_unpack test-3-${packname_3}
+	check_unpack test-3-${packname_3} obj-list
+'
+
+test_expect_success 'unpack with OFS_DELTA (core.fsyncmethod=batch)' '
+       check_unpack test-3-${packname_3} obj-list "$BATCH_CONFIGURATION"
 '
 
 test_expect_success 'compare delta flavors' '
@@ -211,8 +328,10 @@ test_expect_success \
      git index-pack -o tmp.idx test-3.pack &&
      cmp tmp.idx test-1-${packname_1}.idx &&
 
-     git index-pack test-3.pack &&
+     git index-pack --promisor=message test-3.pack &&
      cmp test-3.idx test-1-${packname_1}.idx &&
+     echo message >expect &&
+     test_cmp expect test-3.promisor &&
 
      cat test-2-${packname_2}.pack >test-3.pack &&
      git index-pack -o tmp.idx test-2-${packname_2}.pack &&
@@ -243,7 +362,7 @@ test_expect_success 'unpacking with --strict' '
 		for i in 0 1 2 3 4 5 6 7 8 9
 		do
 			o=$(echo $j$i | git hash-object -w --stdin) &&
-			echo "100644 $o	0 $j$i"
+			echo "100644 $o	0 $j$i" || return 1
 		done
 	done >LIST &&
 	rm -f .git/index &&
@@ -257,11 +376,7 @@ test_expect_success 'unpacking with --strict' '
 	ST=$(git write-tree) &&
 	git rev-list --objects "$LIST" "$LI" "$ST" >actual &&
 	PACK5=$( git pack-objects test-5 <actual ) &&
-	PACK6=$( (
-			echo "$LIST"
-			echo "$LI"
-			echo "$ST"
-		 ) | git pack-objects test-6 ) &&
+	PACK6=$( test_write_lines "$LIST" "$LI" "$ST" | git pack-objects test-6 ) &&
 	test_create_repo test-5 &&
 	(
 		cd test-5 &&
@@ -290,7 +405,7 @@ test_expect_success 'index-pack with --strict' '
 		for i in 0 1 2 3 4 5 6 7 8 9
 		do
 			o=$(echo $j$i | git hash-object -w --stdin) &&
-			echo "100644 $o	0 $j$i"
+			echo "100644 $o	0 $j$i" || return 1
 		done
 	done >LIST &&
 	rm -f .git/index &&
@@ -304,11 +419,7 @@ test_expect_success 'index-pack with --strict' '
 	ST=$(git write-tree) &&
 	git rev-list --objects "$LIST" "$LI" "$ST" >actual &&
 	PACK5=$( git pack-objects test-5 <actual ) &&
-	PACK6=$( (
-			echo "$LIST"
-			echo "$LI"
-			echo "$ST"
-		 ) | git pack-objects test-6 ) &&
+	PACK6=$( test_write_lines "$LIST" "$LI" "$ST" | git pack-objects test-6 ) &&
 	test_create_repo test-7 &&
 	(
 		cd test-7 &&
@@ -490,7 +601,7 @@ test_expect_success 'setup for --stdin-packs tests' '
 		for id in A B C
 		do
 			git pack-objects .git/objects/pack/pack-$id \
-				--incremental --revs <<-EOF
+				--incremental --revs <<-EOF || exit 1
 			refs/tags/$id
 			EOF
 		done &&

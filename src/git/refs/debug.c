@@ -26,7 +26,8 @@ struct ref_store *maybe_debug_wrap_ref_store(const char *gitdir, struct ref_stor
 	be_copy->name = store->be->name;
 	trace_printf_key(&trace_refs, "ref_store for %s\n", gitdir);
 	res->refs = store;
-	base_ref_store_init((struct ref_store *)res, be_copy);
+	base_ref_store_init((struct ref_store *)res, store->repo, gitdir,
+			    be_copy);
 	return (struct ref_store *)res;
 }
 
@@ -47,7 +48,8 @@ static int debug_transaction_prepare(struct ref_store *refs,
 	transaction->ref_store = drefs->refs;
 	res = drefs->refs->be->transaction_prepare(drefs->refs, transaction,
 						   err);
-	trace_printf_key(&trace_refs, "transaction_prepare: %d\n", res);
+	trace_printf_key(&trace_refs, "transaction_prepare: %d \"%s\"\n", res,
+			 err->buf);
 	return res;
 }
 
@@ -218,8 +220,9 @@ static int debug_ref_iterator_abort(struct ref_iterator *ref_iterator)
 }
 
 static struct ref_iterator_vtable debug_ref_iterator_vtable = {
-	debug_ref_iterator_advance, debug_ref_iterator_peel,
-	debug_ref_iterator_abort
+	.advance = debug_ref_iterator_advance,
+	.peel = debug_ref_iterator_peel,
+	.abort = debug_ref_iterator_abort,
 };
 
 static struct ref_iterator *
@@ -232,21 +235,21 @@ debug_ref_iterator_begin(struct ref_store *ref_store, const char *prefix,
 	struct debug_ref_iterator *diter = xcalloc(1, sizeof(*diter));
 	base_ref_iterator_init(&diter->base, &debug_ref_iterator_vtable, 1);
 	diter->iter = res;
-	trace_printf_key(&trace_refs, "ref_iterator_begin: %s (0x%x)\n", prefix, flags);
+	trace_printf_key(&trace_refs, "ref_iterator_begin: \"%s\" (0x%x)\n",
+			 prefix, flags);
 	return &diter->base;
 }
 
 static int debug_read_raw_ref(struct ref_store *ref_store, const char *refname,
 			      struct object_id *oid, struct strbuf *referent,
-			      unsigned int *type)
+			      unsigned int *type, int *failure_errno)
 {
 	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
 	int res = 0;
 
 	oidcpy(oid, null_oid());
-	errno = 0;
 	res = drefs->refs->be->read_raw_ref(drefs->refs, refname, oid, referent,
-					    type);
+					    type, failure_errno);
 
 	if (res == 0) {
 		trace_printf_key(&trace_refs, "read_raw_ref: %s: %s (=> %s) type %x: %d\n",
@@ -254,9 +257,27 @@ static int debug_read_raw_ref(struct ref_store *ref_store, const char *refname,
 	} else {
 		trace_printf_key(&trace_refs,
 				 "read_raw_ref: %s: %d (errno %d)\n", refname,
-				 res, errno);
+				 res, *failure_errno);
 	}
 	return res;
+}
+
+static int debug_read_symbolic_ref(struct ref_store *ref_store, const char *refname,
+				   struct strbuf *referent)
+{
+	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
+	struct ref_store *refs = drefs->refs;
+	int res;
+
+	res = refs->be->read_symbolic_ref(refs, refname, referent);
+	if (!res)
+		trace_printf_key(&trace_refs, "read_symbolic_ref: %s: (%s)\n",
+				 refname, referent->buf);
+	else
+		trace_printf_key(&trace_refs,
+				 "read_symbolic_ref: %s: %d\n", refname, res);
+	return res;
+
 }
 
 static struct ref_iterator *
@@ -284,6 +305,7 @@ static int debug_print_reflog_ent(struct object_id *old_oid,
 	int ret;
 	char o[GIT_MAX_HEXSZ + 1] = "null";
 	char n[GIT_MAX_HEXSZ + 1] = "null";
+	char *msgend = strchrnul(msg, '\n');
 	if (old_oid)
 		oid_to_hex_r(o, old_oid);
 	if (new_oid)
@@ -291,8 +313,10 @@ static int debug_print_reflog_ent(struct object_id *old_oid,
 
 	ret = dbg->fn(old_oid, new_oid, committer, timestamp, tz, msg,
 		      dbg->cb_data);
-	trace_printf_key(&trace_refs, "reflog_ent %s (ret %d): %s -> %s, %s %ld \"%s\"\n",
-		dbg->refname, ret, o, n, committer, (long int)timestamp, msg);
+	trace_printf_key(&trace_refs,
+			 "reflog_ent %s (ret %d): %s -> %s, %s %ld \"%.*s\"\n",
+			 dbg->refname, ret, o, n, committer,
+			 (long int)timestamp, (int)(msgend - msg), msg);
 	return ret;
 }
 
@@ -339,11 +363,10 @@ static int debug_reflog_exists(struct ref_store *ref_store, const char *refname)
 }
 
 static int debug_create_reflog(struct ref_store *ref_store, const char *refname,
-			       int force_create, struct strbuf *err)
+			       struct strbuf *err)
 {
 	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
-	int res = drefs->refs->be->create_reflog(drefs->refs, refname,
-						 force_create, err);
+	int res = drefs->refs->be->create_reflog(drefs->refs, refname, err);
 	trace_printf_key(&trace_refs, "create_reflog: %s: %d\n", refname, res);
 	return res;
 }
@@ -364,8 +387,8 @@ struct debug_reflog_expiry_should_prune {
 };
 
 static void debug_reflog_expiry_prepare(const char *refname,
-				    const struct object_id *oid,
-				    void *cb_data)
+					const struct object_id *oid,
+					void *cb_data)
 {
 	struct debug_reflog_expiry_should_prune *prune = cb_data;
 	trace_printf_key(&trace_refs, "reflog_expire_prepare: %s\n", refname);
@@ -391,7 +414,7 @@ static void debug_reflog_expiry_cleanup(void *cb_data)
 }
 
 static int debug_reflog_expire(struct ref_store *ref_store, const char *refname,
-			       const struct object_id *oid, unsigned int flags,
+			       unsigned int flags,
 			       reflog_expiry_prepare_fn prepare_fn,
 			       reflog_expiry_should_prune_fn should_prune_fn,
 			       reflog_expiry_cleanup_fn cleanup_fn,
@@ -404,7 +427,7 @@ static int debug_reflog_expire(struct ref_store *ref_store, const char *refname,
 		.should_prune = should_prune_fn,
 		.cb_data = policy_cb_data,
 	};
-	int res = drefs->refs->be->reflog_expire(drefs->refs, refname, oid,
+	int res = drefs->refs->be->reflog_expire(drefs->refs, refname,
 						 flags, &debug_reflog_expiry_prepare,
 						 &debug_reflog_expiry_should_prune_fn,
 						 &debug_reflog_expiry_cleanup,
@@ -414,29 +437,37 @@ static int debug_reflog_expire(struct ref_store *ref_store, const char *refname,
 }
 
 struct ref_storage_be refs_be_debug = {
-	NULL,
-	"debug",
-	NULL,
-	debug_init_db,
-	debug_transaction_prepare,
-	debug_transaction_finish,
-	debug_transaction_abort,
-	debug_initial_transaction_commit,
+	.next = NULL,
+	.name = "debug",
+	.init = NULL,
+	.init_db = debug_init_db,
 
-	debug_pack_refs,
-	debug_create_symref,
-	debug_delete_refs,
-	debug_rename_ref,
-	debug_copy_ref,
+	/*
+	 * None of these should be NULL. If the "files" backend (in
+	 * "struct ref_storage_be refs_be_files" in files-backend.c)
+	 * has a function we should also have a wrapper for it here.
+	 * Test the output with "GIT_TRACE_REFS=1".
+	 */
+	.transaction_prepare = debug_transaction_prepare,
+	.transaction_finish = debug_transaction_finish,
+	.transaction_abort = debug_transaction_abort,
+	.initial_transaction_commit = debug_initial_transaction_commit,
 
-	debug_ref_iterator_begin,
-	debug_read_raw_ref,
+	.pack_refs = debug_pack_refs,
+	.create_symref = debug_create_symref,
+	.delete_refs = debug_delete_refs,
+	.rename_ref = debug_rename_ref,
+	.copy_ref = debug_copy_ref,
 
-	debug_reflog_iterator_begin,
-	debug_for_each_reflog_ent,
-	debug_for_each_reflog_ent_reverse,
-	debug_reflog_exists,
-	debug_create_reflog,
-	debug_delete_reflog,
-	debug_reflog_expire,
+	.iterator_begin = debug_ref_iterator_begin,
+	.read_raw_ref = debug_read_raw_ref,
+	.read_symbolic_ref = debug_read_symbolic_ref,
+
+	.reflog_iterator_begin = debug_reflog_iterator_begin,
+	.for_each_reflog_ent = debug_for_each_reflog_ent,
+	.for_each_reflog_ent_reverse = debug_for_each_reflog_ent_reverse,
+	.reflog_exists = debug_reflog_exists,
+	.create_reflog = debug_create_reflog,
+	.delete_reflog = debug_delete_reflog,
+	.reflog_expire = debug_reflog_expire,
 };

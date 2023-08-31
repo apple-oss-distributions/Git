@@ -2,12 +2,12 @@
 .\"     Title: git-multi-pack-index
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-MULTI\-PACK\-IN" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-MULTI\-PACK\-IN" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,8 +32,7 @@ git-multi-pack-index \- Write and verify multi\-pack\-indexes
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit multi\-pack\-index\fR [\-\-object\-dir=<dir>] [\-\-[no\-]progress]
-        [\-\-preferred\-pack=<pack>] <subcommand>
+\fIgit multi\-pack\-index\fR [\-\-object\-dir=<dir>] [\-\-[no\-]bitmap] <sub\-command>
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -48,11 +47,17 @@ Use given directory for the location of Git objects\&. We check
 for the current MIDX file, and
 \fB<dir>/packs\fR
 for the pack\-files to index\&.
+.sp
+\fB<dir>\fR
+must be an alternate of the current repository\&.
 .RE
 .PP
 \-\-[no\-]progress
 .RS 4
-Turn progress on/off explicitly\&. If neither is specified, progress is shown if standard error is connected to a terminal\&.
+Turn progress on/off explicitly\&. If neither is specified, progress is shown if standard error is connected to a terminal\&. Supported by sub\-commands
+\fBwrite\fR,
+\fBverify\fR,
+\fBexpire\fR, and `repack\&.
 .RE
 .sp
 The following subcommands are available:
@@ -65,7 +70,39 @@ sub\-command:
 .PP
 \-\-preferred\-pack=<pack>
 .RS 4
-Optionally specify the tie\-breaking pack used when multiple packs contain the same object\&. If not given, ties are broken in favor of the pack with the lowest mtime\&.
+Optionally specify the tie\-breaking pack used when multiple packs contain the same object\&.
+\fB<pack>\fR
+must contain at least one object\&. If not given, ties are broken in favor of the pack with the lowest mtime\&.
+.RE
+.PP
+\-\-[no\-]bitmap
+.RS 4
+Control whether or not a multi\-pack bitmap is written\&.
+.RE
+.PP
+\-\-stdin\-packs
+.RS 4
+Write a multi\-pack index containing only the set of line\-delimited pack index basenames provided over stdin\&.
+.RE
+.PP
+\-\-refs\-snapshot=<path>
+.RS 4
+With
+\fB\-\-bitmap\fR, optionally specify a file which contains a "refs snapshot" taken prior to repacking\&.
+.sp
+A reference snapshot is composed of line\-delimited OIDs corresponding to the reference tips, usually taken by
+\fBgit repack\fR
+prior to generating a new pack\&. A line may optionally start with a
+\fB+\fR
+character to indicate that the reference which corresponds to that OID is "preferred" (see
+\fBgit-config\fR(1)\(aqs
+\fBpack\&.preferBitmapTips\fR\&.)
+.sp
+The file given at
+\fB<path>\fR
+is expected to be readable, and can contain duplicates\&. (If a given OID is given more than once, it is marked as preferred if at least one instance of it begins with the special
+\fB+\fR
+marker)\&.
 .RE
 .RE
 .PP
@@ -104,13 +141,39 @@ file will not be selected for the batch to repack\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-Write a MIDX file for the packfiles in the current \&.git folder\&.
+Write a MIDX file for the packfiles in the current
+\fB\&.git\fR
+directory\&.
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
 $ git multi\-pack\-index write
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Write a MIDX file for the packfiles in the current
+\fB\&.git\fR
+directory with a corresponding bitmap\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git multi\-pack\-index write \-\-preferred\-pack=<pack> \-\-bitmap
 .fi
 .if n \{\
 .RE
@@ -148,7 +211,9 @@ $ git multi\-pack\-index \-\-object\-dir <alt> write
 .sp -1
 .IP \(bu 2.3
 .\}
-Verify the MIDX file for the packfiles in the current \&.git folder\&.
+Verify the MIDX file for the packfiles in the current
+\fB\&.git\fR
+directory\&.
 .sp
 .if n \{\
 .RS 4

@@ -58,12 +58,12 @@ static void write_tree(struct object_id *oid)
 		strbuf_add(&buf, ent->oid.hash, the_hash_algo->rawsz);
 	}
 
-	write_object_file(buf.buf, buf.len, tree_type, oid);
+	write_object_file(buf.buf, buf.len, OBJ_TREE, oid);
 	strbuf_release(&buf);
 }
 
 static const char *mktree_usage[] = {
-	N_("git mktree [-z] [--missing] [--batch]"),
+	"git mktree [-z] [--missing] [--batch]",
 	NULL
 };
 
@@ -189,5 +189,5 @@ int cmd_mktree(int ac, const char **av, const char *prefix)
 		used=0; /* reset tree entry buffer for re-use in batch mode */
 	}
 	strbuf_release(&sb);
-	exit(0);
+	return 0;
 }

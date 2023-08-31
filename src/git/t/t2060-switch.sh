@@ -32,6 +32,17 @@ test_expect_success 'switch and detach' '
 	test_must_fail git symbolic-ref HEAD
 '
 
+test_expect_success 'suggestion to detach' '
+	test_must_fail git switch main^{commit} 2>stderr &&
+	grep "try again with the --detach option" stderr
+'
+
+test_expect_success 'suggestion to detach is suppressed with advice.suggestDetachingHead=false' '
+	test_config advice.suggestDetachingHead false &&
+	test_must_fail git switch main^{commit} 2>stderr &&
+	! grep "try again with the --detach option" stderr
+'
+
 test_expect_success 'switch and detach current branch' '
 	test_when_finished git switch main &&
 	git switch main &&
@@ -105,6 +116,34 @@ test_expect_success 'not switching when something is in progress' '
 	# fake a merge-in-progress
 	cp .git/HEAD .git/MERGE_HEAD &&
 	test_must_fail git switch -d @^
+'
+
+test_expect_success 'tracking info copied with autoSetupMerge=inherit' '
+	# default config does not copy tracking info
+	git switch -c foo-no-inherit foo &&
+	test_cmp_config "" --default "" branch.foo-no-inherit.remote &&
+	test_cmp_config "" --default "" branch.foo-no-inherit.merge &&
+	# with --track=inherit, we copy tracking info from foo
+	git switch --track=inherit -c foo2 foo &&
+	test_cmp_config origin branch.foo2.remote &&
+	test_cmp_config refs/heads/foo branch.foo2.merge &&
+	# with autoSetupMerge=inherit, we do the same
+	test_config branch.autoSetupMerge inherit &&
+	git switch -c foo3 foo &&
+	test_cmp_config origin branch.foo3.remote &&
+	test_cmp_config refs/heads/foo branch.foo3.merge &&
+	# with --track, we override autoSetupMerge
+	git switch --track -c foo4 foo &&
+	test_cmp_config . branch.foo4.remote &&
+	test_cmp_config refs/heads/foo branch.foo4.merge &&
+	# and --track=direct does as well
+	git switch --track=direct -c foo5 foo &&
+	test_cmp_config . branch.foo5.remote &&
+	test_cmp_config refs/heads/foo branch.foo5.merge &&
+	# no tracking info to inherit from main
+	git switch -c main2 main &&
+	test_cmp_config "" --default "" branch.main2.remote &&
+	test_cmp_config "" --default "" branch.main2.merge
 '
 
 test_done

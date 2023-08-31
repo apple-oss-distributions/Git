@@ -224,7 +224,7 @@ test_expect_success SYMLINKS 'real path works on symlinks' '
 	mkdir second &&
 	ln -s ../first second/other &&
 	mkdir third &&
-	dir="$(cd .git; pwd -P)" &&
+	dir="$(cd .git && pwd -P)" &&
 	dir2=third/../second/other/.git &&
 	test "$dir" = "$(test-tool path-utils real_path $dir2)" &&
 	file="$dir"/index &&
@@ -232,7 +232,7 @@ test_expect_success SYMLINKS 'real path works on symlinks' '
 	basename=blub &&
 	test "$dir/$basename" = "$(cd .git && test-tool path-utils real_path "$basename")" &&
 	ln -s ../first/file .git/syml &&
-	sym="$(cd first; pwd -P)"/file &&
+	sym="$(cd first && pwd -P)"/file &&
 	test "$sym" = "$(test-tool path-utils real_path "$dir2/syml")"
 '
 
@@ -531,6 +531,32 @@ test_expect_success MINGW 'is_valid_path() on Windows' '
 		"lpt*" \
 		Nul \
 		"PRN./abc"
+'
+
+test_lazy_prereq RUNTIME_PREFIX '
+	test true = "$RUNTIME_PREFIX"
+'
+
+test_lazy_prereq CAN_EXEC_IN_PWD '
+	cp "$GIT_EXEC_PATH"/git$X ./ &&
+	./git rev-parse
+'
+
+test_expect_success !VALGRIND,RUNTIME_PREFIX,CAN_EXEC_IN_PWD 'RUNTIME_PREFIX works' '
+	mkdir -p pretend/bin pretend/libexec/git-core &&
+	echo "echo HERE" | write_script pretend/libexec/git-core/git-here &&
+	cp "$GIT_EXEC_PATH"/git$X pretend/bin/ &&
+	GIT_EXEC_PATH= ./pretend/bin/git here >actual &&
+	echo HERE >expect &&
+	test_cmp expect actual'
+
+test_expect_success !VALGRIND,RUNTIME_PREFIX,CAN_EXEC_IN_PWD '%(prefix)/ works' '
+	mkdir -p pretend/bin &&
+	cp "$GIT_EXEC_PATH"/git$X pretend/bin/ &&
+	git config yes.path "%(prefix)/yes" &&
+	GIT_EXEC_PATH= ./pretend/bin/git config --path yes.path >actual &&
+	echo "$(pwd)/pretend/yes" >expect &&
+	test_cmp expect actual
 '
 
 test_done

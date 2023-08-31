@@ -1,3 +1,14 @@
+push.autoSetupRemote::
+	If set to "true" assume `--set-upstream` on default push when no
+	upstream tracking exists for the current branch; this option
+	takes effect with push.default options 'simple', 'upstream',
+	and 'current'. It is useful if by default you want new branches
+	to be pushed to the default remote (like the behavior of
+	'push.default=current') and you also want the upstream tracking
+	to be set. Workflows most likely to benefit from this option are
+	'simple' central workflows where all branches are expected to
+	have the same name on the remote.
+
 push.default::
 	Defines the action `git push` should take if no refspec is
 	given (whether from the command-line, config, or elsewhere).
@@ -24,15 +35,14 @@ push.default::
 
 * `tracking` - This is a deprecated synonym for `upstream`.
 
-* `simple` - in centralized workflow, work like `upstream` with an
-  added safety to refuse to push if the upstream branch's name is
-  different from the local one.
+* `simple` - pushes the current branch with the same name on the remote.
 +
-When pushing to a remote that is different from the remote you normally
-pull from, work as `current`.  This is the safest option and is suited
-for beginners.
+If you are working on a centralized workflow (pushing to the same repository you
+pull from, which is typically `origin`), then you need to configure an upstream
+branch with the same name.
 +
-This mode has become the default in Git 2.0.
+This mode is the default since Git 2.0, and is the safest option suited for
+beginners.
 
 * `matching` - push all branches having the same name on both ends.
   This makes the repository you are pushing to remember the set of

@@ -198,12 +198,34 @@ static int ut_006data(int argc, const char **argv)
 	return 0;
 }
 
-static int ut_007bug(int argc, const char **argv)
+static int ut_007BUG(int argc, const char **argv)
 {
 	/*
 	 * Exercise BUG() to ensure that the message is printed to trace2.
 	 */
 	BUG("the bug message");
+}
+
+static int ut_008bug(int argc, const char **argv)
+{
+	bug("a bug message");
+	bug("another bug message");
+	BUG_if_bug("an explicit BUG_if_bug() following bug() call(s) is nice, but not required");
+	return 0;
+}
+
+static int ut_009bug_BUG(int argc, const char **argv)
+{
+	bug("a bug message");
+	bug("another bug message");
+	/* The BUG_if_bug(...) isn't here, but we'll spot bug() calls on exit()! */
+	return 0;
+}
+
+static int ut_010bug_BUG(int argc, const char **argv)
+{
+	bug("a %s message", "bug");
+	BUG("a %s message", "BUG");
 }
 
 /*
@@ -222,7 +244,10 @@ static struct unit_test ut_table[] = {
 	{ ut_004child,    "004child",  "[<child_command_line>]" },
 	{ ut_005exec,     "005exec",   "<git_command_args>" },
 	{ ut_006data,     "006data",   "[<category> <key> <value>]+" },
-	{ ut_007bug,      "007bug",    "" },
+	{ ut_007BUG,      "007bug",    "" },
+	{ ut_008bug,      "008bug",    "" },
+	{ ut_009bug_BUG,  "009bug_BUG","" },
+	{ ut_010bug_BUG,  "010bug_BUG","" },
 };
 /* clang-format on */
 
@@ -262,8 +287,9 @@ static int print_usage(void)
  *    [] the "cmd_name" event has been generated.
  *    [] this writes various "def_param" events for interesting config values.
  *
- * We further assume that if we return (rather than exit()), trace2_cmd_exit()
- * will be called by test-tool.c:cmd_main().
+ * We return from here and let test-tool.c::cmd_main() pass the exit
+ * code to common-main.c::main(), which will use it to call
+ * trace2_cmd_exit().
  */
 int cmd__trace2(int argc, const char **argv)
 {

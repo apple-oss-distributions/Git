@@ -7,8 +7,8 @@
 
 static const char * const ls_remote_usage[] = {
 	N_("git ls-remote [--heads] [--tags] [--refs] [--upload-pack=<exec>]\n"
-	   "                     [-q | --quiet] [--exit-code] [--get-url]\n"
-	   "                     [--symref] [<repository> [<refs>...]]"),
+	   "              [-q | --quiet] [--exit-code] [--get-url]\n"
+	   "              [--symref] [<repository> [<refs>...]]"),
 	NULL
 };
 
@@ -54,7 +54,7 @@ int cmd_ls_remote(int argc, const char **argv, const char *prefix)
 	struct transport *transport;
 	const struct ref *ref;
 	struct ref_array ref_array;
-	static struct ref_sorting *sorting = NULL, **sorting_tail = &sorting;
+	struct string_list sorting_options = STRING_LIST_INIT_DUP;
 
 	struct option options[] = {
 		OPT__QUIET(&quiet, N_("do not print remote URL")),
@@ -68,7 +68,7 @@ int cmd_ls_remote(int argc, const char **argv, const char *prefix)
 		OPT_BIT(0, "refs", &flags, N_("do not show peeled tags"), REF_NORMAL),
 		OPT_BOOL(0, "get-url", &get_url,
 			 N_("take url.<base>.insteadOf into account")),
-		OPT_REF_SORT(sorting_tail),
+		OPT_REF_SORT(&sorting_options),
 		OPT_SET_INT_F(0, "exit-code", &status,
 			      N_("exit with exit code 2 if no matching refs are found"),
 			      2, PARSE_OPT_NOCOMPLETE),
@@ -84,7 +84,7 @@ int cmd_ls_remote(int argc, const char **argv, const char *prefix)
 			     PARSE_OPT_STOP_AT_NON_OPTION);
 	dest = argv[0];
 
-	UNLEAK(sorting);
+	packet_trace_identity("ls-remote");
 
 	if (argc > 1) {
 		int i;
@@ -114,7 +114,7 @@ int cmd_ls_remote(int argc, const char **argv, const char *prefix)
 	}
 
 	transport = transport_get(remote, NULL);
-	if (uploadpack != NULL)
+	if (uploadpack)
 		transport_set_option(transport, TRANS_OPT_UPLOADPACK, uploadpack);
 	if (server_options.nr)
 		transport->server_options = &server_options;
@@ -137,8 +137,13 @@ int cmd_ls_remote(int argc, const char **argv, const char *prefix)
 		item->symref = xstrdup_or_null(ref->symref);
 	}
 
-	if (sorting)
+	if (sorting_options.nr) {
+		struct ref_sorting *sorting;
+
+		sorting = ref_sorting_options(&sorting_options);
 		ref_array_sort(sorting, &ref_array);
+		ref_sorting_release(sorting);
+	}
 
 	for (i = 0; i < ref_array.nr; i++) {
 		const struct ref_array_item *ref = ref_array.items[i];
@@ -150,6 +155,7 @@ int cmd_ls_remote(int argc, const char **argv, const char *prefix)
 
 	ref_array_clear(&ref_array);
 	if (transport_disconnect(transport))
-		return 1;
+		status = 1;
+	transport_ls_refs_options_release(&transport_options);
 	return status;
 }

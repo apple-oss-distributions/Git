@@ -203,10 +203,8 @@ static void curl_setup_http(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_INFILE, buffer);
 	curl_easy_setopt(curl, CURLOPT_INFILESIZE, buffer->buf.len);
 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, fread_buffer);
-#ifndef NO_CURL_IOCTL
 	curl_easy_setopt(curl, CURLOPT_IOCTLFUNCTION, ioctl_buffer);
 	curl_easy_setopt(curl, CURLOPT_IOCTLDATA, buffer);
-#endif
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_fn);
 	curl_easy_setopt(curl, CURLOPT_NOBODY, 0);
 	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, custom_req);
@@ -249,15 +247,13 @@ static void process_response(void *callback_data)
 	finish_request(request);
 }
 
-#ifdef USE_CURL_MULTI
-
 static void start_fetch_loose(struct transfer_request *request)
 {
 	struct active_request_slot *slot;
 	struct http_object_request *obj_req;
 
 	obj_req = new_http_object_request(repo->url, &request->obj->oid);
-	if (obj_req == NULL) {
+	if (!obj_req) {
 		request->state = ABORTED;
 		return;
 	}
@@ -299,7 +295,6 @@ static void start_mkcol(struct transfer_request *request)
 		FREE_AND_NULL(request->url);
 	}
 }
-#endif
 
 static void start_fetch_packed(struct transfer_request *request)
 {
@@ -323,7 +318,7 @@ static void start_fetch_packed(struct transfer_request *request)
 	fprintf(stderr, " which contains %s\n", oid_to_hex(&request->obj->oid));
 
 	preq = new_http_pack_request(target->hash, repo->url);
-	if (preq == NULL) {
+	if (!preq) {
 		repo->can_update_info_refs = 0;
 		return;
 	}
@@ -368,7 +363,7 @@ static void start_put(struct transfer_request *request)
 	git_zstream stream;
 
 	unpacked = read_object_file(&request->obj->oid, &type, &len);
-	hdrlen = xsnprintf(hdr, sizeof(hdr), "%s %"PRIuMAX , type_name(type), (uintmax_t)len) + 1;
+	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
 
 	/* Set it up */
 	git_deflate_init(&stream, zlib_compression_level);
@@ -525,7 +520,7 @@ static void finish_request(struct transfer_request *request)
 	/* Keep locks active */
 	check_locks();
 
-	if (request->headers != NULL)
+	if (request->headers)
 		curl_slist_free_all(request->headers);
 
 	/* URL is reused for MOVE after PUT and used during FETCH */
@@ -605,7 +600,6 @@ static void finish_request(struct transfer_request *request)
 	}
 }
 
-#ifdef USE_CURL_MULTI
 static int is_running_queue;
 static int fill_active_slot(void *unused)
 {
@@ -629,7 +623,6 @@ static int fill_active_slot(void *unused)
 	}
 	return 0;
 }
-#endif
 
 static void get_remote_object_list(unsigned char parent);
 
@@ -658,10 +651,8 @@ static void add_fetch_request(struct object *obj)
 	request->next = request_queue_head;
 	request_queue_head = request;
 
-#ifdef USE_CURL_MULTI
 	fill_active_slots();
 	step_active_slots();
-#endif
 }
 
 static int add_send_request(struct object *obj, struct remote_lock *lock)
@@ -696,10 +687,8 @@ static int add_send_request(struct object *obj, struct remote_lock *lock)
 	request->next = request_queue_head;
 	request_queue_head = request;
 
-#ifdef USE_CURL_MULTI
 	fill_active_slots();
 	step_active_slots();
-#endif
 
 	return 1;
 }
@@ -794,7 +783,7 @@ xml_start_tag(void *userData, const char *name, const char **atts)
 	const char *c = strchr(name, ':');
 	int old_namelen, new_len;
 
-	if (c == NULL)
+	if (!c)
 		c = name;
 	else
 		c++;
@@ -822,7 +811,7 @@ xml_end_tag(void *userData, const char *name)
 
 	ctx->userFunc(ctx, 1);
 
-	if (c == NULL)
+	if (!c)
 		c = name;
 	else
 		c++;
@@ -894,7 +883,7 @@ static struct remote_lock *lock_remote(const char *path, long timeout)
 	slot->results = &results;
 	curl_setup_http(slot->curl, url, DAV_LOCK, &out_buffer, fwrite_buffer);
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, dav_headers);
-	curl_easy_setopt(slot->curl, CURLOPT_FILE, &in_buffer);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEDATA, &in_buffer);
 
 	CALLOC_ARRAY(lock, 1);
 	lock->timeout = -1;
@@ -1153,7 +1142,7 @@ static void remote_ls(const char *path, int flags,
 	curl_setup_http(slot->curl, url, DAV_PROPFIND,
 			&out_buffer, fwrite_buffer);
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, dav_headers);
-	curl_easy_setopt(slot->curl, CURLOPT_FILE, &in_buffer);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEDATA, &in_buffer);
 
 	if (start_active_slot(slot)) {
 		run_active_slot(slot);
@@ -1227,7 +1216,7 @@ static int locking_available(void)
 	curl_setup_http(slot->curl, repo->url, DAV_PROPFIND,
 			&out_buffer, fwrite_buffer);
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, dav_headers);
-	curl_easy_setopt(slot->curl, CURLOPT_FILE, &in_buffer);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEDATA, &in_buffer);
 
 	if (start_active_slot(slot)) {
 		run_active_slot(slot);
@@ -1682,21 +1671,15 @@ static int delete_remote_branch(const char *pattern, int force)
 
 static void run_request_queue(void)
 {
-#ifdef USE_CURL_MULTI
 	is_running_queue = 1;
 	fill_active_slots();
 	add_fill_function(NULL, fill_active_slot);
-#endif
 	do {
 		finish_all_active_slots();
-#ifdef USE_CURL_MULTI
 		fill_active_slots();
-#endif
 	} while (request_queue_head && !aborted);
 
-#ifdef USE_CURL_MULTI
 	is_running_queue = 0;
-#endif
 }
 
 int cmd_main(int argc, const char **argv)
@@ -1706,7 +1689,6 @@ int cmd_main(int argc, const char **argv)
 	struct refspec rs = REFSPEC_INIT_PUSH;
 	struct remote_lock *ref_lock = NULL;
 	struct remote_lock *info_ref_lock = NULL;
-	struct rev_info revs;
 	int delete_branch = 0;
 	int force_delete = 0;
 	int objects_to_send;
@@ -1770,10 +1752,6 @@ int cmd_main(int argc, const char **argv)
 		break;
 	}
 
-#ifndef USE_CURL_MULTI
-	die("git-push is not available for http/https repository when not compiled with USE_CURL_MULTI");
-#endif
-
 	if (!repo->url)
 		usage(http_push_usage);
 
@@ -1786,9 +1764,7 @@ int cmd_main(int argc, const char **argv)
 
 	http_init(NULL, repo->url, 1);
 
-#ifdef USE_CURL_MULTI
 	is_running_queue = 0;
-#endif
 
 	/* Verify DAV compliance/lock support */
 	if (!locking_available()) {
@@ -1848,6 +1824,7 @@ int cmd_main(int argc, const char **argv)
 
 	new_refs = 0;
 	for (ref = remote_refs; ref; ref = ref->next) {
+		struct rev_info revs;
 		struct strvec commit_argv = STRVEC_INIT;
 
 		if (!ref->peer_ref)
@@ -1916,7 +1893,7 @@ int cmd_main(int argc, const char **argv)
 
 		/* Lock remote branch ref */
 		ref_lock = lock_remote(ref->name, LOCK_TIME);
-		if (ref_lock == NULL) {
+		if (!ref_lock) {
 			fprintf(stderr, "Unable to lock remote branch %s\n",
 				ref->name);
 			if (helper_status)
@@ -1964,6 +1941,7 @@ int cmd_main(int argc, const char **argv)
 		unlock_remote(ref_lock);
 		check_locks();
 		strvec_clear(&commit_argv);
+		release_revisions(&revs);
 	}
 
 	/* Update remote server info if appropriate */

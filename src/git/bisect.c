@@ -23,7 +23,6 @@ static struct oid_array skipped_revs;
 static struct object_id *current_bad_oid;
 
 static const char *argv_checkout[] = {"checkout", "-q", NULL, "--", NULL};
-static const char *argv_show_branch[] = {"show-branch", NULL, NULL};
 
 static const char *term_bad;
 static const char *term_good;
@@ -725,10 +724,13 @@ static int is_expected_rev(const struct object_id *oid)
 	return res;
 }
 
-static enum bisect_error bisect_checkout(const struct object_id *bisect_rev, int no_checkout)
+enum bisect_error bisect_checkout(const struct object_id *bisect_rev,
+				  int no_checkout)
 {
 	char bisect_rev_hex[GIT_MAX_HEXSZ + 1];
-	enum bisect_error res = BISECT_OK;
+	struct commit *commit;
+	struct pretty_print_context pp = {0};
+	struct strbuf commit_msg = STRBUF_INIT;
 
 	oid_to_hex_r(bisect_rev_hex, bisect_rev);
 	update_ref(NULL, "BISECT_EXPECTED_REV", bisect_rev, NULL, 0, UPDATE_REFS_DIE_ON_ERR);
@@ -738,24 +740,21 @@ static enum bisect_error bisect_checkout(const struct object_id *bisect_rev, int
 		update_ref(NULL, "BISECT_HEAD", bisect_rev, NULL, 0,
 			   UPDATE_REFS_DIE_ON_ERR);
 	} else {
-		res = run_command_v_opt(argv_checkout, RUN_GIT_CMD);
-		if (res)
+		if (run_command_v_opt(argv_checkout, RUN_GIT_CMD))
 			/*
 			 * Errors in `run_command()` itself, signaled by res < 0,
 			 * and errors in the child process, signaled by res > 0
-			 * can both be treated as regular BISECT_FAILURE (-1).
+			 * can both be treated as regular BISECT_FAILED (-1).
 			 */
-			return -abs(res);
+			return BISECT_FAILED;
 	}
 
-	argv_show_branch[1] = bisect_rev_hex;
-	res = run_command_v_opt(argv_show_branch, RUN_GIT_CMD);
-	/*
-	 * Errors in `run_command()` itself, signaled by res < 0,
-	 * and errors in the child process, signaled by res > 0
-	 * can both be treated as regular BISECT_FAILURE (-1).
-	 */
-	return -abs(res);
+	commit = lookup_commit_reference(the_repository, bisect_rev);
+	format_commit_message(commit, "[%H] %s%n", &commit_msg, &pp);
+	fputs(commit_msg.buf, stdout);
+	strbuf_release(&commit_msg);
+
+	return BISECT_OK;
 }
 
 static struct commit *get_commit_reference(struct repository *r,
@@ -885,6 +884,7 @@ static int check_ancestors(struct repository *r, int rev_nr,
 	/* Clean up objects used, as they will be reused. */
 	clear_commit_marks_many(rev_nr, rev, ALL_REV_FLAGS);
 
+	release_revisions(&revs);
 	return res;
 }
 
@@ -965,6 +965,7 @@ static void show_diff_tree(struct repository *r,
 
 	setup_revisions(ARRAY_SIZE(argv) - 1, argv, &opt, NULL);
 	log_tree_commit(&opt, commit);
+	release_revisions(&opt);
 }
 
 /*
@@ -1009,7 +1010,7 @@ void read_bisect_terms(const char **read_bad, const char **read_good)
  */
 enum bisect_error bisect_next_all(struct repository *r, const char *prefix)
 {
-	struct rev_info revs;
+	struct rev_info revs = REV_INFO_INIT;
 	struct commit_list *tried;
 	int reaches = 0, all = 0, nr, steps;
 	enum bisect_error res = BISECT_OK;
@@ -1034,7 +1035,7 @@ enum bisect_error bisect_next_all(struct repository *r, const char *prefix)
 
 	res = check_good_are_ancestors_of_bad(r, prefix, no_checkout);
 	if (res)
-		return res;
+		goto cleanup;
 
 	bisect_rev_setup(r, &revs, prefix, "%s", "^%s", 1);
 
@@ -1059,14 +1060,16 @@ enum bisect_error bisect_next_all(struct repository *r, const char *prefix)
 		       term_good,
 		       term_bad);
 
-		return BISECT_FAILED;
+		res = BISECT_FAILED;
+		goto cleanup;
 	}
 
 	if (!all) {
 		fprintf(stderr, _("No testable commit found.\n"
 			"Maybe you started with bad path arguments?\n"));
 
-		return BISECT_NO_TESTABLE_COMMIT;
+		res = BISECT_NO_TESTABLE_COMMIT;
+		goto cleanup;
 	}
 
 	bisect_rev = &revs.commits->item->object.oid;
@@ -1086,7 +1089,8 @@ enum bisect_error bisect_next_all(struct repository *r, const char *prefix)
 		 * for negative return values for early returns up
 		 * until the cmd_bisect__helper() caller.
 		 */
-		return BISECT_INTERNAL_SUCCESS_1ST_BAD_FOUND;
+		res = BISECT_INTERNAL_SUCCESS_1ST_BAD_FOUND;
+		goto cleanup;
 	}
 
 	nr = all - reaches - 1;
@@ -1105,7 +1109,10 @@ enum bisect_error bisect_next_all(struct repository *r, const char *prefix)
 	/* Clean up objects used, as they will be reused. */
 	repo_clear_commit_marks(r, ALL_REV_FLAGS);
 
-	return bisect_checkout(bisect_rev, no_checkout);
+	res = bisect_checkout(bisect_rev, no_checkout);
+cleanup:
+	release_revisions(&revs);
+	return res;
 }
 
 static inline int log2i(int n)

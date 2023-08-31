@@ -9,6 +9,8 @@
 #include "win32/lazyload.h"
 #include "../config.h"
 #include "dir.h"
+#define SECURITY_WIN32
+#include <sspi.h>
 
 #define HCAST(type, handle) ((type)(intptr_t)handle)
 
@@ -342,6 +344,27 @@ int mingw_rmdir(const char *pathname)
 {
 	int ret, tries = 0;
 	wchar_t wpathname[MAX_PATH];
+	struct stat st;
+
+	/*
+	 * Contrary to Linux' `rmdir()`, Windows' _wrmdir() and _rmdir()
+	 * (and `RemoveDirectoryW()`) will attempt to remove the target of a
+	 * symbolic link (if it points to a directory).
+	 *
+	 * This behavior breaks the assumption of e.g. `remove_path()` which
+	 * upon successful deletion of a file will attempt to remove its parent
+	 * directories recursively until failure (which usually happens when
+	 * the directory is not empty).
+	 *
+	 * Therefore, before calling `_wrmdir()`, we first check if the path is
+	 * a symbolic link. If it is, we exit and return the same error as
+	 * Linux' `rmdir()` would, i.e. `ENOTDIR`.
+	 */
+	if (!mingw_lstat(pathname, &st) && S_ISLNK(st.st_mode)) {
+		errno = ENOTDIR;
+		return -1;
+	}
+
 	if (xutftowcs_path(wpathname, pathname) < 0)
 		return -1;
 
@@ -939,9 +962,11 @@ static inline void time_t_to_filetime(time_t t, FILETIME *ft)
 int mingw_utime (const char *file_name, const struct utimbuf *times)
 {
 	FILETIME mft, aft;
-	int fh, rc;
+	int rc;
 	DWORD attrs;
 	wchar_t wfilename[MAX_PATH];
+	HANDLE osfilehandle;
+
 	if (xutftowcs_path(wfilename, file_name) < 0)
 		return -1;
 
@@ -953,7 +978,17 @@ int mingw_utime (const char *file_name, const struct utimbuf *times)
 		SetFileAttributesW(wfilename, attrs & ~FILE_ATTRIBUTE_READONLY);
 	}
 
-	if ((fh = _wopen(wfilename, O_RDWR | O_BINARY)) < 0) {
+	osfilehandle = CreateFileW(wfilename,
+				   FILE_WRITE_ATTRIBUTES,
+				   0 /*FileShare.None*/,
+				   NULL,
+				   OPEN_EXISTING,
+				   (attrs != INVALID_FILE_ATTRIBUTES &&
+					(attrs & FILE_ATTRIBUTE_DIRECTORY)) ?
+					FILE_FLAG_BACKUP_SEMANTICS : 0,
+				   NULL);
+	if (osfilehandle == INVALID_HANDLE_VALUE) {
+		errno = err_win_to_posix(GetLastError());
 		rc = -1;
 		goto revert_attrs;
 	}
@@ -965,12 +1000,15 @@ int mingw_utime (const char *file_name, const struct utimbuf *times)
 		GetSystemTimeAsFileTime(&mft);
 		aft = mft;
 	}
-	if (!SetFileTime((HANDLE)_get_osfhandle(fh), NULL, &aft, &mft)) {
+
+	if (!SetFileTime(osfilehandle, NULL, &aft, &mft)) {
 		errno = EINVAL;
 		rc = -1;
 	} else
 		rc = 0;
-	close(fh);
+
+	if (osfilehandle != INVALID_HANDLE_VALUE)
+		CloseHandle(osfilehandle);
 
 revert_attrs:
 	if (attrs != INVALID_FILE_ATTRIBUTES &&
@@ -988,7 +1026,7 @@ size_t mingw_strftime(char *s, size_t max,
 	/* a pointer to the original strftime in case we can't find the UCRT version */
 	static size_t (*fallback)(char *, size_t, const char *, const struct tm *) = strftime;
 	size_t ret;
-	DECLARE_PROC_ADDR(ucrtbase.dll, size_t, strftime, char *, size_t,
+	DECLARE_PROC_ADDR(ucrtbase.dll, size_t, __cdecl, strftime, char *, size_t,
 		const char *, const struct tm *);
 
 	if (INIT_PROC_ADDR(strftime))
@@ -1022,7 +1060,7 @@ char *mingw_mktemp(char *template)
 int mkstemp(char *template)
 {
 	char *filename = mktemp(template);
-	if (filename == NULL)
+	if (!filename)
 		return -1;
 	return open(filename, O_RDWR | O_CREAT, 0600);
 }
@@ -1105,6 +1143,10 @@ char *mingw_getcwd(char *pointer, int len)
 	}
 	if (!ret || ret >= ARRAY_SIZE(wpointer))
 		return NULL;
+	if (GetFileAttributesW(wpointer) == INVALID_FILE_ATTRIBUTES) {
+		errno = ENOENT;
+		return NULL;
+	}
 	if (xwcstoutf(pointer, wpointer, len) < 0)
 		return NULL;
 	convert_slashes(pointer);
@@ -2165,7 +2207,7 @@ enum EXTENDED_NAME_FORMAT {
 
 static char *get_extended_user_info(enum EXTENDED_NAME_FORMAT type)
 {
-	DECLARE_PROC_ADDR(secur32.dll, BOOL, GetUserNameExW,
+	DECLARE_PROC_ADDR(secur32.dll, BOOL, SEC_ENTRY, GetUserNameExW,
 		enum EXTENDED_NAME_FORMAT, LPCWSTR, PULONG);
 	static wchar_t wbuffer[1024];
 	DWORD len;
@@ -2290,7 +2332,7 @@ int setitimer(int type, struct itimerval *in, struct itimerval *out)
 	static const struct timeval zero;
 	static int atexit_done;
 
-	if (out != NULL)
+	if (out)
 		return errno = EINVAL,
 			error("setitimer param 3 != NULL not implemented");
 	if (!is_timeval_eq(&in->it_interval, &zero) &&
@@ -2319,7 +2361,7 @@ int sigaction(int sig, struct sigaction *in, struct sigaction *out)
 	if (sig != SIGALRM)
 		return errno = EINVAL,
 			error("sigaction only implemented for SIGALRM");
-	if (out != NULL)
+	if (out)
 		return errno = EINVAL,
 			error("sigaction: param 3 != NULL not implemented");
 
@@ -2788,7 +2830,7 @@ not_a_reserved_name:
 			}
 
 			c = path[i];
-			if (c && c != '.' && c != ':' && c != '/' && c != '\\')
+			if (c && c != '.' && c != ':' && !is_xplatform_dir_sep(c))
 				goto not_a_reserved_name;
 
 			/* contains reserved name */

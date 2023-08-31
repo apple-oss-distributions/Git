@@ -18,10 +18,7 @@ GIT_AUTHOR_EMAIL=bogus@email@address
 export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL
 
 test_expect_success 'prepare repository with topic branches' '
-	git config core.logAllRefUpdates true &&
-	echo First >A &&
-	git update-index --add A &&
-	git commit -m "Add A." &&
+	test_commit "Add A." A First First &&
 	git checkout -b force-3way &&
 	echo Dummy >Y &&
 	git update-index --add Y &&
@@ -32,9 +29,7 @@ test_expect_success 'prepare repository with topic branches' '
 	git mv A D/A &&
 	git commit -m "Move A." &&
 	git checkout -b my-topic-branch main &&
-	echo Second >B &&
-	git update-index --add B &&
-	git commit -m "Add B." &&
+	test_commit "Add B." B Second Second &&
 	git checkout -f main &&
 	echo Third >>A &&
 	git update-index A &&
@@ -399,11 +394,51 @@ test_expect_success 'switch to branch not checked out' '
 	git rebase main other
 '
 
+test_expect_success 'switch to non-branch detaches HEAD' '
+	git checkout main &&
+	old_main=$(git rev-parse HEAD) &&
+	git rebase First Second^0 &&
+	test_cmp_rev HEAD Second &&
+	test_cmp_rev main $old_main &&
+	test_must_fail git symbolic-ref HEAD
+'
+
 test_expect_success 'refuse to switch to branch checked out elsewhere' '
 	git checkout main &&
 	git worktree add wt &&
 	test_must_fail git -C wt rebase main main 2>err &&
 	test_i18ngrep "already checked out" err
+'
+
+test_expect_success MINGW,SYMLINKS_WINDOWS 'rebase when .git/logs is a symlink' '
+	git checkout main &&
+	mv .git/logs actual_logs &&
+	cmd //c "mklink /D .git\logs ..\actual_logs" &&
+	git rebase -f HEAD^ &&
+	test -L .git/logs &&
+	rm .git/logs &&
+	mv actual_logs .git/logs
+'
+
+test_expect_success 'rebase when inside worktree subdirectory' '
+	git init main-wt &&
+	(
+		cd main-wt &&
+		git commit --allow-empty -m "initial" &&
+		mkdir -p foo/bar &&
+		test_commit foo/bar/baz &&
+		mkdir -p a/b &&
+		test_commit a/b/c &&
+		# create another branch for our other worktree
+		git branch other &&
+		git worktree add ../other-wt other &&
+		cd ../other-wt &&
+		# create and cd into a subdirectory
+		mkdir -p random/dir &&
+		cd random/dir &&
+		# now do the rebase
+		git rebase --onto HEAD^^ HEAD^  # drops the HEAD^ commit
+	)
 '
 
 test_done

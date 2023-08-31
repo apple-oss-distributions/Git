@@ -62,10 +62,10 @@ test_expect_success setup '
 
 test_expect_success merge '
 
-	{
-		echo "binary -merge"
-		echo "union merge=union"
-	} >.gitattributes &&
+	cat >.gitattributes <<-\EOF &&
+	binary -merge
+	union merge=union
+	EOF
 
 	if git merge main
 	then
@@ -205,6 +205,29 @@ test_expect_success 'custom merge does not lock index' '
 	# the correctness check and the clean-up.
 	test_when_finished "kill \$(cat sleep.pid)" &&
 	git merge main
+'
+
+test_expect_success 'binary files with union attribute' '
+	git checkout -b bin-main &&
+	printf "base\0" >bin.txt &&
+	echo "bin.txt merge=union" >.gitattributes &&
+	git add bin.txt .gitattributes &&
+	git commit -m base &&
+
+	printf "one\0" >bin.txt &&
+	git commit -am one &&
+
+	git checkout -b bin-side HEAD^ &&
+	printf "two\0" >bin.txt &&
+	git commit -am two &&
+
+	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
+	then
+		test_must_fail git merge bin-main >output
+	else
+		test_must_fail git merge bin-main 2>output
+	fi &&
+	grep -i "warning.*cannot merge.*HEAD vs. bin-main" output
 '
 
 test_done

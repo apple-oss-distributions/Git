@@ -26,17 +26,6 @@ struct patch_util {
 	struct object_id oid;
 };
 
-static size_t find_end_of_line(char *buffer, unsigned long size)
-{
-	char *eol = memchr(buffer, '\n', size);
-
-	if (!eol)
-		return size;
-
-	*eol = '\0';
-	return eol + 1 - buffer;
-}
-
 /*
  * Reads the patches into a string list, with the `util` field being populated
  * as struct object_id (will need to be free()d).
@@ -49,12 +38,13 @@ static int read_patches(const char *range, struct string_list *list,
 	struct patch_util *util = NULL;
 	int in_header = 1;
 	char *line, *current_filename = NULL;
-	int offset, len;
+	ssize_t len;
 	size_t size;
+	int ret = -1;
 
 	strvec_pushl(&cp.args, "log", "--no-color", "-p", "--no-merges",
 		     "--reverse", "--date-order", "--decorate=no",
-		     "--no-prefix",
+		     "--no-prefix", "--submodule=short",
 		     /*
 		      * Choose indicators that are not used anywhere
 		      * else in diffs, but still look reasonable
@@ -79,18 +69,25 @@ static int read_patches(const char *range, struct string_list *list,
 	if (strbuf_read(&contents, cp.out, 0) < 0) {
 		error_errno(_("could not read `log` output"));
 		finish_command(&cp);
-		return -1;
+		goto cleanup;
 	}
 	if (finish_command(&cp))
-		return -1;
+		goto cleanup;
 
 	line = contents.buf;
 	size = contents.len;
-	for (offset = 0; size > 0; offset += len, size -= len, line += len) {
+	for (; size > 0; size -= len, line += len) {
 		const char *p;
+		char *eol;
 
-		len = find_end_of_line(line, size);
-		line[len - 1] = '\0';
+		eol = memchr(line, '\n', size);
+		if (eol) {
+			*eol = '\0';
+			len = eol + 1 - line;
+		} else {
+			len = size;
+		}
+
 		if (skip_prefix(line, "commit ", &p)) {
 			if (util) {
 				string_list_append(list, buf.buf)->util = util;
@@ -99,12 +96,9 @@ static int read_patches(const char *range, struct string_list *list,
 			CALLOC_ARRAY(util, 1);
 			if (get_oid(p, &util->oid)) {
 				error(_("could not parse commit '%s'"), p);
-				free(util);
-				free(current_filename);
+				FREE_AND_NULL(util);
 				string_list_clear(list, 1);
-				strbuf_release(&buf);
-				strbuf_release(&contents);
-				return -1;
+				goto cleanup;
 			}
 			util->matching = -1;
 			in_header = 1;
@@ -115,11 +109,8 @@ static int read_patches(const char *range, struct string_list *list,
 			error(_("could not parse first line of `log` output: "
 				"did not start with 'commit ': '%s'"),
 			      line);
-			free(current_filename);
 			string_list_clear(list, 1);
-			strbuf_release(&buf);
-			strbuf_release(&contents);
-			return -1;
+			goto cleanup;
 		}
 
 		if (starts_with(line, "diff --git")) {
@@ -132,19 +123,17 @@ static int read_patches(const char *range, struct string_list *list,
 			strbuf_addch(&buf, '\n');
 			if (!util->diff_offset)
 				util->diff_offset = buf.len;
-			line[len - 1] = '\n';
+			if (eol)
+				*eol = '\n';
 			orig_len = len;
 			len = parse_git_diff_header(&root, &linenr, 0, line,
 						    len, size, &patch);
 			if (len < 0) {
 				error(_("could not parse git header '%.*s'"),
 				      orig_len, line);
-				free(util);
-				free(current_filename);
+				FREE_AND_NULL(util);
 				string_list_clear(list, 1);
-				strbuf_release(&buf);
-				strbuf_release(&contents);
-				return -1;
+				goto cleanup;
 			}
 			strbuf_addstr(&buf, " ## ");
 			if (patch.is_new > 0)
@@ -168,6 +157,7 @@ static int read_patches(const char *range, struct string_list *list,
 					    patch.old_mode, patch.new_mode);
 
 			strbuf_addstr(&buf, " ##");
+			release_patch(&patch);
 		} else if (in_header) {
 			if (starts_with(line, "Author: ")) {
 				strbuf_addstr(&buf, " ## Metadata ##\n");
@@ -221,6 +211,9 @@ static int read_patches(const char *range, struct string_list *list,
 		strbuf_addch(&buf, '\n');
 		util->diffsize++;
 	}
+
+	ret = 0;
+cleanup:
 	strbuf_release(&contents);
 
 	if (util)
@@ -228,7 +221,7 @@ static int read_patches(const char *range, struct string_list *list,
 	strbuf_release(&buf);
 	free(current_filename);
 
-	return 0;
+	return ret;
 }
 
 static int patch_util_cmp(const void *dummy, const struct patch_util *a,
@@ -274,9 +267,10 @@ static void find_exact_matches(struct string_list *a, struct string_list *b)
 	hashmap_clear(&map);
 }
 
-static void diffsize_consume(void *data, char *line, unsigned long len)
+static int diffsize_consume(void *data, char *line, unsigned long len)
 {
 	(*(int *)data)++;
+	return 0;
 }
 
 static void diffsize_hunk(void *data, long ob, long on, long nb, long nn,
@@ -484,6 +478,7 @@ static void output(struct string_list *a, struct string_list *b,
 	else
 		diff_setup(&opts);
 
+	opts.no_free = 1;
 	if (!opts.output_format)
 		opts.output_format = DIFF_FORMAT_PATCH;
 	opts.flags.suppress_diff_headers = 1;
@@ -544,6 +539,8 @@ static void output(struct string_list *a, struct string_list *b,
 	strbuf_release(&buf);
 	strbuf_release(&dashes);
 	strbuf_release(&indent);
+	opts.no_free = 0;
+	diff_free(&opts);
 }
 
 int show_range_diff(const char *range1, const char *range2,
@@ -555,7 +552,7 @@ int show_range_diff(const char *range1, const char *range2,
 	struct string_list branch2 = STRING_LIST_INIT_DUP;
 
 	if (range_diff_opts->left_only && range_diff_opts->right_only)
-		res = error(_("--left-only and --right-only are mutually exclusive"));
+		res = error(_("options '%s' and '%s' cannot be used together"), "--left-only", "--right-only");
 
 	if (!res && read_patches(range1, &branch1, range_diff_opts->other_arg))
 		res = error(_("could not parse log for '%s'"), range1);
@@ -599,6 +596,6 @@ int is_range_diff_range(const char *arg)
 	}
 
 	free(copy);
-	object_array_clear(&revs.pending);
+	release_revisions(&revs);
 	return negative > 0 && positive > 0;
 }

@@ -19,7 +19,7 @@ static void cleanup_space(struct strbuf *sb)
 static void get_sane_name(struct strbuf *out, struct strbuf *name, struct strbuf *email)
 {
 	struct strbuf *src = name;
-	if (name->len < 3 || 60 < name->len || strpbrk(name->buf, "@<>"))
+	if (!name->len || 60 < name->len || strpbrk(name->buf, "@<>"))
 		src = email;
 	else if (name == out)
 		return;
@@ -698,15 +698,15 @@ static int is_scissors_line(const char *line)
 			continue;
 		}
 		last_nonblank = c;
-		if (first_nonblank == NULL)
+		if (!first_nonblank)
 			first_nonblank = c;
 		if (*c == '-') {
 			in_perforation = 1;
 			perforation++;
 			continue;
 		}
-		if ((!memcmp(c, ">8", 2) || !memcmp(c, "8<", 2) ||
-		     !memcmp(c, ">%", 2) || !memcmp(c, "%<", 2))) {
+		if (starts_with(c, ">8") || starts_with(c, "8<") ||
+		    starts_with(c, ">%") || starts_with(c, "%<")) {
 			in_perforation = 1;
 			perforation += 2;
 			scissors += 2;
@@ -1094,7 +1094,7 @@ static void handle_body(struct mailinfo *mi, struct strbuf *line)
 			 */
 			lines = strbuf_split(line, '\n');
 			for (it = lines; (sb = *it); it++) {
-				if (*(it + 1) == NULL) /* The last line */
+				if (!*(it + 1)) /* The last line */
 					if (sb->buf[sb->len - 1] != '\n') {
 						/* Partial line, save it for later. */
 						strbuf_addbuf(&prev, sb);

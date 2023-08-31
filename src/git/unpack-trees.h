@@ -19,6 +19,7 @@ enum unpack_trees_error_types {
 	ERROR_WOULD_OVERWRITE = 0,
 	ERROR_NOT_UPTODATE_FILE,
 	ERROR_NOT_UPTODATE_DIR,
+	ERROR_CWD_IN_THE_WAY,
 	ERROR_WOULD_LOSE_UNTRACKED_OVERWRITTEN,
 	ERROR_WOULD_LOSE_UNTRACKED_REMOVED,
 	ERROR_BIND_OVERLAP,
@@ -45,10 +46,17 @@ void setup_unpack_trees_porcelain(struct unpack_trees_options *opts,
  */
 void clear_unpack_trees_porcelain(struct unpack_trees_options *opts);
 
+enum unpack_trees_reset_type {
+	UNPACK_RESET_NONE = 0,    /* traditional "false" value; still valid */
+	UNPACK_RESET_INVALID = 1, /* "true" no longer valid; use below values */
+	UNPACK_RESET_PROTECT_UNTRACKED,
+	UNPACK_RESET_OVERWRITE_UNTRACKED
+};
+
 struct unpack_trees_options {
-	unsigned int reset,
-		     merge,
+	unsigned int merge,
 		     update,
+		     preserve_ignored,
 		     clone,
 		     index_only,
 		     nontrivial_merge,
@@ -64,9 +72,9 @@ struct unpack_trees_options {
 		     exiting_early,
 		     show_all_errors,
 		     dry_run;
+	enum unpack_trees_reset_type reset;
 	const char *prefix;
 	int cache_bottom;
-	struct dir_struct *dir;
 	struct pathspec *pathspec;
 	merge_fn_t fn;
 	const char *msgs[NB_UNPACK_TREES_WARNING_TYPES];
@@ -88,6 +96,7 @@ struct unpack_trees_options {
 	struct index_state result;
 
 	struct pattern_list *pl; /* for internal use */
+	struct dir_struct *dir; /* for internal use only */
 	struct checkout_metadata meta;
 };
 

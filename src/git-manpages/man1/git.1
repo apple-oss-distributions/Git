@@ -2,12 +2,12 @@
 .\"     Title: git
 .\"    Author: [see the "Authors" section]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,7 @@ git \- the stupid content tracker
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit\fR [\-\-version] [\-\-help] [\-C <path>] [\-c <name>=<value>]
+\fIgit\fR [\-v | \-\-version] [\-h | \-\-help] [\-C <path>] [\-c <name>=<value>]
     [\-\-exec\-path[=<path>]] [\-\-html\-path] [\-\-man\-path] [\-\-info\-path]
     [\-p|\-\-paginate|\-P|\-\-no\-pager] [\-\-no\-replace\-objects] [\-\-bare]
     [\-\-git\-dir=<path>] [\-\-work\-tree=<path>] [\-\-namespace=<name>]
@@ -51,14 +51,23 @@ After you mastered the basic concepts, you can come back to this page to learn w
 A formatted and hyperlinked copy of the latest Git documentation can be viewed at \m[blue]\fBhttps://git\&.github\&.io/htmldocs/git\&.html\fR\m[] or \m[blue]\fBhttps://git\-scm\&.com/docs\fR\m[]\&.
 .SH "OPTIONS"
 .PP
-\-\-version
+\-v, \-\-version
 .RS 4
 Prints the Git suite version that the
 \fIgit\fR
 program came from\&.
+.sp
+This option is internally converted to
+\fBgit version \&.\&.\&.\fR
+and accepts the same options as the
+\fBgit-version\fR(1)
+command\&. If
+\fB\-\-help\fR
+is also given, it takes precedence over
+\fB\-\-version\fR\&.
 .RE
 .PP
-\-\-help
+\-h, \-\-help
 .RS 4
 Prints the synopsis and a list of the most commonly used commands\&. If the option
 \fB\-\-all\fR
@@ -480,7 +489,7 @@ Show various types of objects\&.
 .PP
 \fBgit-sparse-checkout\fR(1)
 .RS 4
-Initialize and modify the sparse\-checkout\&.
+Reduce your working tree to a subset of tracked files\&.
 .RE
 .PP
 \fBgit-stash\fR(1)
@@ -1064,6 +1073,11 @@ Helper to store credentials on disk\&.
 \fBgit-fmt-merge-msg\fR(1)
 .RS 4
 Produce a merge commit message\&.
+.RE
+.PP
+\fBgit-hook\fR(1)
+.RS 4
+Run git hooks\&.
 .RE
 .PP
 \fBgit-interpret-trailers\fR(1)
@@ -1832,7 +1846,7 @@ for full details\&.
 .PP
 \fBGIT_TRACE_REDACT\fR
 .RS 4
-By default, when tracing is activated, Git redacts the values of cookies, the "Authorization:" header, and the "Proxy\-Authorization:" header\&. Set this variable to
+By default, when tracing is activated, Git redacts the values of cookies, the "Authorization:" header, the "Proxy\-Authorization:" header and packfile URIs\&. Set this variable to
 \fB0\fR
 to prevent this redaction\&.
 .RE
@@ -1883,8 +1897,11 @@ to set its name to this variable when it is invoked as the top level command by 
 \fBGIT_REF_PARANOIA\fR
 .RS 4
 If set to
-\fB1\fR, include broken or badly named refs when iterating over lists of refs\&. In a normal, non\-corrupted repository, this does nothing\&. However, enabling it may help git to detect and abort some operations in the presence of broken refs\&. Git sets this variable automatically when performing destructive operations like
-\fBgit-prune\fR(1)\&. You should not need to set it yourself unless you want to be paranoid about making sure an operation has touched every ref (e\&.g\&., because you are cloning a repository to make a backup)\&.
+\fB0\fR, ignore broken or badly named refs when iterating over lists of refs\&. Normally Git will try to include any such refs, which may cause some operations to fail\&. This is usually preferable, as potentially destructive operations (e\&.g\&.,
+\fBgit-prune\fR(1)) are better off aborting rather than ignoring broken refs (and thus considering the history they point to as not worth saving)\&. The default value is
+\fB1\fR
+(i\&.e\&., be paranoid about detecting and aborting all operations)\&. You should not normally need to set this to
+\fB0\fR, but it may be useful when trying to salvage data from a corrupted repository\&.
 .RE
 .PP
 \fBGIT_ALLOW_PROTOCOL\fR
@@ -1918,6 +1935,17 @@ For internal use only\&. Used in handshaking the wire protocol\&. Contains a col
 \fI:\fR
 separated list of keys with optional values
 \fIkey[=value]\fR\&. Presence of unknown keys and values must be ignored\&.
+.sp
+Note that servers may need to be configured to allow this variable to pass over some transports\&. It will be propagated automatically when accessing local repositories (i\&.e\&.,
+\fBfile://\fR
+or a filesystem path), as well as over the
+\fBgit://\fR
+protocol\&. For git\-over\-http, it should work automatically in most configurations, but see the discussion in
+\fBgit-http-backend\fR(1)\&. For git\-over\-ssh, the ssh server may need to be configured to allow clients to pass this variable (e\&.g\&., by using
+\fBAcceptEnv GIT_PROTOCOL\fR
+with OpenSSH)\&.
+.sp
+This configuration is optional\&. If the variable is not propagated, then clients will fall back to the original "v0" protocol (but may miss out on some performance improvements or features)\&. This variable currently only affects clones and fetches; it is not yet used for pushes (but may be in the future)\&.
 .RE
 .PP
 \fBGIT_OPTIONAL_LOCKS\fR

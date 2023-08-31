@@ -122,6 +122,7 @@ static int strict;
 static int do_fsck_object;
 static struct fsck_options fsck_options = FSCK_OPTIONS_MISSING_GITMODULES;
 static int verbose;
+static const char *progress_title;
 static int show_resolving_progress;
 static int show_stat;
 static int check_self_contained_and_connected;
@@ -187,9 +188,7 @@ static void init_thread(void)
 	pthread_key_create(&key, NULL);
 	CALLOC_ARRAY(thread_data, nr_threads);
 	for (i = 0; i < nr_threads; i++) {
-		thread_data[i].pack_fd = open(curr_pack, O_RDONLY);
-		if (thread_data[i].pack_fd == -1)
-			die_errno(_("unable to open %s"), curr_pack);
+		thread_data[i].pack_fd = xopen(curr_pack, O_RDONLY);
 	}
 
 	threads_active = 1;
@@ -324,8 +323,12 @@ static void use(int bytes)
 	if (signed_add_overflows(consumed_bytes, bytes))
 		die(_("pack too large for current definition of off_t"));
 	consumed_bytes += bytes;
-	if (max_input_size && consumed_bytes > max_input_size)
-		die(_("pack exceeds maximum allowed size"));
+	if (max_input_size && consumed_bytes > max_input_size) {
+		struct strbuf size_limit = STRBUF_INIT;
+		strbuf_humanise_bytes(&size_limit, max_input_size);
+		die(_("pack exceeds maximum allowed size (%s)"),
+		    size_limit.buf);
+	}
 }
 
 static const char *open_pack_file(const char *pack_name)
@@ -338,15 +341,11 @@ static const char *open_pack_file(const char *pack_name)
 						"pack/tmp_pack_XXXXXX");
 			pack_name = strbuf_detach(&tmp_file, NULL);
 		} else {
-			output_fd = open(pack_name, O_CREAT|O_EXCL|O_RDWR, 0600);
-			if (output_fd < 0)
-				die_errno(_("unable to create '%s'"), pack_name);
+			output_fd = xopen(pack_name, O_CREAT|O_EXCL|O_RDWR, 0600);
 		}
 		nothread_data.pack_fd = output_fd;
 	} else {
-		input_fd = open(pack_name, O_RDONLY);
-		if (input_fd < 0)
-			die_errno(_("cannot open packfile '%s'"), pack_name);
+		input_fd = xopen(pack_name, O_RDONLY);
 		output_fd = -1;
 		nothread_data.pack_fd = input_fd;
 	}
@@ -369,9 +368,7 @@ static void parse_pack_header(void)
 	use(sizeof(struct pack_header));
 }
 
-static NORETURN void bad_object(off_t offset, const char *format,
-		       ...) __attribute__((format (printf, 2, 3)));
-
+__attribute__((format (printf, 2, 3)))
 static NORETURN void bad_object(off_t offset, const char *format, ...)
 {
 	va_list params;
@@ -456,8 +453,7 @@ static void *unpack_entry_data(off_t offset, unsigned long size,
 	int hdrlen;
 
 	if (!is_delta_type(type)) {
-		hdrlen = xsnprintf(hdr, sizeof(hdr), "%s %"PRIuMAX,
-				   type_name(type),(uintmax_t)size) + 1;
+		hdrlen = format_object_header(hdr, sizeof(hdr), type, size);
 		the_hash_algo->init_fn(&c);
 		the_hash_algo->update_fn(&c, hdr, hdrlen);
 	} else
@@ -586,7 +582,7 @@ static void *unpack_data(struct object_entry *obj,
 		if (!n)
 			die(Q_("premature end of pack file, %"PRIuMAX" byte missing",
 			       "premature end of pack file, %"PRIuMAX" bytes missing",
-			       (unsigned int)len),
+			       len),
 			    (uintmax_t)len);
 		from += n;
 		len -= n;
@@ -978,7 +974,7 @@ static struct base_data *resolve_delta(struct object_entry *delta_obj,
 	if (!result_data)
 		bad_object(delta_obj->idx.offset, _("failed to apply delta"));
 	hash_object_file(the_hash_algo, result_data, result_size,
-			 type_name(delta_obj->real_type), &delta_obj->idx.oid);
+			 delta_obj->real_type, &delta_obj->idx.oid);
 	sha1_object(result_data, NULL, result_size, delta_obj->real_type,
 		    &delta_obj->idx.oid);
 
@@ -1116,6 +1112,7 @@ static void *threaded_second_pass(void *data)
 			list_add(&child->list, &work_head);
 			base_cache_used += child->size;
 			prune_base_data(NULL);
+			free_base_data(child);
 		} else {
 			/*
 			 * This child does not have its own children. It may be
@@ -1138,6 +1135,7 @@ static void *threaded_second_pass(void *data)
 
 				p = next_p;
 			}
+			FREE_AND_NULL(child);
 		}
 		work_unlock();
 	}
@@ -1159,6 +1157,7 @@ static void parse_pack_objects(unsigned char *hash)
 
 	if (verbose)
 		progress = start_progress(
+				progress_title ? progress_title :
 				from_stdin ? _("Receiving objects") : _("Indexing objects"),
 				nr_objects);
 	for (i = 0; i < nr_objects; i++) {
@@ -1292,7 +1291,7 @@ static void conclude_pack(int fix_thin_pack, const char *curr_pack, unsigned cha
 			    nr_objects - nr_objects_initial);
 		stop_progress_msg(&progress, msg.buf);
 		strbuf_release(&msg);
-		finalize_hashfile(f, tail_hash, 0);
+		finalize_hashfile(f, tail_hash, FSYNC_COMPONENT_PACK, 0);
 		hashcpy(read_hash, pack_hash);
 		fixup_pack_header_footer(output_fd, pack_hash,
 					 curr_pack, nr_objects,
@@ -1419,9 +1418,8 @@ static void fix_unresolved_deltas(struct hashfile *f)
 		if (!data)
 			continue;
 
-		if (check_object_signature(the_repository, &d->oid,
-					   data, size,
-					   type_name(type)))
+		if (check_object_signature(the_repository, &d->oid, data, size,
+					   type) < 0)
 			die(_("local object %s is corrupt"), oid_to_hex(&d->oid));
 
 		/*
@@ -1430,6 +1428,7 @@ static void fix_unresolved_deltas(struct hashfile *f)
 		 * object).
 		 */
 		append_obj_to_pack(f, d->oid.hash, data, size, type);
+		free(data);
 		threaded_second_pass(NULL);
 
 		display_progress(progress, nr_resolved_deltas);
@@ -1483,6 +1482,22 @@ static void write_special_file(const char *suffix, const char *msg,
 	strbuf_release(&name_buf);
 }
 
+static void rename_tmp_packfile(const char **final_name,
+				const char *curr_name,
+				struct strbuf *name, unsigned char *hash,
+				const char *ext, int make_read_only_if_same)
+{
+	if (*final_name != curr_name) {
+		if (!*final_name)
+			*final_name = odb_pack_name(name, hash, ext);
+		if (finalize_object_file(curr_name, *final_name))
+			die(_("unable to rename temporary '*.%s' file to '%s'"),
+			    ext, *final_name);
+	} else if (make_read_only_if_same) {
+		chmod(*final_name, 0444);
+	}
+}
+
 static void final(const char *final_pack_name, const char *curr_pack_name,
 		  const char *final_index_name, const char *curr_index_name,
 		  const char *final_rev_index_name, const char *curr_rev_index_name,
@@ -1498,7 +1513,7 @@ static void final(const char *final_pack_name, const char *curr_pack_name,
 	if (!from_stdin) {
 		close(input_fd);
 	} else {
-		fsync_or_die(output_fd, curr_pack_name);
+		fsync_component_or_die(FSYNC_COMPONENT_PACK, output_fd, curr_pack_name);
 		err = close(output_fd);
 		if (err)
 			die_errno(_("error while closing pack file"));
@@ -1511,31 +1526,13 @@ static void final(const char *final_pack_name, const char *curr_pack_name,
 		write_special_file("promisor", promisor_msg, final_pack_name,
 				   hash, NULL);
 
-	if (final_pack_name != curr_pack_name) {
-		if (!final_pack_name)
-			final_pack_name = odb_pack_name(&pack_name, hash, "pack");
-		if (finalize_object_file(curr_pack_name, final_pack_name))
-			die(_("cannot store pack file"));
-	} else if (from_stdin)
-		chmod(final_pack_name, 0444);
-
-	if (final_index_name != curr_index_name) {
-		if (!final_index_name)
-			final_index_name = odb_pack_name(&index_name, hash, "idx");
-		if (finalize_object_file(curr_index_name, final_index_name))
-			die(_("cannot store index file"));
-	} else
-		chmod(final_index_name, 0444);
-
-	if (curr_rev_index_name) {
-		if (final_rev_index_name != curr_rev_index_name) {
-			if (!final_rev_index_name)
-				final_rev_index_name = odb_pack_name(&rev_index_name, hash, "rev");
-			if (finalize_object_file(curr_rev_index_name, final_rev_index_name))
-				die(_("cannot store reverse index file"));
-		} else
-			chmod(final_rev_index_name, 0444);
-	}
+	rename_tmp_packfile(&final_pack_name, curr_pack_name, &pack_name,
+			    hash, "pack", from_stdin);
+	if (curr_rev_index_name)
+		rename_tmp_packfile(&final_rev_index_name, curr_rev_index_name,
+				    &rev_index_name, hash, "rev", 1);
+	rename_tmp_packfile(&final_index_name, curr_index_name, &index_name,
+			    hash, "idx", 1);
 
 	if (do_fsck_object) {
 		struct packed_git *p;
@@ -1578,7 +1575,7 @@ static int git_index_pack_config(const char *k, const char *v, void *cb)
 	if (!strcmp(k, "pack.indexversion")) {
 		opts->version = git_config_int(k, v);
 		if (opts->version > 2)
-			die(_("bad pack.indexversion=%"PRIu32), opts->version);
+			die(_("bad pack.indexVersion=%"PRIu32), opts->version);
 		return 0;
 	}
 	if (!strcmp(k, "pack.threads")) {
@@ -1711,6 +1708,7 @@ static void show_pack_info(int stat_only)
 			  i + 1,
 			  chain_histogram[i]);
 	}
+	free(chain_histogram);
 }
 
 int cmd_index_pack(int argc, const char **argv, const char *prefix)
@@ -1808,6 +1806,10 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
 				input_len = sizeof(*hdr);
 			} else if (!strcmp(arg, "-v")) {
 				verbose = 1;
+			} else if (!strcmp(arg, "--progress-title")) {
+				if (progress_title || (i+1) >= argc)
+					usage(index_pack_usage);
+				progress_title = argv[++i];
 			} else if (!strcmp(arg, "--show-resolving-progress")) {
 				show_resolving_progress = 1;
 			} else if (!strcmp(arg, "--report-end-of-input")) {
@@ -1849,11 +1851,11 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
 	if (!pack_name && !from_stdin)
 		usage(index_pack_usage);
 	if (fix_thin_pack && !from_stdin)
-		die(_("--fix-thin cannot be used without --stdin"));
+		die(_("the option '%s' requires '%s'"), "--fix-thin", "--stdin");
 	if (from_stdin && !startup_info->have_repository)
 		die(_("--stdin requires a git repository"));
 	if (from_stdin && hash_algo)
-		die(_("--object-format cannot be used with --stdin"));
+		die(_("options '%s' and '%s' cannot be used together"), "--object-format", "--stdin");
 	if (!index_name && pack_name)
 		index_name = derive_filename(pack_name, "pack", "idx", &index_name_buf);
 
@@ -1936,14 +1938,15 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
 	if (do_fsck_object && fsck_finish(&fsck_options))
 		die(_("fsck error in pack objects"));
 
+	free(opts.anomaly);
 	free(objects);
 	strbuf_release(&index_name_buf);
 	strbuf_release(&rev_index_name_buf);
-	if (pack_name == NULL)
+	if (!pack_name)
 		free((void *) curr_pack);
-	if (index_name == NULL)
+	if (!index_name)
 		free((void *) curr_index);
-	if (rev_index_name == NULL)
+	if (!rev_index_name)
 		free((void *) curr_rev_index);
 
 	/*

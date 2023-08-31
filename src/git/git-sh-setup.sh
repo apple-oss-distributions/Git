@@ -101,7 +101,6 @@ $LONG_USAGE")"
 	case "$1" in
 		-h)
 		echo "$LONG_USAGE"
-		case "$0" in *git-legacy-stash) exit 129;; esac
 		exit
 	esac
 fi
@@ -173,14 +172,6 @@ git_pager() {
 	eval "$GIT_PAGER" '"$@"'
 }
 
-sane_grep () {
-	GREP_OPTIONS= LC_ALL=C grep @@SANE_TEXT_GREP@@ "$@"
-}
-
-sane_egrep () {
-	GREP_OPTIONS= LC_ALL=C egrep @@SANE_TEXT_GREP@@ "$@"
-}
-
 is_bare_repository () {
 	git rev-parse --is-bare-repository
 }
@@ -217,14 +208,8 @@ require_clean_work_tree () {
 	then
 		action=$1
 		case "$action" in
-		rebase)
-			gettextln "Cannot rebase: You have unstaged changes." >&2
-			;;
 		"rewrite branches")
 			gettextln "Cannot rewrite branches: You have unstaged changes." >&2
-			;;
-		"pull with rebase")
-			gettextln "Cannot pull with rebase: You have unstaged changes." >&2
 			;;
 		*)
 			eval_gettextln "Cannot \$action: You have unstaged changes." >&2
@@ -238,17 +223,7 @@ require_clean_work_tree () {
 		if test $err = 0
 		then
 			action=$1
-			case "$action" in
-			rebase)
-				gettextln "Cannot rebase: Your index contains uncommitted changes." >&2
-				;;
-			"pull with rebase")
-				gettextln "Cannot pull with rebase: Your index contains uncommitted changes." >&2
-				;;
-			*)
-				eval_gettextln "Cannot \$action: Your index contains uncommitted changes." >&2
-				;;
-			esac
+			eval_gettextln "Cannot \$action: Your index contains uncommitted changes." >&2
 		else
 		    gettextln "Additionally, your index contains uncommitted changes." >&2
 		fi

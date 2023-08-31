@@ -2,7 +2,10 @@
 
 test_description='index file specific tests'
 
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
+
+sane_unset GIT_TEST_SPLIT_INDEX
 
 test_expect_success 'setup' '
 	echo 1 >a
@@ -13,7 +16,8 @@ test_expect_success 'bogus GIT_INDEX_VERSION issues warning' '
 		rm -f .git/index &&
 		GIT_INDEX_VERSION=2bogus &&
 		export GIT_INDEX_VERSION &&
-		git add a 2>&1 | sed "s/[0-9]//" >actual.err &&
+		git add a 2>err &&
+		sed "s/[0-9]//" err >actual.err &&
 		sed -e "s/ Z$/ /" <<-\EOF >expect.err &&
 			warning: GIT_INDEX_VERSION set, but the value is invalid.
 			Using version Z
@@ -27,7 +31,8 @@ test_expect_success 'out of bounds GIT_INDEX_VERSION issues warning' '
 		rm -f .git/index &&
 		GIT_INDEX_VERSION=1 &&
 		export GIT_INDEX_VERSION &&
-		git add a 2>&1 | sed "s/[0-9]//" >actual.err &&
+		git add a 2>err &&
+		sed "s/[0-9]//" err >actual.err &&
 		sed -e "s/ Z$/ /" <<-\EOF >expect.err &&
 			warning: GIT_INDEX_VERSION set, but the value is invalid.
 			Using version Z
@@ -50,7 +55,8 @@ test_expect_success 'out of bounds index.version issues warning' '
 		sane_unset GIT_INDEX_VERSION &&
 		rm -f .git/index &&
 		git config --add index.version 1 &&
-		git add a 2>&1 | sed "s/[0-9]//" >actual.err &&
+		git add a 2>err &&
+		sed "s/[0-9]//" err >actual.err &&
 		sed -e "s/ Z$/ /" <<-\EOF >expect.err &&
 			warning: index.version set, but the value is invalid.
 			Using version Z
@@ -79,7 +85,7 @@ test_index_version () {
 		else
 			unset GIT_INDEX_VERSION
 		fi &&
-		git add a 2>&1 &&
+		git add a &&
 		echo $EXPECTED_OUTPUT_VERSION >expect &&
 		test-tool index-version <.git/index >actual &&
 		test_cmp expect actual

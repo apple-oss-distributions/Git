@@ -17,7 +17,8 @@ static char const * const for_each_ref_usage[] = {
 int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 {
 	int i;
-	struct ref_sorting *sorting = NULL, **sorting_tail = &sorting;
+	struct ref_sorting *sorting;
+	struct string_list sorting_options = STRING_LIST_INIT_DUP;
 	int maxcount = 0, icase = 0;
 	struct ref_array array;
 	struct ref_filter filter;
@@ -39,7 +40,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 		OPT_INTEGER( 0 , "count", &maxcount, N_("show only <n> matched refs")),
 		OPT_STRING(  0 , "format", &format.format, N_("format"), N_("format to use for the output")),
 		OPT__COLOR(&format.use_color, N_("respect format colors")),
-		OPT_REF_SORT(sorting_tail),
+		OPT_REF_SORT(&sorting_options),
 		OPT_CALLBACK(0, "points-at", &filter.points_at,
 			     N_("object"), N_("print only refs which points at the given object"),
 			     parse_opt_object_name),
@@ -70,14 +71,13 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	if (verify_ref_format(&format))
 		usage_with_options(for_each_ref_usage, opts);
 
-	if (!sorting)
-		sorting = ref_default_sorting();
+	sorting = ref_sorting_options(&sorting_options);
 	ref_sorting_set_sort_flags_all(sorting, REF_SORTING_ICASE, icase);
 	filter.ignore_case = icase;
 
 	filter.name_patterns = argv;
 	filter.match_as_path = 1;
-	filter_refs(&array, &filter, FILTER_REFS_ALL | FILTER_REFS_INCLUDE_BROKEN);
+	filter_refs(&array, &filter, FILTER_REFS_ALL);
 	ref_array_sort(sorting, &array);
 
 	if (!maxcount || array.nr < maxcount)
@@ -96,6 +96,6 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	ref_array_clear(&array);
 	free_commit_list(filter.with_commit);
 	free_commit_list(filter.no_commit);
-	UNLEAK(sorting);
+	ref_sorting_release(sorting);
 	return 0;
 }

@@ -4,15 +4,15 @@
 <array>
 	<dict>
 		<key>OpenSourceImportDate</key>
-		<string>2022-04-13</string>
+		<string>2022-07-04</string>
 		<key>OpenSourceLicense</key>
 		<string>GPL</string>
 		<key>OpenSourceProject</key>
 		<string>git</string>
 		<key>OpenSourceVersion</key>
-		<string>2.32.1</string>
+		<string>2.37.0</string>
 		<key>OpenSourceSHA1</key>
-		<value>9bcd7a8ecac1c9196bc927647bd06c38ec1feabe</value>
+		<value>e4a4b31577c7419497ac30cebe30d755b97752c5</value>
 		<key>OpenSourceWebsiteURL</key>
 		<string>http://git-scm.com</string>
 		<key>OpenSourceModifications</key>
@@ -23,7 +23,6 @@
 			<string>Set Apple Git version during build</string>
 			<string>Fix test cases that expect --version to not contain a space</string>
 			<string>Pulled in advance patch for CVE-2021-21300</string>
-			<string>Continue supporting LibPRCE1</string>
 		</array>
 	</dict>
 </array>

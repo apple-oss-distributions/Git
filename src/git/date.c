@@ -5,11 +5,12 @@
  */
 
 #include "cache.h"
+#include "date.h"
 
 /*
  * This is like mktime, but without normalization of tm_wday and tm_yday.
  */
-static time_t tm_to_time_t(const struct tm *tm)
+time_t tm_to_time_t(const struct tm *tm)
 {
 	static const int mdays[] = {
 	    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
@@ -205,11 +206,10 @@ void show_date_relative(timestamp_t time, struct strbuf *timebuf)
 
 struct date_mode *date_mode_from_type(enum date_mode_type type)
 {
-	static struct date_mode mode;
+	static struct date_mode mode = DATE_MODE_INIT;
 	if (type == DATE_STRFTIME)
 		BUG("cannot create anonymous strftime date_mode struct");
 	mode.type = type;
-	mode.local = 0;
 	return &mode;
 }
 
@@ -908,7 +908,7 @@ int parse_expiry_date(const char *date, timestamp_t *timestamp)
 		/*
 		 * We take over "now" here, which usually translates
 		 * to the current timestamp.  This is because the user
-		 * really means to expire everything she has done in
+		 * really means to expire everything that was done in
 		 * the past, and by definition reflogs are the record
 		 * of the past, and there is nothing from the future
 		 * to be kept.
@@ -991,6 +991,11 @@ void parse_date_format(const char *format, struct date_mode *mode)
 		mode->strftime_fmt = xstrdup(p);
 	} else if (*p)
 		die("unknown date format %s", format);
+}
+
+void date_mode_release(struct date_mode *mode)
+{
+	free((char *)mode->strftime_fmt);
 }
 
 void datestamp(struct strbuf *out)

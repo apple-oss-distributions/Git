@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-show(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -841,14 +841,16 @@ people using 80-column terminals.</p></div>
 </dt>
 <dd>
 <p>
-        The commit objects record the encoding used for the log message
+        Commit objects record the character encoding used for the log message
         in their encoding header; this option can be used to tell the
         command to re-code the commit log message in the encoding
         preferred by the user.  For non plumbing commands this
         defaults to UTF-8. Note that if an object claims to be encoded
         in <code>X</code> and we are outputting in <code>X</code>, we will output the object
         verbatim; this means that invalid sequences in the original
-        commit may be copied to the output.
+        commit may be copied to the output. Likewise, if iconv(3) fails
+        to convert the commit, we will quietly output the original
+        object verbatim.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -957,7 +959,7 @@ built-in formats:</p></div>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;hash&gt; &lt;title line&gt;</code></pre>
+<pre><code>&lt;hash&gt; &lt;title-line&gt;</code></pre>
 </div></div>
 <div class="paragraph"><p>This is designed to be as compact as possible.</p></div>
 </li>
@@ -972,7 +974,7 @@ Author: &lt;author&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;title line&gt;</code></pre>
+<pre><code>&lt;title-line&gt;</code></pre>
 </div></div>
 </li>
 <li>
@@ -983,15 +985,15 @@ Author: &lt;author&gt;</code></pre>
 <div class="content">
 <pre><code>commit &lt;hash&gt;
 Author: &lt;author&gt;
-Date:   &lt;author date&gt;</code></pre>
+Date:   &lt;author-date&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;title line&gt;</code></pre>
+<pre><code>&lt;title-line&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;full commit message&gt;</code></pre>
+<pre><code>&lt;full-commit-message&gt;</code></pre>
 </div></div>
 </li>
 <li>
@@ -1006,11 +1008,11 @@ Commit: &lt;committer&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;title line&gt;</code></pre>
+<pre><code>&lt;title-line&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;full commit message&gt;</code></pre>
+<pre><code>&lt;full-commit-message&gt;</code></pre>
 </div></div>
 </li>
 <li>
@@ -1021,17 +1023,17 @@ Commit: &lt;committer&gt;</code></pre>
 <div class="content">
 <pre><code>commit &lt;hash&gt;
 Author:     &lt;author&gt;
-AuthorDate: &lt;author date&gt;
+AuthorDate: &lt;author-date&gt;
 Commit:     &lt;committer&gt;
-CommitDate: &lt;committer date&gt;</code></pre>
+CommitDate: &lt;committer-date&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;title line&gt;</code></pre>
+<pre><code>&lt;title-line&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;full commit message&gt;</code></pre>
+<pre><code>&lt;full-commit-message&gt;</code></pre>
 </div></div>
 </li>
 <li>
@@ -1040,7 +1042,7 @@ CommitDate: &lt;committer date&gt;</code></pre>
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;abbrev hash&gt; (&lt;title line&gt;, &lt;short author date&gt;)</code></pre>
+<pre><code>&lt;abbrev-hash&gt; (&lt;title-line&gt;, &lt;short-author-date&gt;)</code></pre>
 </div></div>
 <div class="paragraph"><p>This format is used to refer to another commit in a commit message and
 is the same as <code>--pretty='format:%C(auto)%h (%s, %ad)'</code>.  By default,
@@ -1057,12 +1059,12 @@ placeholders, its output is not affected by other options like
 <div class="content">
 <pre><code>From &lt;hash&gt; &lt;date&gt;
 From: &lt;author&gt;
-Date: &lt;author date&gt;
-Subject: [PATCH] &lt;title line&gt;</code></pre>
+Date: &lt;author-date&gt;
+Subject: [PATCH] &lt;title-line&gt;</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
-<pre><code>&lt;full commit message&gt;</code></pre>
+<pre><code>&lt;full-commit-message&gt;</code></pre>
 </div></div>
 </li>
 <li>
@@ -1089,9 +1091,9 @@ use <code>--no-abbrev</code>.</p></div>
 </li>
 <li>
 <p>
-<em>format:&lt;string&gt;</em>
+<em>format:&lt;format-string&gt;</em>
 </p>
-<div class="paragraph"><p>The <em>format:&lt;string&gt;</em> format allows you to specify which information
+<div class="paragraph"><p>The <em>format:&lt;format-string&gt;</em> format allows you to specify which information
 you want to show. It works a little bit like printf format,
 with the notable exception that you get a newline with <em>%n</em>
 instead of <em>\n</em>.</p></div>
@@ -1584,6 +1586,20 @@ human-readable name, like
 <div class="ulist"><ul>
 <li>
 <p>
+<em>tags[=&lt;bool-value&gt;]</em>: Instead of only considering annotated tags,
+   consider lightweight tags as well.
+</p>
+</li>
+<li>
+<p>
+<em>abbrev=&lt;number&gt;</em>: Instead of using the default number of hexadecimal digits
+   (which will vary according to the number of objects in the repository with a
+   default of 7) of the abbreviated object name, use &lt;number&gt; digits, or as many
+   digits as needed to form a unique object name.
+</p>
+</li>
+<li>
+<p>
 <em>match=&lt;pattern&gt;</em>: Only consider tags matching the given
    <code>glob(7)</code> pattern, excluding the "refs/tags/" prefix.
 </p>
@@ -1794,14 +1810,10 @@ display the trailers of the body as
                           If any option is provided multiple times the
                           last occurrence wins.
 </p>
-<div class="paragraph"><p>The boolean options accept an optional value <code>[=&lt;BOOL&gt;]</code>. The values
-<code>true</code>, <code>false</code>, <code>on</code>, <code>off</code> etc. are all accepted. See the "boolean"
-sub-section in "EXAMPLES" in <a href="git-config.html">git-config(1)</a>. If a boolean
-option is given with no value, it&#8217;s enabled.</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
-<em>key=&lt;K&gt;</em>: only show trailers with specified key. Matching is done
+<em>key=&lt;key&gt;</em>: only show trailers with specified &lt;key&gt;. Matching is done
    case-insensitively and trailing colon is optional. If option is
    given multiple times trailer lines matching any of the keys are
    shown. This option automatically enables the <code>only</code> option so that
@@ -1813,15 +1825,15 @@ option is given with no value, it&#8217;s enabled.</p></div>
 </li>
 <li>
 <p>
-<em>only[=&lt;BOOL&gt;]</em>: select whether non-trailer lines from the trailer
+<em>only[=&lt;bool&gt;]</em>: select whether non-trailer lines from the trailer
    block should be included.
 </p>
 </li>
 <li>
 <p>
-<em>separator=&lt;SEP&gt;</em>: specify a separator inserted between trailer
+<em>separator=&lt;sep&gt;</em>: specify a separator inserted between trailer
    lines. When this option is not given each trailer line is
-   terminated with a line feed character. The string SEP may contain
+   terminated with a line feed character. The string &lt;sep&gt; may contain
    the literal formatting codes described above. To use comma as
    separator one must use <code>%x2C</code> as it would otherwise be parsed as
    next option. E.g., <code>%(trailers:key=Ticket,separator=%x2C )</code>
@@ -1831,27 +1843,27 @@ option is given with no value, it&#8217;s enabled.</p></div>
 </li>
 <li>
 <p>
-<em>unfold[=&lt;BOOL&gt;]</em>: make it behave as if interpret-trailer&#8217;s <code>--unfold</code>
+<em>unfold[=&lt;bool&gt;]</em>: make it behave as if interpret-trailer&#8217;s <code>--unfold</code>
    option was given. E.g.,
    <code>%(trailers:only,unfold=true)</code> unfolds and shows all trailer lines.
 </p>
 </li>
 <li>
 <p>
-<em>keyonly[=&lt;BOOL&gt;]</em>: only show the key part of the trailer.
+<em>keyonly[=&lt;bool&gt;]</em>: only show the key part of the trailer.
 </p>
 </li>
 <li>
 <p>
-<em>valueonly[=&lt;BOOL&gt;]</em>: only show the value part of the trailer.
+<em>valueonly[=&lt;bool&gt;]</em>: only show the value part of the trailer.
 </p>
 </li>
 <li>
 <p>
-<em>key_value_separator=&lt;SEP&gt;</em>: specify a separator inserted between
+<em>key_value_separator=&lt;sep&gt;</em>: specify a separator inserted between
    trailer lines. When this option is not given each trailer key-value
    pair is separated by ": ". Otherwise it shares the same semantics
-   as <em>separator=&lt;SEP&gt;</em> above.
+   as <em>separator=&lt;sep&gt;</em> above.
 </p>
 </li>
 </ul></div>
@@ -1874,6 +1886,10 @@ decoration format if <code>--decorate</code> was not already provided on the com
 line.</td>
 </tr></table>
 </div>
+<div class="paragraph"><p>The boolean options accept an optional value <code>[=&lt;bool-value&gt;]</code>. The values
+<code>true</code>, <code>false</code>, <code>on</code>, <code>off</code> etc. are all accepted. See the "boolean"
+sub-section in "EXAMPLES" in <a href="git-config.html">git-config(1)</a>. If a boolean
+option is given with no value, it&#8217;s enabled.</p></div>
 <div class="paragraph"><p>If you add a <code>+</code> (plus sign) after <em>%</em> of a placeholder, a line-feed
 is inserted immediately before the expansion if and only if the
 placeholder expands to a non-empty string.</p></div>
@@ -1952,7 +1968,7 @@ diff output.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
---diff-merges=(off|none|on|first-parent|1|separate|m|combined|c|dense-combined|cc)
+--diff-merges=(off|none|on|first-parent|1|separate|m|combined|c|dense-combined|cc|remerge|r)
 </dt>
 <dt class="hdlist1">
 --no-diff-merges
@@ -2015,6 +2031,26 @@ diff output.</p></div>
         each of the parents. Separate log entry and diff is generated
         for each parent.
 </p>
+</dd>
+<dt class="hdlist1">
+--diff-merges=remerge
+</dt>
+<dt class="hdlist1">
+--diff-merges=r
+</dt>
+<dt class="hdlist1">
+--remerge-diff
+</dt>
+<dd>
+<p>
+        With this option, two-parent merge commits are remerged to
+        create a temporary tree object&#8201;&#8212;&#8201;potentially containing files
+        with conflict markers and such.  A diff is then shown between
+        that temporary tree and the actual merge commit.
+</p>
+<div class="paragraph"><p>The output emitted when this option is used is subject to change, and
+so is its interaction with other options (unless explicitly
+documented).</p></div>
 </dd>
 <dt class="hdlist1">
 --diff-merges=combined
@@ -2909,11 +2945,17 @@ of a delete/create pair.</p></div>
 </dt>
 <dd>
 <p>
-        The <code>-M</code> and <code>-C</code> options require O(n^2) processing time where n
-        is the number of potential rename/copy targets.  This
-        option prevents rename/copy detection from running if
-        the number of rename/copy targets exceeds the specified
-        number.
+        The <code>-M</code> and <code>-C</code> options involve some preliminary steps that
+        can detect subsets of renames/copies cheaply, followed by an
+        exhaustive fallback portion that compares all remaining
+        unpaired destinations to all relevant sources.  (For renames,
+        only remaining unpaired sources are relevant; for copies, all
+        original sources are relevant.)  For N sources and
+        destinations, this exhaustive check is O(N^2).  This option
+        prevents the exhaustive portion of rename/copy detection from
+        running if the number of source/destination files involved
+        exceeds the specified number.  Defaults to diff.renameLimit.
+        Note that a value of 0 is treated as unlimited.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2934,11 +2976,8 @@ of a delete/create pair.</p></div>
 </p>
 <div class="paragraph"><p>Also, these upper-case letters can be downcased to exclude.  E.g.
 <code>--diff-filter=ad</code> excludes added and deleted paths.</p></div>
-<div class="paragraph"><p>Note that not all diffs can feature all types. For instance, diffs
-from the index to the working tree can never have Added entries
-(because the set of paths included in the diff is limited by what is in
-the index).  Similarly, copied and renamed entries cannot appear if
-detection for those types is disabled.</p></div>
+<div class="paragraph"><p>Note that not all diffs can feature all types. For instance, copied and
+renamed entries cannot appear if detection for those types is disabled.</p></div>
 </dd>
 <dt class="hdlist1">
 -S&lt;string&gt;
@@ -3699,7 +3738,7 @@ reversible operation.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-02-06 10:34:58 JST
+ 2021-02-05 22:36:43 PST
 </div>
 </div>
 </body>

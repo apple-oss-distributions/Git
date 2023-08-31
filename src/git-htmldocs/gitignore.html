@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>gitignore(5)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -773,12 +773,11 @@ Patterns read from the command line for those commands that support
 <li>
 <p>
 Patterns read from a <code>.gitignore</code> file in the same directory
-   as the path, or in any parent directory, with patterns in the
-   higher level files (up to the toplevel of the work tree) being overridden
-   by those in lower level files down to the directory containing the file.
-   These patterns match relative to the location of the
-   <code>.gitignore</code> file.  A project normally includes such
-   <code>.gitignore</code> files in its repository, containing patterns for
+   as the path, or in any parent directory (up to the top-level of the working
+   tree), with patterns in the higher level files being overridden by those in
+   lower level files down to the directory containing the file. These patterns
+   match relative to the location of the <code>.gitignore</code> file.  A project normally
+   includes such <code>.gitignore</code> files in its repository, containing patterns for
    files generated as part of the project build.
 </p>
 </li>
@@ -968,7 +967,7 @@ accessed from the index or a tree versus from the filesystem.</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
-The pattern <code>hello.*</code> matches any file or folder
+The pattern <code>hello.*</code> matches any file or directory
    whose name begins with <code>hello.</code>. If one wants to restrict
    this only to the directory and not in its subdirectories,
    one can prepend the pattern with a slash, i.e. <code>/hello.*</code>;
@@ -1072,7 +1071,7 @@ everything within <code>foo/bar</code>):</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-05-12 14:17:56 JST
+ 2021-10-29 16:18:45 PDT
 </div>
 </div>
 </body>

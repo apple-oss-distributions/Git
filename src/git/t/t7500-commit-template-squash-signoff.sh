@@ -270,7 +270,7 @@ EOF
 
 test_expect_success 'commit --fixup provides correct one-line commit message' '
 	commit_for_rebase_autosquash_setup &&
-	git commit --fixup HEAD~1 &&
+	EDITOR="echo ignored >>" git commit --fixup HEAD~1 &&
 	commit_msg_is "fixup! target message subject line"
 '
 
@@ -281,6 +281,13 @@ test_expect_success 'commit --fixup -m"something" -m"extra"' '
 
 extra"
 '
+test_expect_success 'commit --fixup --edit' '
+	commit_for_rebase_autosquash_setup &&
+	EDITOR="printf \"something\nextra\" >>" git commit --fixup HEAD~1 --edit &&
+	commit_msg_is "fixup! target message subject linesomething
+extra"
+'
+
 get_commit_msg () {
 	rev="$1" &&
 	git log -1 --pretty=format:"%B" "$rev"
@@ -352,14 +359,14 @@ test_expect_success '--fixup=reword: ignores staged changes' '
 
 test_expect_success '--fixup=reword: error out with -m option' '
 	commit_for_rebase_autosquash_setup &&
-	echo "fatal: cannot combine -m with --fixup:reword" >expect &&
+	echo "fatal: options '\''-m'\'' and '\''--fixup:reword'\'' cannot be used together" >expect &&
 	test_must_fail git commit --fixup=reword:HEAD~ -m "reword commit message" 2>actual &&
 	test_cmp expect actual
 '
 
 test_expect_success '--fixup=amend: error out with -m option' '
 	commit_for_rebase_autosquash_setup &&
-	echo "fatal: cannot combine -m with --fixup:amend" >expect &&
+	echo "fatal: options '\''-m'\'' and '\''--fixup:amend'\'' cannot be used together" >expect &&
 	test_must_fail git commit --fixup=amend:HEAD~ -m "amend commit message" 2>actual &&
 	test_cmp expect actual
 '
@@ -414,8 +421,9 @@ test_expect_success 'amend! commit allows empty commit msg body with --allow-emp
 
 test_fixup_reword_opt () {
 	test_expect_success "--fixup=reword: incompatible with $1" "
-		echo 'fatal: reword option of --fixup is mutually exclusive with'\
-			'--patch/--interactive/--all/--include/--only' >expect &&
+		echo 'fatal: reword option of '\''--fixup'\'' and' \
+			''\''--patch/--interactive/--all/--include/--only'\' \
+			'cannot be used together' >expect &&
 		test_must_fail git commit --fixup=reword:HEAD~ $1 2>actual &&
 		test_cmp expect actual
 	"
@@ -428,13 +436,13 @@ done
 
 test_expect_success '--fixup=reword: give error with pathsec' '
 	commit_for_rebase_autosquash_setup &&
-	echo "fatal: cannot combine reword option of --fixup with path '\''foo'\''" >expect &&
+	echo "fatal: reword option of '\''--fixup'\'' and path '\''foo'\'' cannot be used together" >expect &&
 	test_must_fail git commit --fixup=reword:HEAD~ -- foo 2>actual &&
 	test_cmp expect actual
 '
 
 test_expect_success '--fixup=reword: -F give error message' '
-	echo "fatal: Only one of -c/-C/-F/--fixup can be used." >expect &&
+	echo "fatal: options '\''-F'\'' and '\''--fixup'\'' cannot be used together" >expect &&
 	test_must_fail git commit --fixup=reword:HEAD~ -F msg  2>actual &&
 	test_cmp expect actual
 '
@@ -498,7 +506,7 @@ test_expect_success 'invalid message options when using --fixup' '
 cat >expected-template <<EOF
 
 # Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.
+# with '#' will be ignored.
 #
 # Author:    A U Thor <author@example.com>
 #

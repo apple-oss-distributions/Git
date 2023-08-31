@@ -10,7 +10,7 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 test_expect_success setup '
 
 	s="1 2 3 4 5 6 7 8" &&
-	for i in $s; do echo $i; done >hello &&
+	test_write_lines $s >hello &&
 	git add hello &&
 	git commit -m initial &&
 	git checkout -b side &&
@@ -18,7 +18,7 @@ test_expect_success setup '
 	git add hello &&
 	git commit -m second &&
 	git checkout main &&
-	for i in mundo $s; do echo $i; done >hello &&
+	test_write_lines mundo $s >hello &&
 	git add hello &&
 	git commit -m main
 
@@ -27,7 +27,7 @@ test_expect_success setup '
 test_expect_success 'subtree available and works like recursive' '
 
 	git merge -s subtree side &&
-	for i in mundo $s world; do echo $i; done >expect &&
+	test_write_lines mundo $s world >expect &&
 	test_cmp expect hello
 
 '
@@ -100,7 +100,7 @@ test_expect_success 'merge update' '
 	git checkout -b topic_2 &&
 	git commit -m "update git-gui" &&
 	cd ../git &&
-	git pull -s subtree gui topic_2 &&
+	git pull --no-rebase -s subtree gui topic_2 &&
 	git ls-files -s >actual &&
 	(
 		echo "100644 $o3 0	git-gui/git-gui.sh" &&
@@ -129,7 +129,7 @@ test_expect_success 'initial ambiguous subtree' '
 test_expect_success 'merge using explicit' '
 	cd ../git &&
 	git reset --hard topic_2 &&
-	git pull -Xsubtree=git-gui gui topic_2 &&
+	git pull --no-rebase -Xsubtree=git-gui gui topic_2 &&
 	git ls-files -s >actual &&
 	(
 		echo "100644 $o3 0	git-gui/git-gui.sh" &&
@@ -142,7 +142,7 @@ test_expect_success 'merge using explicit' '
 test_expect_success 'merge2 using explicit' '
 	cd ../git &&
 	git reset --hard topic_2 &&
-	git pull -Xsubtree=git-gui2 gui topic_2 &&
+	git pull --no-rebase -Xsubtree=git-gui2 gui topic_2 &&
 	git ls-files -s >actual &&
 	(
 		echo "100644 $o1 0	git-gui/git-gui.sh" &&

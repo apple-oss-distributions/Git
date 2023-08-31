@@ -1,5 +1,5 @@
 test_expect_success "setup proc-receive hook (fall-through, $PROTOCOL/porcelain)" '
-	write_script "$upstream/hooks/proc-receive" <<-EOF
+	test_hook -C "$upstream" --clobber proc-receive <<-\EOF
 	printf >&2 "# proc-receive hook\n"
 	test-tool proc-receive -v \
 		-r "ok refs/for/main/topic" \
@@ -15,18 +15,18 @@ test_expect_success "proc-receive: fall throught, let receive-pack to execute ($
 		$B:refs/for/main/topic \
 		>out 2>&1 &&
 	make_user_friendly_and_stable_output <out >actual &&
-	cat >expect <<-EOF &&
-	remote: # pre-receive hook
-	remote: pre-receive< <ZERO-OID> <COMMIT-B> refs/for/main/topic
-	remote: # proc-receive hook
-	remote: proc-receive< <ZERO-OID> <COMMIT-B> refs/for/main/topic
-	remote: proc-receive> ok refs/for/main/topic
-	remote: proc-receive> option fall-through
-	remote: # post-receive hook
-	remote: post-receive< <ZERO-OID> <COMMIT-B> refs/for/main/topic
-	To <URL/of/upstream.git>
-	*    <COMMIT-B>:refs/for/main/topic    [new reference]
-	Done
+	format_and_save_expect <<-EOF &&
+	> remote: # pre-receive hook        Z
+	> remote: pre-receive< <ZERO-OID> <COMMIT-B> refs/for/main/topic        Z
+	> remote: # proc-receive hook        Z
+	> remote: proc-receive< <ZERO-OID> <COMMIT-B> refs/for/main/topic        Z
+	> remote: proc-receive> ok refs/for/main/topic        Z
+	> remote: proc-receive> option fall-through        Z
+	> remote: # post-receive hook        Z
+	> remote: post-receive< <ZERO-OID> <COMMIT-B> refs/for/main/topic        Z
+	> To <URL/of/upstream.git>
+	> *	<COMMIT-B>:refs/for/main/topic	[new reference]
+	> Done
 	EOF
 	test_cmp expect actual &&
 

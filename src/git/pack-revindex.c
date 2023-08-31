@@ -296,14 +296,34 @@ int load_pack_revindex(struct packed_git *p)
 
 int load_midx_revindex(struct multi_pack_index *m)
 {
-	char *revindex_name;
+	struct strbuf revindex_name = STRBUF_INIT;
 	int ret;
+
 	if (m->revindex_data)
 		return 0;
 
-	revindex_name = get_midx_rev_filename(m);
+	if (m->chunk_revindex) {
+		/*
+		 * If the MIDX `m` has a `RIDX` chunk, then use its contents for
+		 * the reverse index instead of trying to load a separate `.rev`
+		 * file.
+		 *
+		 * Note that we do *not* set `m->revindex_map` here, since we do
+		 * not want to accidentally call munmap() in the middle of the
+		 * MIDX.
+		 */
+		trace2_data_string("load_midx_revindex", the_repository,
+				   "source", "midx");
+		m->revindex_data = (const uint32_t *)m->chunk_revindex;
+		return 0;
+	}
 
-	ret = load_revindex_from_disk(revindex_name,
+	trace2_data_string("load_midx_revindex", the_repository,
+			   "source", "rev");
+
+	get_midx_rev_filename(&revindex_name, m);
+
+	ret = load_revindex_from_disk(revindex_name.buf,
 				      m->num_objects,
 				      &m->revindex_map,
 				      &m->revindex_len);
@@ -313,7 +333,7 @@ int load_midx_revindex(struct multi_pack_index *m)
 	m->revindex_data = (const uint32_t *)((const char *)m->revindex_map + RIDX_HEADER_SIZE);
 
 cleanup:
-	free(revindex_name);
+	strbuf_release(&revindex_name);
 	return ret;
 }
 

@@ -90,12 +90,20 @@ static void reset_repository_shallow(struct repository *r)
 {
 	r->parsed_objects->is_shallow = -1;
 	stat_validity_clear(r->parsed_objects->shallow_stat);
+	reset_commit_grafts(r);
 }
 
 int commit_shallow_file(struct repository *r, struct shallow_lock *lk)
 {
 	int res = commit_lock_file(&lk->lock);
 	reset_repository_shallow(r);
+
+	/*
+	 * Update in-memory data structures with the new shallow information,
+	 * including unparsing all commits that now have grafts.
+	 */
+	is_repository_shallow(r);
+
 	return res;
 }
 
@@ -261,6 +269,7 @@ struct commit_list *get_shallow_commits_by_rev_list(int ac, const char **av,
 		if ((o->flags & both_flags) == both_flags)
 			o->flags &= ~not_shallow_flag;
 	}
+	release_revisions(&revs);
 	return result;
 }
 
@@ -559,7 +568,7 @@ static void paint_down(struct paint_info *info, const struct object_id *oid,
 		else
 			c->object.flags |= SEEN;
 
-		if (*refs == NULL)
+		if (!*refs)
 			*refs = bitmap;
 		else {
 			memcpy(tmp, *refs, bitmap_size);
@@ -603,7 +612,7 @@ static int mark_uninteresting(const char *refname, const struct object_id *oid,
 	if (!commit)
 		return 0;
 	commit->object.flags |= UNINTERESTING;
-	mark_parents_uninteresting(commit);
+	mark_parents_uninteresting(NULL, commit);
 	return 0;
 }
 

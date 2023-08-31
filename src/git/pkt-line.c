@@ -103,7 +103,7 @@ void packet_response_end(int fd)
 {
 	packet_trace("0002", 4, 1);
 	if (write_in_full(fd, "0002", 4) < 0)
-		die_errno(_("unable to write stateless separator packet"));
+		die_errno(_("unable to write response end packet"));
 }
 
 int packet_flush_gently(int fd)
@@ -243,6 +243,43 @@ void packet_write(int fd_out, const char *buf, size_t size)
 		die("%s", err.buf);
 }
 
+void packet_fwrite(FILE *f, const char *buf, size_t size)
+{
+	size_t packet_size;
+	char header[4];
+
+	if (size > LARGE_PACKET_DATA_MAX)
+		die(_("packet write failed - data exceeds max packet size"));
+
+	packet_trace(buf, size, 1);
+	packet_size = size + 4;
+
+	set_packet_header(header, packet_size);
+	fwrite_or_die(f, header, 4);
+	fwrite_or_die(f, buf, size);
+}
+
+void packet_fwrite_fmt(FILE *fh, const char *fmt, ...)
+{
+       static struct strbuf buf = STRBUF_INIT;
+       va_list args;
+
+       strbuf_reset(&buf);
+
+       va_start(args, fmt);
+       format_packet(&buf, "", fmt, args);
+       va_end(args);
+
+       fwrite_or_die(fh, buf.buf, buf.len);
+}
+
+void packet_fflush(FILE *f)
+{
+	packet_trace("0000", 4, 1);
+	fwrite_or_die(f, "0000", 4);
+	fflush_or_die(f);
+}
+
 void packet_buf_write(struct strbuf *buf, const char *fmt, ...)
 {
 	va_list args;
@@ -250,22 +287,6 @@ void packet_buf_write(struct strbuf *buf, const char *fmt, ...)
 	va_start(args, fmt);
 	format_packet(buf, "", fmt, args);
 	va_end(args);
-}
-
-void packet_buf_write_len(struct strbuf *buf, const char *data, size_t len)
-{
-	size_t orig_len, n;
-
-	orig_len = buf->len;
-	strbuf_addstr(buf, "0000");
-	strbuf_add(buf, data, len);
-	n = buf->len - orig_len;
-
-	if (n > LARGE_PACKET_MAX)
-		die(_("protocol error: impossibly long line"));
-
-	set_packet_header(&buf->buf[orig_len], n);
-	packet_trace(data, len, 1);
 }
 
 int write_packetized_from_fd_no_flush(int fd_in, int fd_out)
@@ -349,6 +370,32 @@ int packet_length(const char lenbuf_hex[4])
 	return (val < 0) ? val : (val << 8) | hex2chr(lenbuf_hex + 2);
 }
 
+static char *find_packfile_uri_path(const char *buffer)
+{
+	const char *URI_MARK = "://";
+	char *path;
+	int len;
+
+	/* First char is sideband mark */
+	buffer += 1;
+
+	len = strspn(buffer, "0123456789abcdefABCDEF");
+	/* size of SHA1 and SHA256 hash */
+	if (!(len == 40 || len == 64) || buffer[len] != ' ')
+		return NULL; /* required "<hash>SP" not seen */
+
+	path = strstr(buffer + len + 1, URI_MARK);
+	if (!path)
+		return NULL;
+
+	path = strchr(path + strlen(URI_MARK), '/');
+	if (!path || !*(path + 1))
+		return NULL;
+
+	/* position after '/' */
+	return ++path;
+}
+
 enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 						size_t *src_len, char *buffer,
 						unsigned size, int *pktlen,
@@ -356,6 +403,7 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 {
 	int len;
 	char linelen[4];
+	char *uri_path_start;
 
 	if (get_packet_data(fd, src_buffer, src_len, linelen, 4, options) < 0) {
 		*pktlen = -1;
@@ -406,7 +454,18 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 		len--;
 
 	buffer[len] = 0;
-	packet_trace(buffer, len, 0);
+	if (options & PACKET_READ_REDACT_URI_PATH &&
+	    (uri_path_start = find_packfile_uri_path(buffer))) {
+		const char *redacted = "<redacted>";
+		struct strbuf tracebuf = STRBUF_INIT;
+		strbuf_insert(&tracebuf, 0, buffer, len);
+		strbuf_splice(&tracebuf, uri_path_start - buffer,
+			      strlen(uri_path_start), redacted, strlen(redacted));
+		packet_trace(tracebuf.buf, tracebuf.len, 0);
+		strbuf_release(&tracebuf);
+	} else {
+		packet_trace(buffer, len, 0);
+	}
 
 	if ((options & PACKET_READ_DIE_ON_ERR_PACKET) &&
 	    starts_with(buffer, "ERR "))
@@ -416,49 +475,34 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 	return PACKET_READ_NORMAL;
 }
 
-int packet_read(int fd, char **src_buffer, size_t *src_len,
-		char *buffer, unsigned size, int options)
+int packet_read(int fd, char *buffer, unsigned size, int options)
 {
 	int pktlen = -1;
 
-	packet_read_with_status(fd, src_buffer, src_len, buffer, size,
-				&pktlen, options);
+	packet_read_with_status(fd, NULL, NULL, buffer, size, &pktlen,
+				options);
 
 	return pktlen;
 }
 
-static char *packet_read_line_generic(int fd,
-				      char **src, size_t *src_len,
-				      int *dst_len)
+char *packet_read_line(int fd, int *dst_len)
 {
-	int len = packet_read(fd, src, src_len,
-			      packet_buffer, sizeof(packet_buffer),
+	int len = packet_read(fd, packet_buffer, sizeof(packet_buffer),
 			      PACKET_READ_CHOMP_NEWLINE);
 	if (dst_len)
 		*dst_len = len;
 	return (len > 0) ? packet_buffer : NULL;
 }
 
-char *packet_read_line(int fd, int *len_p)
-{
-	return packet_read_line_generic(fd, NULL, NULL, len_p);
-}
-
 int packet_read_line_gently(int fd, int *dst_len, char **dst_line)
 {
-	int len = packet_read(fd, NULL, NULL,
-			      packet_buffer, sizeof(packet_buffer),
+	int len = packet_read(fd, packet_buffer, sizeof(packet_buffer),
 			      PACKET_READ_CHOMP_NEWLINE|PACKET_READ_GENTLE_ON_EOF);
 	if (dst_len)
 		*dst_len = len;
 	if (dst_line)
 		*dst_line = (len > 0) ? packet_buffer : NULL;
 	return len;
-}
-
-char *packet_read_line_buf(char **src, size_t *src_len, int *dst_len)
-{
-	return packet_read_line_generic(-1, src, src_len, dst_len);
 }
 
 ssize_t read_packetized_to_strbuf(int fd_in, struct strbuf *sb_out, int options)
@@ -470,7 +514,7 @@ ssize_t read_packetized_to_strbuf(int fd_in, struct strbuf *sb_out, int options)
 
 	for (;;) {
 		strbuf_grow(sb_out, LARGE_PACKET_DATA_MAX);
-		packet_len = packet_read(fd_in, NULL, NULL,
+		packet_len = packet_read(fd_in,
 			/* strbuf_grow() above always allocates one extra byte to
 			 * store a '\0' at the end of the string. packet_read()
 			 * writes a '\0' extra byte at the end, too. Let it know

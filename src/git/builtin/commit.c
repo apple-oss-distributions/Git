@@ -19,6 +19,7 @@
 #include "revision.h"
 #include "wt-status.h"
 #include "run-command.h"
+#include "hook.h"
 #include "refs.h"
 #include "log-tree.h"
 #include "strbuf.h"
@@ -36,6 +37,7 @@
 #include "help.h"
 #include "commit-reach.h"
 #include "commit-graph.h"
+#include "pretty.h"
 
 static const char * const builtin_commit_usage[] = {
 	N_("git commit [<options>] [--] <pathspec>..."),
@@ -203,7 +205,7 @@ static void status_init_config(struct wt_status *s, config_fn_t fn)
 	init_diff_ui_defaults();
 	git_config(fn, s);
 	determine_whence(s);
-	s->hints = advice_status_hints; /* must come after git_config() */
+	s->hints = advice_enabled(ADVICE_STATUS_HINTS); /* must come after git_config() */
 }
 
 static void rollback_index_files(void)
@@ -354,19 +356,19 @@ static const char *prepare_index(const char **argv, const char *prefix,
 
 	if (pathspec_from_file) {
 		if (interactive)
-			die(_("--pathspec-from-file is incompatible with --interactive/--patch"));
+			die(_("options '%s' and '%s' cannot be used together"), "--pathspec-from-file", "--interactive/--patch");
 
 		if (all)
-			die(_("--pathspec-from-file with -a does not make sense"));
+			die(_("options '%s' and '%s' cannot be used together"), "--pathspec-from-file", "-a");
 
 		if (pathspec.nr)
-			die(_("--pathspec-from-file is incompatible with pathspec arguments"));
+			die(_("'%s' and pathspec arguments cannot be used together"), "--pathspec-from-file");
 
 		parse_pathspec_file(&pathspec, 0,
 				    PATHSPEC_PREFER_FULL,
 				    prefix, pathspec_from_file, pathspec_file_nul);
 	} else if (pathspec_file_nul) {
-		die(_("--pathspec-file-nul requires --pathspec-from-file"));
+		die(_("the option '%s' requires '%s'"), "--pathspec-file-nul", "--pathspec-from-file");
 	}
 
 	if (!pathspec.nr && (also || (only && !allow_empty &&
@@ -724,11 +726,13 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 	int clean_message_contents = (cleanup_mode != COMMIT_MSG_CLEANUP_NONE);
 	int old_display_comment_prefix;
 	int merge_contains_scissors = 0;
+	int invoked_hook;
 
 	/* This checks and barfs if author is badly specified */
 	determine_author_info(author_ident);
 
-	if (!no_verify && run_commit_hook(use_editor, index_file, "pre-commit", NULL))
+	if (!no_verify && run_commit_hook(use_editor, index_file, &invoked_hook,
+					  "pre-commit", NULL))
 		return 0;
 
 	if (squash_message) {
@@ -798,7 +802,7 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 
 		if (!strcmp(fixup_prefix, "amend")) {
 			if (have_option_m)
-				die(_("cannot combine -m with --fixup:%s"), fixup_message);
+				die(_("options '%s' and '%s:%s' cannot be used together"), "-m", "--fixup", fixup_message);
 			prepare_amend_commit(commit, &sb, &ctx);
 		}
 	} else if (!stat(git_path_merge_msg(the_repository), &statbuf)) {
@@ -857,7 +861,7 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 	}
 
 	s->fp = fopen_for_writing(git_path_commit_editmsg());
-	if (s->fp == NULL)
+	if (!s->fp)
 		die_errno(_("could not open '%s'"), git_path_commit_editmsg());
 
 	/* Ignore status.displayCommentPrefix: we do need comments in COMMIT_EDITMSG. */
@@ -889,7 +893,22 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 		int ident_shown = 0;
 		int saved_color_setting;
 		struct ident_split ci, ai;
-
+		const char *hint_cleanup_all = allow_empty_message ?
+			_("Please enter the commit message for your changes."
+			  " Lines starting\nwith '%c' will be ignored.\n") :
+			_("Please enter the commit message for your changes."
+			  " Lines starting\nwith '%c' will be ignored, and an empty"
+			  " message aborts the commit.\n");
+		const char *hint_cleanup_space = allow_empty_message ?
+			_("Please enter the commit message for your changes."
+			  " Lines starting\n"
+			  "with '%c' will be kept; you may remove them"
+			  " yourself if you want to.\n") :
+			_("Please enter the commit message for your changes."
+			  " Lines starting\n"
+			  "with '%c' will be kept; you may remove them"
+			  " yourself if you want to.\n"
+			  "An empty message aborts the commit.\n");
 		if (whence != FROM_COMMIT) {
 			if (cleanup_mode == COMMIT_MSG_CLEANUP_SCISSORS &&
 				!merge_contains_scissors)
@@ -911,20 +930,12 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 
 		fprintf(s->fp, "\n");
 		if (cleanup_mode == COMMIT_MSG_CLEANUP_ALL)
-			status_printf(s, GIT_COLOR_NORMAL,
-				_("Please enter the commit message for your changes."
-				  " Lines starting\nwith '%c' will be ignored, and an empty"
-				  " message aborts the commit.\n"), comment_line_char);
+			status_printf(s, GIT_COLOR_NORMAL, hint_cleanup_all, comment_line_char);
 		else if (cleanup_mode == COMMIT_MSG_CLEANUP_SCISSORS) {
 			if (whence == FROM_COMMIT && !merge_contains_scissors)
 				wt_status_add_cut_line(s->fp);
 		} else /* COMMIT_MSG_CLEANUP_SPACE, that is. */
-			status_printf(s, GIT_COLOR_NORMAL,
-				_("Please enter the commit message for your changes."
-				  " Lines starting\n"
-				  "with '%c' will be kept; you may remove them"
-				  " yourself if you want to.\n"
-				  "An empty message aborts the commit.\n"), comment_line_char);
+			status_printf(s, GIT_COLOR_NORMAL, hint_cleanup_space, comment_line_char);
 
 		/*
 		 * These should never fail because they come from our own
@@ -1026,7 +1037,7 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 	 */
 	if (!committable && whence != FROM_MERGE && !allow_empty &&
 	    !(amend && is_a_merge(current_head))) {
-		s->hints = advice_status_hints;
+		s->hints = advice_enabled(ADVICE_STATUS_HINTS);
 		s->display_comment_prefix = old_display_comment_prefix;
 		run_status(stdout, index_file, prefix, 0, s);
 		if (amend)
@@ -1044,10 +1055,10 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 		return 0;
 	}
 
-	if (!no_verify && find_hook("pre-commit")) {
+	if (!no_verify && invoked_hook) {
 		/*
-		 * Re-read the index as pre-commit hook could have updated it,
-		 * and write it out as a tree.  We must do this before we invoke
+		 * Re-read the index as the pre-commit-commit hook was invoked
+		 * and could have updated it. We must do this before we invoke
 		 * the editor and after we invoke run_status above.
 		 */
 		discard_cache();
@@ -1059,7 +1070,7 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 		return 0;
 	}
 
-	if (run_commit_hook(use_editor, index_file, "prepare-commit-msg",
+	if (run_commit_hook(use_editor, index_file, NULL, "prepare-commit-msg",
 			    git_path_commit_editmsg(), hook_arg1, hook_arg2, NULL))
 		return 0;
 
@@ -1076,7 +1087,8 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 	}
 
 	if (!no_verify &&
-	    run_commit_hook(use_editor, index_file, "commit-msg", git_path_commit_editmsg(), NULL)) {
+	    run_commit_hook(use_editor, index_file, NULL, "commit-msg",
+			    git_path_commit_editmsg(), NULL)) {
 		return 0;
 	}
 
@@ -1088,7 +1100,6 @@ static const char *find_author_by_nickname(const char *name)
 	struct rev_info revs;
 	struct commit *commit;
 	struct strbuf buf = STRBUF_INIT;
-	struct string_list mailmap = STRING_LIST_INIT_NODUP;
 	const char *av[20];
 	int ac = 0;
 
@@ -1099,7 +1110,8 @@ static const char *find_author_by_nickname(const char *name)
 	av[++ac] = buf.buf;
 	av[++ac] = NULL;
 	setup_revisions(ac, av, &revs, NULL);
-	revs.mailmap = &mailmap;
+	revs.mailmap = xmalloc(sizeof(struct string_list));
+	string_list_init_nodup(revs.mailmap);
 	read_mailmap(revs.mailmap);
 
 	if (prepare_revision_walk(&revs))
@@ -1110,7 +1122,7 @@ static const char *find_author_by_nickname(const char *name)
 		ctx.date_mode.type = DATE_NORMAL;
 		strbuf_release(&buf);
 		format_commit_message(commit, "%aN <%aE>", &buf, &ctx);
-		clear_mailmap(&mailmap);
+		release_revisions(&revs);
 		return strbuf_detach(&buf, NULL);
 	}
 	die(_("--author '%s' is not 'Name <email>' and matches no existing author"), name);
@@ -1185,7 +1197,7 @@ static void finalize_deferred_config(struct wt_status *s)
 		    status_format == STATUS_FORMAT_UNSPECIFIED)
 			status_format = STATUS_FORMAT_PORCELAIN;
 		else if (status_format == STATUS_FORMAT_LONG)
-			die(_("--long and -z are incompatible"));
+			die(_("options '%s' and '%s' cannot be used together"), "--long", "-z");
 	}
 
 	if (use_deferred_config && status_format == STATUS_FORMAT_UNSPECIFIED)
@@ -1221,9 +1233,10 @@ static void check_fixup_reword_options(int argc, const char *argv[]) {
 			die(_("You are in the middle of a cherry-pick -- cannot reword."));
 	}
 	if (argc)
-		die(_("cannot combine reword option of --fixup with path '%s'"), *argv);
+		die(_("reword option of '%s' and path '%s' cannot be used together"), "--fixup", *argv);
 	if (patch_interactive || interactive || all || also || only)
-		die(_("reword option of --fixup is mutually exclusive with --patch/--interactive/--all/--include/--only"));
+		die(_("reword option of '%s' and '%s' cannot be used together"),
+			"--fixup", "--patch/--interactive/--all/--include/--only");
 }
 
 static int parse_and_validate_options(int argc, const char *argv[],
@@ -1233,8 +1246,6 @@ static int parse_and_validate_options(int argc, const char *argv[],
 				      struct commit *current_head,
 				      struct wt_status *s)
 {
-	int f = 0;
-
 	argc = parse_options(argc, argv, prefix, options, usage, 0);
 	finalize_deferred_config(s);
 
@@ -1242,12 +1253,10 @@ static int parse_and_validate_options(int argc, const char *argv[],
 		force_author = find_author_by_nickname(force_author);
 
 	if (force_author && renew_authorship)
-		die(_("Using both --reset-author and --author does not make sense"));
+		die(_("options '%s' and '%s' cannot be used together"), "--reset-author", "--author");
 
 	if (logfile || have_option_m || use_message)
 		use_editor = 0;
-	if (0 <= edit_flag)
-		use_editor = edit_flag;
 
 	/* Sanity check options */
 	if (amend && !current_head)
@@ -1261,20 +1270,16 @@ static int parse_and_validate_options(int argc, const char *argv[],
 			die(_("You are in the middle of a rebase -- cannot amend."));
 	}
 	if (fixup_message && squash_message)
-		die(_("Options --squash and --fixup cannot be used together"));
-	if (use_message)
-		f++;
-	if (edit_message)
-		f++;
-	if (fixup_message)
-		f++;
-	if (logfile)
-		f++;
-	if (f > 1)
-		die(_("Only one of -c/-C/-F/--fixup can be used."));
-	if (have_option_m && (edit_message || use_message || logfile))
-		die((_("Option -m cannot be combined with -c/-C/-F.")));
-	if (f || have_option_m)
+		die(_("options '%s' and '%s' cannot be used together"), "--squash", "--fixup");
+	die_for_incompatible_opt4(!!use_message, "-C",
+				  !!edit_message, "-c",
+				  !!logfile, "-F",
+				  !!fixup_message, "--fixup");
+	die_for_incompatible_opt4(have_option_m, "-m",
+				  !!edit_message, "-c",
+				  !!use_message, "-C",
+				  !!logfile, "-F");
+	if (use_message || edit_message || logfile ||fixup_message || have_option_m)
 		template_file = NULL;
 	if (edit_message)
 		use_message = edit_message;
@@ -1299,9 +1304,10 @@ static int parse_and_validate_options(int argc, const char *argv[],
 	if (patch_interactive)
 		interactive = 1;
 
-	if (also + only + all + interactive > 1)
-		die(_("Only one of --include/--only/--all/--interactive/--patch can be used."));
-
+	die_for_incompatible_opt4(also, "-i/--include",
+				  only, "-o/--only",
+				  all, "-a/--all",
+				  interactive, "--interactive/-p/--patch");
 	if (fixup_message) {
 		/*
 		 * We limit --fixup's suboptions to only alpha characters.
@@ -1336,6 +1342,9 @@ static int parse_and_validate_options(int argc, const char *argv[],
 			use_editor = 0;
 		}
 	}
+
+	if (0 <= edit_flag)
+		use_editor = edit_flag;
 
 	cleanup_mode = get_cleanup_mode(cleanup_arg, use_editor);
 
@@ -1510,6 +1519,9 @@ int cmd_status(int argc, const char **argv, const char *prefix)
 	if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage_with_options(builtin_status_usage, builtin_status_options);
 
+	prepare_repo_settings(the_repository);
+	the_repository->settings.command_requires_full_index = 0;
+
 	status_init_config(&s, git_status_config);
 	argc = parse_options(argc, argv, prefix,
 			     builtin_status_options,
@@ -1675,9 +1687,13 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 	struct commit *current_head = NULL;
 	struct commit_extra_header *extra = NULL;
 	struct strbuf err = STRBUF_INIT;
+	int ret = 0;
 
 	if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage_with_options(builtin_commit_usage, builtin_commit_options);
+
+	prepare_repo_settings(the_repository);
+	the_repository->settings.command_requires_full_index = 0;
 
 	status_init_config(&s, git_commit_config);
 	s.commit_template = 1;
@@ -1706,8 +1722,9 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 	   running hooks, writing the trees, and interacting with the user.  */
 	if (!prepare_to_commit(index_file, prefix,
 			       current_head, &s, &author_ident)) {
+		ret = 1;
 		rollback_index_files();
-		return 1;
+		goto cleanup;
 	}
 
 	/* Determine parents */
@@ -1805,7 +1822,6 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 		rollback_index_files();
 		die(_("failed to write commit object"));
 	}
-	strbuf_release(&author_ident);
 	free_commit_extra_headers(extra);
 
 	if (update_head_with_reflog(current_head, &oid, reflog_msg, &sb,
@@ -1829,7 +1845,8 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 
 	repo_rerere(the_repository, 0);
 	run_auto_maintenance(quiet);
-	run_commit_hook(use_editor, get_index_file(), "post-commit", NULL);
+	run_commit_hook(use_editor, get_index_file(), NULL, "post-commit",
+			NULL);
 	if (amend && !no_post_rewrite) {
 		commit_post_rewrite(the_repository, current_head, &oid);
 	}
@@ -1846,7 +1863,9 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 
 	apply_autostash(git_path_merge_autostash(the_repository));
 
+cleanup:
+	UNLEAK(author_ident);
 	UNLEAK(err);
 	UNLEAK(sb);
-	return 0;
+	return ret;
 }

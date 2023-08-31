@@ -17,6 +17,7 @@
 #include "commit.h"
 #include "strvec.h"
 #include "object-store.h"
+#include "tmp-objdir.h"
 #include "chdir-notify.h"
 #include "shallow.h"
 
@@ -31,7 +32,6 @@ int prefer_symlink_refs;
 int is_bare_repository_cfg = -1; /* unspecified */
 int warn_ambiguous_refs = 1;
 int warn_on_object_refname_ambiguity = 1;
-int ref_paranoia = -1;
 int repository_format_precious_objects;
 int repository_format_worktree_config;
 const char *git_commit_encoding;
@@ -41,9 +41,11 @@ char *apply_default_ignorewhitespace;
 const char *git_attributes_file;
 const char *git_hooks_path;
 int zlib_compression_level = Z_BEST_SPEED;
-int core_compression_level;
 int pack_compression_level = Z_DEFAULT_COMPRESSION;
-int fsync_object_files;
+int fsync_object_files = -1;
+int use_fsync = -1;
+enum fsync_method fsync_method = FSYNC_METHOD_DEFAULT;
+enum fsync_component fsync_components = FSYNC_COMPONENTS_DEFAULT;
 size_t packed_git_window_size = DEFAULT_PACKED_GIT_WINDOW_SIZE;
 size_t packed_git_limit = DEFAULT_PACKED_GIT_LIMIT;
 size_t delta_base_cache_limit = 96 * 1024 * 1024;
@@ -70,6 +72,7 @@ char *notes_ref_name;
 int grafts_replace_parents = 1;
 int core_apply_sparse_checkout;
 int core_sparse_checkout_cone;
+int sparse_expect_files_outside_of_patterns;
 int merge_log_config = -1;
 int precomposed_unicode = -1; /* see probe_utf8_pathname_composition() */
 unsigned long pack_size_limit_cfg;
@@ -84,7 +87,6 @@ int protect_hfs = PROTECT_HFS_DEFAULT;
 #define PROTECT_NTFS_DEFAULT 1
 #endif
 int protect_ntfs = PROTECT_NTFS_DEFAULT;
-const char *core_fsmonitor;
 
 /*
  * The character that begins a commented line in user-editable file
@@ -95,13 +97,6 @@ int auto_comment_line_char;
 
 /* Parallel index stat data preload? */
 int core_preload_index = 1;
-
-/*
- * This is a hack for test programs like test-dump-untracked-cache to
- * ensure that they do not modify the untracked cache when reading it.
- * Do not use it otherwise!
- */
-int ignore_untracked_cache_config;
 
 /* This is set by setup_git_dir_gently() and/or git_default_config() */
 char *git_work_tree_cfg;
@@ -177,6 +172,10 @@ void setup_git_env(const char *git_dir)
 	args.graft_file = getenv_safe(&to_free, GRAFT_ENVIRONMENT);
 	args.index_file = getenv_safe(&to_free, INDEX_ENVIRONMENT);
 	args.alternate_db = getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT);
+	if (getenv(GIT_QUARANTINE_ENVIRONMENT)) {
+		args.disable_ref_updates = 1;
+	}
+
 	repo_set_gitdir(the_repository, git_dir, &args);
 	strvec_clear(&to_free);
 
@@ -253,21 +252,20 @@ static int git_work_tree_initialized;
  */
 void set_git_work_tree(const char *new_work_tree)
 {
-	struct strbuf realpath = STRBUF_INIT;
-
 	if (git_work_tree_initialized) {
+		struct strbuf realpath = STRBUF_INIT;
+
 		strbuf_realpath(&realpath, new_work_tree, 1);
 		new_work_tree = realpath.buf;
 		if (strcmp(new_work_tree, the_repository->worktree))
 			die("internal error: work tree has already been set\n"
 			    "Current worktree: %s\nNew worktree: %s",
 			    the_repository->worktree, new_work_tree);
+		strbuf_release(&realpath);
 		return;
 	}
 	git_work_tree_initialized = 1;
 	repo_set_worktree(the_repository, new_work_tree);
-
-	strbuf_release(&realpath);
 }
 
 const char *get_git_work_tree(void)
@@ -275,7 +273,7 @@ const char *get_git_work_tree(void)
 	return the_repository->worktree;
 }
 
-char *get_object_directory(void)
+const char *get_object_directory(void)
 {
 	if (!the_repository->objects->odb)
 		BUG("git environment hasn't been setup");
@@ -331,8 +329,7 @@ char *get_graft_file(struct repository *r)
 
 static void set_git_dir_1(const char *path)
 {
-	if (setenv(GIT_DIR_ENVIRONMENT, path, 1))
-		die(_("could not set GIT_DIR to '%s'"), path);
+	xsetenv(GIT_DIR_ENVIRONMENT, path, 1);
 	setup_git_env(path);
 }
 
@@ -342,10 +339,14 @@ static void update_relative_gitdir(const char *name,
 				   void *data)
 {
 	char *path = reparent_relative_path(old_cwd, new_cwd, get_git_dir());
+	struct tmp_objdir *tmp_objdir = tmp_objdir_unapply_primary_odb();
+
 	trace_printf_key(&trace_setup_key,
 			 "setup: move $GIT_DIR to '%s'",
 			 path);
 	set_git_dir_1(path);
+	if (tmp_objdir)
+		tmp_objdir_reapply_primary_odb(tmp_objdir, old_cwd, new_cwd);
 	free(path);
 }
 

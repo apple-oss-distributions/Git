@@ -2,12 +2,12 @@
 .\"     Title: gitglossary
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GITGLOSSARY" "7" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GITGLOSSARY" "7" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -251,7 +251,7 @@ and you are "merging" another
 branch\(aqs changes that happen to be a descendant of what you have\&. In such a case, you do not make a new
 merge
 commit
-but instead just update to his revision\&. This will happen frequently on a
+but instead just update your branch to point at the same revision as the branch you are merging\&. This will happen frequently on a
 remote\-tracking branch
 of a remote
 repository\&.
@@ -471,7 +471,7 @@ pathspec
 .RS 4
 Pattern used to limit paths in Git commands\&.
 .sp
-Pathspecs are used on the command line of "git ls\-files", "git ls\-tree", "git add", "git grep", "git diff", "git checkout", and many other commands to limit the scope of operations to some subset of the tree or worktree\&. See the documentation of each command for whether paths are relative to the current directory or toplevel\&. The pathspec syntax is as follows:
+Pathspecs are used on the command line of "git ls\-files", "git ls\-tree", "git add", "git grep", "git diff", "git checkout", and many other commands to limit the scope of operations to some subset of the tree or working tree\&. See the documentation of each command for whether paths are relative to the current directory or toplevel\&. The pathspec syntax is as follows:
 .sp
 .RS 4
 .ie n \{\
@@ -1077,6 +1077,11 @@ working tree
 The tree of actual checked out files\&. The working tree normally contains the contents of the
 HEAD
 commit\(cqs tree, plus any local changes that you have made but not yet committed\&.
+.RE
+.PP
+worktree
+.RS 4
+A repository can have zero (i\&.e\&. bare repository) or one or more worktrees attached to it\&. One "worktree" consists of a "working tree" and repository metadata, most of which are shared among other worktrees of a single repository, and some of which are maintained separately per worktree (e\&.g\&. the index, HEAD and pseudorefs like MERGE_HEAD, per\-worktree refs and per\-worktree configuration file)\&.
 .RE
 .SH "SEE ALSO"
 .sp

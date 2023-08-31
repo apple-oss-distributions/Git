@@ -14,7 +14,7 @@ test_expect_success 'setup' '
 	i=1 &&
 	while test $i -le 100
 	do
-		iii=$(printf "%03i" $i)
+		iii=$(printf "%03i" $i) &&
 		test-tool genrandom "bar" 200 > wide_delta_$iii &&
 		test-tool genrandom "baz $iii" 50 >> wide_delta_$iii &&
 		test-tool genrandom "foo"$i 100 > deep_delta_$iii &&
@@ -282,6 +282,14 @@ test_expect_success 'index-pack -v --stdin produces progress for both phases' '
 	GIT_PROGRESS_DELAY=0 git index-pack -v --stdin <pack-$pack.pack 2>err &&
 	test_i18ngrep "Receiving objects" err &&
 	test_i18ngrep "Resolving deltas" err
+'
+
+test_expect_success 'too-large packs report the breach' '
+	pack=$(git pack-objects --all pack </dev/null) &&
+	sz="$(test_file_size pack-$pack.pack)" &&
+	test "$sz" -gt 20 &&
+	test_must_fail git index-pack --max-input-size=20 pack-$pack.pack 2>err &&
+	grep "maximum allowed size (20 bytes)" err
 '
 
 test_done

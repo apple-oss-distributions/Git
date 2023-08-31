@@ -41,6 +41,14 @@ int open_commit_graph(const char *graph_file, int *fd, struct stat *st);
 int parse_commit_in_graph(struct repository *r, struct commit *item);
 
 /*
+ * Look up the given commit ID in the commit-graph. This will only return a
+ * commit if the ID exists both in the graph and in the object database such
+ * that we don't return commits whose object has been pruned. Otherwise, this
+ * function returns `NULL`.
+ */
+struct commit *lookup_commit_in_graph(struct repository *repo, const struct object_id *id);
+
+/*
  * It is possible that we loaded commit contents from the commit buffer,
  * but we also want to ensure the commit-graph content is correctly
  * checked and filled. Fill the graph_pos and generation members of
@@ -134,7 +142,7 @@ int write_commit_graph_reachable(struct object_directory *odb,
 				 enum commit_graph_write_flags flags,
 				 const struct commit_graph_opts *opts);
 int write_commit_graph(struct object_directory *odb,
-		       struct string_list *pack_indexes,
+		       const struct string_list *pack_indexes,
 		       struct oidset *commits,
 		       enum commit_graph_write_flags flags,
 		       const struct commit_graph_opts *opts);

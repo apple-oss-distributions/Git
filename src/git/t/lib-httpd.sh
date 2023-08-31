@@ -29,7 +29,7 @@
 # Copyright (c) 2008 Clemens Buchacher <drizzd@aon.at>
 #
 
-if test -n "$NO_CURL"
+if ! test_have_prereq LIBCURL
 then
 	skip_all='skipping test, git built without http support'
 	test_done
@@ -131,6 +131,7 @@ prepare_httpd() {
 	cp "$TEST_PATH"/passwd "$HTTPD_ROOT_PATH"
 	install_script incomplete-length-upload-pack-v2-http.sh
 	install_script incomplete-body-upload-pack-v2-http.sh
+	install_script error-no-report.sh
 	install_script broken-smart-http.sh
 	install_script error-smart-http.sh
 	install_script error.sh

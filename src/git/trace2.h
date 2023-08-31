@@ -101,14 +101,8 @@ void trace2_cmd_start_fl(const char *file, int line, const char **argv);
 
 /*
  * Emit an 'exit' event.
- *
- * Write the exit-code that will be passed to exit() or returned
- * from main().
- *
- * Use this prior to actually calling exit().
- * See "#define exit()" in git-compat-util.h
  */
-int trace2_cmd_exit_fl(const char *file, int line, int code);
+void trace2_cmd_exit_fl(const char *file, int line, int code);
 
 #define trace2_cmd_exit(code) (trace2_cmd_exit_fl(__FILE__, __LINE__, (code)))
 
@@ -132,6 +126,16 @@ void trace2_cmd_error_va_fl(const char *file, int line, const char *fmt,
 void trace2_cmd_path_fl(const char *file, int line, const char *pathname);
 
 #define trace2_cmd_path(p) trace2_cmd_path_fl(__FILE__, __LINE__, (p))
+
+/*
+ * Emit an 'ancestry' event with the process name of the current process's
+ * parent process.
+ * This gives post-processors a way to determine what invoked the command and
+ * learn more about usage patterns.
+ */
+void trace2_cmd_ancestry_fl(const char *file, int line, const char **parent_names);
+
+#define trace2_cmd_ancestry(v) trace2_cmd_ancestry_fl(__FILE__, __LINE__, (v))
 
 /*
  * Emit a 'cmd_name' event with the canonical name of the command.
@@ -244,6 +248,31 @@ void trace2_child_exit_fl(const char *file, int line, struct child_process *cmd,
 	trace2_child_exit_fl(__FILE__, __LINE__, (cmd), (code))
 
 /**
+ * Emits a "child_ready" message containing the "child-id" and a flag
+ * indicating whether the child was considered "ready" when we
+ * released it.
+ *
+ * This function should be called after starting a daemon process in
+ * the background (and after giving it sufficient time to boot
+ * up) to indicate that we no longer control or own it.
+ *
+ * The "ready" argument should contain one of { "ready", "timeout",
+ * "error" } to indicate the state of the running daemon when we
+ * released it.
+ *
+ * If the daemon process fails to start or it exits or is terminated
+ * while we are still waiting for it, the caller should emit a
+ * regular "child_exit" to report the normal process exit information.
+ *
+ */
+void trace2_child_ready_fl(const char *file, int line,
+			   struct child_process *cmd,
+			   const char *ready);
+
+#define trace2_child_ready(cmd, ready) \
+	trace2_child_ready_fl(__FILE__, __LINE__, (cmd), (ready))
+
+/**
  * Emit an 'exec' event prior to calling one of exec(), execv(),
  * execvp(), and etc.  On Unix-derived systems, this will be the
  * last event emitted for the current process, unless the exec
@@ -340,7 +369,7 @@ void trace2_def_repo_fl(const char *file, int line, struct repository *repo);
  * being started, such as "read_recursive" or "do_read_index".
  *
  * The `repo` field, if set, will be used to get the "repo-id", so that
- * recursive oerations can be attributed to the correct repository.
+ * recursive operations can be attributed to the correct repository.
  */
 void trace2_region_enter_fl(const char *file, int line, const char *category,
 			    const char *label, const struct repository *repo, ...);
@@ -362,18 +391,9 @@ void trace2_region_enter_printf_fl(const char *file, int line,
 				   const struct repository *repo,
 				   const char *fmt, ...);
 
-#ifdef HAVE_VARIADIC_MACROS
 #define trace2_region_enter_printf(category, label, repo, ...)                 \
 	trace2_region_enter_printf_fl(__FILE__, __LINE__, (category), (label), \
 				      (repo), __VA_ARGS__)
-#else
-/* clang-format off */
-__attribute__((format (region_enter_printf, 4, 5)))
-void trace2_region_enter_printf(const char *category, const char *label,
-				const struct repository *repo, const char *fmt,
-				...);
-/* clang-format on */
-#endif
 
 /**
  * Emit a 'region_leave' event for <category>.<label> with optional
@@ -407,18 +427,9 @@ void trace2_region_leave_printf_fl(const char *file, int line,
 				   const struct repository *repo,
 				   const char *fmt, ...);
 
-#ifdef HAVE_VARIADIC_MACROS
 #define trace2_region_leave_printf(category, label, repo, ...)                 \
 	trace2_region_leave_printf_fl(__FILE__, __LINE__, (category), (label), \
 				      (repo), __VA_ARGS__)
-#else
-/* clang-format off */
-__attribute__((format (region_leave_printf, 4, 5)))
-void trace2_region_leave_printf(const char *category, const char *label,
-				const struct repository *repo, const char *fmt,
-				...);
-/* clang-format on */
-#endif
 
 /**
  * Emit a key-value pair 'data' event of the form <category>.<key> = <value>.
@@ -471,14 +482,7 @@ void trace2_printf_va_fl(const char *file, int line, const char *fmt,
 
 void trace2_printf_fl(const char *file, int line, const char *fmt, ...);
 
-#ifdef HAVE_VARIADIC_MACROS
 #define trace2_printf(...) trace2_printf_fl(__FILE__, __LINE__, __VA_ARGS__)
-#else
-/* clang-format off */
-__attribute__((format (printf, 1, 2)))
-void trace2_printf(const char *fmt, ...);
-/* clang-format on */
-#endif
 
 /*
  * Optional platform-specific code to dump information about the
@@ -492,13 +496,7 @@ enum trace2_process_info_reason {
 	TRACE2_PROCESS_INFO_EXIT,
 };
 
-#if defined(GIT_WINDOWS_NATIVE)
 void trace2_collect_process_info(enum trace2_process_info_reason reason);
-#else
-#define trace2_collect_process_info(reason) \
-	do {                                \
-	} while (0)
-#endif
 
 const char *trace2_session_id(void);
 

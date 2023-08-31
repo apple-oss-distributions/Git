@@ -24,6 +24,7 @@
 #include "repository.h"
 #include "revision.h"
 #include "string-list.h"
+#include "submodule-config.h"
 #include "submodule.h"
 #include "tag.h"
 #include "tree-walk.h"
@@ -55,15 +56,7 @@ static int path_hashmap_cmp(const void *cmp_data,
 	a = container_of(eptr, const struct path_hashmap_entry, e);
 	b = container_of(entry_or_key, const struct path_hashmap_entry, e);
 
-	if (ignore_case)
-		return strcasecmp(a->path, key ? key : b->path);
-	else
-		return strcmp(a->path, key ? key : b->path);
-}
-
-static unsigned int path_hash(const char *path)
-{
-	return ignore_case ? strihash(path) : strhash(path);
+	return fspathcmp(a->path, key ? key : b->path);
 }
 
 /*
@@ -89,7 +82,7 @@ static struct dir_rename_entry *dir_rename_find_entry(struct hashmap *hashmap,
 {
 	struct dir_rename_entry key;
 
-	if (dir == NULL)
+	if (!dir)
 		return NULL;
 	hashmap_entry_init(&key.ent, strhash(dir));
 	key.dir = dir;
@@ -121,7 +114,7 @@ static void dir_rename_entry_init(struct dir_rename_entry *entry,
 	entry->dir = directory;
 	entry->non_unique_new_dir = 0;
 	strbuf_init(&entry->new_dir, 0);
-	string_list_init(&entry->possible_new_dirs, 0);
+	string_list_init_nodup(&entry->possible_new_dirs);
 }
 
 struct collision_entry {
@@ -167,6 +160,7 @@ static void flush_output(struct merge_options *opt)
 	}
 }
 
+__attribute__((format (printf, 2, 3)))
 static int err(struct merge_options *opt, const char *err, ...)
 {
 	va_list params;
@@ -340,7 +334,9 @@ static void output(struct merge_options *opt, int v, const char *fmt, ...)
 		flush_output(opt);
 }
 
-static void output_commit_title(struct merge_options *opt, struct commit *commit)
+static void repo_output_commit_title(struct merge_options *opt,
+				     struct repository *repo,
+				     struct commit *commit)
 {
 	struct merge_remote_desc *desc;
 
@@ -349,21 +345,27 @@ static void output_commit_title(struct merge_options *opt, struct commit *commit
 	if (desc)
 		strbuf_addf(&opt->obuf, "virtual %s\n", desc->name);
 	else {
-		strbuf_add_unique_abbrev(&opt->obuf, &commit->object.oid,
-					 DEFAULT_ABBREV);
+		strbuf_repo_add_unique_abbrev(&opt->obuf, repo,
+					      &commit->object.oid,
+					      DEFAULT_ABBREV);
 		strbuf_addch(&opt->obuf, ' ');
-		if (parse_commit(commit) != 0)
+		if (repo_parse_commit(repo, commit) != 0)
 			strbuf_addstr(&opt->obuf, _("(bad commit)\n"));
 		else {
 			const char *title;
-			const char *msg = get_commit_buffer(commit, NULL);
+			const char *msg = repo_get_commit_buffer(repo, commit, NULL);
 			int len = find_commit_subject(msg, &title);
 			if (len)
 				strbuf_addf(&opt->obuf, "%.*s\n", len, title);
-			unuse_commit_buffer(commit, msg);
+			repo_unuse_commit_buffer(repo, commit, msg);
 		}
 	}
 	flush_output(opt);
+}
+
+static void output_commit_title(struct merge_options *opt, struct commit *commit)
+{
+	repo_output_commit_title(opt, the_repository, commit);
 }
 
 static int add_cacheinfo(struct merge_options *opt,
@@ -415,8 +417,11 @@ static int unpack_trees_start(struct merge_options *opt,
 	memset(&opt->priv->unpack_opts, 0, sizeof(opt->priv->unpack_opts));
 	if (opt->priv->call_depth)
 		opt->priv->unpack_opts.index_only = 1;
-	else
+	else {
 		opt->priv->unpack_opts.update = 1;
+		/* FIXME: should only do this if !overwrite_ignore */
+		opt->priv->unpack_opts.preserve_ignored = 0;
+	}
 	opt->priv->unpack_opts.merge = 1;
 	opt->priv->unpack_opts.head_idx = 2;
 	opt->priv->unpack_opts.fn = threeway_merge;
@@ -462,7 +467,7 @@ static int save_files_dirs(const struct object_id *oid,
 	strbuf_addstr(base, path);
 
 	FLEX_ALLOC_MEM(entry, path, base->buf, base->len);
-	hashmap_entry_init(&entry->e, path_hash(entry->path));
+	hashmap_entry_init(&entry->e, fspathhash(entry->path));
 	hashmap_add(&opt->priv->current_file_dir_set, &entry->e);
 
 	strbuf_setlen(base, baselen);
@@ -517,10 +522,10 @@ static struct stage_data *insert_stage_data(struct repository *r,
  */
 static struct string_list *get_unmerged(struct index_state *istate)
 {
-	struct string_list *unmerged = xcalloc(1, sizeof(struct string_list));
+	struct string_list *unmerged = xmalloc(sizeof(struct string_list));
 	int i;
 
-	unmerged->strdup_strings = 1;
+	string_list_init_dup(unmerged);
 
 	/* TODO: audit for interaction with sparse-index. */
 	ensure_full_index(istate);
@@ -736,14 +741,14 @@ static char *unique_path(struct merge_options *opt,
 
 	base_len = newpath.len;
 	while (hashmap_get_from_hash(&opt->priv->current_file_dir_set,
-				     path_hash(newpath.buf), newpath.buf) ||
+				     fspathhash(newpath.buf), newpath.buf) ||
 	       (!opt->priv->call_depth && file_exists(newpath.buf))) {
 		strbuf_setlen(&newpath, base_len);
 		strbuf_addf(&newpath, "_%d", suffix++);
 	}
 
 	FLEX_ALLOC_MEM(entry, path, newpath.buf, newpath.len);
-	hashmap_entry_init(&entry->e, path_hash(entry->path));
+	hashmap_entry_init(&entry->e, fspathhash(entry->path));
 	hashmap_add(&opt->priv->current_file_dir_set, &entry->e);
 	return strbuf_detach(&newpath, NULL);
 }
@@ -1039,7 +1044,7 @@ static int merge_3way(struct merge_options *opt,
 	mmfile_t orig, src1, src2;
 	struct ll_merge_options ll_opts = {0};
 	char *base, *name1, *name2;
-	int merge_status;
+	enum ll_merge_result merge_status;
 
 	ll_opts.renormalize = opt->renormalize;
 	ll_opts.extra_marker_size = extra_marker_size;
@@ -1085,6 +1090,9 @@ static int merge_3way(struct merge_options *opt,
 	merge_status = ll_merge(result_buf, a->path, &orig, base,
 				&src1, name1, &src2, name2,
 				opt->repo->index, &ll_opts);
+	if (merge_status == LL_MERGE_BINARY_CONFLICT)
+		warning("Cannot merge binary files: %s (%s vs. %s)",
+			a->path, name1, name2);
 
 	free(base);
 	free(name1);
@@ -1117,7 +1125,6 @@ static int find_first_merges(struct repository *repo,
 	xsnprintf(merged_revision, sizeof(merged_revision), "^%s",
 		  oid_to_hex(&a->object.oid));
 	repo_init_revisions(repo, &revs, NULL);
-	rev_opts.submodule = path;
 	/* FIXME: can't handle linked worktrees in submodules yet */
 	revs.single_worktree = path != NULL;
 	setup_revisions(ARRAY_SIZE(rev_args)-1, rev_args, &revs, &rev_opts);
@@ -1127,7 +1134,7 @@ static int find_first_merges(struct repository *repo,
 		die("revision walk setup failed");
 	while ((commit = get_revision(&revs)) != NULL) {
 		struct object *o = &(commit->object);
-		if (in_merge_bases(b, commit))
+		if (repo_in_merge_bases(repo, b, commit))
 			add_object_array(o, NULL, &merges);
 	}
 	reset_revision_walk();
@@ -1142,7 +1149,7 @@ static int find_first_merges(struct repository *repo,
 		contains_another = 0;
 		for (j = 0; j < merges.nr; j++) {
 			struct commit *m2 = (struct commit *) merges.objects[j].item;
-			if (i != j && in_merge_bases(m2, m1)) {
+			if (i != j && repo_in_merge_bases(repo, m2, m1)) {
 				contains_another = 1;
 				break;
 			}
@@ -1153,17 +1160,18 @@ static int find_first_merges(struct repository *repo,
 	}
 
 	object_array_clear(&merges);
+	release_revisions(&revs);
 	return result->nr;
 }
 
-static void print_commit(struct commit *commit)
+static void print_commit(struct repository *repo, struct commit *commit)
 {
 	struct strbuf sb = STRBUF_INIT;
 	struct pretty_print_context ctx = {0};
 	ctx.date_mode.type = DATE_NORMAL;
 	/* FIXME: Merge this with output_commit_title() */
 	assert(!merge_remote_util(commit));
-	format_commit_message(commit, " %h: %m %s", &sb, &ctx);
+	repo_format_commit_message(repo, commit, " %h: %m %s", &sb, &ctx);
 	fprintf(stderr, "%s\n", sb.buf);
 	strbuf_release(&sb);
 }
@@ -1178,6 +1186,8 @@ static int merge_submodule(struct merge_options *opt,
 			   const struct object_id *base, const struct object_id *a,
 			   const struct object_id *b)
 {
+	struct repository subrepo;
+	int ret = 0;
 	struct commit *commit_base, *commit_a, *commit_b;
 	int parent_count;
 	struct object_array merges;
@@ -1201,49 +1211,51 @@ static int merge_submodule(struct merge_options *opt,
 	if (is_null_oid(b))
 		return 0;
 
-	if (add_submodule_odb(path)) {
+	if (repo_submodule_init(&subrepo, opt->repo, path, null_oid())) {
 		output(opt, 1, _("Failed to merge submodule %s (not checked out)"), path);
 		return 0;
 	}
 
-	if (!(commit_base = lookup_commit_reference(opt->repo, base)) ||
-	    !(commit_a = lookup_commit_reference(opt->repo, a)) ||
-	    !(commit_b = lookup_commit_reference(opt->repo, b))) {
+	if (!(commit_base = lookup_commit_reference(&subrepo, base)) ||
+	    !(commit_a = lookup_commit_reference(&subrepo, a)) ||
+	    !(commit_b = lookup_commit_reference(&subrepo, b))) {
 		output(opt, 1, _("Failed to merge submodule %s (commits not present)"), path);
-		return 0;
+		goto cleanup;
 	}
 
 	/* check whether both changes are forward */
-	if (!in_merge_bases(commit_base, commit_a) ||
-	    !in_merge_bases(commit_base, commit_b)) {
+	if (!repo_in_merge_bases(&subrepo, commit_base, commit_a) ||
+	    !repo_in_merge_bases(&subrepo, commit_base, commit_b)) {
 		output(opt, 1, _("Failed to merge submodule %s (commits don't follow merge-base)"), path);
-		return 0;
+		goto cleanup;
 	}
 
 	/* Case #1: a is contained in b or vice versa */
-	if (in_merge_bases(commit_a, commit_b)) {
+	if (repo_in_merge_bases(&subrepo, commit_a, commit_b)) {
 		oidcpy(result, b);
 		if (show(opt, 3)) {
 			output(opt, 3, _("Fast-forwarding submodule %s to the following commit:"), path);
-			output_commit_title(opt, commit_b);
+			repo_output_commit_title(opt, &subrepo, commit_b);
 		} else if (show(opt, 2))
 			output(opt, 2, _("Fast-forwarding submodule %s"), path);
 		else
 			; /* no output */
 
-		return 1;
+		ret = 1;
+		goto cleanup;
 	}
-	if (in_merge_bases(commit_b, commit_a)) {
+	if (repo_in_merge_bases(&subrepo, commit_b, commit_a)) {
 		oidcpy(result, a);
 		if (show(opt, 3)) {
 			output(opt, 3, _("Fast-forwarding submodule %s to the following commit:"), path);
-			output_commit_title(opt, commit_a);
+			repo_output_commit_title(opt, &subrepo, commit_a);
 		} else if (show(opt, 2))
 			output(opt, 2, _("Fast-forwarding submodule %s"), path);
 		else
 			; /* no output */
 
-		return 1;
+		ret = 1;
+		goto cleanup;
 	}
 
 	/*
@@ -1255,10 +1267,10 @@ static int merge_submodule(struct merge_options *opt,
 
 	/* Skip the search if makes no sense to the calling context.  */
 	if (!search)
-		return 0;
+		goto cleanup;
 
 	/* find commit which merges them */
-	parent_count = find_first_merges(opt->repo, &merges, path,
+	parent_count = find_first_merges(&subrepo, &merges, path,
 					 commit_a, commit_b);
 	switch (parent_count) {
 	case 0:
@@ -1268,7 +1280,7 @@ static int merge_submodule(struct merge_options *opt,
 	case 1:
 		output(opt, 1, _("Failed to merge submodule %s (not fast-forward)"), path);
 		output(opt, 2, _("Found a possible merge resolution for the submodule:\n"));
-		print_commit((struct commit *) merges.objects[0].item);
+		print_commit(&subrepo, (struct commit *) merges.objects[0].item);
 		output(opt, 2, _(
 		       "If this is correct simply add it to the index "
 		       "for example\n"
@@ -1281,11 +1293,13 @@ static int merge_submodule(struct merge_options *opt,
 	default:
 		output(opt, 1, _("Failed to merge submodule %s (multiple merges found)"), path);
 		for (i = 0; i < merges.nr; i++)
-			print_commit((struct commit *) merges.objects[i].item);
+			print_commit(&subrepo, (struct commit *) merges.objects[i].item);
 	}
 
 	object_array_clear(&merges);
-	return 0;
+cleanup:
+	repo_clear(&subrepo);
+	return ret;
 }
 
 static int merge_mode_and_contents(struct merge_options *opt,
@@ -1363,7 +1377,7 @@ static int merge_mode_and_contents(struct merge_options *opt,
 
 			if (!ret &&
 			    write_object_file(result_buf.ptr, result_buf.size,
-					      blob_type, &result->blob.oid))
+					      OBJ_BLOB, &result->blob.oid))
 				ret = err(opt, _("Unable to add %s to database"),
 					  a->path);
 
@@ -1879,7 +1893,7 @@ static struct diff_queue_struct *get_diffpairs(struct merge_options *opt,
 	 */
 	if (opts.detect_rename > DIFF_DETECT_RENAME)
 		opts.detect_rename = DIFF_DETECT_RENAME;
-	opts.rename_limit = (opt->rename_limit >= 0) ? opt->rename_limit : 1000;
+	opts.rename_limit = (opt->rename_limit >= 0) ? opt->rename_limit : 7000;
 	opts.rename_score = opt->rename_score;
 	opts.show_rename_progress = opt->show_rename_progress;
 	opts.output_format = DIFF_FORMAT_NO_OUTPUT;
@@ -1977,14 +1991,14 @@ static void get_renamed_dir_portion(const char *old_path, const char *new_path,
 	 * renamed means the root directory can never be renamed -- because
 	 * the root directory always exists).
 	 */
-	if (end_of_old == NULL)
+	if (!end_of_old)
 		return; /* Note: *old_dir and *new_dir are still NULL */
 
 	/*
 	 * If new_path contains no directory (end_of_new is NULL), then we
 	 * have a rename of old_path's directory to the root directory.
 	 */
-	if (end_of_new == NULL) {
+	if (!end_of_new) {
 		*old_dir = xstrndup(old_path, end_of_old - old_path);
 		*new_dir = xstrdup("");
 		return;
@@ -2103,7 +2117,7 @@ static char *handle_path_level_conflicts(struct merge_options *opt,
 	 * to ensure that's the case.
 	 */
 	collision_ent = collision_find_entry(collisions, new_path);
-	if (collision_ent == NULL)
+	if (!collision_ent)
 		BUG("collision_ent is NULL");
 
 	/*
@@ -2152,7 +2166,7 @@ static char *handle_path_level_conflicts(struct merge_options *opt,
  *      implicit renaming of files that should be left in place.  (See
  *      testcase 6b in t6043 for details.)
  *   2. Prune directory renames if there are still files left in the
- *      the original directory.  These represent a partial directory rename,
+ *      original directory.  These represent a partial directory rename,
  *      i.e. a rename where only some of the files within the directory
  *      were renamed elsewhere.  (Technically, this could be done earlier
  *      in get_directory_renames(), except that would prevent us from
@@ -2804,12 +2818,19 @@ static int process_renames(struct merge_options *opt,
 			int renamed_stage = a_renames == renames1 ? 2 : 3;
 			int other_stage =   a_renames == renames1 ? 3 : 2;
 
+			/*
+			 * Directory renames have a funny corner case...
+			 */
+			int renamed_to_self = !strcmp(ren1_src, ren1_dst);
+
 			/* BUG: We should only remove ren1_src in the base
 			 * stage and in other_stage (think of rename +
 			 * add-source case).
 			 */
-			remove_file(opt, 1, ren1_src,
-				    renamed_stage == 2 || !was_tracked(opt, ren1_src));
+			if (!renamed_to_self)
+				remove_file(opt, 1, ren1_src,
+					    renamed_stage == 2 ||
+					    !was_tracked(opt, ren1_src));
 
 			oidcpy(&src_other.oid,
 			       &ren1->src_entry->stages[other_stage].oid);
@@ -2822,6 +2843,9 @@ static int process_renames(struct merge_options *opt,
 			if (oideq(&src_other.oid, null_oid()) &&
 			    ren1->dir_rename_original_type == 'A') {
 				setup_rename_conflict_info(RENAME_VIA_DIR,
+							   opt, ren1, NULL);
+			} else if (renamed_to_self) {
+				setup_rename_conflict_info(RENAME_NORMAL,
 							   opt, ren1, NULL);
 			} else if (oideq(&src_other.oid, null_oid())) {
 				setup_rename_conflict_info(RENAME_DELETE,
@@ -2973,7 +2997,7 @@ static void final_cleanup_rename(struct string_list *rename)
 	const struct rename *re;
 	int i;
 
-	if (rename == NULL)
+	if (!rename)
 		return;
 
 	for (i = 0; i < rename->nr; i++) {
@@ -3180,7 +3204,6 @@ static int handle_rename_normal(struct merge_options *opt,
 	struct rename *ren = ci->ren1;
 	struct merge_file_info mfi;
 	int clean;
-	int side = (ren->branch == opt->branch1 ? 2 : 3);
 
 	/* Merge the content and write it out */
 	clean = handle_content_merge(&mfi, opt, path, was_dirty(opt, path),
@@ -3190,9 +3213,7 @@ static int handle_rename_normal(struct merge_options *opt,
 	    opt->detect_directory_renames == MERGE_DIRECTORY_RENAMES_CONFLICT &&
 	    ren->dir_rename_original_dest) {
 		if (update_stages(opt, path,
-				  NULL,
-				  side == 2 ? &mfi.blob : NULL,
-				  side == 2 ? NULL : &mfi.blob))
+				  &mfi.blob, &mfi.blob, &mfi.blob))
 			return -1;
 		clean = 0; /* not clean, but conflicted */
 	}
@@ -3585,7 +3606,7 @@ static int merge_recursive_internal(struct merge_options *opt,
 	}
 
 	merged_merge_bases = pop_commit(&merge_bases);
-	if (merged_merge_bases == NULL) {
+	if (!merged_merge_bases) {
 		/* if there is no common ancestor, use an empty tree */
 		struct tree *tree;
 
@@ -3694,6 +3715,10 @@ static int merge_start(struct merge_options *opt, struct tree *head)
 
 	assert(opt->priv == NULL);
 
+	/* Not supported; option specific to merge-ort */
+	assert(!opt->record_conflict_msgs_as_headers);
+	assert(!opt->msg_header_prefix);
+
 	/* Sanity check on repo state; index must match head */
 	if (repo_index_has_changes(opt->repo, head, &sb)) {
 		err(opt, _("Your local changes to the following files would be overwritten by merge:\n  %s"),
@@ -3703,7 +3728,7 @@ static int merge_start(struct merge_options *opt, struct tree *head)
 	}
 
 	CALLOC_ARRAY(opt->priv, 1);
-	string_list_init(&opt->priv->df_conflict_file_set, 1);
+	string_list_init_dup(&opt->priv->df_conflict_file_set);
 	return 0;
 }
 
@@ -3746,6 +3771,9 @@ int merge_recursive(struct merge_options *opt,
 
 	assert(opt->ancestor == NULL ||
 	       !strcmp(opt->ancestor, "constructed merge base"));
+
+	prepare_repo_settings(opt->repo);
+	opt->repo->settings.command_requires_full_index = 1;
 
 	if (merge_start(opt, repo_get_commit_tree(opt->repo, h1)))
 		return -1;

@@ -2,12 +2,12 @@
 .\"     Title: git-shortlog
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-SHORTLOG" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-SHORTLOG" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,7 @@ git-shortlog \- Summarize \(aqgit log\(aq output
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit shortlog\fR [<options>] [<revision range>] [[\-\-] <path>\&...]
+\fIgit shortlog\fR [<options>] [<revision\-range>] [[\-\-] <path>\&...]
 git log \-\-pretty=short | \fIgit shortlog\fR [<options>]
 .fi
 .sp
@@ -171,15 +171,15 @@ If width is
 (zero) then indent the lines of the output without wrapping them\&.
 .RE
 .PP
-<revision range>
+<revision\-range>
 .RS 4
-Show only commits in the specified revision range\&. When no <revision range> is specified, it defaults to
+Show only commits in the specified revision range\&. When no <revision\-range> is specified, it defaults to
 \fBHEAD\fR
 (i\&.e\&. the whole history leading to the current commit)\&.
 \fBorigin\&.\&.HEAD\fR
 specifies all the commits reachable from the current commit (i\&.e\&.
 \fBHEAD\fR), but not from
-\fBorigin\fR\&. For a complete list of ways to spell <revision range>, see the "Specifying Ranges" section of
+\fBorigin\fR\&. For a complete list of ways to spell <revision\-range>, see the "Specifying Ranges" section of
 \fBgitrevisions\fR(7)\&.
 .RE
 .PP
@@ -214,6 +214,11 @@ commits before starting to show the commit output\&.
 \-\-since=<date>, \-\-after=<date>
 .RS 4
 Show commits more recent than a specific date\&.
+.RE
+.PP
+\-\-since\-as\-filter=<date>
+.RS 4
+Show all commits more recent than a specific date\&. This visits all commits in the range, rather than stopping at the first commit which is older than a specific date\&.
 .RE
 .PP
 \-\-until=<date>, \-\-before=<date>
@@ -329,7 +334,13 @@ reset these limits (to no limit) again\&. Equivalent forms are
 .PP
 \-\-first\-parent
 .RS 4
-Follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&.
+When finding commits to include, follow only the first parent commit upon seeing a merge commit\&. This option can give a better overview when viewing the evolution of a particular topic branch, because merges into a topic branch tend to be only about adjusting to updated upstream from time to time, and this option allows you to ignore the individual commits brought in to your history by such a merge\&.
+.RE
+.PP
+\-\-exclude\-first\-parent\-only
+.RS 4
+When finding commits to exclude (with a
+\fI^\fR), follow only the first parent commit upon seeing a merge commit\&. This can be used to find the set of changes in a topic branch from the point where it diverged from the remote branch, given that arbitrary merges can be valid topic branch changes\&.
 .RE
 .PP
 \-\-not

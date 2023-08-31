@@ -2,12 +2,12 @@
 .\"     Title: git-format-patch
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-FORMAT\-PATCH" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-FORMAT\-PATCH" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -41,7 +41,7 @@ git-format-patch \- Prepare patches for e\-mail submission
                    [\-n | \-\-numbered | \-N | \-\-no\-numbered]
                    [\-\-start\-number <n>] [\-\-numbered\-files]
                    [\-\-in\-reply\-to=<message id>] [\-\-suffix=\&.<sfx>]
-                   [\-\-ignore\-if\-in\-upstream]
+                   [\-\-ignore\-if\-in\-upstream] [\-\-always]
                    [\-\-cover\-from\-description=<mode>]
                    [\-\-rfc] [\-\-subject\-prefix=<subject prefix>]
                    [(\-\-reroll\-count|\-v) <n>]
@@ -445,7 +445,7 @@ The
 \fB\-M\fR
 and
 \fB\-C\fR
-options require O(n^2) processing time where n is the number of potential rename/copy targets\&. This option prevents rename/copy detection from running if the number of rename/copy targets exceeds the specified number\&.
+options involve some preliminary steps that can detect subsets of renames/copies cheaply, followed by an exhaustive fallback portion that compares all remaining unpaired destinations to all relevant sources\&. (For renames, only remaining unpaired sources are relevant; for copies, all original sources are relevant\&.) For N sources and destinations, this exhaustive check is O(N^2)\&. This option prevents the exhaustive portion of rename/copy detection from running if the number of source/destination files involved exceeds the specified number\&. Defaults to diff\&.renameLimit\&. Note that a value of 0 is treated as unlimited\&.
 .RE
 .PP
 \-O<orderfile>
@@ -750,6 +750,11 @@ Make the first mail (or all the mails with
 \-\-ignore\-if\-in\-upstream
 .RS 4
 Do not include a patch that matches a commit in <until>\&.\&.<since>\&. This will examine all patches reachable from <since> but not from <until> and compare them with the patches being generated, and any patch that matches is ignored\&.
+.RE
+.PP
+\-\-always
+.RS 4
+Include patches for commits that do not introduce any change, which are omitted by default\&.
 .RE
 .PP
 \-\-cover\-from\-description=<mode>
@@ -1479,7 +1484,7 @@ For non\-linear topology, such as
 .sp
 You can also use \fBgit format\-patch \-\-base=P \-3 C\fR to generate patches for A, B and C, and the identifiers for P, X, Y, Z are appended at the end of the first message\&.
 .sp
-If set \fB\-\-base=auto\fR in cmdline, it will track base commit automatically, the base commit will be the merge base of tip commit of the remote\-tracking branch and revision\-range specified in cmdline\&. For a local branch, you need to track a remote branch by \fBgit branch \-\-set\-upstream\-to\fR before using this option\&.
+If set \fB\-\-base=auto\fR in cmdline, it will automatically compute the base commit as the merge base of tip commit of the remote\-tracking branch and revision\-range specified in cmdline\&. For a local branch, you need to make it to track a remote branch by \fBgit branch \-\-set\-upstream\-to\fR before using this option\&.
 .SH "EXAMPLES"
 .sp
 .RS 4

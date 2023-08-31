@@ -2,12 +2,12 @@
 .\"     Title: git-fetch
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-FETCH" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-FETCH" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -120,7 +120,24 @@ The argument to this option may be a glob on ref names, a ref, or the (possibly 
 .sp
 See also the
 \fBfetch\&.negotiationAlgorithm\fR
-configuration variable documented in
+and
+\fBpush\&.negotiate\fR
+configuration variables documented in
+\fBgit-config\fR(1), and the
+\fB\-\-negotiate\-only\fR
+option below\&.
+.RE
+.PP
+\-\-negotiate\-only
+.RS 4
+Do not fetch anything from the server, and instead print the ancestors of the provided
+\fB\-\-negotiation\-tip=*\fR
+arguments, which we have in common with the server\&.
+.sp
+This is incompatible with
+\fB\-\-recurse\-submodules=[yes|on\-demand]\fR\&. Internally this is used to implement the
+\fBpush\&.negotiate\fR
+option, see
 \fBgit-config\fR(1)\&.
 .RE
 .PP
@@ -213,6 +230,13 @@ By default, tags that point at objects that are downloaded from the remote repos
 \fBgit-config\fR(1)\&.
 .RE
 .PP
+\-\-refetch
+.RS 4
+Instead of negotiating with the server to avoid transferring commits and associated objects that are already present locally, this option fetches all objects as a fresh clone would\&. Use this to reapply a partial clone filter from configuration or using
+\fB\-\-filter=\fR
+when the filter definition has changed\&. Automatic post\-fetch maintenance will perform object database pack consolidation to remove any duplicate objects\&.
+.RE
+.PP
 \-\-refmap=<refspec>
 .RS 4
 When fetching refs listed on the command line, use the specified refspec (can be given more than once) to map the refs to remote\-tracking branches, instead of the values of
@@ -234,17 +258,26 @@ into local tags with the same name), in addition to whatever else would otherwis
 .PP
 \-\-recurse\-submodules[=yes|on\-demand|no]
 .RS 4
-This option controls if and under what conditions new commits of populated submodules should be fetched too\&. It can be used as a boolean option to completely disable recursion when set to
-\fIno\fR
-or to unconditionally recurse into all populated submodules when set to
-\fIyes\fR, which is the default when this option is used without any value\&. Use
-\fIon\-demand\fR
-to only recurse into a populated submodule when the superproject retrieves a commit that updates the submodule\(cqs reference to a commit that isn\(cqt already in the local submodule clone\&. By default,
-\fIon\-demand\fR
-is used, unless
+This option controls if and under what conditions new commits of submodules should be fetched too\&. When recursing through submodules,
+\fBgit fetch\fR
+always attempts to fetch "changed" submodules, that is, a submodule that has commits that are referenced by a newly fetched superproject commit but are missing in the local submodule clone\&. A changed submodule can be fetched as long as it is present locally e\&.g\&. in
+\fB$GIT_DIR/modules/\fR
+(see
+\fBgitsubmodules\fR(7)); if the upstream adds a new submodule, that submodule cannot be fetched until it is cloned e\&.g\&. by
+\fBgit submodule update\fR\&.
+.sp
+When set to
+\fIon\-demand\fR, only changed submodules are fetched\&. When set to
+\fIyes\fR, all populated submodules are fetched and submodules that are both unpopulated and changed are fetched\&. When set to
+\fIno\fR, submodules are never fetched\&.
+.sp
+When unspecified, this uses the value of
 \fBfetch\&.recurseSubmodules\fR
-is set (see
-\fBgit-config\fR(1))\&.
+if it is set (see
+\fBgit-config\fR(1)), defaulting to
+\fIon\-demand\fR
+if unset\&. When this option is used without any value, it defaults to
+\fIyes\fR\&.
 .RE
 .PP
 \-j, \-\-jobs=<n>
@@ -731,7 +764,7 @@ You can choose to provide the name of a remote which you had previously configur
 .\}
 .nf
         [remote "<name>"]
-                url = <url>
+                url = <URL>
                 pushurl = <pushurl>
                 push = <refspec>
                 fetch = <refspec>
@@ -741,7 +774,7 @@ You can choose to provide the name of a remote which you had previously configur
 .\}
 .sp
 .sp
-The \fB<pushurl>\fR is used for pushes only\&. It is optional and defaults to \fB<url>\fR\&.
+The \fB<pushurl>\fR is used for pushes only\&. It is optional and defaults to \fB<URL>\fR\&.
 .SS "Named file in \fB$GIT_DIR/remotes\fR"
 .sp
 You can choose to provide the name of a file in \fB$GIT_DIR/remotes\fR\&. The URL in this file will be used to access the repository\&. The refspec in this file will be used as default when you do not provide a refspec on the command line\&. This file should have the following format:
@@ -768,14 +801,14 @@ You can choose to provide the name of a file in \fB$GIT_DIR/branches\fR\&. The U
 .RS 4
 .\}
 .nf
-        <url>#<head>
+        <URL>#<head>
 .fi
 .if n \{\
 .RE
 .\}
 .sp
 .sp
-\fB<url>\fR is required; \fB#<head>\fR is optional\&.
+\fB<URL>\fR is required; \fB#<head>\fR is optional\&.
 .sp
 Depending on the operation, git will use one of the following refspecs, if you don\(cqt provide one on the command line\&. \fB<branch>\fR is the name of this file in \fB$GIT_DIR/branches\fR and \fB<head>\fR defaults to \fBmaster\fR\&.
 .sp
@@ -904,7 +937,7 @@ $ git remote prune <name>
 .sp
 To prune references as part of your normal workflow without needing to remember to run that, set \fBfetch\&.prune\fR globally, or \fBremote\&.<name>\&.prune\fR per\-remote in the config\&. See \fBgit-config\fR(1)\&.
 .sp
-Here\(cqs where things get tricky and more specific\&. The pruning feature doesn\(cqt actually care about branches, instead it\(cqll prune local <\(-> remote\-references as a function of the refspec of the remote (see \fB<refspec>\fR and CONFIGURED REMOTE\-TRACKING BRANCHES above)\&.
+Here\(cqs where things get tricky and more specific\&. The pruning feature doesn\(cqt actually care about branches, instead it\(cqll prune local \(<-\(-> remote\-references as a function of the refspec of the remote (see \fB<refspec>\fR and CONFIGURED REMOTE\-TRACKING BRANCHES above)\&.
 .sp
 Therefore if the refspec for the remote includes e\&.g\&. \fBrefs/tags/*:refs/tags/*\fR, or you manually run e\&.g\&. \fBgit fetch \-\-prune <name> "refs/tags/*:refs/tags/*"\fR it won\(cqt be stale remote tracking branches that are deleted, but any local tag that doesn\(cqt exist on the remote\&.
 .sp
@@ -1160,7 +1193,7 @@ As in #1, the attacker chooses an object ID X to steal\&. The victim sends an ob
 .RE
 .SH "BUGS"
 .sp
-Using \-\-recurse\-submodules can only fetch new commits in already checked out submodules right now\&. When e\&.g\&. upstream added a new submodule in the just fetched commits of the superproject the submodule itself cannot be fetched, making it impossible to check out that submodule later without having to do a fetch again\&. This is expected to be fixed in a future Git version\&.
+Using \-\-recurse\-submodules can only fetch new commits in submodules that are present locally e\&.g\&. in \fB$GIT_DIR/modules/\fR\&. If the upstream adds a new submodule, that submodule cannot be fetched until it is cloned e\&.g\&. by \fBgit submodule update\fR\&. This is expected to be fixed in a future Git version\&.
 .SH "SEE ALSO"
 .sp
 \fBgit-pull\fR(1)

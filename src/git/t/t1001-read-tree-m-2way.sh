@@ -20,6 +20,8 @@ In the test, these paths are used:
 	rezrov  - in H, deleted in M
 	yomin   - not in H or M
 '
+
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-read-tree.sh
 
@@ -36,11 +38,12 @@ compare_change () {
 }
 
 check_cache_at () {
-	clean_if_empty=$(git diff-files -- "$1")
+	git diff-files -- "$1" >out &&
+	clean_if_empty=$(cat out) &&
 	case "$clean_if_empty" in
 	'')  echo "$1: clean" ;;
 	?*)  echo "$1: dirty" ;;
-	esac
+	esac &&
 	case "$2,$clean_if_empty" in
 	clean,)		:     ;;
 	clean,?*)	false ;;

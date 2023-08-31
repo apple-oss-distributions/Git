@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-read-tree(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -750,8 +750,7 @@ git-read-tree(1) Manual Page
 <div class="sectionbody">
 <div class="verseblock">
 <pre class="content"><em>git read-tree</em> [[-m [--trivial] [--aggressive] | --reset | --prefix=&lt;prefix&gt;]
-                [-u [--exclude-per-directory=&lt;gitignore&gt;] | -i]]
-                [--index-output=&lt;file&gt;] [--no-sparse-checkout]
+                [-u | -i]] [--index-output=&lt;file&gt;] [--no-sparse-checkout]
                 (--empty | &lt;tree-ish1&gt; [&lt;tree-ish2&gt; [&lt;tree-ish3&gt;]])</pre>
 <div class="attribution">
 </div></div>
@@ -792,8 +791,9 @@ will be in unmerged state when <em>git read-tree</em> returns.</p></div>
 <dd>
 <p>
         Same as -m, except that unmerged entries are discarded instead
-        of failing. When used with <code>-u</code>, updates leading to loss of
-        working tree changes will not abort the operation.
+        of failing.  When used with <code>-u</code>, updates leading to loss of
+        working tree changes or untracked files or directories will not
+        abort the operation.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -890,26 +890,6 @@ when both sides add a path identically.  The resolution
         of the named tree-ish under the directory at <code>&lt;prefix&gt;</code>.
         The command will refuse to overwrite entries that already
         existed in the original index file.
-</p>
-</dd>
-<dt class="hdlist1">
---exclude-per-directory=&lt;gitignore&gt;
-</dt>
-<dd>
-<p>
-        When running the command with <code>-u</code> and <code>-m</code> options, the
-        merge result may need to overwrite paths that are not
-        tracked in the current branch.  The command usually
-        refuses to proceed with the merge to avoid losing such a
-        path.  However this safety valve sometimes gets in the
-        way.  For example, it often happens that the other
-        branch added a file that used to be a generated file in
-        your branch, and the safety valve triggers when you try
-        to switch to that branch after you ran <code>make</code> but before
-        running <code>make clean</code> to remove the generated file.  This
-        option tells the command to read per-directory exclude
-        file (usually <em>.gitignore</em>) and allows such an untracked
-        but explicitly ignored file to be overwritten.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1250,16 +1230,24 @@ have finished your work-in-progress), attempt the merge again.</p></div>
 <div class="sect1">
 <h2 id="_sparse_checkout">SPARSE CHECKOUT</h2>
 <div class="sectionbody">
+<div class="paragraph"><p>Note: The skip-worktree capabilities in <a href="git-update-index.html">git-update-index(1)</a>
+and <code>read-tree</code> predated the introduction of
+<a href="git-sparse-checkout.html">git-sparse-checkout(1)</a>.  Users are encouraged to use the
+<code>sparse-checkout</code> command in preference to these plumbing commands for
+sparse-checkout/skip-worktree related needs.  However, the information
+below might be useful to users trying to understand the pattern style
+used in non-cone mode of the <code>sparse-checkout</code> command.</p></div>
 <div class="paragraph"><p>"Sparse checkout" allows populating the working directory sparsely.
-It uses the skip-worktree bit (see <a href="git-update-index.html">git-update-index(1)</a>) to tell
-Git whether a file in the working directory is worth looking at.</p></div>
+It uses the skip-worktree bit (see <a href="git-update-index.html">git-update-index(1)</a>) to
+tell Git whether a file in the working directory is worth looking at.</p></div>
 <div class="paragraph"><p><em>git read-tree</em> and other merge-based commands (<em>git merge</em>, <em>git
 checkout</em>&#8230;) can help maintaining the skip-worktree bitmap and working
 directory update. <code>$GIT_DIR/info/sparse-checkout</code> is used to
 define the skip-worktree reference bitmap. When <em>git read-tree</em> needs
 to update the working directory, it resets the skip-worktree bit in the index
 based on this file, which uses the same syntax as .gitignore files.
-If an entry matches a pattern in this file, skip-worktree will not be
+If an entry matches a pattern in this file, or the entry corresponds to
+a file present in the working tree, then skip-worktree will not be
 set on that entry. Otherwise, skip-worktree will be set.</p></div>
 <div class="paragraph"><p>Then it compares the new skip-worktree value with the previous one. If
 skip-worktree turns from set to unset, it will add the corresponding
@@ -1291,8 +1279,8 @@ support.</p></div>
 <div class="sect1">
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
-<div class="paragraph"><p><a href="git-write-tree.html">git-write-tree(1)</a>; <a href="git-ls-files.html">git-ls-files(1)</a>;
-<a href="gitignore.html">gitignore(5)</a>; <a href="git-sparse-checkout.html">git-sparse-checkout(1)</a>;</p></div>
+<div class="paragraph"><p><a href="git-write-tree.html">git-write-tree(1)</a>, <a href="git-ls-files.html">git-ls-files(1)</a>,
+<a href="gitignore.html">gitignore(5)</a>, <a href="git-sparse-checkout.html">git-sparse-checkout(1)</a></p></div>
 </div>
 </div>
 <div class="sect1">
@@ -1306,7 +1294,7 @@ support.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-04-30 06:18:27 JST
+ 2022-06-03 15:24:31 PDT
 </div>
 </div>
 </body>

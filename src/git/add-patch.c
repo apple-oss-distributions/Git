@@ -280,6 +280,7 @@ static void add_p_state_clear(struct add_p_state *s)
 	clear_add_i_state(&s->s);
 }
 
+__attribute__((format (printf, 2, 3)))
 static void err(struct add_p_state *s, const char *fmt, ...)
 {
 	va_list args;
@@ -304,7 +305,7 @@ static void setup_child_process(struct add_p_state *s,
 	va_end(ap);
 
 	cp->git_cmd = 1;
-	strvec_pushf(&cp->env_array,
+	strvec_pushf(&cp->env,
 		     INDEX_ENVIRONMENT "=%s", s->s.r->index_file);
 }
 
@@ -382,6 +383,17 @@ static int is_octal(const char *p, size_t len)
 	return 1;
 }
 
+static void complete_file(char marker, struct hunk *hunk)
+{
+	if (marker == '-' || marker == '+')
+		/*
+		 * Last hunk ended in non-context line (i.e. it
+		 * appended lines to the file, so there are no
+		 * trailing context lines).
+		 */
+		hunk->splittable_into++;
+}
+
 static int parse_diff(struct add_p_state *s, const struct pathspec *ps)
 {
 	struct strvec args = STRVEC_INIT;
@@ -412,7 +424,7 @@ static int parse_diff(struct add_p_state *s, const struct pathspec *ps)
 		strvec_push(&args, ps->items[i].original);
 
 	setup_child_process(s, &cp, NULL);
-	cp.argv = args.v;
+	strvec_pushv(&cp.args, args.v);
 	res = capture_command(&cp, plain, 0);
 	if (res) {
 		strvec_clear(&args);
@@ -430,7 +442,7 @@ static int parse_diff(struct add_p_state *s, const struct pathspec *ps)
 
 		setup_child_process(s, &colored_cp, NULL);
 		xsnprintf((char *)args.v[color_arg_index], 8, "--color");
-		colored_cp.argv = args.v;
+		strvec_pushv(&colored_cp.args, args.v);
 		colored = &s->colored;
 		res = capture_command(&colored_cp, colored, 0);
 		strvec_clear(&args);
@@ -471,6 +483,7 @@ static int parse_diff(struct add_p_state *s, const struct pathspec *ps)
 			eol = pend;
 
 		if (starts_with(p, "diff ")) {
+			complete_file(marker, hunk);
 			ALLOC_GROW_BY(s->file_diff, s->file_diff_nr, 1,
 				   file_diff_alloc);
 			file_diff = s->file_diff + s->file_diff_nr - 1;
@@ -597,13 +610,7 @@ static int parse_diff(struct add_p_state *s, const struct pathspec *ps)
 				file_diff->hunk->colored_end = hunk->colored_end;
 		}
 	}
-
-	if (marker == '-' || marker == '+')
-		/*
-		 * Last hunk ended in non-context line (i.e. it appended lines
-		 * to the file, so there are no trailing context lines).
-		 */
-		hunk->splittable_into++;
+	complete_file(marker, hunk);
 
 	/* non-colored shorter than colored? */
 	if (colored_p != colored_pend) {

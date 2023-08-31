@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-switch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -942,8 +942,7 @@ should result in deletion of the path).</p></div>
         The same as <code>--merge</code> option above, but changes the way the
         conflicting hunks are presented, overriding the
         <code>merge.conflictStyle</code> configuration variable.  Possible values are
-        "merge" (default) and "diff3" (in addition to what is shown by
-        "merge" style, shows the original contents).
+        "merge" (default), "diff3", and "zdiff3".
 </p>
 </dd>
 <dt class="hdlist1">
@@ -975,7 +974,7 @@ should result in deletion of the path).</p></div>
 -t
 </dt>
 <dt class="hdlist1">
---track
+--track [direct|inherit]
 </dt>
 <dd>
 <p>
@@ -1127,7 +1126,7 @@ always create a new name for it (without switching away):</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-10-28 07:58:27 JST
+ 2022-01-10 13:33:11 PST
 </div>
 </div>
 </body>

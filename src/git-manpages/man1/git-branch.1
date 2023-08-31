@@ -2,12 +2,12 @@
 .\"     Title: git-branch
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-BRANCH" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-BRANCH" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -40,7 +40,8 @@ git-branch \- List, create, or delete branches
         [\-\-points\-at <object>] [\-\-format=<format>]
         [(\-r | \-\-remotes) | (\-a | \-\-all)]
         [\-\-list] [<pattern>\&...]
-\fIgit branch\fR [\-\-track | \-\-no\-track] [\-f] <branchname> [<start\-point>]
+\fIgit branch\fR [\-\-track[=(direct|inherit)] | \-\-no\-track] [\-f]
+        [\-\-recurse\-submodules] <branchname> [<start\-point>]
 \fIgit branch\fR (\-\-set\-upstream\-to=<upstream> | \-u <upstream>) [<branchname>]
 \fIgit branch\fR \-\-unset\-upstream [<branchname>]
 \fIgit branch\fR (\-m | \-M) [<oldbranch>] <newbranch>
@@ -109,7 +110,7 @@ Reset <branchname> to <startpoint>, even if <branchname> exists already\&. Witho
 refuses to change an existing branch\&. In combination with
 \fB\-d\fR
 (or
-\fB\-\-delete\fR), allow deleting the branch irrespective of its merged status\&. In combination with
+\fB\-\-delete\fR), allow deleting the branch irrespective of its merged status, or whether it even points to a valid commit\&. In combination with
 \fB\-m\fR
 (or
 \fB\-\-move\fR), allow renaming the branch even if the new branch name already exists, the same applies for
@@ -120,7 +121,7 @@ refuses to change an existing branch\&. In combination with
 .PP
 \-m, \-\-move
 .RS 4
-Move/rename a branch and the corresponding reflog\&.
+Move/rename a branch, together with its config and reflog\&.
 .RE
 .PP
 \-M
@@ -131,7 +132,7 @@ Shortcut for
 .PP
 \-c, \-\-copy
 .RS 4
-Copy a branch and the corresponding reflog\&.
+Copy a branch, together with its config and reflog\&.
 .RE
 .PP
 \-C
@@ -224,36 +225,87 @@ config option\&.
 Display the full sha1s in the output listing rather than abbreviating them\&.
 .RE
 .PP
-\-t, \-\-track
+\-t, \-\-track[=(direct|inherit)]
 .RS 4
 When creating a new branch, set up
 \fBbranch\&.<name>\&.remote\fR
 and
 \fBbranch\&.<name>\&.merge\fR
-configuration entries to mark the start\-point branch as "upstream" from the new branch\&. This configuration will tell git to show the relationship between the two branches in
+configuration entries to set "upstream" tracking configuration for the new branch\&. This configuration will tell git to show the relationship between the two branches in
 \fBgit status\fR
 and
 \fBgit branch \-v\fR\&. Furthermore, it directs
 \fBgit pull\fR
 without arguments to pull from the upstream when the new branch is checked out\&.
 .sp
-This behavior is the default when the start point is a remote\-tracking branch\&. Set the branch\&.autoSetupMerge configuration variable to
-\fBfalse\fR
-if you want
+The exact upstream branch is chosen depending on the optional argument:
+\fB\-t\fR,
+\fB\-\-track\fR, or
+\fB\-\-track=direct\fR
+means to use the start\-point branch itself as the upstream;
+\fB\-\-track=inherit\fR
+means to copy the upstream configuration of the start\-point branch\&.
+.sp
+The branch\&.autoSetupMerge configuration variable specifies how
 \fBgit switch\fR,
 \fBgit checkout\fR
 and
 \fBgit branch\fR
-to always behave as if
+should behave when neither
+\fB\-\-track\fR
+nor
 \fB\-\-no\-track\fR
-were given\&. Set it to
+are specified:
+.sp
+The default option,
+\fBtrue\fR, behaves as though
+\fB\-\-track=direct\fR
+were given whenever the start\-point is a remote\-tracking branch\&.
+\fBfalse\fR
+behaves as if
+\fB\-\-no\-track\fR
+were given\&.
 \fBalways\fR
-if you want this behavior when the start\-point is either a local or remote\-tracking branch\&.
+behaves as though
+\fB\-\-track=direct\fR
+were given\&.
+\fBinherit\fR
+behaves as though
+\fB\-\-track=inherit\fR
+were given\&.
+\fBsimple\fR
+behaves as though
+\fB\-\-track=direct\fR
+were given only when the start\-point is a remote\-tracking branch and the new branch has the same name as the remote branch\&.
+.sp
+See
+\fBgit-pull\fR(1)
+and
+\fBgit-config\fR(1)
+for additional discussion on how the
+\fBbranch\&.<name>\&.remote\fR
+and
+\fBbranch\&.<name>\&.merge\fR
+options are used\&.
 .RE
 .PP
 \-\-no\-track
 .RS 4
-Do not set up "upstream" configuration, even if the branch\&.autoSetupMerge configuration variable is true\&.
+Do not set up "upstream" configuration, even if the branch\&.autoSetupMerge configuration variable is set\&.
+.RE
+.PP
+\-\-recurse\-submodules
+.RS 4
+THIS OPTION IS EXPERIMENTAL! Causes the current command to recurse into submodules if
+\fBsubmodule\&.propagateBranches\fR
+is enabled\&. See
+\fBsubmodule\&.propagateBranches\fR
+in
+\fBgit-config\fR(1)\&. Currently, only branch creation is supported\&.
+.sp
+When used in branch creation, a new branch <branchname> will be created in the superproject and all of the submodules in the superproject\(cqs <start\-point>\&. In submodules, the branch will point to the submodule commit in the superproject\(cqs <start\-point> but the branch\(cqs tracking information will be set up based on the submodule\(cqs branches and remotes e\&.g\&.
+\fBgit branch \-\-recurse\-submodules topic origin/main\fR
+will create the submodule branch "topic" that points to the submodule commit in the superproject\(cqs "origin/main", but tracks the submodule\(cqs "origin/main"\&.
 .RE
 .PP
 \-\-set\-upstream

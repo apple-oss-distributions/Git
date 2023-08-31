@@ -2,12 +2,12 @@
 .\"     Title: git-fetch-pack
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-FETCH\-PACK" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-FETCH\-PACK" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -118,6 +118,11 @@ Deepen or shorten the history of a shallow repository to exclude commits reachab
 \-\-deepen\-relative
 .RS 4
 Argument \-\-depth specifies the number of commits from the current shallow boundary instead of from the tip of each remote branch history\&.
+.RE
+.PP
+\-\-refetch
+.RS 4
+Skips negotiating commits with the server in order to fetch all matching objects\&. Use to reapply a new partial clone blob/tree filter\&.
 .RE
 .PP
 \-\-no\-progress

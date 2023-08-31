@@ -8,8 +8,12 @@
 #define DEFAULT_PAGER "less"
 #endif
 
-static struct child_process pager_process = CHILD_PROCESS_INIT;
+static struct child_process pager_process;
 static const char *pager_program;
+
+/* Is the value coming back from term_columns() just a guess? */
+static int term_columns_guessed;
+
 
 static void close_pager_fds(void)
 {
@@ -95,7 +99,7 @@ void prepare_pager_args(struct child_process *pager_process, const char *pager)
 {
 	strvec_push(&pager_process->args, pager);
 	pager_process->use_shell = 1;
-	setup_pager_env(&pager_process->env_array);
+	setup_pager_env(&pager_process->env);
 	pager_process->trace2_child_class = "pager";
 }
 
@@ -114,15 +118,18 @@ void setup_pager(void)
 	{
 		char buf[64];
 		xsnprintf(buf, sizeof(buf), "%d", term_columns());
-		setenv("COLUMNS", buf, 0);
+		if (!term_columns_guessed)
+			setenv("COLUMNS", buf, 0);
 	}
 
 	setenv("GIT_PAGER_IN_USE", "true", 1);
 
+	child_process_init(&pager_process);
+
 	/* spawn the pager */
 	prepare_pager_args(&pager_process, pager);
 	pager_process.in = -1;
-	strvec_push(&pager_process.env_array, "GIT_PAGER_IN_USE");
+	strvec_push(&pager_process.env, "GIT_PAGER_IN_USE");
 	if (start_command(&pager_process))
 		return;
 
@@ -158,15 +165,20 @@ int term_columns(void)
 		return term_columns_at_startup;
 
 	term_columns_at_startup = 80;
+	term_columns_guessed = 1;
 
 	col_string = getenv("COLUMNS");
-	if (col_string && (n_cols = atoi(col_string)) > 0)
+	if (col_string && (n_cols = atoi(col_string)) > 0) {
 		term_columns_at_startup = n_cols;
+		term_columns_guessed = 0;
+	}
 #ifdef TIOCGWINSZ
 	else {
 		struct winsize ws;
-		if (!ioctl(1, TIOCGWINSZ, &ws) && ws.ws_col)
+		if (!ioctl(1, TIOCGWINSZ, &ws) && ws.ws_col) {
 			term_columns_at_startup = ws.ws_col;
+			term_columns_guessed = 0;
+		}
 	}
 #endif
 

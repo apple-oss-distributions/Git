@@ -82,11 +82,13 @@ static int create_file(const char *path, unsigned int mode)
 	return open(path, O_WRONLY | O_CREAT | O_EXCL, mode);
 }
 
-void *read_blob_entry(const struct cache_entry *ce, unsigned long *size)
+void *read_blob_entry(const struct cache_entry *ce, size_t *size)
 {
 	enum object_type type;
-	void *blob_data = read_object_file(&ce->oid, &type, size);
+	unsigned long ul;
+	void *blob_data = read_object_file(&ce->oid, &type, &ul);
 
+	*size = ul;
 	if (blob_data) {
 		if (type == OBJ_BLOB)
 			return blob_data;
@@ -143,8 +145,8 @@ void enable_delayed_checkout(struct checkout *state)
 	if (!state->delayed_checkout) {
 		state->delayed_checkout = xmalloc(sizeof(*state->delayed_checkout));
 		state->delayed_checkout->state = CE_CAN_DELAY;
-		string_list_init(&state->delayed_checkout->filters, 0);
-		string_list_init(&state->delayed_checkout->paths, 0);
+		string_list_init_nodup(&state->delayed_checkout->filters);
+		string_list_init_nodup(&state->delayed_checkout->paths);
 	}
 }
 
@@ -159,25 +161,25 @@ static int remove_available_paths(struct string_list_item *item, void *cb_data)
 	return !available;
 }
 
-int finish_delayed_checkout(struct checkout *state, int *nr_checkouts)
+int finish_delayed_checkout(struct checkout *state, int *nr_checkouts,
+			    int show_progress)
 {
 	int errs = 0;
-	unsigned delayed_object_count;
+	unsigned processed_paths = 0;
 	off_t filtered_bytes = 0;
 	struct string_list_item *filter, *path;
-	struct progress *progress;
+	struct progress *progress = NULL;
 	struct delayed_checkout *dco = state->delayed_checkout;
 
 	if (!state->delayed_checkout)
 		return errs;
 
 	dco->state = CE_RETRY;
-	delayed_object_count = dco->paths.nr;
-	progress = start_delayed_progress(_("Filtering content"), delayed_object_count);
+	if (show_progress)
+		progress = start_delayed_progress(_("Filtering content"), dco->paths.nr);
 	while (dco->filters.nr > 0) {
 		for_each_string_list_item(filter, &dco->filters) {
 			struct string_list available_paths = STRING_LIST_INIT_NODUP;
-			display_progress(progress, delayed_object_count - dco->paths.nr);
 
 			if (!async_query_available_blobs(filter->string, &available_paths)) {
 				/* Filter reported an error */
@@ -224,6 +226,7 @@ int finish_delayed_checkout(struct checkout *state, int *nr_checkouts)
 				ce = index_file_exists(state->istate, path->string,
 						       strlen(path->string), 0);
 				if (ce) {
+					display_progress(progress, ++processed_paths);
 					errs |= checkout_entry(ce, state, NULL, nr_checkouts);
 					filtered_bytes += ce->ce_stat_data.sd_size;
 					display_throughput(progress, filtered_bytes);
@@ -270,7 +273,7 @@ static int write_entry(struct cache_entry *ce, char *path, struct conv_attrs *ca
 	int fd, ret, fstat_done = 0;
 	char *new_blob;
 	struct strbuf buf = STRBUF_INIT;
-	unsigned long size;
+	size_t size;
 	ssize_t wrote;
 	size_t newsize = 0;
 	struct stat st;

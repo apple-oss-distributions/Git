@@ -976,7 +976,7 @@ test_expect_success '%(describe) vs git describe' '
 		else
 			: >expect-contains-bad
 		fi &&
-		echo "$hash $desc"
+		echo "$hash $desc" || return 1
 	done >expect &&
 	test_path_exists expect-contains-good &&
 	test_path_exists expect-contains-bad &&
@@ -988,7 +988,7 @@ test_expect_success '%(describe) vs git describe' '
 
 test_expect_success '%(describe:match=...) vs git describe --match ...' '
 	test_when_finished "git tag -d tag-match" &&
-	git tag -a -m tagged tag-match&&
+	git tag -a -m tagged tag-match &&
 	git describe --match "*-match" >expect &&
 	git log -1 --format="%(describe:match=*-match)" >actual &&
 	test_cmp expect actual
@@ -999,6 +999,22 @@ test_expect_success '%(describe:exclude=...) vs git describe --exclude ...' '
 	git tag -a -m tagged tag-exclude &&
 	git describe --exclude "*-exclude" >expect &&
 	git log -1 --format="%(describe:exclude=*-exclude)" >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '%(describe:tags) vs git describe --tags' '
+	test_when_finished "git tag -d tagname" &&
+	git tag tagname &&
+	git describe --tags >expect &&
+	git log -1 --format="%(describe:tags)" >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '%(describe:abbrev=...) vs git describe --abbrev=...' '
+	test_when_finished "git tag -d tagname" &&
+	git tag -a -m tagged tagname &&
+	git describe --abbrev=15 >expect &&
+	git log -1 --format="%(describe:abbrev=15)" >actual &&
 	test_cmp expect actual
 '
 

@@ -2,12 +2,12 @@
 .\"     Title: git-show
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-SHOW" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-SHOW" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -113,10 +113,10 @@ This is a shorthand for "\-\-pretty=oneline \-\-abbrev\-commit" used together\&.
 .PP
 \-\-encoding=<encoding>
 .RS 4
-The commit objects record the encoding used for the log message in their encoding header; this option can be used to tell the command to re\-code the commit log message in the encoding preferred by the user\&. For non plumbing commands this defaults to UTF\-8\&. Note that if an object claims to be encoded in
+Commit objects record the character encoding used for the log message in their encoding header; this option can be used to tell the command to re\-code the commit log message in the encoding preferred by the user\&. For non plumbing commands this defaults to UTF\-8\&. Note that if an object claims to be encoded in
 \fBX\fR
 and we are outputting in
-\fBX\fR, we will output the object verbatim; this means that invalid sequences in the original commit may be copied to the output\&.
+\fBX\fR, we will output the object verbatim; this means that invalid sequences in the original commit may be copied to the output\&. Likewise, if iconv(3) fails to convert the commit, we will quietly output the original object verbatim\&.
 .RE
 .PP
 \-\-expand\-tabs=<n>, \-\-expand\-tabs, \-\-no\-expand\-tabs
@@ -209,7 +209,7 @@ There are several built\-in formats, and you can define additional formats by se
 .RS 4
 .\}
 .nf
-<hash> <title line>
+<hash> <title\-line>
 .fi
 .if n \{\
 .RE
@@ -243,7 +243,7 @@ Author: <author>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -266,7 +266,7 @@ Author: <author>
 .nf
 commit <hash>
 Author: <author>
-Date:   <author date>
+Date:   <author\-date>
 .fi
 .if n \{\
 .RE
@@ -276,7 +276,7 @@ Date:   <author date>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -286,7 +286,7 @@ Date:   <author date>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -319,7 +319,7 @@ Commit: <committer>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -329,7 +329,7 @@ Commit: <committer>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -352,9 +352,9 @@ Commit: <committer>
 .nf
 commit <hash>
 Author:     <author>
-AuthorDate: <author date>
+AuthorDate: <author\-date>
 Commit:     <committer>
-CommitDate: <committer date>
+CommitDate: <committer\-date>
 .fi
 .if n \{\
 .RE
@@ -364,7 +364,7 @@ CommitDate: <committer date>
 .RS 4
 .\}
 .nf
-<title line>
+<title\-line>
 .fi
 .if n \{\
 .RE
@@ -374,7 +374,7 @@ CommitDate: <committer date>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -395,7 +395,7 @@ CommitDate: <committer date>
 .RS 4
 .\}
 .nf
-<abbrev hash> (<title line>, <short author date>)
+<abbrev\-hash> (<title\-line>, <short\-author\-date>)
 .fi
 .if n \{\
 .RE
@@ -430,8 +430,8 @@ and
 .nf
 From <hash> <date>
 From: <author>
-Date: <author date>
-Subject: [PATCH] <title line>
+Date: <author\-date>
+Subject: [PATCH] <title\-line>
 .fi
 .if n \{\
 .RE
@@ -441,7 +441,7 @@ Subject: [PATCH] <title line>
 .RS 4
 .\}
 .nf
-<full commit message>
+<full\-commit\-message>
 .fi
 .if n \{\
 .RE
@@ -489,10 +489,10 @@ information show the true parent commits, without taking grafts or history simpl
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIformat:<string>\fR
+\fIformat:<format\-string>\fR
 .sp
 The
-\fIformat:<string>\fR
+\fIformat:<format\-string>\fR
 format allows you to specify which information you want to show\&. It works a little bit like printf format, with the notable exception that you get a newline with
 \fI%n\fR
 instead of
@@ -875,6 +875,28 @@ string may be followed by a colon and zero or more comma\-separated options\&. D
 .sp -1
 .IP \(bu 2.3
 .\}
+\fItags[=<bool\-value>]\fR: Instead of only considering annotated tags, consider lightweight tags as well\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIabbrev=<number>\fR: Instead of using the default number of hexadecimal digits (which will vary according to the number of objects in the repository with a default of 7) of the abbreviated object name, use <number> digits, or as many digits as needed to form a unique object name\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fImatch=<pattern>\fR: Only consider tags matching the given
 \fBglob(7)\fR
 pattern, excluding the "refs/tags/" prefix\&.
@@ -1028,15 +1050,6 @@ display the trailers of the body as interpreted by
 \fBtrailers\fR
 string may be followed by a colon and zero or more comma\-separated options\&. If any option is provided multiple times the last occurrence wins\&.
 .sp
-The boolean options accept an optional value
-\fB[=<BOOL>]\fR\&. The values
-\fBtrue\fR,
-\fBfalse\fR,
-\fBon\fR,
-\fBoff\fR
-etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in
-\fBgit-config\fR(1)\&. If a boolean option is given with no value, it\(cqs enabled\&.
-.sp
 .RS 4
 .ie n \{\
 \h'-04'\(bu\h'+03'\c
@@ -1045,7 +1058,7 @@ etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIkey=<K>\fR: only show trailers with specified key\&. Matching is done case\-insensitively and trailing colon is optional\&. If option is given multiple times trailer lines matching any of the keys are shown\&. This option automatically enables the
+\fIkey=<key>\fR: only show trailers with specified <key>\&. Matching is done case\-insensitively and trailing colon is optional\&. If option is given multiple times trailer lines matching any of the keys are shown\&. This option automatically enables the
 \fBonly\fR
 option so that non\-trailer lines in the trailer block are hidden\&. If that is not desired it can be disabled with
 \fBonly=false\fR\&. E\&.g\&.,
@@ -1062,7 +1075,7 @@ shows trailer lines with key
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIonly[=<BOOL>]\fR: select whether non\-trailer lines from the trailer block should be included\&.
+\fIonly[=<bool>]\fR: select whether non\-trailer lines from the trailer block should be included\&.
 .RE
 .sp
 .RS 4
@@ -1073,7 +1086,7 @@ shows trailer lines with key
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIseparator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer line is terminated with a line feed character\&. The string SEP may contain the literal formatting codes described above\&. To use comma as separator one must use
+\fIseparator=<sep>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer line is terminated with a line feed character\&. The string <sep> may contain the literal formatting codes described above\&. To use comma as separator one must use
 \fB%x2C\fR
 as it would otherwise be parsed as next option\&. E\&.g\&.,
 \fB%(trailers:key=Ticket,separator=%x2C )\fR
@@ -1088,7 +1101,7 @@ shows all trailer lines whose key is "Ticket" separated by a comma and a space\&
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIunfold[=<BOOL>]\fR: make it behave as if interpret\-trailer\(cqs
+\fIunfold[=<bool>]\fR: make it behave as if interpret\-trailer\(cqs
 \fB\-\-unfold\fR
 option was given\&. E\&.g\&.,
 \fB%(trailers:only,unfold=true)\fR
@@ -1103,7 +1116,7 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIkeyonly[=<BOOL>]\fR: only show the key part of the trailer\&.
+\fIkeyonly[=<bool>]\fR: only show the key part of the trailer\&.
 .RE
 .sp
 .RS 4
@@ -1114,7 +1127,7 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIvalueonly[=<BOOL>]\fR: only show the value part of the trailer\&.
+\fIvalueonly[=<bool>]\fR: only show the value part of the trailer\&.
 .RE
 .sp
 .RS 4
@@ -1125,8 +1138,8 @@ unfolds and shows all trailer lines\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIkey_value_separator=<SEP>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer key\-value pair is separated by ": "\&. Otherwise it shares the same semantics as
-\fIseparator=<SEP>\fR
+\fIkey_value_separator=<sep>\fR: specify a separator inserted between trailer lines\&. When this option is not given each trailer key\-value pair is separated by ": "\&. Otherwise it shares the same semantics as
+\fIseparator=<sep>\fR
 above\&.
 .RE
 .RE
@@ -1148,6 +1161,8 @@ above\&.
 Some placeholders may depend on other options given to the revision traversal engine\&. For example, the \fB%g*\fR reflog options will insert an empty string unless we are traversing reflog entries (e\&.g\&., by \fBgit log \-g\fR)\&. The \fB%d\fR and \fB%D\fR placeholders will use the "short" decoration format if \fB\-\-decorate\fR was not already provided on the command line\&.
 .sp .5v
 .RE
+.sp
+The boolean options accept an optional value \fB[=<bool\-value>]\fR\&. The values \fBtrue\fR, \fBfalse\fR, \fBon\fR, \fBoff\fR etc\&. are all accepted\&. See the "boolean" sub\-section in "EXAMPLES" in \fBgit-config\fR(1)\&. If a boolean option is given with no value, it\(cqs enabled\&.
 .sp
 If you add a \fB+\fR (plus sign) after \fI%\fR of a placeholder, a line\-feed is inserted immediately before the expansion if and only if the placeholder expands to a non\-empty string\&.
 .sp
@@ -1223,7 +1238,7 @@ that show the patch by default, or to cancel the effect of
 \fB\-\-patch\fR\&.
 .RE
 .PP
-\-\-diff\-merges=(off|none|on|first\-parent|1|separate|m|combined|c|dense\-combined|cc), \-\-no\-diff\-merges
+\-\-diff\-merges=(off|none|on|first\-parent|1|separate|m|combined|c|dense\-combined|cc|remerge|r), \-\-no\-diff\-merges
 .RS 4
 Specify diff format to be used for merge commits\&. Default is
 \fBdense\-combined\fR
@@ -1258,6 +1273,13 @@ This option makes merge commits show the full diff with respect to the first par
 \-\-diff\-merges=separate
 .RS 4
 This makes merge commits show the full diff with respect to each of the parents\&. Separate log entry and diff is generated for each parent\&.
+.RE
+.PP
+\-\-diff\-merges=remerge, \-\-diff\-merges=r, \-\-remerge\-diff
+.RS 4
+With this option, two\-parent merge commits are remerged to create a temporary tree object \(em potentially containing files with conflict markers and such\&. A diff is then shown between that temporary tree and the actual merge commit\&.
+.sp
+The output emitted when this option is used is subject to change, and so is its interaction with other options (unless explicitly documented)\&.
 .RE
 .PP
 \-\-diff\-merges=combined, \-\-diff\-merges=c, \-c
@@ -1882,7 +1904,7 @@ The
 \fB\-M\fR
 and
 \fB\-C\fR
-options require O(n^2) processing time where n is the number of potential rename/copy targets\&. This option prevents rename/copy detection from running if the number of rename/copy targets exceeds the specified number\&.
+options involve some preliminary steps that can detect subsets of renames/copies cheaply, followed by an exhaustive fallback portion that compares all remaining unpaired destinations to all relevant sources\&. (For renames, only remaining unpaired sources are relevant; for copies, all original sources are relevant\&.) For N sources and destinations, this exhaustive check is O(N^2)\&. This option prevents the exhaustive portion of rename/copy detection from running if the number of source/destination files involved exceeds the specified number\&. Defaults to diff\&.renameLimit\&. Note that a value of 0 is treated as unlimited\&.
 .RE
 .PP
 \-\-diff\-filter=[(A|C|D|M|R|T|U|X|B)\&...[*]]
@@ -1895,7 +1917,7 @@ Also, these upper\-case letters can be downcased to exclude\&. E\&.g\&.
 \fB\-\-diff\-filter=ad\fR
 excludes added and deleted paths\&.
 .sp
-Note that not all diffs can feature all types\&. For instance, diffs from the index to the working tree can never have Added entries (because the set of paths included in the diff is limited by what is in the index)\&. Similarly, copied and renamed entries cannot appear if detection for those types is disabled\&.
+Note that not all diffs can feature all types\&. For instance, copied and renamed entries cannot appear if detection for those types is disabled\&.
 .RE
 .PP
 \-S<string>

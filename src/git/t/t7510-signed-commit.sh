@@ -110,6 +110,13 @@ test_expect_success GPG 'verify and show signatures' '
 	)
 '
 
+test_expect_success GPG 'verify-commit exits failure on unknown signature' '
+	test_must_fail env GNUPGHOME="$GNUPGHOME_NOT_USED" git verify-commit initial 2>actual &&
+	! grep "Good signature from" actual &&
+	! grep "BAD signature from" actual &&
+	grep -q -F -e "No public key" -e "public key not found" actual
+'
+
 test_expect_success GPG 'verify-commit exits success on untrusted signature' '
 	git verify-commit eighth-signed-alt 2>actual &&
 	grep "Good signature from" actual &&
@@ -203,7 +210,7 @@ test_expect_success GPG 'detect fudged signature with NUL' '
 '
 
 test_expect_success GPG 'amending already signed commit' '
-	git checkout fourth-signed^0 &&
+	git checkout -f fourth-signed^0 &&
 	git commit --amend -S --no-edit &&
 	git verify-commit HEAD &&
 	git show -s --show-signature HEAD >actual &&
@@ -338,6 +345,8 @@ test_expect_success GPG 'show double signature with custom format' '
 '
 
 
+# NEEDSWORK: This test relies on the test_tick commit/author dates from the first
+# 'create signed commits' test even though it creates its own
 test_expect_success GPG 'verify-commit verifies multiply signed commits' '
 	git init multiply-signed &&
 	cd multiply-signed &&

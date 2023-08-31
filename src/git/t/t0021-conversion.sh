@@ -6,6 +6,7 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY"/lib-terminal.sh
 
 TEST_ROOT="$PWD"
 PATH=$TEST_ROOT:$PATH
@@ -75,13 +76,13 @@ test_expect_success setup '
 	git config filter.rot13.clean ./rot13.sh &&
 
 	{
-	    echo "*.t filter=rot13"
+	    echo "*.t filter=rot13" &&
 	    echo "*.i ident"
 	} >.gitattributes &&
 
 	{
-	    echo a b c d e f g h i j k l m
-	    echo n o p q r s t u v w x y z
+	    echo a b c d e f g h i j k l m &&
+	    echo n o p q r s t u v w x y z &&
 	    echo '\''$Id$'\''
 	} >test &&
 	cat test >test.t &&
@@ -117,17 +118,17 @@ test_expect_success check '
 # If an expanded ident ever gets into the repository, we want to make sure that
 # it is collapsed before being expanded again on checkout
 test_expect_success expanded_in_repo '
-	{
-		echo "File with expanded keywords"
-		echo "\$Id\$"
-		echo "\$Id:\$"
-		echo "\$Id: 0000000000000000000000000000000000000000 \$"
-		echo "\$Id: NoSpaceAtEnd\$"
-		echo "\$Id:NoSpaceAtFront \$"
-		echo "\$Id:NoSpaceAtEitherEnd\$"
-		echo "\$Id: NoTerminatingSymbol"
-		echo "\$Id: Foreign Commit With Spaces \$"
-	} >expanded-keywords.0 &&
+	cat >expanded-keywords.0 <<-\EOF &&
+	File with expanded keywords
+	$Id$
+	$Id:$
+	$Id: 0000000000000000000000000000000000000000 $
+	$Id: NoSpaceAtEnd$
+	$Id:NoSpaceAtFront $
+	$Id:NoSpaceAtEitherEnd$
+	$Id: NoTerminatingSymbol
+	$Id: Foreign Commit With Spaces $
+	EOF
 
 	{
 		cat expanded-keywords.0 &&
@@ -138,17 +139,17 @@ test_expect_success expanded_in_repo '
 	git commit -m "File with keywords expanded" &&
 	id=$(git rev-parse --verify :expanded-keywords) &&
 
-	{
-		echo "File with expanded keywords"
-		echo "\$Id: $id \$"
-		echo "\$Id: $id \$"
-		echo "\$Id: $id \$"
-		echo "\$Id: $id \$"
-		echo "\$Id: $id \$"
-		echo "\$Id: $id \$"
-		echo "\$Id: NoTerminatingSymbol"
-		echo "\$Id: Foreign Commit With Spaces \$"
-	} >expected-output.0 &&
+	cat >expected-output.0 <<-EOF &&
+	File with expanded keywords
+	\$Id: $id \$
+	\$Id: $id \$
+	\$Id: $id \$
+	\$Id: $id \$
+	\$Id: $id \$
+	\$Id: $id \$
+	\$Id: NoTerminatingSymbol
+	\$Id: Foreign Commit With Spaces \$
+	EOF
 	{
 		cat expected-output.0 &&
 		printf "\$Id: NoTerminatingSymbolAtEOF"
@@ -158,7 +159,7 @@ test_expect_success expanded_in_repo '
 		printf "\$Id: NoTerminatingSymbolAtEOF"
 	} >expected-output-crlf &&
 	{
-		echo "expanded-keywords ident"
+		echo "expanded-keywords ident" &&
 		echo "expanded-keywords-crlf ident text eol=crlf"
 	} >>.gitattributes &&
 
@@ -284,7 +285,7 @@ test_expect_success 'required filter with absent smudge field' '
 test_expect_success 'filtering large input to small output should use little memory' '
 	test_config filter.devnull.clean "cat >/dev/null" &&
 	test_config filter.devnull.required true &&
-	for i in $(test_seq 1 30); do printf "%1048576d" 1; done >30MB &&
+	for i in $(test_seq 1 30); do printf "%1048576d" 1 || return 1; done >30MB &&
 	echo "30MB filter=devnull" >.gitattributes &&
 	GIT_MMAP_LIMIT=1m GIT_ALLOC_LIMIT=1m git add 30MB
 '
@@ -302,7 +303,7 @@ test_expect_success 'filter that does not read is fine' '
 test_expect_success EXPENSIVE 'filter large file' '
 	test_config filter.largefile.smudge cat &&
 	test_config filter.largefile.clean cat &&
-	for i in $(test_seq 1 2048); do printf "%1048576d" 1; done >2GB &&
+	for i in $(test_seq 1 2048); do printf "%1048576d" 1 || return 1; done >2GB &&
 	echo "2GB filter=largefile" >.gitattributes &&
 	git add 2GB 2>err &&
 	test_must_be_empty err &&
@@ -642,7 +643,7 @@ test_expect_success PERL 'required process filter should process multiple packet
 		for FILE in "$TEST_ROOT"/*.file
 		do
 			cp "$FILE" . &&
-			rot13.sh <"$FILE" >"$FILE.rot13"
+			rot13.sh <"$FILE" >"$FILE.rot13" || return 1
 		done &&
 
 		echo "*.file filter=protocol" >.gitattributes &&
@@ -681,7 +682,7 @@ test_expect_success PERL 'required process filter should process multiple packet
 
 		for FILE in *.file
 		do
-			test_cmp_committed_rot13 "$TEST_ROOT/$FILE" $FILE
+			test_cmp_committed_rot13 "$TEST_ROOT/$FILE" $FILE || return 1
 		done
 	)
 '
@@ -1060,5 +1061,75 @@ test_expect_success PERL,SYMLINKS,CASE_INSENSITIVE_FS \
 		test_path_is_missing target-dir/y
 	)
 '
+
+test_expect_success PERL 'setup for progress tests' '
+	git init progress &&
+	(
+		cd progress &&
+		git config filter.delay.process "rot13-filter.pl delay-progress.log clean smudge delay" &&
+		git config filter.delay.required true &&
+
+		echo "*.a filter=delay" >.gitattributes &&
+		touch test-delay10.a &&
+		git add . &&
+		git commit -m files
+	)
+'
+
+test_delayed_checkout_progress () {
+	if test "$1" = "!"
+	then
+		local expect_progress=N &&
+		shift
+	else
+		local expect_progress=
+	fi &&
+
+	if test $# -lt 1
+	then
+		BUG "no command given to test_delayed_checkout_progress"
+	fi &&
+
+	(
+		cd progress &&
+		GIT_PROGRESS_DELAY=0 &&
+		export GIT_PROGRESS_DELAY &&
+		rm -f *.a delay-progress.log &&
+
+		"$@" 2>err &&
+		grep "IN: smudge test-delay10.a .* \\[DELAYED\\]" delay-progress.log &&
+		if test "$expect_progress" = N
+		then
+			! grep "Filtering content" err
+		else
+			grep "Filtering content" err
+		fi
+	)
+}
+
+for mode in pathspec branch
+do
+	case "$mode" in
+	pathspec) opt='.' ;;
+	branch) opt='-f HEAD' ;;
+	esac
+
+	test_expect_success PERL,TTY "delayed checkout shows progress by default on tty ($mode checkout)" '
+		test_delayed_checkout_progress test_terminal git checkout $opt
+	'
+
+	test_expect_success PERL "delayed checkout ommits progress on non-tty ($mode checkout)" '
+		test_delayed_checkout_progress ! git checkout $opt
+	'
+
+	test_expect_success PERL,TTY "delayed checkout ommits progress with --quiet ($mode checkout)" '
+		test_delayed_checkout_progress ! test_terminal git checkout --quiet $opt
+	'
+
+	test_expect_success PERL,TTY "delayed checkout honors --[no]-progress ($mode checkout)" '
+		test_delayed_checkout_progress ! test_terminal git checkout --no-progress $opt &&
+		test_delayed_checkout_progress test_terminal git checkout --quiet --progress $opt
+	'
+done
 
 test_done

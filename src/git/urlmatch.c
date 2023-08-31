@@ -5,7 +5,7 @@
 #define URL_DIGIT "0123456789"
 #define URL_ALPHADIGIT URL_ALPHA URL_DIGIT
 #define URL_SCHEME_CHARS URL_ALPHADIGIT "+.-"
-#define URL_HOST_CHARS URL_ALPHADIGIT ".-[:]" /* IPv6 literals need [:] */
+#define URL_HOST_CHARS URL_ALPHADIGIT ".-_[:]" /* IPv6 literals need [:] */
 #define URL_UNSAFE_CHARS " <>\"%{}|\\^`" /* plus 0x00-0x1F,0x7F-0xFF */
 #define URL_GEN_RESERVED ":/?#[]@"
 #define URL_SUB_RESERVED "!$&'()*+,;="
@@ -610,4 +610,9 @@ int urlmatch_config_entry(const char *var, const char *value, void *cb)
 
 	strbuf_release(&synthkey);
 	return retval;
+}
+
+void urlmatch_config_release(struct urlmatch_config *config)
+{
+	string_list_clear(&config->vars, 1);
 }

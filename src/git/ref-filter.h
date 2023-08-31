@@ -13,7 +13,6 @@
 #define QUOTE_PYTHON 4
 #define QUOTE_TCL 8
 
-#define FILTER_REFS_INCLUDE_BROKEN 0x0001
 #define FILTER_REFS_TAGS           0x0002
 #define FILTER_REFS_BRANCHES       0x0004
 #define FILTER_REFS_REMOTES        0x0008
@@ -24,20 +23,18 @@
 #define FILTER_REFS_KIND_MASK      (FILTER_REFS_ALL | FILTER_REFS_DETACHED_HEAD)
 
 struct atom_value;
+struct ref_sorting;
 
-struct ref_sorting {
-	struct ref_sorting *next;
-	int atom; /* index into used_atom array (internal) */
-	enum {
-		REF_SORTING_REVERSE = 1<<0,
-		REF_SORTING_ICASE = 1<<1,
-		REF_SORTING_VERSION = 1<<2,
-		REF_SORTING_DETACHED_HEAD_FIRST = 1<<3,
-	} sort_flags;
+enum ref_sorting_order {
+	REF_SORTING_REVERSE = 1<<0,
+	REF_SORTING_ICASE = 1<<1,
+	REF_SORTING_VERSION = 1<<2,
+	REF_SORTING_DETACHED_HEAD_FIRST = 1<<3,
 };
 
 struct ref_array_item {
 	struct object_id objectname;
+	const char *rest;
 	int flag;
 	unsigned int kind;
 	const char *symref;
@@ -76,14 +73,16 @@ struct ref_format {
 	 * verify_ref_format() afterwards to finalize.
 	 */
 	const char *format;
+	const char *rest;
 	int quote_style;
+	int use_rest;
 	int use_color;
 
 	/* Internal state to ref-filter */
 	int need_color_reset_at_eol;
 };
 
-#define REF_FORMAT_INIT { NULL, 0, -1 }
+#define REF_FORMAT_INIT { .use_color = -1 }
 
 /*  Macros for checking --merged and --no-merged options */
 #define _OPT_MERGED_NO_MERGED(option, filter, h) \
@@ -95,9 +94,8 @@ struct ref_format {
 #define OPT_NO_MERGED(f, h) _OPT_MERGED_NO_MERGED("no-merged", f, h)
 
 #define OPT_REF_SORT(var) \
-	OPT_CALLBACK_F(0, "sort", (var), \
-		       N_("key"), N_("field name to sort on"), \
-		       PARSE_OPT_NONEG, parse_opt_ref_sorting)
+	OPT_STRING_LIST(0, "sort", (var), \
+			N_("key"), N_("field name to sort on"))
 
 /*
  * API for filtering a set of refs. Based on the type of refs the user
@@ -116,15 +114,13 @@ void ref_array_sort(struct ref_sorting *sort, struct ref_array *array);
 void ref_sorting_set_sort_flags_all(struct ref_sorting *sorting, unsigned int mask, int on);
 /*  Based on the given format and quote_style, fill the strbuf */
 int format_ref_array_item(struct ref_array_item *info,
-			  const struct ref_format *format,
+			  struct ref_format *format,
 			  struct strbuf *final_buf,
 			  struct strbuf *error_buf);
-/*  Parse a single sort specifier and add it to the list */
-void parse_ref_sorting(struct ref_sorting **sorting_tail, const char *atom);
-/*  Callback function for parsing the sort option */
-int parse_opt_ref_sorting(const struct option *opt, const char *arg, int unset);
-/*  Default sort option based on refname */
-struct ref_sorting *ref_default_sorting(void);
+/* Release a "struct ref_sorting" */
+void ref_sorting_release(struct ref_sorting *);
+/*  Convert list of sort options into ref_sorting */
+struct ref_sorting *ref_sorting_options(struct string_list *);
 /*  Function to parse --merged and --no-merged options */
 int parse_opt_merge_filter(const struct option *opt, const char *arg, int unset);
 /*  Get the current HEAD's description */
@@ -137,7 +133,7 @@ void setup_ref_filter_porcelain_msg(void);
  * name must be a fully qualified refname.
  */
 void pretty_print_ref(const char *name, const struct object_id *oid,
-		      const struct ref_format *format);
+		      struct ref_format *format);
 
 /*
  * Push a single ref onto the array; this can be used to construct your own

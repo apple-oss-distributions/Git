@@ -17,10 +17,10 @@
 #include "protocol.h"
 
 static const char * const send_pack_usage[] = {
-	N_("git send-pack [--all | --mirror] [--dry-run] [--force] "
-	  "[--receive-pack=<git-receive-pack>] [--verbose] [--thin] [--atomic] "
-	  "[<host>:]<directory> [<ref>...]\n"
-	  "  --all and explicit <ref> specification are mutually exclusive."),
+	N_("git send-pack [--mirror] [--dry-run] [--force]\n"
+	   "              [--receive-pack=<git-receive-pack>]\n"
+	   "              [--verbose] [--thin] [--atomic]\n"
+	   "              [<host>:]<directory> (--all | <ref>...)"),
 	NULL,
 };
 
@@ -87,6 +87,10 @@ static void print_helper_status(struct ref *ref)
 			break;
 
 		case REF_STATUS_EXPECTING_REPORT:
+			res = "error";
+			msg = "expecting report";
+			break;
+
 		default:
 			continue;
 		}
@@ -141,7 +145,7 @@ static int send_pack_config(const char *k, const char *v, void *cb)
 				if (value && !strcasecmp(value, "if-asked"))
 					args.push_cert = SEND_PACK_PUSH_CERT_IF_ASKED;
 				else
-					return error("Invalid value for '%s'", k);
+					return error(_("invalid value for '%s'"), k);
 			}
 		}
 	}
@@ -230,6 +234,7 @@ int cmd_send_pack(int argc, const char **argv, const char *prefix)
 	args.atomic = atomic;
 	args.stateless_rpc = stateless_rpc;
 	args.push_options = push_options.nr ? &push_options : NULL;
+	args.url = dest;
 
 	if (from_stdin) {
 		if (args.stateless_rpc) {

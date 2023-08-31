@@ -36,6 +36,13 @@ CVSWORK="$PWD/cvswork"
 CVS_SERVER=git-cvsserver
 export CVSROOT CVS_SERVER
 
+if perl -e 'exit(1) if not defined crypt("", "cv")'
+then
+	PWDHASH='lac2ItudM3.KM'
+else
+	PWDHASH='$2b$10$t8fGvE/a9eLmfOLzsZme2uOa2QtoMYwIxq9wZA6aBKtF1Yb7FJIzi'
+fi
+
 rm -rf "$CVSWORK" "$SERVERDIR"
 test_expect_success 'setup' '
   git config push.default matching &&
@@ -54,7 +61,7 @@ test_expect_success 'setup' '
   GIT_DIR="$SERVERDIR" git config --bool gitcvs.enabled true &&
   GIT_DIR="$SERVERDIR" git config gitcvs.logfile "$SERVERDIR/gitcvs.log" &&
   GIT_DIR="$SERVERDIR" git config gitcvs.authdb "$SERVERDIR/auth.db" &&
-  echo cvsuser:cvGVEarMLnhlA > "$SERVERDIR/auth.db"
+  echo "cvsuser:$PWDHASH" >"$SERVERDIR/auth.db"
 '
 
 # note that cvs doesn't accept absolute pathnames
@@ -331,7 +338,7 @@ test_expect_success 'cvs update (subdirectories)' \
   '(for dir in A A/B A/B/C A/D E; do
       mkdir $dir &&
       echo "test file in $dir" >"$dir/file_in_$(echo $dir|sed -e "s#/# #g")"  &&
-      git add $dir
+      git add $dir || exit 1
    done) &&
    git commit -q -m "deep sub directory structure" &&
    git push gitcvs.git >/dev/null &&
@@ -343,10 +350,9 @@ test_expect_success 'cvs update (subdirectories)' \
 	test_cmp "$dir/$filename" "../$dir/$filename"; then
         :
       else
-        echo >failure
+	exit 1
       fi
-    done) &&
-   test ! -f failure'
+    done)'
 
 cd "$WORKDIR"
 test_expect_success 'cvs update (delete file)' \
@@ -375,7 +381,7 @@ test_expect_success 'cvs update (merge)' \
    for i in 1 2 3 4 5 6 7
    do
      echo Line $i >>merge &&
-     echo Line $i >>expected
+     echo Line $i >>expected || return 1
    done &&
    echo Line 8 >>expected &&
    git add merge &&
@@ -585,7 +591,7 @@ test_expect_success 'cvs annotate' '
     cd cvswork &&
     GIT_CONFIG="$git_config" cvs annotate merge >../out &&
     sed -e "s/ .*//" ../out >../actual &&
-    for i in 3 1 1 1 1 1 1 1 2 4; do echo 1.$i; done >../expect &&
+    printf "1.%d\n" 3 1 1 1 1 1 1 1 2 4 >../expect &&
     test_cmp ../expect ../actual
 '
 

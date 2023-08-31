@@ -27,7 +27,8 @@
 
 static const char * const builtin_branch_usage[] = {
 	N_("git branch [<options>] [-r | -a] [--merged] [--no-merged]"),
-	N_("git branch [<options>] [-l] [-f] <branch-name> [<start-point>]"),
+	N_("git branch [<options>] [-f] [--recurse-submodules] <branch-name> [<start-point>]"),
+	N_("git branch [<options>] [-l] [<pattern>...]"),
 	N_("git branch [<options>] [-r] (-d | -D) <branch-name>..."),
 	N_("git branch [<options>] (-m | -M) [<old-branch>] <new-branch>"),
 	N_("git branch [<options>] (-c | -C) [<old-branch>] <new-branch>"),
@@ -38,6 +39,8 @@ static const char * const builtin_branch_usage[] = {
 
 static const char *head;
 static struct object_id head_oid;
+static int recurse_submodules = 0;
+static int submodule_propagate_branches = 0;
 
 static int branch_use_color = -1;
 static char branch_colors[][COLOR_MAXLEN] = {
@@ -77,12 +80,11 @@ define_list_config_array(color_branch_slots);
 static int git_branch_config(const char *var, const char *value, void *cb)
 {
 	const char *slot_name;
-	struct ref_sorting **sorting_tail = (struct ref_sorting **)cb;
 
 	if (!strcmp(var, "branch.sort")) {
 		if (!value)
 			return config_error_nonbool(var);
-		parse_ref_sorting(sorting_tail, value);
+		string_list_append(cb, value);
 		return 0;
 	}
 
@@ -100,6 +102,15 @@ static int git_branch_config(const char *var, const char *value, void *cb)
 			return config_error_nonbool(var);
 		return color_parse(value, branch_colors[slot]);
 	}
+	if (!strcmp(var, "submodule.recurse")) {
+		recurse_submodules = git_config_bool(var, value);
+		return 0;
+	}
+	if (!strcasecmp(var, "submodule.propagateBranches")) {
+		submodule_propagate_branches = git_config_bool(var, value);
+		return 0;
+	}
+
 	return git_color_default_config(var, value, cb);
 }
 
@@ -168,7 +179,7 @@ static int check_branch_commit(const char *branchname, const char *refname,
 			       int kinds, int force)
 {
 	struct commit *rev = lookup_commit_reference(the_repository, oid);
-	if (!rev) {
+	if (!force && !rev) {
 		error(_("Couldn't look up commit object for '%s'"), refname);
 		return -1;
 	}
@@ -193,6 +204,7 @@ static void delete_branch_config(const char *branchname)
 static int delete_branches(int argc, const char **argv, int force, int kinds,
 			   int quiet)
 {
+	struct worktree **worktrees;
 	struct commit *head_rev = NULL;
 	struct object_id oid;
 	char *name = NULL;
@@ -229,6 +241,9 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
 		if (!head_rev)
 			die(_("Couldn't look up commit object for HEAD"));
 	}
+
+	worktrees = get_worktrees();
+
 	for (i = 0; i < argc; i++, strbuf_reset(&bname)) {
 		char *target = NULL;
 		int flags = 0;
@@ -239,7 +254,7 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
 
 		if (kinds == FILTER_REFS_BRANCHES) {
 			const struct worktree *wt =
-				find_shared_symref("HEAD", name);
+				find_shared_symref(worktrees, "HEAD", name);
 			if (wt) {
 				error(_("Cannot delete branch '%s' "
 					"checked out at '%s'"),
@@ -300,6 +315,7 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
 
 	free(name);
 	strbuf_release(&bname);
+	free_worktrees(worktrees);
 
 	return ret;
 }
@@ -407,7 +423,8 @@ static char *build_format(struct ref_filter *filter, int maxwidth, const char *r
 	return strbuf_detach(&fmt, NULL);
 }
 
-static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sorting, struct ref_format *format)
+static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sorting,
+			   struct ref_format *format, struct string_list *output)
 {
 	int i;
 	struct ref_array array;
@@ -427,7 +444,7 @@ static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sortin
 
 	memset(&array, 0, sizeof(array));
 
-	filter_refs(&array, filter, filter->kind | FILTER_REFS_INCLUDE_BROKEN);
+	filter_refs(&array, filter, filter->kind);
 
 	if (filter->verbose)
 		maxwidth = calc_maxwidth(&array, strlen(remote_prefix));
@@ -449,7 +466,7 @@ static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sortin
 		if (column_active(colopts)) {
 			assert(!filter->verbose && "--column and --verbose are incompatible");
 			 /* format to a string_list to let print_columns() do its job */
-			string_list_append(&output, out.buf);
+			string_list_append(output, out.buf);
 		} else {
 			fwrite(out.buf, 1, out.len, stdout);
 			putchar('\n');
@@ -616,15 +633,18 @@ static int edit_branch_description(const char *branch_name)
 
 int cmd_branch(int argc, const char **argv, const char *prefix)
 {
-	int delete = 0, rename = 0, copy = 0, force = 0, list = 0;
-	int show_current = 0;
-	int reflog = 0, edit_description = 0;
-	int quiet = 0, unset_upstream = 0;
+	/* possible actions */
+	int delete = 0, rename = 0, copy = 0, list = 0,
+	    unset_upstream = 0, show_current = 0, edit_description = 0;
 	const char *new_upstream = NULL;
+	int noncreate_actions = 0;
+	/* possible options */
+	int reflog = 0, quiet = 0, icase = 0, force = 0,
+	    recurse_submodules_explicit = 0;
 	enum branch_track track;
 	struct ref_filter filter;
-	int icase = 0;
-	static struct ref_sorting *sorting = NULL, **sorting_tail = &sorting;
+	static struct ref_sorting *sorting;
+	struct string_list sorting_options = STRING_LIST_INIT_DUP;
 	struct ref_format format = REF_FORMAT_INIT;
 
 	struct option options[] = {
@@ -632,8 +652,10 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		OPT__VERBOSE(&filter.verbose,
 			N_("show hash and subject, give twice for upstream branch")),
 		OPT__QUIET(&quiet, N_("suppress informational messages")),
-		OPT_SET_INT('t', "track",  &track, N_("set up tracking mode (see git-pull(1))"),
-			BRANCH_TRACK_EXPLICIT),
+		OPT_CALLBACK_F('t', "track",  &track, "(direct|inherit)",
+			N_("set branch tracking configuration"),
+			PARSE_OPT_OPTARG,
+			parse_opt_tracking_mode),
 		OPT_SET_INT_F(0, "set-upstream", &track, N_("do not use"),
 			BRANCH_TRACK_OVERRIDE, PARSE_OPT_HIDDEN),
 		OPT_STRING('u', "set-upstream-to", &new_upstream, N_("upstream"), N_("change the upstream info")),
@@ -665,10 +687,11 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		OPT_MERGED(&filter, N_("print only branches that are merged")),
 		OPT_NO_MERGED(&filter, N_("print only branches that are not merged")),
 		OPT_COLUMN(0, "column", &colopts, N_("list branches in columns")),
-		OPT_REF_SORT(sorting_tail),
+		OPT_REF_SORT(&sorting_options),
 		OPT_CALLBACK(0, "points-at", &filter.points_at, N_("object"),
 			N_("print only branches of the object"), parse_opt_object_name),
 		OPT_BOOL('i', "ignore-case", &icase, N_("sorting and filtering are case insensitive")),
+		OPT_BOOL(0, "recurse-submodules", &recurse_submodules_explicit, N_("recurse through submodules")),
 		OPT_STRING(  0 , "format", &format.format, N_("format"), N_("format to use for the output")),
 		OPT_END(),
 	};
@@ -682,7 +705,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 	if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage_with_options(builtin_branch_usage, options);
 
-	git_config(git_branch_config, sorting_tail);
+	git_config(git_branch_config, &sorting_options);
 
 	track = git_branch_track;
 
@@ -705,9 +728,22 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 	    filter.reachable_from || filter.unreachable_from || filter.points_at.nr)
 		list = 1;
 
-	if (!!delete + !!rename + !!copy + !!new_upstream + !!show_current +
-	    list + edit_description + unset_upstream > 1)
+	noncreate_actions = !!delete + !!rename + !!copy + !!new_upstream +
+			    !!show_current + !!list + !!edit_description +
+			    !!unset_upstream;
+	if (noncreate_actions > 1)
 		usage_with_options(builtin_branch_usage, options);
+
+	if (recurse_submodules_explicit) {
+		if (!submodule_propagate_branches)
+			die(_("branch with --recurse-submodules can only be used if submodule.propagateBranches is enabled"));
+		if (noncreate_actions)
+			die(_("--recurse-submodules can only be used to create branches"));
+	}
+
+	recurse_submodules =
+		(recurse_submodules || recurse_submodules_explicit) &&
+		submodule_propagate_branches;
 
 	if (filter.abbrev == -1)
 		filter.abbrev = DEFAULT_ABBREV;
@@ -716,7 +752,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 	finalize_colopts(&colopts, -1);
 	if (filter.verbose) {
 		if (explicitly_enable_column(colopts))
-			die(_("--column and --verbose are incompatible"));
+			die(_("options '%s' and '%s' cannot be used together"), "--column", "--verbose");
 		colopts = 0;
 	}
 
@@ -748,14 +784,14 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		 * local branches 'refs/heads/...' and finally remote-tracking
 		 * branches 'refs/remotes/...'.
 		 */
-		if (!sorting)
-			sorting = ref_default_sorting();
+		sorting = ref_sorting_options(&sorting_options);
 		ref_sorting_set_sort_flags_all(sorting, REF_SORTING_ICASE, icase);
 		ref_sorting_set_sort_flags_all(
 			sorting, REF_SORTING_DETACHED_HEAD_FIRST, 1);
-		print_ref_list(&filter, sorting, &format);
+		print_ref_list(&filter, sorting, &format, &output);
 		print_columns(&output, colopts, NULL);
 		string_list_clear(&output, 0);
+		ref_sorting_release(sorting);
 		return 0;
 	} else if (edit_description) {
 		const char *branch_name;
@@ -820,12 +856,9 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		if (!ref_exists(branch->refname))
 			die(_("branch '%s' does not exist"), branch->name);
 
-		/*
-		 * create_branch takes care of setting up the tracking
-		 * info and making sure new_upstream is correct
-		 */
-		create_branch(the_repository, branch->name, new_upstream,
-			      0, 0, 0, quiet, BRANCH_TRACK_OVERRIDE);
+		dwim_and_setup_tracking(the_repository, branch->name,
+					new_upstream, BRANCH_TRACK_OVERRIDE,
+					quiet);
 	} else if (unset_upstream) {
 		struct branch *branch = branch_get(argv[0]);
 		struct strbuf buf = STRBUF_INIT;
@@ -849,7 +882,10 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		strbuf_addf(&buf, "branch.%s.merge", branch->name);
 		git_config_set_multivar(buf.buf, NULL, NULL, CONFIG_FLAGS_MULTI_REPLACE);
 		strbuf_release(&buf);
-	} else if (argc > 0 && argc <= 2) {
+	} else if (!noncreate_actions && argc > 0 && argc <= 2) {
+		const char *branch_name = argv[0];
+		const char *start_name = argc == 2 ? argv[1] : head;
+
 		if (filter.kind != FILTER_REFS_BRANCHES)
 			die(_("The -a, and -r, options to 'git branch' do not take a branch name.\n"
 				  "Did you mean to use: -a|-r --list <pattern>?"));
@@ -857,10 +893,14 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
 		if (track == BRANCH_TRACK_OVERRIDE)
 			die(_("the '--set-upstream' option is no longer supported. Please use '--track' or '--set-upstream-to' instead."));
 
-		create_branch(the_repository,
-			      argv[0], (argc == 2) ? argv[1] : head,
-			      force, 0, reflog, quiet, track);
-
+		if (recurse_submodules) {
+			create_branches_recursively(the_repository, branch_name,
+						    start_name, NULL, force,
+						    reflog, quiet, track, 0);
+			return 0;
+		}
+		create_branch(the_repository, branch_name, start_name, force, 0,
+			      reflog, quiet, track, 0);
 	} else
 		usage_with_options(builtin_branch_usage, options);
 

@@ -59,7 +59,7 @@ static void start_object_request(struct walker *walker,
 	struct http_object_request *req;
 
 	req = new_http_object_request(obj_req->repo->base, &obj_req->oid);
-	if (req == NULL) {
+	if (!req) {
 		obj_req->state = ABORTED;
 		return;
 	}
@@ -106,7 +106,7 @@ static void process_object_response(void *callback_data)
 	/* Use alternates if necessary */
 	if (missing_target(obj_req->req)) {
 		fetch_alternates(walker, alt->base);
-		if (obj_req->repo->next != NULL) {
+		if (obj_req->repo->next) {
 			obj_req->repo =
 				obj_req->repo->next;
 			release_http_object_request(obj_req->req);
@@ -127,7 +127,6 @@ static void release_object_request(struct object_request *obj_req)
 	free(obj_req);
 }
 
-#ifdef USE_CURL_MULTI
 static int fill_active_slot(struct walker *walker)
 {
 	struct object_request *obj_req;
@@ -146,7 +145,6 @@ static int fill_active_slot(struct walker *walker)
 	}
 	return 0;
 }
-#endif
 
 static void prefetch(struct walker *walker, unsigned char *sha1)
 {
@@ -163,10 +161,8 @@ static void prefetch(struct walker *walker, unsigned char *sha1)
 	http_is_verbose = walker->get_verbosely;
 	list_add_tail(&newreq->node, &object_queue_head);
 
-#ifdef USE_CURL_MULTI
 	fill_active_slots();
 	step_active_slots();
-#endif
 }
 
 static int is_alternate_allowed(const char *url)
@@ -229,12 +225,12 @@ static void process_alternates_response(void *callback_data)
 					 alt_req->url->buf);
 			active_requests++;
 			slot->in_use = 1;
-			if (slot->finished != NULL)
+			if (slot->finished)
 				(*slot->finished) = 0;
 			if (!start_active_slot(slot)) {
 				cdata->got_alternates = -1;
 				slot->in_use = 0;
-				if (slot->finished != NULL)
+				if (slot->finished)
 					(*slot->finished) = 1;
 			}
 			return;
@@ -357,11 +353,9 @@ static void fetch_alternates(struct walker *walker, const char *base)
 	 * wait for them to arrive and return to processing this request's
 	 * curl message
 	 */
-#ifdef USE_CURL_MULTI
 	while (cdata->got_alternates == 0) {
 		step_active_slots();
 	}
-#endif
 
 	/* Nothing to do if they've already been fetched */
 	if (cdata->got_alternates == 1)
@@ -384,7 +378,7 @@ static void fetch_alternates(struct walker *walker, const char *base)
 	alt_req.walker = walker;
 	slot->callback_data = &alt_req;
 
-	curl_easy_setopt(slot->curl, CURLOPT_FILE, &buffer);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEDATA, &buffer);
 	curl_easy_setopt(slot->curl, CURLOPT_WRITEFUNCTION, fwrite_buffer);
 	curl_easy_setopt(slot->curl, CURLOPT_URL, url.buf);
 
@@ -449,7 +443,7 @@ static int http_fetch_pack(struct walker *walker, struct alt_base *repo, unsigne
 	}
 
 	preq = new_http_pack_request(target->hash, repo->base);
-	if (preq == NULL)
+	if (!preq)
 		goto abort;
 	preq->slot->results = &results;
 
@@ -495,22 +489,18 @@ static int fetch_object(struct walker *walker, unsigned char *hash)
 		if (hasheq(obj_req->oid.hash, hash))
 			break;
 	}
-	if (obj_req == NULL)
+	if (!obj_req)
 		return error("Couldn't find request for %s in the queue", hex);
 
 	if (has_object_file(&obj_req->oid)) {
-		if (obj_req->req != NULL)
+		if (obj_req->req)
 			abort_http_object_request(obj_req->req);
 		abort_object_request(obj_req);
 		return 0;
 	}
 
-#ifdef USE_CURL_MULTI
 	while (obj_req->state == WAITING)
 		step_active_slots();
-#else
-	start_object_request(walker, obj_req);
-#endif
 
 	/*
 	 * obj_req->req might change when fetching alternates in the callback
@@ -623,9 +613,7 @@ struct walker *get_http_walker(const char *url)
 	walker->cleanup = cleanup;
 	walker->data = data;
 
-#ifdef USE_CURL_MULTI
 	add_fill_function(walker, (int (*)(void *)) fill_active_slot);
-#endif
 
 	return walker;
 }

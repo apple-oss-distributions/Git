@@ -265,6 +265,7 @@ struct diff_options {
 	 * postimage of the diff_queue.
 	 */
 	const char *pickaxe;
+	unsigned pickaxe_opts;
 
 	/* -I<regex> */
 	regex_t **ignore_regex;
@@ -282,7 +283,7 @@ struct diff_options {
 	struct diff_flags flags;
 
 	/* diff-filter bits */
-	unsigned int filter;
+	unsigned int filter, filter_not;
 
 	int use_color;
 
@@ -303,8 +304,6 @@ struct diff_options {
 
 	/* The output format used when `diff_flush()` is run. */
 	int output_format;
-
-	unsigned pickaxe_opts;
 
 	/* Affects the way detection logic for complete rewrites, renames and
 	 * copies.
@@ -396,6 +395,7 @@ struct diff_options {
 
 	struct repository *repo;
 	struct option *parseopts;
+	struct strmap *additional_path_headers;
 
 	int no_free;
 };
@@ -556,6 +556,10 @@ int git_config_rename(const char *var, const char *value);
 #define DIFF_PICKAXE_KINDS_MASK (DIFF_PICKAXE_KIND_S | \
 				 DIFF_PICKAXE_KIND_G | \
 				 DIFF_PICKAXE_KIND_OBJFIND)
+#define DIFF_PICKAXE_KINDS_G_REGEX_MASK (DIFF_PICKAXE_KIND_G | \
+					 DIFF_PICKAXE_REGEX)
+#define DIFF_PICKAXE_KINDS_ALL_OBJFIND_MASK (DIFF_PICKAXE_ALL | \
+					     DIFF_PICKAXE_KIND_OBJFIND)
 
 #define DIFF_PICKAXE_IGNORE_CASE	32
 
@@ -590,7 +594,7 @@ void diffcore_fix_diff_index(void);
 "                show all files diff when -S is used and hit is found.\n" \
 "  -a  --text    treat all files as text.\n"
 
-int diff_queue_is_empty(void);
+int diff_queue_is_empty(struct diff_options *o);
 void diff_flush(struct diff_options*);
 void diff_free(struct diff_options*);
 void diff_warn_rename_limit(const char *varname, int needed, int degraded_cc);

@@ -1,6 +1,8 @@
 #!/bin/sh
 
 test_description='test if rebase detects and aborts on incompatible options'
+
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -62,16 +64,5 @@ test_rebase_am_only () {
 
 test_rebase_am_only --whitespace=fix
 test_rebase_am_only -C4
-
-test_expect_success REBASE_P '--preserve-merges incompatible with --signoff' '
-	git checkout B^0 &&
-	test_must_fail git rebase --preserve-merges --signoff A
-'
-
-test_expect_success REBASE_P \
-	'--preserve-merges incompatible with --rebase-merges' '
-	git checkout B^0 &&
-	test_must_fail git rebase --preserve-merges --rebase-merges A
-'
 
 test_done

@@ -8,18 +8,19 @@
 #include "string-list.h"
 #include "quote.h"
 #include "config.h"
+#include "packfile.h"
+#include "hook.h"
 
 void child_process_init(struct child_process *child)
 {
-	memset(child, 0, sizeof(*child));
-	strvec_init(&child->args);
-	strvec_init(&child->env_array);
+	struct child_process blank = CHILD_PROCESS_INIT;
+	memcpy(child, &blank, sizeof(*child));
 }
 
 void child_process_clear(struct child_process *child)
 {
 	strvec_clear(&child->args);
-	strvec_clear(&child->env_array);
+	strvec_clear(&child->env);
 }
 
 struct child_to_clean {
@@ -211,9 +212,9 @@ static char *locate_in_PATH(const char *file)
 	return NULL;
 }
 
-static int exists_in_PATH(const char *file)
+int exists_in_PATH(const char *command)
 {
-	char *r = locate_in_PATH(file);
+	char *r = locate_in_PATH(command);
 	int found = r != NULL;
 	free(r);
 	return found;
@@ -339,15 +340,6 @@ static void child_close_pair(int fd[2])
 	child_close(fd[1]);
 }
 
-/*
- * parent will make it look like the child spewed a fatal error and died
- * this is needed to prevent changes to t0061.
- */
-static void fake_fatal(const char *err, va_list params)
-{
-	vreportf("fatal: ", err, params);
-}
-
 static void child_error_fn(const char *err, va_list params)
 {
 	const char msg[] = "error() should not be called in child\n";
@@ -371,15 +363,16 @@ static void NORETURN child_die_fn(const char *err, va_list params)
 static void child_err_spew(struct child_process *cmd, struct child_err *cerr)
 {
 	static void (*old_errfn)(const char *err, va_list params);
+	report_fn die_message_routine = get_die_message_routine();
 
 	old_errfn = get_error_routine();
-	set_error_routine(fake_fatal);
+	set_error_routine(die_message_routine);
 	errno = cerr->syserr;
 
 	switch (cerr->err) {
 	case CHILD_ERR_CHDIR:
 		error_errno("exec '%s': cd to '%s' failed",
-			    cmd->argv[0], cmd->dir);
+			    cmd->args.v[0], cmd->dir);
 		break;
 	case CHILD_ERR_DUP2:
 		error_errno("dup2() in child failed");
@@ -391,12 +384,12 @@ static void child_err_spew(struct child_process *cmd, struct child_err *cerr)
 		error_errno("sigprocmask failed restoring signals");
 		break;
 	case CHILD_ERR_ENOENT:
-		error_errno("cannot run %s", cmd->argv[0]);
+		error_errno("cannot run %s", cmd->args.v[0]);
 		break;
 	case CHILD_ERR_SILENT:
 		break;
 	case CHILD_ERR_ERRNO:
-		error_errno("cannot exec '%s'", cmd->argv[0]);
+		error_errno("cannot exec '%s'", cmd->args.v[0]);
 		break;
 	}
 	set_error_routine(old_errfn);
@@ -404,7 +397,7 @@ static void child_err_spew(struct child_process *cmd, struct child_err *cerr)
 
 static int prepare_cmd(struct strvec *out, const struct child_process *cmd)
 {
-	if (!cmd->argv[0])
+	if (!cmd->args.v[0])
 		BUG("command is empty");
 
 	/*
@@ -414,11 +407,11 @@ static int prepare_cmd(struct strvec *out, const struct child_process *cmd)
 	strvec_push(out, SHELL_PATH);
 
 	if (cmd->git_cmd) {
-		prepare_git_cmd(out, cmd->argv);
+		prepare_git_cmd(out, cmd->args.v);
 	} else if (cmd->use_shell) {
-		prepare_shell_cmd(out, cmd->argv);
+		prepare_shell_cmd(out, cmd->args.v);
 	} else {
-		strvec_pushv(out, cmd->argv);
+		strvec_pushv(out, cmd->args.v);
 	}
 
 	/*
@@ -551,20 +544,17 @@ static int wait_or_whine(pid_t pid, const char *argv0, int in_signal)
 
 	while ((waiting = waitpid(pid, &status, 0)) < 0 && errno == EINTR)
 		;	/* nothing */
-	if (in_signal) {
-		if (WIFEXITED(status))
-			code = WEXITSTATUS(status);
-		return code;
-	}
 
 	if (waiting < 0) {
 		failed_errno = errno;
-		error_errno("waitpid for %s failed", argv0);
+		if (!in_signal)
+			error_errno("waitpid for %s failed", argv0);
 	} else if (waiting != pid) {
-		error("waitpid is confused (%s)", argv0);
+		if (!in_signal)
+			error("waitpid is confused (%s)", argv0);
 	} else if (WIFSIGNALED(status)) {
 		code = WTERMSIG(status);
-		if (code != SIGINT && code != SIGQUIT && code != SIGPIPE)
+		if (!in_signal && code != SIGINT && code != SIGQUIT && code != SIGPIPE)
 			error("%s died of signal %d", argv0, code);
 		/*
 		 * This return value is chosen so that code & 0xff
@@ -575,10 +565,12 @@ static int wait_or_whine(pid_t pid, const char *argv0, int in_signal)
 	} else if (WIFEXITED(status)) {
 		code = WEXITSTATUS(status);
 	} else {
-		error("waitpid is confused (%s)", argv0);
+		if (!in_signal)
+			error("waitpid is confused (%s)", argv0);
 	}
 
-	clear_child_for_cleanup(pid);
+	if (!in_signal)
+		clear_child_for_cleanup(pid);
 
 	errno = failed_errno;
 	return code;
@@ -654,15 +646,10 @@ static void trace_run_command(const struct child_process *cp)
 		sq_quote_buf_pretty(&buf, cp->dir);
 		strbuf_addch(&buf, ';');
 	}
-	/*
-	 * The caller is responsible for initializing cp->env from
-	 * cp->env_array if needed. We only check one place.
-	 */
-	if (cp->env)
-		trace_add_env(&buf, cp->env);
+	trace_add_env(&buf, cp->env.v);
 	if (cp->git_cmd)
 		strbuf_addstr(&buf, " git");
-	sq_quote_argv_pretty(&buf, cp->argv);
+	sq_quote_argv_pretty(&buf, cp->args.v);
 
 	trace_printf("%s", buf.buf);
 	strbuf_release(&buf);
@@ -674,11 +661,6 @@ int start_command(struct child_process *cmd)
 	int fdin[2], fdout[2], fderr[2];
 	int failed_errno;
 	char *str;
-
-	if (!cmd->argv)
-		cmd->argv = cmd->args.v;
-	if (!cmd->env)
-		cmd->env = cmd->env_array.v;
 
 	/*
 	 * In case of errors we must keep the promise to close FDs
@@ -728,7 +710,7 @@ int start_command(struct child_process *cmd)
 			str = "standard error";
 fail_pipe:
 			error("cannot create %s pipe for %s: %s",
-				str, cmd->argv[0], strerror(failed_errno));
+				str, cmd->args.v[0], strerror(failed_errno));
 			child_process_clear(cmd);
 			errno = failed_errno;
 			return -1;
@@ -740,6 +722,9 @@ fail_pipe:
 	trace_run_command(cmd);
 
 	fflush(NULL);
+
+	if (cmd->close_object_store)
+		close_object_store(the_repository->objects);
 
 #ifndef GIT_WINDOWS_NATIVE
 {
@@ -754,7 +739,7 @@ fail_pipe:
 		failed_errno = errno;
 		cmd->pid = -1;
 		if (!cmd->silent_exec_failure)
-			error_errno("cannot run %s", cmd->argv[0]);
+			error_errno("cannot run %s", cmd->args.v[0]);
 		goto end_of_spawn;
 	}
 
@@ -762,13 +747,11 @@ fail_pipe:
 		notify_pipe[0] = notify_pipe[1] = -1;
 
 	if (cmd->no_stdin || cmd->no_stdout || cmd->no_stderr) {
-		null_fd = open("/dev/null", O_RDWR | O_CLOEXEC);
-		if (null_fd < 0)
-			die_errno(_("open /dev/null failed"));
+		null_fd = xopen("/dev/null", O_RDWR | O_CLOEXEC);
 		set_cloexec(null_fd);
 	}
 
-	childenv = prep_childenv(cmd->env);
+	childenv = prep_childenv(cmd->env.v);
 	atfork_prepare(&as);
 
 	/*
@@ -866,7 +849,7 @@ fail_pipe:
 	}
 	atfork_parent(&as);
 	if (cmd->pid < 0)
-		error_errno("cannot fork() for %s", cmd->argv[0]);
+		error_errno("cannot fork() for %s", cmd->args.v[0]);
 	else if (cmd->clean_on_exit)
 		mark_child_for_cleanup(cmd->pid, cmd);
 
@@ -883,7 +866,7 @@ fail_pipe:
 		 * At this point we know that fork() succeeded, but exec()
 		 * failed. Errors have been reported to our stderr.
 		 */
-		wait_or_whine(cmd->pid, cmd->argv[0], 0);
+		wait_or_whine(cmd->pid, cmd->args.v[0], 0);
 		child_err_spew(cmd, &cerr);
 		failed_errno = errno;
 		cmd->pid = -1;
@@ -900,7 +883,7 @@ end_of_spawn:
 #else
 {
 	int fhin = 0, fhout = 1, fherr = 2;
-	const char **sargv = cmd->argv;
+	const char **sargv = cmd->args.v;
 	struct strvec nargv = STRVEC_INIT;
 
 	if (cmd->no_stdin)
@@ -927,20 +910,21 @@ end_of_spawn:
 		fhout = dup(cmd->out);
 
 	if (cmd->git_cmd)
-		cmd->argv = prepare_git_cmd(&nargv, cmd->argv);
+		cmd->args.v = prepare_git_cmd(&nargv, sargv);
 	else if (cmd->use_shell)
-		cmd->argv = prepare_shell_cmd(&nargv, cmd->argv);
+		cmd->args.v = prepare_shell_cmd(&nargv, sargv);
 
-	cmd->pid = mingw_spawnvpe(cmd->argv[0], cmd->argv, (char**) cmd->env,
-			cmd->dir, fhin, fhout, fherr);
+	cmd->pid = mingw_spawnvpe(cmd->args.v[0], cmd->args.v,
+				  (char**) cmd->env.v,
+				  cmd->dir, fhin, fhout, fherr);
 	failed_errno = errno;
 	if (cmd->pid < 0 && (!cmd->silent_exec_failure || errno != ENOENT))
-		error_errno("cannot spawn %s", cmd->argv[0]);
+		error_errno("cannot spawn %s", cmd->args.v[0]);
 	if (cmd->clean_on_exit && cmd->pid >= 0)
 		mark_child_for_cleanup(cmd->pid, cmd);
 
 	strvec_clear(&nargv);
-	cmd->argv = sargv;
+	cmd->args.v = sargv;
 	if (fhin != 0)
 		close(fhin);
 	if (fhout != 1)
@@ -990,7 +974,7 @@ end_of_spawn:
 
 int finish_command(struct child_process *cmd)
 {
-	int ret = wait_or_whine(cmd->pid, cmd->argv[0], 0);
+	int ret = wait_or_whine(cmd->pid, cmd->args.v[0], 0);
 	trace2_child_exit(cmd, ret);
 	child_process_clear(cmd);
 	invalidate_lstat_cache();
@@ -999,8 +983,9 @@ int finish_command(struct child_process *cmd)
 
 int finish_command_in_signal(struct child_process *cmd)
 {
-	int ret = wait_or_whine(cmd->pid, cmd->argv[0], 1);
-	trace2_child_exit(cmd, ret);
+	int ret = wait_or_whine(cmd->pid, cmd->args.v[0], 1);
+	if (ret != -1)
+		trace2_child_exit(cmd, ret);
 	return ret;
 }
 
@@ -1037,7 +1022,7 @@ int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
 				 const char *const *env, const char *tr2_class)
 {
 	struct child_process cmd = CHILD_PROCESS_INIT;
-	cmd.argv = argv;
+	strvec_pushv(&cmd.args, argv);
 	cmd.no_stdin = opt & RUN_COMMAND_NO_STDIN ? 1 : 0;
 	cmd.git_cmd = opt & RUN_GIT_CMD ? 1 : 0;
 	cmd.stdout_to_stderr = opt & RUN_COMMAND_STDOUT_TO_STDERR ? 1 : 0;
@@ -1045,8 +1030,10 @@ int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
 	cmd.use_shell = opt & RUN_USING_SHELL ? 1 : 0;
 	cmd.clean_on_exit = opt & RUN_CLEAN_ON_EXIT ? 1 : 0;
 	cmd.wait_after_clean = opt & RUN_WAIT_AFTER_CLEAN ? 1 : 0;
+	cmd.close_object_store = opt & RUN_CLOSE_OBJECT_STORE ? 1 : 0;
 	cmd.dir = dir;
-	cmd.env = env;
+	if (env)
+		strvec_pushv(&cmd.env, (const char **)env);
 	cmd.trace2_child_class = tr2_class;
 	return run_command(&cmd);
 }
@@ -1079,7 +1066,9 @@ static void *run_thread(void *data)
 
 static NORETURN void die_async(const char *err, va_list params)
 {
-	vreportf("fatal: ", err, params);
+	report_fn die_message_fn = get_die_message_routine();
+
+	die_message_fn(err, params);
 
 	if (in_async()) {
 		struct async *async = pthread_getspecific(async_key);
@@ -1096,7 +1085,7 @@ static NORETURN void die_async(const char *err, va_list params)
 static int async_die_is_recursing(void)
 {
 	void *ret = pthread_getspecific(async_die_counter);
-	pthread_setspecific(async_die_counter, (void *)1);
+	pthread_setspecific(async_die_counter, &async_die_counter); /* set to any non-NULL valid pointer */
 	return ret != NULL;
 }
 
@@ -1320,72 +1309,6 @@ int async_with_fork(void)
 #endif
 }
 
-const char *find_hook(const char *name)
-{
-	static struct strbuf path = STRBUF_INIT;
-
-	strbuf_reset(&path);
-	strbuf_git_path(&path, "hooks/%s", name);
-	if (access(path.buf, X_OK) < 0) {
-		int err = errno;
-
-#ifdef STRIP_EXTENSION
-		strbuf_addstr(&path, STRIP_EXTENSION);
-		if (access(path.buf, X_OK) >= 0)
-			return path.buf;
-		if (errno == EACCES)
-			err = errno;
-#endif
-
-		if (err == EACCES && advice_ignored_hook) {
-			static struct string_list advise_given = STRING_LIST_INIT_DUP;
-
-			if (!string_list_lookup(&advise_given, name)) {
-				string_list_insert(&advise_given, name);
-				advise(_("The '%s' hook was ignored because "
-					 "it's not set as executable.\n"
-					 "You can disable this warning with "
-					 "`git config advice.ignoredHook false`."),
-				       path.buf);
-			}
-		}
-		return NULL;
-	}
-	return path.buf;
-}
-
-int run_hook_ve(const char *const *env, const char *name, va_list args)
-{
-	struct child_process hook = CHILD_PROCESS_INIT;
-	const char *p;
-
-	p = find_hook(name);
-	if (!p)
-		return 0;
-
-	strvec_push(&hook.args, p);
-	while ((p = va_arg(args, const char *)))
-		strvec_push(&hook.args, p);
-	hook.env = env;
-	hook.no_stdin = 1;
-	hook.stdout_to_stderr = 1;
-	hook.trace2_hook_name = name;
-
-	return run_command(&hook);
-}
-
-int run_hook_le(const char *const *env, const char *name, ...)
-{
-	va_list args;
-	int ret;
-
-	va_start(args, name);
-	ret = run_hook_ve(env, name, args);
-	va_end(args);
-
-	return ret;
-}
-
 struct io_pump {
 	/* initialized by caller */
 	int fd;
@@ -1550,6 +1473,7 @@ enum child_state {
 	GIT_CP_WAIT_CLEANUP,
 };
 
+int run_processes_parallel_ungroup;
 struct parallel_processes {
 	void *data;
 
@@ -1573,6 +1497,7 @@ struct parallel_processes {
 	struct pollfd *pfd;
 
 	unsigned shutdown : 1;
+	unsigned ungroup : 1;
 
 	int output_owner;
 	struct strbuf buffered_output; /* of finished children */
@@ -1616,7 +1541,7 @@ static void pp_init(struct parallel_processes *pp,
 		    get_next_task_fn get_next_task,
 		    start_failure_fn start_failure,
 		    task_finished_fn task_finished,
-		    void *data)
+		    void *data, int ungroup)
 {
 	int i;
 
@@ -1638,15 +1563,21 @@ static void pp_init(struct parallel_processes *pp,
 	pp->nr_processes = 0;
 	pp->output_owner = 0;
 	pp->shutdown = 0;
+	pp->ungroup = ungroup;
 	CALLOC_ARRAY(pp->children, n);
-	CALLOC_ARRAY(pp->pfd, n);
+	if (pp->ungroup)
+		pp->pfd = NULL;
+	else
+		CALLOC_ARRAY(pp->pfd, n);
 	strbuf_init(&pp->buffered_output, 0);
 
 	for (i = 0; i < n; i++) {
 		strbuf_init(&pp->children[i].err, 0);
 		child_process_init(&pp->children[i].process);
-		pp->pfd[i].events = POLLIN | POLLHUP;
-		pp->pfd[i].fd = -1;
+		if (pp->pfd) {
+			pp->pfd[i].events = POLLIN | POLLHUP;
+			pp->pfd[i].fd = -1;
+		}
 	}
 
 	pp_for_signal = pp;
@@ -1694,24 +1625,31 @@ static int pp_start_one(struct parallel_processes *pp)
 		BUG("bookkeeping is hard");
 
 	code = pp->get_next_task(&pp->children[i].process,
-				 &pp->children[i].err,
+				 pp->ungroup ? NULL : &pp->children[i].err,
 				 pp->data,
 				 &pp->children[i].data);
 	if (!code) {
-		strbuf_addbuf(&pp->buffered_output, &pp->children[i].err);
-		strbuf_reset(&pp->children[i].err);
+		if (!pp->ungroup) {
+			strbuf_addbuf(&pp->buffered_output, &pp->children[i].err);
+			strbuf_reset(&pp->children[i].err);
+		}
 		return 1;
 	}
-	pp->children[i].process.err = -1;
-	pp->children[i].process.stdout_to_stderr = 1;
+	if (!pp->ungroup) {
+		pp->children[i].process.err = -1;
+		pp->children[i].process.stdout_to_stderr = 1;
+	}
 	pp->children[i].process.no_stdin = 1;
 
 	if (start_command(&pp->children[i].process)) {
-		code = pp->start_failure(&pp->children[i].err,
+		code = pp->start_failure(pp->ungroup ? NULL :
+					 &pp->children[i].err,
 					 pp->data,
 					 pp->children[i].data);
-		strbuf_addbuf(&pp->buffered_output, &pp->children[i].err);
-		strbuf_reset(&pp->children[i].err);
+		if (!pp->ungroup) {
+			strbuf_addbuf(&pp->buffered_output, &pp->children[i].err);
+			strbuf_reset(&pp->children[i].err);
+		}
 		if (code)
 			pp->shutdown = 1;
 		return code;
@@ -1719,7 +1657,8 @@ static int pp_start_one(struct parallel_processes *pp)
 
 	pp->nr_processes++;
 	pp->children[i].state = GIT_CP_WORKING;
-	pp->pfd[i].fd = pp->children[i].process.err;
+	if (pp->pfd)
+		pp->pfd[i].fd = pp->children[i].process.err;
 	return 0;
 }
 
@@ -1753,6 +1692,7 @@ static void pp_buffer_stderr(struct parallel_processes *pp, int output_timeout)
 static void pp_output(struct parallel_processes *pp)
 {
 	int i = pp->output_owner;
+
 	if (pp->children[i].state == GIT_CP_WORKING &&
 	    pp->children[i].err.len) {
 		strbuf_write(&pp->children[i].err, stderr);
@@ -1775,7 +1715,7 @@ static int pp_collect_finished(struct parallel_processes *pp)
 
 		code = finish_command(&pp->children[i].process);
 
-		code = pp->task_finished(code,
+		code = pp->task_finished(code, pp->ungroup ? NULL :
 					 &pp->children[i].err, pp->data,
 					 pp->children[i].data);
 
@@ -1786,10 +1726,13 @@ static int pp_collect_finished(struct parallel_processes *pp)
 
 		pp->nr_processes--;
 		pp->children[i].state = GIT_CP_FREE;
-		pp->pfd[i].fd = -1;
+		if (pp->pfd)
+			pp->pfd[i].fd = -1;
 		child_process_init(&pp->children[i].process);
 
-		if (i != pp->output_owner) {
+		if (pp->ungroup) {
+			; /* no strbuf_*() work to do here */
+		} else if (i != pp->output_owner) {
 			strbuf_addbuf(&pp->buffered_output, &pp->children[i].err);
 			strbuf_reset(&pp->children[i].err);
 		} else {
@@ -1826,9 +1769,14 @@ int run_processes_parallel(int n,
 	int i, code;
 	int output_timeout = 100;
 	int spawn_cap = 4;
+	int ungroup = run_processes_parallel_ungroup;
 	struct parallel_processes pp;
 
-	pp_init(&pp, n, get_next_task, start_failure, task_finished, pp_cb);
+	/* unset for the next API user */
+	run_processes_parallel_ungroup = 0;
+
+	pp_init(&pp, n, get_next_task, start_failure, task_finished, pp_cb,
+		ungroup);
 	while (1) {
 		for (i = 0;
 		    i < spawn_cap && !pp.shutdown &&
@@ -1845,8 +1793,15 @@ int run_processes_parallel(int n,
 		}
 		if (!pp.nr_processes)
 			break;
-		pp_buffer_stderr(&pp, output_timeout);
-		pp_output(&pp);
+		if (ungroup) {
+			int i;
+
+			for (i = 0; i < pp.max_processes; i++)
+				pp.children[i].state = GIT_CP_WAIT_CLEANUP;
+		} else {
+			pp_buffer_stderr(&pp, output_timeout);
+			pp_output(&pp);
+		}
 		code = pp_collect_finished(&pp);
 		if (code) {
 			pp.shutdown = 1;
@@ -1887,8 +1842,150 @@ int run_auto_maintenance(int quiet)
 		return 0;
 
 	maint.git_cmd = 1;
+	maint.close_object_store = 1;
 	strvec_pushl(&maint.args, "maintenance", "run", "--auto", NULL);
 	strvec_push(&maint.args, quiet ? "--quiet" : "--no-quiet");
 
 	return run_command(&maint);
+}
+
+void prepare_other_repo_env(struct strvec *env, const char *new_git_dir)
+{
+	const char * const *var;
+
+	for (var = local_repo_env; *var; var++) {
+		if (strcmp(*var, CONFIG_DATA_ENVIRONMENT) &&
+		    strcmp(*var, CONFIG_COUNT_ENVIRONMENT))
+			strvec_push(env, *var);
+	}
+	strvec_pushf(env, "%s=%s", GIT_DIR_ENVIRONMENT, new_git_dir);
+}
+
+enum start_bg_result start_bg_command(struct child_process *cmd,
+				      start_bg_wait_cb *wait_cb,
+				      void *cb_data,
+				      unsigned int timeout_sec)
+{
+	enum start_bg_result sbgr = SBGR_ERROR;
+	int ret;
+	int wait_status;
+	pid_t pid_seen;
+	time_t time_limit;
+
+	/*
+	 * We do not allow clean-on-exit because the child process
+	 * should persist in the background and possibly/probably
+	 * after this process exits.  So we don't want to kill the
+	 * child during our atexit routine.
+	 */
+	if (cmd->clean_on_exit)
+		BUG("start_bg_command() does not allow non-zero clean_on_exit");
+
+	if (!cmd->trace2_child_class)
+		cmd->trace2_child_class = "background";
+
+	ret = start_command(cmd);
+	if (ret) {
+		/*
+		 * We assume that if `start_command()` fails, we
+		 * either get a complete `trace2_child_start() /
+		 * trace2_child_exit()` pair or it fails before the
+		 * `trace2_child_start()` is emitted, so we do not
+		 * need to worry about it here.
+		 *
+		 * We also assume that `start_command()` does not add
+		 * us to the cleanup list.  And that it calls
+		 * calls `child_process_clear()`.
+		 */
+		sbgr = SBGR_ERROR;
+		goto done;
+	}
+
+	time(&time_limit);
+	time_limit += timeout_sec;
+
+wait:
+	pid_seen = waitpid(cmd->pid, &wait_status, WNOHANG);
+
+	if (!pid_seen) {
+		/*
+		 * The child is currently running.  Ask the callback
+		 * if the child is ready to do work or whether we
+		 * should keep waiting for it to boot up.
+		 */
+		ret = (*wait_cb)(cmd, cb_data);
+		if (!ret) {
+			/*
+			 * The child is running and "ready".
+			 */
+			trace2_child_ready(cmd, "ready");
+			sbgr = SBGR_READY;
+			goto done;
+		} else if (ret > 0) {
+			/*
+			 * The callback said to give it more time to boot up
+			 * (subject to our timeout limit).
+			 */
+			time_t now;
+
+			time(&now);
+			if (now < time_limit)
+				goto wait;
+
+			/*
+			 * Our timeout has expired.  We don't try to
+			 * kill the child, but rather let it continue
+			 * (hopefully) trying to startup.
+			 */
+			trace2_child_ready(cmd, "timeout");
+			sbgr = SBGR_TIMEOUT;
+			goto done;
+		} else {
+			/*
+			 * The cb gave up on this child.  It is still running,
+			 * but our cb got an error trying to probe it.
+			 */
+			trace2_child_ready(cmd, "error");
+			sbgr = SBGR_CB_ERROR;
+			goto done;
+		}
+	}
+
+	else if (pid_seen == cmd->pid) {
+		int child_code = -1;
+
+		/*
+		 * The child started, but exited or was terminated
+		 * before becoming "ready".
+		 *
+		 * We try to match the behavior of `wait_or_whine()`
+		 * WRT the handling of WIFSIGNALED() and WIFEXITED()
+		 * and convert the child's status to a return code for
+		 * tracing purposes and emit the `trace2_child_exit()`
+		 * event.
+		 *
+		 * We do not want the wait_or_whine() error message
+		 * because we will be called by client-side library
+		 * routines.
+		 */
+		if (WIFEXITED(wait_status))
+			child_code = WEXITSTATUS(wait_status);
+		else if (WIFSIGNALED(wait_status))
+			child_code = WTERMSIG(wait_status) + 128;
+		trace2_child_exit(cmd, child_code);
+
+		sbgr = SBGR_DIED;
+		goto done;
+	}
+
+	else if (pid_seen < 0 && errno == EINTR)
+		goto wait;
+
+	trace2_child_exit(cmd, -1);
+	sbgr = SBGR_ERROR;
+
+done:
+	child_process_clear(cmd);
+	invalidate_lstat_cache();
+	return sbgr;
 }

@@ -2,12 +2,12 @@
 .\"     Title: githooks
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GITHOOKS" "5" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GITHOOKS" "5" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -477,6 +477,9 @@ The first parameter passed to the hook is the indicator for the working director
 The second parameter passed to the hook is the indicator for whether or not the index was updated and the skip\-worktree bit could have changed\&. "1" meaning skip\-worktree bits could have been updated and "0" meaning they were not\&.
 .sp
 Only one parameter should be set to "1" when the hook runs\&. The hook running passing "1", "1" should not be possible\&.
+.SH "SEE ALSO"
+.sp
+\fBgit-hook\fR(1)
 .SH "GIT"
 .sp
 Part of the \fBgit\fR(1) suite

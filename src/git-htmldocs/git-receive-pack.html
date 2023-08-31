@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-receive-pack(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -788,6 +788,16 @@ its behavior, see <a href="git-config.html">git-config(1)</a>.</p></div>
         The repository to sync into.
 </p>
 </dd>
+<dt class="hdlist1">
+--http-backend-info-refs
+</dt>
+<dd>
+<p>
+        Used by <a href="git-http-backend.html">git-http-backend(1)</a> to serve up
+        <code>$GIT_URL/info/refs?service=git-receive-pack</code> requests. See
+        <code>--http-backend-info-refs</code> in <a href="git-upload-pack.html">git-upload-pack(1)</a>.
+</p>
+</dd>
 </dl></div>
 </div>
 </div>
@@ -1084,7 +1094,7 @@ The <code>pre-receive</code> hook MUST NOT update any refs to point to
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-03-11 00:03:13 JST
+ 2021-09-20 15:44:03 PDT
 </div>
 </div>
 </body>

@@ -2,6 +2,7 @@
 
 test_description='wildmatch tests'
 
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 # Disable expensive chain-lint tests; all of the tests in this script
@@ -192,7 +193,7 @@ match() {
 		file=$(cat .git/expected_test_file) &&
 		if should_create_test_file "$file"
 		then
-			dirs=${file%/*}
+			dirs=${file%/*} &&
 			if test "$file" != "$dirs"
 			then
 				mkdir -p -- "$dirs" &&

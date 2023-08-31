@@ -2,6 +2,7 @@
 #include "refs.h"
 #include "string-list.h"
 #include "utf8.h"
+#include "date.h"
 
 int starts_with(const char *str, const char *prefix)
 {
@@ -52,8 +53,8 @@ char strbuf_slopbuf[1];
 
 void strbuf_init(struct strbuf *sb, size_t hint)
 {
-	sb->alloc = sb->len = 0;
-	sb->buf = strbuf_slopbuf;
+	struct strbuf blank = STRBUF_INIT;
+	memcpy(sb, &blank, sizeof(*sb));
 	if (hint)
 		strbuf_grow(sb, hint);
 }
@@ -874,9 +875,9 @@ static void strbuf_humanise(struct strbuf *buf, off_t bytes,
 		strbuf_addf(buf,
 				humanise_rate == 0 ?
 					/* TRANSLATORS: IEC 80000-13:2008 byte */
-					Q_("%u byte", "%u bytes", (unsigned)bytes) :
+					Q_("%u byte", "%u bytes", bytes) :
 					/* TRANSLATORS: IEC 80000-13:2008 byte/second */
-					Q_("%u byte/s", "%u bytes/s", (unsigned)bytes),
+					Q_("%u byte/s", "%u bytes/s", bytes),
 				(unsigned)bytes);
 	}
 }
@@ -1006,7 +1007,12 @@ void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm,
 
 	/*
 	 * There is no portable way to pass timezone information to
-	 * strftime, so we handle %z and %Z here.
+	 * strftime, so we handle %z and %Z here. Likewise '%s', because
+	 * going back to an epoch time requires knowing the zone.
+	 *
+	 * Note that tz_offset is in the "[-+]HHMM" decimal form; this is what
+	 * we want for %z, but the computation for %s has to convert to number
+	 * of seconds.
 	 */
 	for (;;) {
 		const char *percent = strchrnul(fmt, '%');
@@ -1017,6 +1023,13 @@ void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm,
 		switch (*fmt) {
 		case '%':
 			strbuf_addstr(&munged_fmt, "%%");
+			fmt++;
+			break;
+		case 's':
+			strbuf_addf(&munged_fmt, "%"PRItime,
+				    (timestamp_t)tm_to_time_t(tm) -
+				    3600 * (tz_offset / 100) -
+				    60 * (tz_offset % 100));
 			fmt++;
 			break;
 		case 'z':
@@ -1059,13 +1072,19 @@ void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm,
 	strbuf_setlen(sb, sb->len + len);
 }
 
-void strbuf_add_unique_abbrev(struct strbuf *sb, const struct object_id *oid,
-			      int abbrev_len)
+void strbuf_repo_add_unique_abbrev(struct strbuf *sb, struct repository *repo,
+				   const struct object_id *oid, int abbrev_len)
 {
 	int r;
 	strbuf_grow(sb, GIT_MAX_HEXSZ + 1);
-	r = find_unique_abbrev_r(sb->buf + sb->len, oid, abbrev_len);
+	r = repo_find_unique_abbrev_r(repo, sb->buf + sb->len, oid, abbrev_len);
 	strbuf_setlen(sb, sb->len + r);
+}
+
+void strbuf_add_unique_abbrev(struct strbuf *sb, const struct object_id *oid,
+			      int abbrev_len)
+{
+	strbuf_repo_add_unique_abbrev(sb, the_repository, oid, abbrev_len);
 }
 
 /*

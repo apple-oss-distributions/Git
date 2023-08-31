@@ -27,7 +27,7 @@
 #include "exec-cmd.h"
 #include "run-command.h"
 #include "parse-options.h"
-#ifdef NO_OPENSSL
+#if defined(NO_OPENSSL) && !defined(HAVE_OPENSSL_CSPRNG)
 typedef void *SSL;
 #endif
 #ifdef USE_CURL_FOR_IMAP_SEND
@@ -98,17 +98,7 @@ struct imap_server_conf {
 };
 
 static struct imap_server_conf server = {
-	NULL,	/* name */
-	NULL,	/* tunnel */
-	NULL,	/* host */
-	0,	/* port */
-	NULL,	/* folder */
-	NULL,	/* user */
-	NULL,	/* pass */
-	0,   	/* use_ssl */
-	1,   	/* ssl_verify */
-	0,   	/* use_html */
-	NULL,	/* auth_method */
+	.ssl_verify = 1,
 };
 
 struct imap_socket {
@@ -451,6 +441,7 @@ static int buffer_gets(struct imap_buffer *b, char **s)
 	/* not reached */
 }
 
+__attribute__((format (printf, 1, 2)))
 static void imap_info(const char *msg, ...)
 {
 	va_list va;
@@ -463,6 +454,7 @@ static void imap_info(const char *msg, ...)
 	}
 }
 
+__attribute__((format (printf, 1, 2)))
 static void imap_warn(const char *msg, ...)
 {
 	va_list va;
@@ -504,6 +496,7 @@ static char *next_arg(char **s)
 	return ret;
 }
 
+__attribute__((format (printf, 3, 4)))
 static int nfsnprintf(char *buf, int blen, const char *fmt, ...)
 {
 	int ret;
@@ -1266,18 +1259,6 @@ static void wrap_in_html(struct strbuf *msg)
 	*msg = buf;
 }
 
-#define CHUNKSIZE 0x1000
-
-static int read_message(FILE *f, struct strbuf *all_msgs)
-{
-	do {
-		if (strbuf_fread(all_msgs, CHUNKSIZE, f) <= 0)
-			break;
-	} while (!feof(f));
-
-	return ferror(f) ? -1 : 0;
-}
-
 static int count_messages(struct strbuf *all_msgs)
 {
 	int count = 0;
@@ -1450,7 +1431,7 @@ static CURL *setup_curl(struct imap_server_conf *srvc, struct credential *cred)
 	curl_easy_setopt(curl, CURLOPT_PORT, server.port);
 
 	if (server.auth_method) {
-#if LIBCURL_VERSION_NUM < 0x072200
+#ifndef GIT_CURL_HAVE_CURLOPT_LOGIN_OPTIONS
 		warning("No LOGIN_OPTIONS support in this cURL version");
 #else
 		struct strbuf auth = STRBUF_INIT;
@@ -1526,11 +1507,7 @@ static int curl_append_msgs_to_imap(struct imap_server_conf *server,
 	if (cred.username) {
 		if (res == CURLE_OK)
 			credential_approve(&cred);
-#if LIBCURL_VERSION_NUM >= 0x070d01
 		else if (res == CURLE_LOGIN_DENIED)
-#else
-		else
-#endif
 			credential_reject(&cred);
 	}
 
@@ -1582,8 +1559,8 @@ int cmd_main(int argc, const char **argv)
 	}
 
 	/* read the messages */
-	if (read_message(stdin, &all_msgs)) {
-		fprintf(stderr, "error reading input\n");
+	if (strbuf_read(&all_msgs, 0, 0) < 0) {
+		error_errno(_("could not read from stdin"));
 		return 1;
 	}
 

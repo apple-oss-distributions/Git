@@ -8,12 +8,13 @@
 #include "parse-options.h"
 #include "dir.h"
 #include "commit-slab.h"
+#include "date.h"
 
 static const char* show_branch_usage[] = {
     N_("git show-branch [-a | --all] [-r | --remotes] [--topo-order | --date-order]\n"
-       "		[--current] [--color[=<when>] | --no-color] [--sparse]\n"
-       "		[--more=<n> | --list | --independent | --merge-base]\n"
-       "		[--no-name | --sha1-name] [--topics] [(<rev> | <glob>)...]"),
+       "                [--current] [--color[=<when>] | --no-color] [--sparse]\n"
+       "                [--more=<n> | --list | --independent | --merge-base]\n"
+       "                [--no-name | --sha1-name] [--topics] [(<rev> | <glob>)...]"),
     N_("git show-branch (-g | --reflog)[=<n>[,<base>]] [--list] [<ref>]"),
     NULL
 };
@@ -482,10 +483,9 @@ static void snarf_refs(int head, int remotes)
 	}
 }
 
-static int rev_is_head(const char *head, const char *name,
-		       unsigned char *head_sha1, unsigned char *sha1)
+static int rev_is_head(const char *head, const char *name)
 {
-	if (!head || (head_sha1 && sha1 && !hasheq(head_sha1, sha1)))
+	if (!head)
 		return 0;
 	skip_prefix(head, "refs/heads/", &head);
 	if (!skip_prefix(name, "refs/heads/", &name))
@@ -708,9 +708,13 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
 			 *
 			 * Also --all and --remotes do not make sense either.
 			 */
-			die(_("--reflog is incompatible with --all, --remotes, "
-			      "--independent or --merge-base"));
+			die(_("options '%s' and '%s' cannot be used together"), "--reflog",
+				"--all/--remotes/--independent/--merge-base");
 	}
+
+	if (with_current_branch && reflog)
+		die(_("options '%s' and '%s' cannot be used together"),
+		    "--reflog", "--current");
 
 	/* If nothing is specified, show all branches by default */
 	if (ac <= topics && all_heads + all_remotes == 0)
@@ -762,6 +766,7 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
 			char *logmsg;
 			char *nth_desc;
 			const char *msg;
+			char *end;
 			timestamp_t timestamp;
 			int tz;
 
@@ -771,11 +776,12 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
 				reflog = i;
 				break;
 			}
-			msg = strchr(logmsg, '\t');
-			if (!msg)
-				msg = "(none)";
-			else
-				msg++;
+
+			end = strchr(logmsg, '\n');
+			if (end)
+				*end = '\0';
+
+			msg = (*logmsg == '\0') ? "(none)" : logmsg;
 			reflog_msg[i] = xstrfmt("(%s) %s",
 						show_date(timestamp, tz,
 							  DATE_MODE(RELATIVE)),
@@ -806,9 +812,7 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
 			/* We are only interested in adding the branch
 			 * HEAD points at.
 			 */
-			if (rev_is_head(head,
-					ref_name[i],
-					head_oid.hash, NULL))
+			if (rev_is_head(head, ref_name[i]))
 				has_head++;
 		}
 		if (!has_head) {
@@ -867,10 +871,8 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
 	if (1 < num_rev || extra < 0) {
 		for (i = 0; i < num_rev; i++) {
 			int j;
-			int is_head = rev_is_head(head,
-						  ref_name[i],
-						  head_oid.hash,
-						  rev[i]->object.oid.hash);
+			int is_head = rev_is_head(head, ref_name[i]) &&
+				      oideq(&head_oid, &rev[i]->object.oid);
 			if (extra < 0)
 				printf("%c [%s] ",
 				       is_head ? '*' : ' ', ref_name[i]);
@@ -939,9 +941,12 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
 					mark = '*';
 				else
 					mark = '+';
-				printf("%s%c%s",
-				       get_color_code(i),
-				       mark, get_color_reset_code());
+				if (mark == ' ')
+					putchar(mark);
+				else
+					printf("%s%c%s",
+					       get_color_code(i),
+					       mark, get_color_reset_code());
 			}
 			putchar(' ');
 		}

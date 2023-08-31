@@ -195,9 +195,9 @@ static void check_global_conv_flags_eol(const char *path,
 		if (conv_flags & CONV_EOL_RNDTRP_DIE)
 			die(_("CRLF would be replaced by LF in %s"), path);
 		else if (conv_flags & CONV_EOL_RNDTRP_WARN)
-			warning(_("CRLF will be replaced by LF in %s.\n"
-				  "The file will have its original line"
-				  " endings in your working directory"), path);
+			warning(_("in the working copy of '%s', CRLF will be"
+				  " replaced by LF the next time Git touches"
+				  " it"), path);
 	} else if (old_stats->lonelf && !new_stats->lonelf ) {
 		/*
 		 * CRLFs would be added by checkout
@@ -205,9 +205,9 @@ static void check_global_conv_flags_eol(const char *path,
 		if (conv_flags & CONV_EOL_RNDTRP_DIE)
 			die(_("LF would be replaced by CRLF in %s"), path);
 		else if (conv_flags & CONV_EOL_RNDTRP_WARN)
-			warning(_("LF will be replaced by CRLF in %s.\n"
-				  "The file will have its original line"
-				  " endings in your working directory"), path);
+			warning(_("in the working copy of '%s', LF will be"
+				  " replaced by CRLF the next time Git touches"
+				  " it"), path);
 	}
 }
 
@@ -613,7 +613,7 @@ static int crlf_to_worktree(const char *src, size_t len, struct strbuf *buf,
 
 struct filter_params {
 	const char *src;
-	unsigned long size;
+	size_t size;
 	int fd;
 	const char *cmd;
 	const char *path;
@@ -916,6 +916,7 @@ done:
 	else
 		strbuf_swap(dst, &nbuf);
 	strbuf_release(&nbuf);
+	strbuf_release(&filter_status);
 	return !err;
 }
 
@@ -966,6 +967,7 @@ done:
 
 	if (err)
 		handle_filter_error(&filter_status, entry, 0);
+	strbuf_release(&filter_status);
 	return !err;
 }
 
@@ -1157,7 +1159,7 @@ static int ident_to_worktree(const char *src, size_t len,
 	/* are we "faking" in place editing ? */
 	if (src == buf->buf)
 		to_free = strbuf_detach(buf, NULL);
-	hash_object_file(the_hash_algo, src, len, "blob", &oid);
+	hash_object_file(the_hash_algo, src, len, OBJ_BLOB, &oid);
 
 	strbuf_grow(buf, len + cnt * (the_hash_algo->hexsz + 3));
 	for (;;) {
@@ -1572,12 +1574,12 @@ static void null_free_fn(struct stream_filter *filter)
 }
 
 static struct stream_filter_vtbl null_vtbl = {
-	null_filter_fn,
-	null_free_fn,
+	.filter = null_filter_fn,
+	.free = null_free_fn,
 };
 
 static struct stream_filter null_filter_singleton = {
-	&null_vtbl,
+	.vtbl = &null_vtbl,
 };
 
 int is_null_stream_filter(struct stream_filter *filter)
@@ -1681,8 +1683,8 @@ static void lf_to_crlf_free_fn(struct stream_filter *filter)
 }
 
 static struct stream_filter_vtbl lf_to_crlf_vtbl = {
-	lf_to_crlf_filter_fn,
-	lf_to_crlf_free_fn,
+	.filter = lf_to_crlf_filter_fn,
+	.free = lf_to_crlf_free_fn,
 };
 
 static struct stream_filter *lf_to_crlf_filter(void)
@@ -1777,8 +1779,8 @@ static void cascade_free_fn(struct stream_filter *filter)
 }
 
 static struct stream_filter_vtbl cascade_vtbl = {
-	cascade_filter_fn,
-	cascade_free_fn,
+	.filter = cascade_filter_fn,
+	.free = cascade_free_fn,
 };
 
 static struct stream_filter *cascade_filter(struct stream_filter *one,
@@ -1929,8 +1931,8 @@ static void ident_free_fn(struct stream_filter *filter)
 }
 
 static struct stream_filter_vtbl ident_vtbl = {
-	ident_filter_fn,
-	ident_free_fn,
+	.filter = ident_filter_fn,
+	.free = ident_free_fn,
 };
 
 static struct stream_filter *ident_filter(const struct object_id *oid)

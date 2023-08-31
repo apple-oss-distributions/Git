@@ -2,9 +2,6 @@
 
 test_description='git remote porcelain-ish'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 setup_repository () {
@@ -79,6 +76,40 @@ test_expect_success 'add another remote' '
 		    -e "/^refs\/remotes\/second\//d" >actual &&
 		test_must_be_empty actual
 	)
+'
+
+test_expect_success 'setup bare clone for server' '
+	git clone --bare "file://$(pwd)/one" srv.bare &&
+	git -C srv.bare config --local uploadpack.allowfilter 1 &&
+	git -C srv.bare config --local uploadpack.allowanysha1inwant 1
+'
+
+test_expect_success 'filters for promisor remotes are listed by git remote -v' '
+	test_when_finished "rm -rf pc" &&
+	git clone --filter=blob:none "file://$(pwd)/srv.bare" pc &&
+	git -C pc remote -v >out &&
+	grep "srv.bare (fetch) \[blob:none\]" out &&
+
+	git -C pc config remote.origin.partialCloneFilter object:type=commit &&
+	git -C pc remote -v >out &&
+	grep "srv.bare (fetch) \[object:type=commit\]" out
+'
+
+test_expect_success 'filters should not be listed for non promisor remotes (remote -v)' '
+	test_when_finished "rm -rf pc" &&
+	git clone one pc &&
+	git -C pc remote -v >out &&
+	! grep "(fetch) \[.*\]" out
+'
+
+test_expect_success 'filters are listed by git remote -v only' '
+	test_when_finished "rm -rf pc" &&
+	git clone --filter=blob:none "file://$(pwd)/srv.bare" pc &&
+	git -C pc remote >out &&
+	! grep "\[blob:none\]" out &&
+
+	git -C pc remote show >out &&
+	! grep "\[blob:none\]" out
 '
 
 test_expect_success 'check remote-tracking' '
@@ -182,7 +213,7 @@ test_expect_success 'rename errors out early when deleting non-existent branch' 
 	)
 '
 
-test_expect_success 'rename errors out early when when new name is invalid' '
+test_expect_success 'rename errors out early when new name is invalid' '
 	test_config remote.foo.vcs bar &&
 	echo "fatal: '\''invalid...name'\'' is not a valid remote name" >expect &&
 	test_must_fail git remote rename foo invalid...name 2>actual &&
@@ -756,7 +787,9 @@ test_expect_success 'rename a remote' '
 	(
 		cd four &&
 		git config branch.main.pushRemote origin &&
-		git remote rename origin upstream &&
+		GIT_TRACE2_EVENT=$(pwd)/trace \
+			git remote rename --progress origin upstream &&
+		test_region progress "Renaming remote references" trace &&
 		grep "pushRemote" .git/config &&
 		test -z "$(git for-each-ref refs/remotes/origin)" &&
 		test "$(git symbolic-ref refs/remotes/upstream/HEAD)" = "refs/remotes/upstream/main" &&
@@ -1332,7 +1365,6 @@ test_expect_success 'unqualified <dst> refspec DWIM and advice' '
 	(
 		cd test &&
 		git tag -a -m "Some tag" some-tag main &&
-		exit_with=true &&
 		for type in commit tag tree blob
 		do
 			if test "$type" = "blob"
@@ -1348,9 +1380,8 @@ test_expect_success 'unqualified <dst> refspec DWIM and advice' '
 				push origin $oid:dst 2>err &&
 			test_i18ngrep "error: The destination you" err &&
 			test_i18ngrep ! "hint: Did you mean" err ||
-			exit_with=false
-		done &&
-		$exit_with
+			exit 1
+		done
 	)
 '
 

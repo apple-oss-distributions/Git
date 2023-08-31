@@ -8,6 +8,7 @@ test_description='Test git config in different settings'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'clear default config' '
@@ -717,8 +718,8 @@ test_expect_success bool '
 	rm -f result &&
 	for i in 1 2 3 4
 	do
-	    git config --bool --get bool.true$i >>result
-	    git config --bool --get bool.false$i >>result
+	    git config --bool --get bool.true$i >>result &&
+	    git config --bool --get bool.false$i >>result || return 1
 	done &&
 	test_cmp expect result'
 
@@ -901,7 +902,7 @@ test_expect_success 'get --expiry-date' '
 	EOF
 	: "work around heredoc parsing bug fixed in dash 0.5.7 (in ec2c84d)" &&
 	{
-		echo "$rel_out $(git config --expiry-date date.valid1)"
+		echo "$rel_out $(git config --expiry-date date.valid1)" &&
 		git config --expiry-date date.valid2 &&
 		git config --expiry-date date.valid3 &&
 		git config --expiry-date date.valid4 &&
@@ -2023,8 +2024,17 @@ test_expect_success '--show-scope with --list' '
 	local	user.override=local
 	local	include.path=../include/relative.include
 	local	user.relative=include
+	local	core.repositoryformatversion=1
+	local	extensions.worktreeconfig=true
+	worktree	user.worktree=true
 	command	user.cmdline=true
 	EOF
+	git worktree add wt1 &&
+	# We need these to test for worktree scope, but outside of this
+	# test, this is just noise
+	test_config core.repositoryformatversion 1 &&
+	test_config extensions.worktreeConfig true &&
+	git config --worktree user.worktree true &&
 	git -c user.cmdline=true config --list --show-scope >output &&
 	test_cmp expect output
 '
@@ -2385,6 +2395,124 @@ test_expect_success '--get and --get-all with --fixed-value' '
 	test_must_fail git config --file=config --get-regexp fixed+ "$META" &&
 	git config --file=config --get-regexp --fixed-value fixed+ "$META" &&
 	test_must_fail git config --file=config --get-regexp --fixed-value fixed+ non-existent
+'
+
+test_expect_success 'includeIf.hasconfig:remote.*.url' '
+	git init hasremoteurlTest &&
+	test_when_finished "rm -rf hasremoteurlTest" &&
+
+	cat >include-this <<-\EOF &&
+	[user]
+		this = this-is-included
+	EOF
+	cat >dont-include-that <<-\EOF &&
+	[user]
+		that = that-is-not-included
+	EOF
+	cat >>hasremoteurlTest/.git/config <<-EOF &&
+	[includeIf "hasconfig:remote.*.url:foourl"]
+		path = "$(pwd)/include-this"
+	[includeIf "hasconfig:remote.*.url:barurl"]
+		path = "$(pwd)/dont-include-that"
+	[remote "foo"]
+		url = foourl
+	EOF
+
+	echo this-is-included >expect-this &&
+	git -C hasremoteurlTest config --get user.this >actual-this &&
+	test_cmp expect-this actual-this &&
+
+	test_must_fail git -C hasremoteurlTest config --get user.that
+'
+
+test_expect_success 'includeIf.hasconfig:remote.*.url respects last-config-wins' '
+	git init hasremoteurlTest &&
+	test_when_finished "rm -rf hasremoteurlTest" &&
+
+	cat >include-two-three <<-\EOF &&
+	[user]
+		two = included-config
+		three = included-config
+	EOF
+	cat >>hasremoteurlTest/.git/config <<-EOF &&
+	[remote "foo"]
+		url = foourl
+	[user]
+		one = main-config
+		two = main-config
+	[includeIf "hasconfig:remote.*.url:foourl"]
+		path = "$(pwd)/include-two-three"
+	[user]
+		three = main-config
+	EOF
+
+	echo main-config >expect-main-config &&
+	echo included-config >expect-included-config &&
+
+	git -C hasremoteurlTest config --get user.one >actual &&
+	test_cmp expect-main-config actual &&
+
+	git -C hasremoteurlTest config --get user.two >actual &&
+	test_cmp expect-included-config actual &&
+
+	git -C hasremoteurlTest config --get user.three >actual &&
+	test_cmp expect-main-config actual
+'
+
+test_expect_success 'includeIf.hasconfig:remote.*.url globs' '
+	git init hasremoteurlTest &&
+	test_when_finished "rm -rf hasremoteurlTest" &&
+
+	printf "[user]\ndss = yes\n" >double-star-start &&
+	printf "[user]\ndse = yes\n" >double-star-end &&
+	printf "[user]\ndsm = yes\n" >double-star-middle &&
+	printf "[user]\nssm = yes\n" >single-star-middle &&
+	printf "[user]\nno = no\n" >no &&
+
+	cat >>hasremoteurlTest/.git/config <<-EOF &&
+	[remote "foo"]
+		url = https://foo/bar/baz
+	[includeIf "hasconfig:remote.*.url:**/baz"]
+		path = "$(pwd)/double-star-start"
+	[includeIf "hasconfig:remote.*.url:**/nomatch"]
+		path = "$(pwd)/no"
+	[includeIf "hasconfig:remote.*.url:https:/**"]
+		path = "$(pwd)/double-star-end"
+	[includeIf "hasconfig:remote.*.url:nomatch:/**"]
+		path = "$(pwd)/no"
+	[includeIf "hasconfig:remote.*.url:https:/**/baz"]
+		path = "$(pwd)/double-star-middle"
+	[includeIf "hasconfig:remote.*.url:https:/**/nomatch"]
+		path = "$(pwd)/no"
+	[includeIf "hasconfig:remote.*.url:https://*/bar/baz"]
+		path = "$(pwd)/single-star-middle"
+	[includeIf "hasconfig:remote.*.url:https://*/baz"]
+		path = "$(pwd)/no"
+	EOF
+
+	git -C hasremoteurlTest config --get user.dss &&
+	git -C hasremoteurlTest config --get user.dse &&
+	git -C hasremoteurlTest config --get user.dsm &&
+	git -C hasremoteurlTest config --get user.ssm &&
+	test_must_fail git -C hasremoteurlTest config --get user.no
+'
+
+test_expect_success 'includeIf.hasconfig:remote.*.url forbids remote url in such included files' '
+	git init hasremoteurlTest &&
+	test_when_finished "rm -rf hasremoteurlTest" &&
+
+	cat >include-with-url <<-\EOF &&
+	[remote "bar"]
+		url = barurl
+	EOF
+	cat >>hasremoteurlTest/.git/config <<-EOF &&
+	[includeIf "hasconfig:remote.*.url:foourl"]
+		path = "$(pwd)/include-with-url"
+	EOF
+
+	# test with any Git command
+	test_must_fail git -C hasremoteurlTest status 2>err &&
+	grep "fatal: remote URLs cannot be configured in file directly or indirectly included by includeIf.hasconfig:remote.*.url" err
 '
 
 test_done

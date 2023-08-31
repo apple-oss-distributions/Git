@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>Git Wire Protocol, Version 2</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -818,7 +818,8 @@ commands be executed.</p></div>
 <div class="paragraph"><p>In general a client can request to speak protocol v2 by sending
 <code>version=2</code> through the respective side-channel for the transport being
 used which inevitably sets <code>GIT_PROTOCOL</code>.  More information can be
-found in <code>pack-protocol.txt</code> and <code>http-protocol.txt</code>.  In all cases the
+found in <code>pack-protocol.txt</code> and <code>http-protocol.txt</code>, as well as the
+<code>GIT_PROTOCOL</code> definition in <code>git.txt</code>. In all cases the
 response from the server is the capability advertisement.</p></div>
 <div class="sect2">
 <h3 id="_git_transport">Git Transport</h3>
@@ -832,7 +833,9 @@ sending "version=2" as an extra parameter:</p></div>
 <div class="sect2">
 <h3 id="_ssh_and_file_transport">SSH and File Transport</h3>
 <div class="paragraph"><p>When using either the ssh:// or file:// transport, the GIT_PROTOCOL
-environment variable must be set explicitly to include "version=2".</p></div>
+environment variable must be set explicitly to include "version=2".
+The server may need to be configured to allow this environment variable
+to pass.</p></div>
 </div>
 <div class="sect2">
 <h3 id="_http_transport">HTTP Transport</h3>
@@ -856,6 +859,10 @@ S: &lt;capability-advertisement&gt;</code></pre>
 </div></div>
 <div class="paragraph"><p>Subsequent requests are then made directly to the service
 <code>$GIT_URL/git-upload-pack</code>. (This works the same for git-receive-pack).</p></div>
+<div class="paragraph"><p>Uses the <code>--http-backend-info-refs</code> option to
+<a href="../git-upload-pack.html">git-upload-pack(1)</a>.</p></div>
+<div class="paragraph"><p>The server may need to be configured to pass this header&#8217;s contents via
+the <code>GIT_PROTOCOL</code> variable. See the discussion in <code>git-http-backend.txt</code>.</p></div>
 </div>
 </div>
 </div>
@@ -902,11 +909,11 @@ command can be requested at a time.</p></div>
 empty-request = flush-pkt
 command-request = command
                   capability-list
-                  [command-args]
+                  delim-pkt
+                  command-args
                   flush-pkt
 command = PKT-LINE("command=" key LF)
-command-args = delim-pkt
-               *command-specific-arg</code></pre>
+command-args = *command-specific-arg</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -973,7 +980,11 @@ peel
     Show peeled tags.
 ref-prefix &lt;prefix&gt;
     When specified, only references having a prefix matching one of
-    the provided prefixes are displayed.</code></pre>
+    the provided prefixes are displayed. Multiple instances may be
+    given, in which case references matching any prefix will be
+    shown. Note that this is purely for optimization; a server MAY
+    show refs not matching the prefix if it chooses, and clients
+    should filter the result themselves.</code></pre>
 </div></div>
 <div class="paragraph"><p>If the <em>unborn</em> feature is advertised the following argument can be
 included in the client&#8217;s request.</p></div>
@@ -1432,7 +1443,7 @@ Requests size information to be returned for each listed object id.</code></pre>
 Indicates to the server an object which the client wants to obtain
 information for.</code></pre>
 </div></div>
-<div class="paragraph"><p>The response of <code>object-info</code> is a list of the the requested object ids
+<div class="paragraph"><p>The response of <code>object-info</code> is a list of the requested object ids
 and associated requested information, each separated by a single space.</p></div>
 <div class="literalblock">
 <div class="content">
@@ -1463,7 +1474,7 @@ and associated requested information, each separated by a single space.</p></div
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-05-17 06:37:54 JST
+ 2021-12-10 14:52:03 PST
 </div>
 </div>
 </body>

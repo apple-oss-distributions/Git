@@ -95,7 +95,7 @@ test_expect_success 'setup' '
 	while [ $cur -le 10 ]; do
 		add A$cur $(eval echo \$A$prev) &&
 		prev=$cur &&
-		cur=$(($cur+1))
+		cur=$(($cur+1)) || return 1
 	done &&
 	add B1 $A1 &&
 	git update-ref refs/heads/A "$ATIP" &&
@@ -112,7 +112,7 @@ test_expect_success 'post 1st pull setup' '
 	while [ $cur -le 65 ]; do
 		add B$cur $(eval echo \$B$prev) &&
 		prev=$cur &&
-		cur=$(($cur+1))
+		cur=$(($cur+1)) || return 1
 	done
 '
 
@@ -464,11 +464,11 @@ test_expect_success 'fetch creating new shallow root' '
 test_expect_success 'setup tests for the --stdin parameter' '
 	for head in C D E F
 	do
-		add $head
+		add $head || return 1
 	done &&
 	for head in A B C D E F
 	do
-		git tag $head $head
+		git tag $head $head || return 1
 	done &&
 	cat >input <<-\EOF &&
 	refs/heads/C
@@ -927,7 +927,8 @@ test_expect_success 'fetching deepen' '
 	)
 '
 
-test_expect_success 'use ref advertisement to prune "have" lines sent' '
+test_negotiation_algorithm_default () {
+	test_when_finished rm -rf clientv0 clientv2 &&
 	rm -rf server client &&
 	git init server &&
 	test_commit -C server both_have_1 &&
@@ -946,7 +947,7 @@ test_expect_success 'use ref advertisement to prune "have" lines sent' '
 	rm -f trace &&
 	cp -r client clientv0 &&
 	GIT_TRACE_PACKET="$(pwd)/trace" git -C clientv0 \
-		fetch origin server_has both_have_2 &&
+		"$@" fetch origin server_has both_have_2 &&
 	grep "have $(git -C client rev-parse client_has)" trace &&
 	grep "have $(git -C client rev-parse both_have_2)" trace &&
 	! grep "have $(git -C client rev-parse both_have_2^)" trace &&
@@ -954,10 +955,27 @@ test_expect_success 'use ref advertisement to prune "have" lines sent' '
 	rm -f trace &&
 	cp -r client clientv2 &&
 	GIT_TRACE_PACKET="$(pwd)/trace" git -C clientv2 -c protocol.version=2 \
-		fetch origin server_has both_have_2 &&
+		"$@" fetch origin server_has both_have_2 &&
 	grep "have $(git -C client rev-parse client_has)" trace &&
 	grep "have $(git -C client rev-parse both_have_2)" trace &&
 	! grep "have $(git -C client rev-parse both_have_2^)" trace
+}
+
+test_expect_success 'use ref advertisement to prune "have" lines sent' '
+	test_negotiation_algorithm_default
+'
+
+test_expect_success 'same as last but with config overrides' '
+	test_negotiation_algorithm_default \
+		-c feature.experimental=true \
+		-c fetch.negotiationAlgorithm=consecutive
+'
+
+test_expect_success 'ensure bogus fetch.negotiationAlgorithm yields error' '
+	test_when_finished rm -rf clientv0 &&
+	cp -r client clientv0 &&
+	test_must_fail git -C clientv0 --fetch.negotiationAlgorithm=bogus \
+		       fetch origin server_has both_have_2
 '
 
 test_expect_success 'filtering by size' '

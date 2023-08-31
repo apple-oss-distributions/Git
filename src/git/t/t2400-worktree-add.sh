@@ -67,9 +67,23 @@ test_expect_success '"add" worktree' '
 '
 
 test_expect_success '"add" worktree with lock' '
-	git rev-parse HEAD >expect &&
 	git worktree add --detach --lock here-with-lock main &&
+	test_when_finished "git worktree unlock here-with-lock || :" &&
 	test -f .git/worktrees/here-with-lock/locked
+'
+
+test_expect_success '"add" worktree with lock and reason' '
+	lock_reason="why not" &&
+	git worktree add --detach --lock --reason "$lock_reason" here-with-lock-reason main &&
+	test_when_finished "git worktree unlock here-with-lock-reason || :" &&
+	test -f .git/worktrees/here-with-lock-reason/locked &&
+	echo "$lock_reason" >expect &&
+	test_cmp expect .git/worktrees/here-with-lock-reason/locked
+'
+
+test_expect_success '"add" worktree with reason but no lock' '
+	test_must_fail git worktree add --detach --reason "why not" here-with-reason-only main &&
+	test_path_is_missing .git/worktrees/here-with-reason-only/locked
 '
 
 test_expect_success '"add" worktree from a subdir' '
@@ -151,8 +165,62 @@ test_expect_success '"add" default branch of a bare repo' '
 	(
 		git clone --bare . bare2 &&
 		cd bare2 &&
-		git worktree add ../there3 main
-	)
+		git worktree add ../there3 main &&
+		cd ../there3 &&
+		# Simple check that a Git command does not
+		# immediately fail with the current setup
+		git status
+	) &&
+	cat >expect <<-EOF &&
+	init.t
+	EOF
+	ls there3 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '"add" to bare repo with worktree config' '
+	(
+		git clone --bare . bare3 &&
+		cd bare3 &&
+		git config extensions.worktreeconfig true &&
+
+		# Add config values that are erroneous to have in
+		# a config.worktree file outside of the main
+		# working tree, to check that Git filters them out
+		# when copying config during "git worktree add".
+		git config --worktree core.bare true &&
+		git config --worktree core.worktree "$(pwd)" &&
+
+		# We want to check that bogus.key is copied
+		git config --worktree bogus.key value &&
+		git config --unset core.bare &&
+		git worktree add ../there4 main &&
+		cd ../there4 &&
+
+		# Simple check that a Git command does not
+		# immediately fail with the current setup
+		git status &&
+		git worktree add --detach ../there5 &&
+		cd ../there5 &&
+		git status
+	) &&
+
+	# the worktree has the arbitrary value copied.
+	test_cmp_config -C there4 value bogus.key &&
+	test_cmp_config -C there5 value bogus.key &&
+
+	# however, core.bare and core.worktree were removed.
+	test_must_fail git -C there4 config core.bare &&
+	test_must_fail git -C there4 config core.worktree &&
+
+	cat >expect <<-EOF &&
+	init.t
+	EOF
+
+	ls there4 >actual &&
+	test_cmp expect actual &&
+	ls there5 >actual &&
+	test_cmp expect actual
 '
 
 test_expect_success 'checkout with grafts' '
@@ -491,10 +559,7 @@ test_expect_success 'git worktree --no-guess-remote option overrides config' '
 '
 
 post_checkout_hook () {
-	gitdir=${1:-.git}
-	test_when_finished "rm -f $gitdir/hooks/post-checkout" &&
-	mkdir -p $gitdir/hooks &&
-	write_script $gitdir/hooks/post-checkout <<-\EOF
+	test_hook -C "$1" post-checkout <<-\EOF
 	{
 		echo $*
 		git rev-parse --git-dir --show-toplevel

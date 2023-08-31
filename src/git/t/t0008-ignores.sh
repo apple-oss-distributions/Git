@@ -2,6 +2,7 @@
 
 test_description=check-ignore
 
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 init_vars () {
@@ -199,7 +200,7 @@ test_expect_success 'setup' '
 	do
 		: >$dir/not-ignored &&
 		: >$dir/ignored-and-untracked &&
-		: >$dir/ignored-but-in-index
+		: >$dir/ignored-but-in-index || return 1
 	done &&
 	git add -f ignored-but-in-index a/ignored-but-in-index &&
 	cat <<-\EOF >a/.gitignore &&
@@ -800,6 +801,49 @@ test_expect_success 'existing directory and file' '
 	git check-ignore top-level-dir one >actual &&
 	grep one actual &&
 	grep top-level-dir actual
+'
+
+test_expect_success 'exact prefix matching (with root)' '
+	test_when_finished rm -r a &&
+	mkdir -p a/git a/git-foo &&
+	touch a/git/foo a/git-foo/bar &&
+	echo /git/ >a/.gitignore &&
+	git check-ignore a/git a/git/foo a/git-foo a/git-foo/bar >actual &&
+	cat >expect <<-\EOF &&
+	a/git
+	a/git/foo
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'exact prefix matching (without root)' '
+	test_when_finished rm -r a &&
+	mkdir -p a/git a/git-foo &&
+	touch a/git/foo a/git-foo/bar &&
+	echo git/ >a/.gitignore &&
+	git check-ignore a/git a/git/foo a/git-foo a/git-foo/bar >actual &&
+	cat >expect <<-\EOF &&
+	a/git
+	a/git/foo
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'directories and ** matches' '
+	cat >.gitignore <<-\EOF &&
+	data/**
+	!data/**/
+	!data/**/*.txt
+	EOF
+	git check-ignore file \
+		data/file data/data1/file1 data/data1/file1.txt \
+		data/data2/file2 data/data2/file2.txt >actual &&
+	cat >expect <<-\EOF &&
+	data/file
+	data/data1/file1
+	data/data2/file2
+	EOF
+	test_cmp expect actual
 '
 
 ############################################################################

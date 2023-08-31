@@ -8,6 +8,7 @@ test_description='git checkout-index --temp test.
 With --temp flag, git checkout-index writes to temporary merge files
 rather than the tracked path.'
 
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -56,7 +57,7 @@ test_expect_success 'checkout all stage 0 to temporary files' '
 		test $(grep $f actual | cut "-d	" -f2) = $f &&
 		p=$(grep $f actual | cut "-d	" -f1) &&
 		test -f $p &&
-		test $(cat $p) = tree1$f
+		test $(cat $p) = tree1$f || return 1
 	done
 '
 
@@ -84,7 +85,7 @@ test_expect_success 'checkout all stage 2 to temporary files' '
 		test $(grep $f actual | cut "-d	" -f2) = $f &&
 		p=$(grep $f actual | cut "-d	" -f1) &&
 		test -f $p &&
-		test $(cat $p) = tree2$f
+		test $(cat $p) = tree2$f || return 1
 	done
 '
 

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-pack-objects(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -753,8 +753,9 @@ git-pack-objects(1) Manual Page
         [--no-reuse-delta] [--delta-base-offset] [--non-empty]
         [--local] [--incremental] [--window=&lt;n&gt;] [--depth=&lt;n&gt;]
         [--revs [--unpacked | --all]] [--keep-pack=&lt;pack-name&gt;]
-        [--stdout [--filter=&lt;filter-spec&gt;] | base-name]
-        [--shallow] [--keep-true-parents] [--[no-]sparse] &lt; object-list</pre>
+        [--cruft] [--cruft-expiration=&lt;time&gt;]
+        [--stdout [--filter=&lt;filter-spec&gt;] | &lt;base-name&gt;]
+        [--shallow] [--keep-true-parents] [--[no-]sparse] &lt; &lt;object-list&gt;</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -871,6 +872,43 @@ base-name
 <code>--all</code>), with the exception of <code>--unpacked</code>, which is compatible.</p></div>
 </dd>
 <dt class="hdlist1">
+--cruft
+</dt>
+<dd>
+<p>
+        Packs unreachable objects into a separate "cruft" pack, denoted
+        by the existence of a <code>.mtimes</code> file. Typically used by <code>git
+        repack --cruft</code>. Callers provide a list of pack names and
+        indicate which packs will remain in the repository, along with
+        which packs will be deleted (indicated by the <code>-</code> prefix). The
+        contents of the cruft pack are all objects not contained in the
+        surviving packs which have not exceeded the grace period (see
+        <code>--cruft-expiration</code> below), or which have exceeded the grace
+        period, but are reachable from an other object which hasn&#8217;t.
+</p>
+<div class="paragraph"><p>When the input lists a pack containing all reachable objects (and lists
+all other packs as pending deletion), the corresponding cruft pack will
+contain all unreachable objects (with mtime newer than the
+<code>--cruft-expiration</code>) along with any unreachable objects whose mtime is
+older than the <code>--cruft-expiration</code>, but are reachable from an
+unreachable object whose mtime is newer than the <code>--cruft-expiration</code>).</p></div>
+<div class="paragraph"><p>Incompatible with <code>--unpack-unreachable</code>, <code>--keep-unreachable</code>,
+<code>--pack-loose-unreachable</code>, <code>--stdin-packs</code>, as well as any other
+options which imply <code>--revs</code>. Also incompatible with <code>--max-pack-size</code>;
+when this option is set, the maximum pack size is not inferred from
+<code>pack.packSizeLimit</code>.</p></div>
+</dd>
+<dt class="hdlist1">
+--cruft-expiration=&lt;approxidate&gt;
+</dt>
+<dd>
+<p>
+        If specified, objects are eliminated from the cruft pack if they
+        have an mtime older than <code>&lt;approxidate&gt;</code>. If unspecified (and
+        given <code>--cruft</code>), then no objects are eliminated.
+</p>
+</dd>
+<dt class="hdlist1">
 --window=&lt;n&gt;
 </dt>
 <dt class="hdlist1">
@@ -918,10 +956,10 @@ depth is 4095.</p></div>
         into multiple independent packfiles, each not larger than the
         given size. The size can be suffixed with
         "k", "m", or "g". The minimum size allowed is limited to 1 MiB.
-        This option
-        prevents the creation of a bitmap index.
         The default is unlimited, unless the config variable
-        <code>pack.packSizeLimit</code> is set.
+        <code>pack.packSizeLimit</code> is set. Note that this option may result in
+        a larger and slower repository; see the discussion in
+        <code>pack.packSizeLimit</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1352,7 +1390,7 @@ attribute <code>delta</code> set to false.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-03-25 07:15:46 JST
+ 2022-06-03 15:24:31 PDT
 </div>
 </div>
 </body>

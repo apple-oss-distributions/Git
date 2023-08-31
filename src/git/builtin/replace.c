@@ -22,7 +22,7 @@ static const char * const git_replace_usage[] = {
 	N_("git replace [-f] <object> <replacement>"),
 	N_("git replace [-f] --edit <object>"),
 	N_("git replace [-f] --graft <commit> [<parent>...]"),
-	N_("git replace [-f] --convert-graft-file"),
+	"git replace [-f] --convert-graft-file",
 	N_("git replace -d <object>..."),
 	N_("git replace [--format=<format>] [-l [<pattern>]]"),
 	NULL
@@ -72,7 +72,7 @@ static int list_replace_refs(const char *pattern, const char *format)
 {
 	struct show_data data;
 
-	if (pattern == NULL)
+	if (!pattern)
 		pattern = "*";
 	data.pattern = pattern;
 
@@ -258,11 +258,10 @@ static int import_object(struct object_id *oid, enum object_type type,
 		return error_errno(_("unable to open %s for reading"), filename);
 
 	if (!raw && type == OBJ_TREE) {
-		const char *argv[] = { "mktree", NULL };
 		struct child_process cmd = CHILD_PROCESS_INIT;
 		struct strbuf result = STRBUF_INIT;
 
-		cmd.argv = argv;
+		strvec_push(&cmd.args, "mktree");
 		cmd.git_cmd = 1;
 		cmd.in = fd;
 		cmd.out = -1;
@@ -410,7 +409,7 @@ static int check_one_mergetag(struct commit *commit,
 	int i;
 
 	hash_object_file(the_hash_algo, extra->value, extra->len,
-			 type_name(OBJ_TAG), &tag_oid);
+			 OBJ_TAG, &tag_oid);
 	tag = lookup_tag(the_repository, &tag_oid);
 	if (!tag)
 		return error(_("bad mergetag in commit '%s'"), ref);
@@ -475,7 +474,7 @@ static int create_graft(int argc, const char **argv, int force, int gentle)
 		return -1;
 	}
 
-	if (write_object_file(buf.buf, buf.len, commit_type, &new_oid)) {
+	if (write_object_file(buf.buf, buf.len, OBJ_COMMIT, &new_oid)) {
 		strbuf_release(&buf);
 		return error(_("could not write replacement commit for: '%s'"),
 			     old_ref);
@@ -507,7 +506,7 @@ static int convert_graft_file(int force)
 	if (!fp)
 		return -1;
 
-	advice_graft_file_deprecated = 0;
+	no_graft_file_deprecated_advice = 1;
 	while (strbuf_getline(&buf, fp) != EOF) {
 		if (*buf.buf == '#')
 			continue;

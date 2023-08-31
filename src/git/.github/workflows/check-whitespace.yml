@@ -1,8 +1,9 @@
 name: check-whitespace
 
-# Get the repo with the commits(+1) in the series.
+# Get the repository with all commits to ensure that we can analyze
+# all of the commits contributed via the Pull Request.
 # Process `git log --check` output to extract just the check errors.
-# Add a comment to the pull request with the check errors.
+# Exit with failure upon white-space issues.
 
 on:
   pull_request:
@@ -12,15 +13,9 @@ jobs:
   check-whitespace:
     runs-on: ubuntu-latest
     steps:
-    - name: Set commit count
-      shell: bash
-      run: echo "COMMIT_DEPTH=$((1+$COMMITS))" >>$GITHUB_ENV
-      env:
-        COMMITS: ${{ github.event.pull_request.commits }}
-
     - uses: actions/checkout@v2
       with:
-        fetch-depth: ${{ env.COMMIT_DEPTH }}
+        fetch-depth: 0
 
     - name: git log --check
       id: check_out
@@ -47,25 +42,9 @@ jobs:
             echo "${dash} ${etc}"
             ;;
           esac
-        done <<< $(git log --check --pretty=format:"---% h% s" -${{github.event.pull_request.commits}})
+        done <<< $(git log --check --pretty=format:"---% h% s" ${{github.event.pull_request.base.sha}}..)
 
         if test -n "${log}"
         then
-          echo "::set-output name=checkout::"${log}""
           exit 2
         fi
-
-    - name: Add Check Output as Comment
-      uses: actions/github-script@v3
-      id: add-comment
-      env:
-        log: ${{ steps.check_out.outputs.checkout }}
-      with:
-        script: |
-            await github.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `Whitespace errors found in workflow ${{ github.workflow }}:\n\n\`\`\`\n${process.env.log.replace(/\\n/g, "\n")}\n\`\`\``
-            })
-      if: ${{ failure() }}

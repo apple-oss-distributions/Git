@@ -2,6 +2,7 @@
 #define PRETTY_H
 
 #include "cache.h"
+#include "date.h"
 #include "string-list.h"
 
 struct commit;
@@ -65,12 +66,16 @@ static inline int cmit_fmt_is_mail(enum cmit_fmt fmt)
 	return (fmt == CMIT_FMT_EMAIL || fmt == CMIT_FMT_MBOXRD);
 }
 
+/*
+ * Examine the user-specified format given by "fmt" (or if NULL, the global one
+ * previously saved by get_commit_format()), and set flags based on which items
+ * the format will need when it is expanded.
+ */
 struct userformat_want {
 	unsigned notes:1;
 	unsigned source:1;
+	unsigned decorate:1;
 };
-
-/* Set the flag "w->notes" if there is placeholder %N in "fmt". */
 void userformat_find_requirements(const char *fmt, struct userformat_want *w);
 
 /*
@@ -158,5 +163,14 @@ int format_set_trailers_options(struct process_trailer_options *opts,
 			struct strbuf *kvsepbuf,
 			const char **arg,
 			char **invalid_arg);
+
+/*
+ * Like show_date, but pull the timestamp and tz parameters from
+ * the ident_split. It will also sanity-check the values and produce
+ * a well-known sentinel date if they appear bogus.
+ */
+const char *show_ident_date(const struct ident_split *id,
+			    const struct date_mode *mode);
+
 
 #endif /* PRETTY_H */

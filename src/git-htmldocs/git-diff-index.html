@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-diff-index(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -749,7 +749,7 @@ git-diff-index(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git diff-index</em> [-m] [--cached] [--merge-base] [&lt;common diff options&gt;] &lt;tree-ish&gt; [&lt;path&gt;&#8230;]</pre>
+<pre class="content"><em>git diff-index</em> [-m] [--cached] [--merge-base] [&lt;common-diff-options&gt;] &lt;tree-ish&gt; [&lt;path&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1622,11 +1622,17 @@ of a delete/create pair.</p></div>
 </dt>
 <dd>
 <p>
-        The <code>-M</code> and <code>-C</code> options require O(n^2) processing time where n
-        is the number of potential rename/copy targets.  This
-        option prevents rename/copy detection from running if
-        the number of rename/copy targets exceeds the specified
-        number.
+        The <code>-M</code> and <code>-C</code> options involve some preliminary steps that
+        can detect subsets of renames/copies cheaply, followed by an
+        exhaustive fallback portion that compares all remaining
+        unpaired destinations to all relevant sources.  (For renames,
+        only remaining unpaired sources are relevant; for copies, all
+        original sources are relevant.)  For N sources and
+        destinations, this exhaustive check is O(N^2).  This option
+        prevents the exhaustive portion of rename/copy detection from
+        running if the number of source/destination files involved
+        exceeds the specified number.  Defaults to diff.renameLimit.
+        Note that a value of 0 is treated as unlimited.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1647,11 +1653,8 @@ of a delete/create pair.</p></div>
 </p>
 <div class="paragraph"><p>Also, these upper-case letters can be downcased to exclude.  E.g.
 <code>--diff-filter=ad</code> excludes added and deleted paths.</p></div>
-<div class="paragraph"><p>Note that not all diffs can feature all types. For instance, diffs
-from the index to the working tree can never have Added entries
-(because the set of paths included in the diff is limited by what is in
-the index).  Similarly, copied and renamed entries cannot appear if
-detection for those types is disabled.</p></div>
+<div class="paragraph"><p>Note that not all diffs can feature all types. For instance, copied and
+renamed entries cannot appear if detection for those types is disabled.</p></div>
 </dd>
 <dt class="hdlist1">
 -S&lt;string&gt;
@@ -2239,7 +2242,7 @@ R: renaming of a file
 </li>
 <li>
 <p>
-T: change in the type of the file
+T: change in the type of the file (regular file, symbolic link or submodule)
 </p>
 </li>
 <li>
@@ -2794,7 +2797,7 @@ always have the special all-zero sha1.</td>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-11-03 07:02:22 JST
+ 2021-12-10 14:52:02 PST
 </div>
 </div>
 </body>

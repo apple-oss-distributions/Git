@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>git-commit(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -845,7 +845,7 @@ that, you can recover from it with <em>git reset</em>.</p></div>
 </dt>
 <dd>
 <p>
-        Use the interactive patch selection interface to chose
+        Use the interactive patch selection interface to choose
         which changes to commit. See <a href="git-add.html">git-add(1)</a> for
         details.
 </p>
@@ -1099,11 +1099,12 @@ option on the command line.</p></div>
 -n
 </dt>
 <dt class="hdlist1">
---no-verify
+--[no-]verify
 </dt>
 <dd>
 <p>
-        This option bypasses the pre-commit and commit-msg hooks.
+        By default, the pre-commit and commit-msg hooks are run.
+        When any of <code>--no-verify</code> or <code>-n</code> is given, these are bypassed.
         See also <a href="githooks.html">githooks(5)</a>.
 </p>
 </dd>
@@ -1585,9 +1586,9 @@ Git internal format
 </dt>
 <dd>
 <p>
-        It is <code>&lt;unix timestamp&gt; &lt;time zone offset&gt;</code>, where <code>&lt;unix
-        timestamp&gt;</code> is the number of seconds since the UNIX epoch.
-        <code>&lt;time zone offset&gt;</code> is a positive or negative offset from UTC.
+        It is <code>&lt;unix-timestamp&gt; &lt;time-zone-offset&gt;</code>, where
+        <code>&lt;unix-timestamp&gt;</code> is the number of seconds since the UNIX epoch.
+        <code>&lt;time-zone-offset&gt;</code> is a positive or negative offset from UTC.
         For example CET (which is 1 hour ahead of UTC) is <code>+0100</code>.
 </p>
 </dd>
@@ -1780,7 +1781,7 @@ information.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-04-08 09:16:19 JST
+ 2021-11-04 13:20:34 PDT
 </div>
 </div>
 </body>

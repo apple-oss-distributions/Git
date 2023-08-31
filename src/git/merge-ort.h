@@ -5,6 +5,7 @@
 
 struct commit;
 struct tree;
+struct strmap;
 
 struct merge_result {
 	/*
@@ -24,11 +25,22 @@ struct merge_result {
 	struct tree *tree;
 
 	/*
+	 * Special messages and conflict notices for various paths
+	 *
+	 * This is a map of pathnames to strbufs.  It contains various
+	 * warning/conflict/notice messages (possibly multiple per path)
+	 * that callers may want to use.
+	 */
+	struct strmap *path_messages;
+
+	/*
 	 * Additional metadata used by merge_switch_to_result() or future calls
 	 * to merge_incore_*().  Includes data needed to update the index (if
 	 * !clean) and to print "CONFLICT" messages.  Not for external use.
 	 */
 	void *priv;
+	/* Also private */
+	unsigned _properly_initialized;
 };
 
 /*

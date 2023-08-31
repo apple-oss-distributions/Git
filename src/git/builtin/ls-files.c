@@ -37,6 +37,7 @@ static int debug_mode;
 static int show_eol;
 static int recurse_submodules;
 static int skipping_duplicates;
+static int show_sparse_dirs;
 
 static const char *prefix;
 static int max_prefix_len;
@@ -209,10 +210,8 @@ static void show_submodule(struct repository *superproject,
 			   struct dir_struct *dir, const char *path)
 {
 	struct repository subrepo;
-	const struct submodule *sub = submodule_from_path(superproject,
-							  null_oid(), path);
 
-	if (repo_submodule_init(&subrepo, superproject, sub))
+	if (repo_submodule_init(&subrepo, superproject, path, null_oid()))
 		return;
 
 	if (repo_read_index(&subrepo) < 0)
@@ -245,7 +244,7 @@ static void show_ce(struct repository *repo, struct dir_struct *dir,
 			printf("%s%06o %s %d\t",
 			       tag,
 			       ce->ce_mode,
-			       find_unique_abbrev(&ce->oid, abbrev),
+			       repo_find_unique_abbrev(repo, &ce->oid, abbrev),
 			       ce_stage(ce));
 		}
 		write_eolinfo(repo->index, ce, fullname);
@@ -317,8 +316,10 @@ static void show_files(struct repository *repo, struct dir_struct *dir)
 
 	if (!(show_cached || show_stage || show_deleted || show_modified))
 		return;
-	/* TODO: audit for interaction with sparse-index. */
-	ensure_full_index(repo->index);
+
+	if (!show_sparse_dirs)
+		ensure_full_index(repo->index);
+
 	for (i = 0; i < repo->index->cache_nr; i++) {
 		const struct cache_entry *ce = repo->index->cache[i];
 		struct stat st;
@@ -608,13 +609,13 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 {
 	int require_work_tree = 0, show_tag = 0, i;
 	char *max_prefix;
-	struct dir_struct dir;
+	struct dir_struct dir = DIR_INIT;
 	struct pattern_list *pl;
 	struct string_list exclude_list = STRING_LIST_INIT_NODUP;
 	struct option builtin_ls_files_options[] = {
 		/* Think twice before adding "--nul" synonym to this */
 		OPT_SET_INT('z', NULL, &line_terminator,
-			N_("paths are separated with NUL character"), '\0'),
+			N_("separate paths with the NUL character"), '\0'),
 		OPT_BOOL('t', NULL, &show_tag,
 			N_("identify the file status with tags")),
 		OPT_BOOL('v', NULL, &show_valid_bit,
@@ -651,7 +652,7 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 			N_("skip files matching pattern"),
 			PARSE_OPT_NONEG, option_parse_exclude),
 		OPT_CALLBACK_F('X', "exclude-from", &dir, N_("file"),
-			N_("exclude patterns are read from <file>"),
+			N_("read exclude patterns from <file>"),
 			PARSE_OPT_NONEG, option_parse_exclude_from),
 		OPT_STRING(0, "exclude-per-directory", &dir.exclude_per_dir, N_("file"),
 			N_("read additional per-directory exclude patterns in <file>")),
@@ -672,13 +673,18 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 		OPT_BOOL(0, "debug", &debug_mode, N_("show debugging data")),
 		OPT_BOOL(0, "deduplicate", &skipping_duplicates,
 			 N_("suppress duplicate entries")),
+		OPT_BOOL(0, "sparse", &show_sparse_dirs,
+			 N_("show sparse directories in the presence of a sparse index")),
 		OPT_END()
 	};
+	int ret = 0;
 
 	if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage_with_options(ls_files_usage, builtin_ls_files_options);
 
-	dir_init(&dir);
+	prepare_repo_settings(the_repository);
+	the_repository->settings.command_requires_full_index = 0;
+
 	prefix = cmd_prefix;
 	if (prefix)
 		prefix_len = strlen(prefix);
@@ -720,7 +726,7 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 		setup_work_tree();
 
 	if (recurse_submodules &&
-	    (show_stage || show_deleted || show_others || show_unmerged ||
+	    (show_deleted || show_others || show_unmerged ||
 	     show_killed || show_modified || show_resolve_undo || with_tree))
 		die("ls-files --recurse-submodules unsupported mode");
 
@@ -769,7 +775,7 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 		 * would not make any sense with this option.
 		 */
 		if (show_stage || show_unmerged)
-			die("ls-files --with-tree is incompatible with -s or -u");
+			die(_("options '%s' and '%s' cannot be used together"), "ls-files --with-tree", "-s/-u");
 		overlay_tree_on_index(the_repository->index, with_tree, max_prefix);
 	}
 
@@ -778,16 +784,13 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 	if (show_resolve_undo)
 		show_ru_info(the_repository->index);
 
-	if (ps_matched) {
-		int bad;
-		bad = report_path_error(ps_matched, &pathspec);
-		if (bad)
-			fprintf(stderr, "Did you forget to 'git add'?\n");
-
-		return bad ? 1 : 0;
+	if (ps_matched && report_path_error(ps_matched, &pathspec)) {
+		fprintf(stderr, "Did you forget to 'git add'?\n");
+		ret = 1;
 	}
 
+	string_list_clear(&exclude_list, 0);
 	dir_clear(&dir);
 	free(max_prefix);
-	return 0;
+	return ret;
 }

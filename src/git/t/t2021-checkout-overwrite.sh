@@ -1,6 +1,8 @@
 #!/bin/sh
 
 test_description='checkout must not overwrite an untracked objects'
+
+TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -48,6 +50,7 @@ test_expect_success 'checkout commit with dir must not remove untracked a/b' '
 
 test_expect_success SYMLINKS 'the symlink remained' '
 
+	test_when_finished "rm a/b" &&
 	test -h a/b
 '
 

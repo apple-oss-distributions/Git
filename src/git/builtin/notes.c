@@ -32,8 +32,8 @@ static const char * const git_notes_usage[] = {
 	N_("git notes [--ref <notes-ref>] edit [--allow-empty] [<object>]"),
 	N_("git notes [--ref <notes-ref>] show [<object>]"),
 	N_("git notes [--ref <notes-ref>] merge [-v | -q] [-s <strategy>] <notes-ref>"),
-	N_("git notes merge --commit [-v | -q]"),
-	N_("git notes merge --abort [-v | -q]"),
+	"git notes merge --commit [-v | -q]",
+	"git notes merge --abort [-v | -q]",
 	N_("git notes [--ref <notes-ref>] remove [<object>...]"),
 	N_("git notes [--ref <notes-ref>] prune [-n] [-v]"),
 	N_("git notes [--ref <notes-ref>] get-ref"),
@@ -89,7 +89,7 @@ static const char * const git_notes_prune_usage[] = {
 };
 
 static const char * const git_notes_get_ref_usage[] = {
-	N_("git notes get-ref"),
+	"git notes get-ref",
 	NULL
 };
 
@@ -134,14 +134,13 @@ static void copy_obj_to_fd(int fd, const struct object_id *oid)
 
 static void write_commented_object(int fd, const struct object_id *object)
 {
-	const char *show_args[5] =
-		{"show", "--stat", "--no-notes", oid_to_hex(object), NULL};
 	struct child_process show = CHILD_PROCESS_INIT;
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf cbuf = STRBUF_INIT;
 
 	/* Invoke "git show --stat --no-notes $object" */
-	show.argv = show_args;
+	strvec_pushl(&show.args, "show", "--stat", "--no-notes",
+		     oid_to_hex(object), NULL);
 	show.no_stdin = 1;
 	show.out = -1;
 	show.err = 0;
@@ -172,9 +171,7 @@ static void prepare_note_data(const struct object_id *object, struct note_data *
 
 		/* write the template message before editing: */
 		d->edit_path = git_pathdup("NOTES_EDITMSG");
-		fd = open(d->edit_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
-		if (fd < 0)
-			die_errno(_("could not create file '%s'"), d->edit_path);
+		fd = xopen(d->edit_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
 
 		if (d->given)
 			write_or_die(fd, d->buf.buf, d->buf.len);
@@ -202,12 +199,13 @@ static void prepare_note_data(const struct object_id *object, struct note_data *
 
 static void write_note_data(struct note_data *d, struct object_id *oid)
 {
-	if (write_object_file(d->buf.buf, d->buf.len, blob_type, oid)) {
-		error(_("unable to write note object"));
+	if (write_object_file(d->buf.buf, d->buf.len, OBJ_BLOB, oid)) {
+		int status = die_message(_("unable to write note object"));
+
 		if (d->edit_path)
-			error(_("the note contents have been left in %s"),
-				d->edit_path);
-		exit(128);
+			die_message(_("the note contents have been left in %s"),
+				    d->edit_path);
+		exit(status);
 	}
 }
 
@@ -863,15 +861,19 @@ static int merge(int argc, const char **argv, const char *prefix)
 		update_ref(msg.buf, default_notes_ref(), &result_oid, NULL, 0,
 			   UPDATE_REFS_DIE_ON_ERR);
 	else { /* Merge has unresolved conflicts */
+		struct worktree **worktrees;
 		const struct worktree *wt;
 		/* Update .git/NOTES_MERGE_PARTIAL with partial merge result */
 		update_ref(msg.buf, "NOTES_MERGE_PARTIAL", &result_oid, NULL,
 			   0, UPDATE_REFS_DIE_ON_ERR);
 		/* Store ref-to-be-updated into .git/NOTES_MERGE_REF */
-		wt = find_shared_symref("NOTES_MERGE_REF", default_notes_ref());
+		worktrees = get_worktrees();
+		wt = find_shared_symref(worktrees, "NOTES_MERGE_REF",
+					default_notes_ref());
 		if (wt)
 			die(_("a notes merge into %s is already in-progress at %s"),
 			    default_notes_ref(), wt->path);
+		free_worktrees(worktrees);
 		if (create_symref("NOTES_MERGE_REF", default_notes_ref(), NULL))
 			die(_("failed to store link to current notes ref (%s)"),
 			    default_notes_ref());

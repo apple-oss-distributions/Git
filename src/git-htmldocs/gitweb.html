@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 9.0.0rc2" />
+<meta name="generator" content="AsciiDoc 10.1.4" />
 <title>gitweb(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -1476,7 +1476,7 @@ like this:</p></div>
     # make the front page an internal rewrite to the gitweb script
     RewriteRule ^/$  /cgi-bin/gitweb.cgi  [QSA,L,PT]
 
-    # look for a public_git folder in unix users' home
+    # look for a public_git directory in unix users' home
     # http://git.example.org/~&lt;user&gt;/
     RewriteRule ^/\~([^\/]+)(/|/gitweb.cgi)?$   /cgi-bin/gitweb.cgi \
                 [QSA,E=GITWEB_PROJECTROOT:/home/$1/public_git/,L,PT]
@@ -1642,7 +1642,7 @@ putting "gitweb" in the subject of email.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-03-11 00:03:13 JST
+ 2021-10-29 16:18:45 PDT
 </div>
 </div>
 </body>

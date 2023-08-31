@@ -366,6 +366,13 @@ excluded as so much relies on it, but this might change in the future.
 GIT_TEST_SPLIT_INDEX=<boolean> forces split-index mode on the whole
 test suite. Accept any boolean values that are accepted by git-config.
 
+GIT_TEST_PASSING_SANITIZE_LEAK=<boolean> when compiled with
+SANITIZE=leak will run only those tests that have whitelisted
+themselves as passing with no memory leaks. Tests can be whitelisted
+by setting "TEST_PASSES_SANITIZE_LEAK=true" before sourcing
+"test-lib.sh" itself at the top of the test script. This test mode is
+used by the "linux-leaks" CI target.
+
 GIT_TEST_PROTOCOL_VERSION=<n>, when set, makes 'protocol.version'
 default to n.
 
@@ -398,8 +405,8 @@ every 'git commit-graph write', as if the `--changed-paths` option was
 passed in.
 
 GIT_TEST_FSMONITOR=$PWD/t7519/fsmonitor-all exercises the fsmonitor
-code path for utilizing a file system monitor to speed up detecting
-new or changed files.
+code paths for utilizing a (hook based) file system monitor to speed up
+detecting new or changed files.
 
 GIT_TEST_INDEX_VERSION=<n> exercises the index read/write code path
 for the index version specified.  Can be set to any valid version
@@ -412,7 +419,7 @@ the --sparse command-line argument.
 GIT_TEST_PRELOAD_INDEX=<boolean> exercises the preload-index code path
 by overriding the minimum number of cache entries required per thread.
 
-GIT_TEST_ADD_I_USE_BUILTIN=<boolean>, when true, enables the
+GIT_TEST_ADD_I_USE_BUILTIN=<boolean>, when false, disables the
 built-in version of git add -i. See 'add.interactive.useBuiltin' in
 git-config(1).
 
@@ -424,6 +431,10 @@ index loading single threaded.
 GIT_TEST_MULTI_PACK_INDEX=<boolean>, when true, forces the multi-pack-
 index to be written after every 'git repack' command, and overrides the
 'core.multiPackIndex' setting to true.
+
+GIT_TEST_MULTI_PACK_INDEX_WRITE_BITMAP=<boolean>, when true, sets the
+'--bitmap' option on all invocations of 'git multi-pack-index write',
+and ignores pack-objects' '--write-bitmap-index'.
 
 GIT_TEST_SIDEBAND_ALL=<boolean>, when true, overrides the
 'uploadpack.allowSidebandAll' setting to true, and when false, forces
@@ -447,6 +458,19 @@ sparse-index format by default.
 GIT_TEST_CHECKOUT_WORKERS=<n> overrides the 'checkout.workers' setting
 to <n> and 'checkout.thresholdForParallelism' to 0, forcing the
 execution of the parallel-checkout code.
+
+GIT_TEST_FATAL_REGISTER_SUBMODULE_ODB=<boolean>, when true, makes
+registering submodule ODBs as alternates a fatal action. Support for
+this environment variable can be removed once the migration to
+explicitly providing repositories when accessing submodule objects is
+complete or needs to be abandoned for whatever reason (in which case the
+migrated codepaths still retain their performance benefits).
+
+GIT_TEST_REQUIRE_PREREQ=<list> allows specifying a space separated list of
+prereqs that are required to succeed. If a prereq in this list is triggered by
+a test and then fails then the whole test run will abort. This can help to make
+sure the expected tests are executed and not silently skipped when their
+dependency breaks or is simply not present in a new environment.
 
 Naming Tests
 ------------
@@ -753,7 +777,8 @@ Test harness library
 --------------------
 
 There are a handful helper functions defined in the test harness
-library for your script to use.
+library for your script to use. Some of them are listed below;
+see test-lib-functions.sh for the full list and their options.
 
  - test_expect_success [<prereq>] <message> <script>
 
@@ -799,10 +824,12 @@ library for your script to use.
    argument.  This is primarily meant for use during the
    development of a new test script.
 
- - debug <git-command>
+ - debug [options] <git-command>
 
    Run a git command inside a debugger. This is primarily meant for
-   use when debugging a failing test script.
+   use when debugging a failing test script. With '-t', use your
+   original TERM instead of test-lib.sh's "dumb", so that your
+   debugger interface has colors.
 
  - test_done
 
@@ -989,7 +1016,7 @@ library for your script to use.
 	EOF
 
 
- - test_pause
+ - test_pause [options]
 
 	This command is useful for writing and debugging tests and must be
 	removed before submitting. It halts the execution of the test and
@@ -1113,18 +1140,6 @@ use these, and "test_set_prereq" for how to define your own.
    Git was compiled with support for PCRE. Wrap any tests
    that use git-grep --perl-regexp or git-grep -P in these.
 
- - LIBPCRE1
-
-   Git was compiled with PCRE v1 support via
-   USE_LIBPCRE1=YesPlease. Wrap any PCRE using tests that for some
-   reason need v1 of the PCRE library instead of v2 in these.
-
- - LIBPCRE2
-
-   Git was compiled with PCRE v2 support via
-   USE_LIBPCRE2=YesPlease. Wrap any PCRE using tests that for some
-   reason need v2 of the PCRE library instead of v1 in these.
-
  - CASE_INSENSITIVE_FS
 
    Test is run on a case insensitive file system.
@@ -1137,6 +1152,12 @@ use these, and "test_set_prereq" for how to define your own.
  - PTHREADS
 
    Git wasn't compiled with NO_PTHREADS=YesPlease.
+
+ - REFFILES
+
+   Test is specific to packed/loose ref storage, and should be
+   disabled for other ref storage backends
+
 
 Tips for Writing Tests
 ----------------------

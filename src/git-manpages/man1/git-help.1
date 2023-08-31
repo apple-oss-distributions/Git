@@ -2,12 +2,12 @@
 .\"     Title: git-help
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/06/2021
+.\"      Date: 06/27/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.32.0
+.\"    Source: Git 2.37.0
 .\"  Language: English
 .\"
-.TH "GIT\-HELP" "1" "06/06/2021" "Git 2\&.32\&.0" "Git Manual"
+.TH "GIT\-HELP" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,13 +32,15 @@ git-help \- Display help information about Git
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit help\fR [\-a|\-\-all [\-\-[no\-]verbose]] [\-g|\-\-guides]
-           [\-i|\-\-info|\-m|\-\-man|\-w|\-\-web] [COMMAND|GUIDE]
+\fIgit help\fR [\-a|\-\-all] [\-\-[no\-]verbose] [\-\-[no\-]external\-commands] [\-\-[no\-]aliases]
+\fIgit help\fR [[\-i|\-\-info] [\-m|\-\-man] [\-w|\-\-web]] [<command>|<guide>]
+\fIgit help\fR [\-g|\-\-guides]
+\fIgit help\fR [\-c|\-\-config]
 .fi
 .sp
 .SH "DESCRIPTION"
 .sp
-With no options and no COMMAND or GUIDE given, the synopsis of the \fIgit\fR command and a list of the most commonly used Git commands are printed on the standard output\&.
+With no options and no \fI<command>\fR or \fI<guide>\fR given, the synopsis of the \fIgit\fR command and a list of the most commonly used Git commands are printed on the standard output\&.
 .sp
 If the option \fB\-\-all\fR or \fB\-a\fR is given, all available commands are printed on the standard output\&.
 .sp
@@ -46,7 +48,7 @@ If the option \fB\-\-guides\fR or \fB\-g\fR is given, a list of the Git concept 
 .sp
 If a command, or a guide, is given, a manual page for that command or guide is brought up\&. The \fIman\fR program is used by default for this purpose, but this can be overridden by other options or configuration variables\&.
 .sp
-If an alias is given, git shows the definition of the alias on standard output\&. To get the manual page for the aliased command, use \fBgit COMMAND \-\-help\fR\&.
+If an alias is given, git shows the definition of the alias on standard output\&. To get the manual page for the aliased command, use \fBgit <command> \-\-help\fR\&.
 .sp
 Note that \fBgit \-\-help \&.\&.\&.\fR is identical to \fBgit help \&.\&.\&.\fR because the former is internally converted into the latter\&.
 .sp
@@ -57,7 +59,20 @@ This page can be displayed with \fIgit help help\fR or \fBgit help \-\-help\fR
 .PP
 \-a, \-\-all
 .RS 4
-Prints all the available commands on the standard output\&. This option overrides any given command or guide name\&.
+Prints all the available commands on the standard output\&.
+.RE
+.PP
+\-\-no\-external\-commands
+.RS 4
+When used with
+\fB\-\-all\fR, exclude the listing of external "git\-*" commands found in the
+\fB$PATH\fR\&.
+.RE
+.PP
+\-\-no\-aliases
+.RS 4
+When used with
+\fB\-\-all\fR, exclude the listing of configured aliases\&.
 .RE
 .PP
 \-\-verbose
@@ -75,7 +90,7 @@ List all available configuration variables\&. This is a short summary of the lis
 .PP
 \-g, \-\-guides
 .RS 4
-Prints a list of the Git concept guides on the standard output\&. This option overrides any given command or guide name\&.
+Prints a list of the Git concept guides on the standard output\&.
 .RE
 .PP
 \-i, \-\-info

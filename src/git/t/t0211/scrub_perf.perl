@@ -44,6 +44,11 @@ while (<>) {
 	# $tokens[$col_rest] = "_EXE_";
 	goto SKIP_LINE;
     }
+    elsif ($tokens[$col_event] =~ m/cmd_ancestry/) {
+	# 'cmd_ancestry' is platform-specific and not implemented everywhere,
+	# so skip it.
+	goto SKIP_LINE;
+    }
     elsif ($tokens[$col_event] =~ m/child_exit/) {
 	$tokens[$col_rest] =~ s/ pid:\d* / pid:_PID_ /;
     }
@@ -52,6 +57,10 @@ while (<>) {
 	    # 'data' and 'data_json' events containing 'process'
 	    # category data are assumed to be platform-specific
 	    # and highly variable.  Just omit them.
+	    goto SKIP_LINE;
+	}
+	if ($tokens[$col_category] =~ m/fsync/) {
+	    # fsync events aren't interesting for the test
 	    goto SKIP_LINE;
 	}
     }

@@ -1,6 +1,6 @@
 test_expect_success "setup proc-receive hook and disable push-options ($PROTOCOL/porcelain)" '
 	git -C "$upstream" config receive.advertisePushOptions false &&
-	write_script "$upstream/hooks/proc-receive" <<-EOF
+	test_hook -C "$upstream" --clobber proc-receive <<-\EOF
 	printf >&2 "# proc-receive hook\n"
 	test-tool proc-receive -v \
 		-r "ok refs/for/main/topic"
@@ -32,7 +32,7 @@ test_expect_success "enable push options ($PROTOCOL/porcelain)" '
 '
 
 test_expect_success "setup version=0 for proc-receive hook ($PROTOCOL/porcelain)" '
-	write_script "$upstream/hooks/proc-receive" <<-EOF
+	test_hook -C "$upstream" --clobber proc-receive <<-\EOF
 	printf >&2 "# proc-receive hook\n"
 	test-tool proc-receive -v \
 		--version 0 \
@@ -54,20 +54,20 @@ test_expect_success "proc-receive: ignore push-options for version 0 ($PROTOCOL/
 		HEAD:refs/for/main/topic \
 		>out 2>&1 &&
 	make_user_friendly_and_stable_output <out >actual &&
-	cat >expect <<-EOF &&
-	remote: # pre-receive hook
-	remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/heads/next
-	remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic
-	remote: # proc-receive hook
-	remote: proc-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic
-	remote: proc-receive> ok refs/for/main/topic
-	remote: # post-receive hook
-	remote: post-receive< <ZERO-OID> <COMMIT-A> refs/heads/next
-	remote: post-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic
-	To <URL/of/upstream.git>
-	*    HEAD:refs/heads/next    [new branch]
-	*    HEAD:refs/for/main/topic    [new reference]
-	Done
+	format_and_save_expect <<-EOF &&
+	> remote: # pre-receive hook        Z
+	> remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/heads/next        Z
+	> remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic        Z
+	> remote: # proc-receive hook        Z
+	> remote: proc-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic        Z
+	> remote: proc-receive> ok refs/for/main/topic        Z
+	> remote: # post-receive hook        Z
+	> remote: post-receive< <ZERO-OID> <COMMIT-A> refs/heads/next        Z
+	> remote: post-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic        Z
+	> To <URL/of/upstream.git>
+	> *	HEAD:refs/heads/next	[new branch]
+	> *	HEAD:refs/for/main/topic	[new reference]
+	> Done
 	EOF
 	test_cmp expect actual &&
 
@@ -78,7 +78,7 @@ test_expect_success "proc-receive: ignore push-options for version 0 ($PROTOCOL/
 '
 
 test_expect_success "restore proc-receive hook ($PROTOCOL/porcelain)" '
-	write_script "$upstream/hooks/proc-receive" <<-EOF
+	test_hook -C "$upstream" --clobber proc-receive <<-\EOF
 	printf >&2 "# proc-receive hook\n"
 	test-tool proc-receive -v \
 		-r "ok refs/for/main/topic"
@@ -105,23 +105,23 @@ test_expect_success "proc-receive: push with options ($PROTOCOL/porcelain)" '
 		HEAD:refs/for/main/topic \
 		>out 2>&1 &&
 	make_user_friendly_and_stable_output <out >actual &&
-	cat >expect <<-EOF &&
-	remote: # pre-receive hook
-	remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/heads/next
-	remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic
-	remote: # proc-receive hook
-	remote: proc-receive: atomic push_options
-	remote: proc-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic
-	remote: proc-receive< issue=123
-	remote: proc-receive< reviewer=user1
-	remote: proc-receive> ok refs/for/main/topic
-	remote: # post-receive hook
-	remote: post-receive< <ZERO-OID> <COMMIT-A> refs/heads/next
-	remote: post-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic
-	To <URL/of/upstream.git>
-	*    HEAD:refs/heads/next    [new branch]
-	*    HEAD:refs/for/main/topic    [new reference]
-	Done
+	format_and_save_expect <<-EOF &&
+	> remote: # pre-receive hook        Z
+	> remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/heads/next        Z
+	> remote: pre-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic        Z
+	> remote: # proc-receive hook        Z
+	> remote: proc-receive: atomic push_options        Z
+	> remote: proc-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic        Z
+	> remote: proc-receive< issue=123        Z
+	> remote: proc-receive< reviewer=user1        Z
+	> remote: proc-receive> ok refs/for/main/topic        Z
+	> remote: # post-receive hook        Z
+	> remote: post-receive< <ZERO-OID> <COMMIT-A> refs/heads/next        Z
+	> remote: post-receive< <ZERO-OID> <COMMIT-A> refs/for/main/topic        Z
+	> To <URL/of/upstream.git>
+	> *	HEAD:refs/heads/next	[new branch]
+	> *	HEAD:refs/for/main/topic	[new reference]
+	> Done
 	EOF
 	test_cmp expect actual &&
 

@@ -1,6 +1,7 @@
 #include "cache.h"
 #include "config.h"
 #include "strbuf.h"
+#include "strvec.h"
 #include "run-command.h"
 #include "sigchain.h"
 
@@ -55,10 +56,9 @@ static int launch_specified_editor(const char *editor, const char *path,
 
 	if (strcmp(editor, ":")) {
 		struct strbuf realpath = STRBUF_INIT;
-		const char *args[] = { editor, NULL, NULL };
 		struct child_process p = CHILD_PROCESS_INIT;
 		int ret, sig;
-		int print_waiting_for_editor = advice_waiting_for_editor && isatty(2);
+		int print_waiting_for_editor = advice_enabled(ADVICE_WAITING_FOR_EDITOR) && isatty(2);
 
 		if (print_waiting_for_editor) {
 			/*
@@ -77,10 +77,10 @@ static int launch_specified_editor(const char *editor, const char *path,
 		}
 
 		strbuf_realpath(&realpath, path, 1);
-		args[1] = realpath.buf;
 
-		p.argv = args;
-		p.env = env;
+		strvec_pushl(&p.args, editor, realpath.buf, NULL);
+		if (env)
+			strvec_pushv(&p.env, (const char **)env);
 		p.use_shell = 1;
 		p.trace2_child_class = "editor";
 		if (start_command(&p) < 0) {

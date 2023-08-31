@@ -21,6 +21,23 @@ struct traversal_context {
 	struct filter *filter;
 };
 
+static void show_commit(struct traversal_context *ctx,
+			struct commit *commit)
+{
+	if (!ctx->show_commit)
+		return;
+	ctx->show_commit(commit, ctx->show_data);
+}
+
+static void show_object(struct traversal_context *ctx,
+			struct object *object,
+			const char *name)
+{
+	if (!ctx->show_object)
+		return;
+	ctx->show_object(object, name, ctx->show_data);
+}
+
 static void process_blob(struct traversal_context *ctx,
 			 struct blob *blob,
 			 struct strbuf *path,
@@ -60,7 +77,7 @@ static void process_blob(struct traversal_context *ctx,
 	if (r & LOFR_MARK_SEEN)
 		obj->flags |= SEEN;
 	if (r & LOFR_DO_SHOW)
-		ctx->show_object(obj, path->buf, ctx->show_data);
+		show_object(ctx, obj, path->buf);
 	strbuf_setlen(path, pathlen);
 }
 
@@ -164,6 +181,9 @@ static void process_tree(struct traversal_context *ctx,
 		die("bad tree object");
 	if (obj->flags & (UNINTERESTING | SEEN))
 		return;
+	if (revs->include_check_obj &&
+	    !revs->include_check_obj(&tree->object, revs->include_check_data))
+		return;
 
 	failed_parse = parse_tree_gently(tree, 1);
 	if (failed_parse) {
@@ -191,7 +211,7 @@ static void process_tree(struct traversal_context *ctx,
 	if (r & LOFR_MARK_SEEN)
 		obj->flags |= SEEN;
 	if (r & LOFR_DO_SHOW)
-		ctx->show_object(obj, base->buf, ctx->show_data);
+		show_object(ctx, obj, base->buf);
 	if (base->len)
 		strbuf_addch(base, '/');
 
@@ -207,7 +227,7 @@ static void process_tree(struct traversal_context *ctx,
 	if (r & LOFR_MARK_SEEN)
 		obj->flags |= SEEN;
 	if (r & LOFR_DO_SHOW)
-		ctx->show_object(obj, base->buf, ctx->show_data);
+		show_object(ctx, obj, base->buf);
 
 	strbuf_setlen(base, baselen);
 	free_tree_buffer(tree);
@@ -225,7 +245,7 @@ static void process_tag(struct traversal_context *ctx,
 	if (r & LOFR_MARK_SEEN)
 		tag->object.flags |= SEEN;
 	if (r & LOFR_DO_SHOW)
-		ctx->show_object(&tag->object, name, ctx->show_data);
+		show_object(ctx, &tag->object, name);
 }
 
 static void mark_edge_parents_uninteresting(struct commit *commit,
@@ -334,8 +354,8 @@ static void add_pending_tree(struct rev_info *revs, struct tree *tree)
 	add_pending_object(revs, &tree->object, "");
 }
 
-static void traverse_trees_and_blobs(struct traversal_context *ctx,
-				     struct strbuf *base)
+static void traverse_non_commits(struct traversal_context *ctx,
+				 struct strbuf *base)
 {
 	int i;
 
@@ -399,7 +419,7 @@ static void do_traverse(struct traversal_context *ctx)
 		if (r & LOFR_MARK_SEEN)
 			commit->object.flags |= SEEN;
 		if (r & LOFR_DO_SHOW)
-			ctx->show_commit(commit, ctx->show_data);
+			show_commit(ctx, commit);
 
 		if (ctx->revs->tree_blobs_in_commit_order)
 			/*
@@ -407,41 +427,31 @@ static void do_traverse(struct traversal_context *ctx)
 			 * needs a reallocation for each commit. Can we pass the
 			 * tree directory without allocation churn?
 			 */
-			traverse_trees_and_blobs(ctx, &csp);
+			traverse_non_commits(ctx, &csp);
 	}
-	traverse_trees_and_blobs(ctx, &csp);
+	traverse_non_commits(ctx, &csp);
 	strbuf_release(&csp);
 }
 
-void traverse_commit_list(struct rev_info *revs,
-			  show_commit_fn show_commit,
-			  show_object_fn show_object,
-			  void *show_data)
-{
-	struct traversal_context ctx;
-	ctx.revs = revs;
-	ctx.show_commit = show_commit;
-	ctx.show_object = show_object;
-	ctx.show_data = show_data;
-	ctx.filter = NULL;
-	do_traverse(&ctx);
-}
-
 void traverse_commit_list_filtered(
-	struct list_objects_filter_options *filter_options,
 	struct rev_info *revs,
 	show_commit_fn show_commit,
 	show_object_fn show_object,
 	void *show_data,
 	struct oidset *omitted)
 {
-	struct traversal_context ctx;
+	struct traversal_context ctx = {
+		.revs = revs,
+		.show_object = show_object,
+		.show_commit = show_commit,
+		.show_data = show_data,
+	};
 
-	ctx.revs = revs;
-	ctx.show_object = show_object;
-	ctx.show_commit = show_commit;
-	ctx.show_data = show_data;
-	ctx.filter = list_objects_filter__init(omitted, filter_options);
+	if (revs->filter.choice)
+		ctx.filter = list_objects_filter__init(omitted, &revs->filter);
+
 	do_traverse(&ctx);
-	list_objects_filter__free(ctx.filter);
+
+	if (ctx.filter)
+		list_objects_filter__free(ctx.filter);
 }

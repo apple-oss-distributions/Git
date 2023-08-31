@@ -16,7 +16,7 @@ struct checkout {
 		 clone:1,
 		 refresh_cache:1;
 };
-#define CHECKOUT_INIT { NULL, "" }
+#define CHECKOUT_INIT { .base_dir = "" }
 
 #define TEMPORARY_FILENAME_LENGTH 25
 /*
@@ -43,7 +43,8 @@ static inline int checkout_entry(struct cache_entry *ce,
 }
 
 void enable_delayed_checkout(struct checkout *state);
-int finish_delayed_checkout(struct checkout *state, int *nr_checkouts);
+int finish_delayed_checkout(struct checkout *state, int *nr_checkouts,
+			    int show_progress);
 
 /*
  * Unlink the last component and schedule the leading directories for
@@ -51,7 +52,7 @@ int finish_delayed_checkout(struct checkout *state, int *nr_checkouts);
  */
 void unlink_entry(const struct cache_entry *ce);
 
-void *read_blob_entry(const struct cache_entry *ce, unsigned long *size);
+void *read_blob_entry(const struct cache_entry *ce, size_t *size);
 int fstat_checkout_output(int fd, const struct checkout *state, struct stat *st);
 void update_ce_after_write(const struct checkout *state, struct cache_entry *ce,
 			   struct stat *st);

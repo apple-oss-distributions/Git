@@ -25,6 +25,11 @@ ordering and formatting options, such as `--reverse`.
 --after=<date>::
 	Show commits more recent than a specific date.
 
+--since-as-filter=<date>::
+	Show all commits more recent than a specific date. This visits
+	all commits in the range, rather than stopping at the first commit which
+	is older than a specific date.
+
 --until=<date>::
 --before=<date>::
 	Show commits older than a specific date.
@@ -122,18 +127,26 @@ again.  Equivalent forms are `--min-parents=0` (any commit has 0 or more
 parents) and `--max-parents=-1` (negative numbers denote no upper limit).
 
 --first-parent::
-	Follow only the first parent commit upon seeing a merge
-	commit.  This option can give a better overview when
-	viewing the evolution of a particular topic branch,
-	because merges into a topic branch tend to be only about
-	adjusting to updated upstream from time to time, and
-	this option allows you to ignore the individual commits
-	brought in to your history by such a merge.
+	When finding commits to include, follow only the first
+	parent commit upon seeing a merge commit.  This option
+	can give a better overview when viewing the evolution of
+	a particular topic branch, because merges into a topic
+	branch tend to be only about adjusting to updated upstream
+	from time to time, and this option allows you to ignore
+	the individual commits brought in to your history by such
+	a merge.
 ifdef::git-log[]
 +
 This option also changes default diff format for merge commits
 to `first-parent`, see `--diff-merges=first-parent` for details.
 endif::git-log[]
+
+--exclude-first-parent-only::
+	When finding commits to exclude (with a '{caret}'), follow only
+	the first parent commit upon seeing a merge commit.
+	This can be used to find the set of changes in a topic branch
+	from the point where it diverged from the remote branch, given
+	that arbitrary merges can be valid topic branch changes.
 
 --not::
 	Reverses the meaning of the '{caret}' prefix (or lack thereof)
@@ -897,7 +910,7 @@ which are not of the requested type.
 +
 The form '--filter=sparse:oid=<blob-ish>' uses a sparse-checkout
 specification contained in the blob (or blob-expression) '<blob-ish>'
-to omit blobs that would not be not required for a sparse checkout on
+to omit blobs that would not be required for a sparse checkout on
 the requested refs.
 +
 The form '--filter=tree:<depth>' omits all blobs and trees whose depth
@@ -1047,7 +1060,7 @@ omitted.
 has no effect.
 
 `--date=format:...` feeds the format `...` to your system `strftime`,
-except for %z and %Z, which are handled internally.
+except for %s, %z, and %Z, which are handled internally.
 Use `--date=format:%c` to show the date in your system locale's
 preferred format.  See the `strftime` manual for a complete list of
 format placeholders. When using `-local`, the correct syntax is
@@ -1064,6 +1077,14 @@ ifdef::git-rev-list[]
 --header::
 	Print the contents of the commit in raw-format; each record is
 	separated with a NUL character.
+
+--no-commit-header::
+	Suppress the header line containing "commit" and the object ID printed before
+	the specified format.  This has no effect on the built-in formats; only custom
+	formats are affected.
+
+--commit-header::
+	Overrides a previous `--no-commit-header`.
 endif::git-rev-list[]
 
 --parents::
