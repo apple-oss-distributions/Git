@@ -107,8 +107,8 @@ int grep_config(const char *var, const char *value, void *cb)
 
 void grep_init(struct grep_opt *opt, struct repository *repo)
 {
-    struct grep_opt blank = GREP_OPT_INIT;
-    memcpy(opt, &blank, sizeof(*opt));
+	struct grep_opt blank = GREP_OPT_INIT;
+	memcpy(opt, &blank, sizeof(*opt));
 
 	opt->repo = repo;
 	opt->pattern_tail = &opt->pattern_list;

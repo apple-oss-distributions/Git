@@ -773,6 +773,8 @@ test_expect_success '--left-only/--right-only' '
 '
 
 test_expect_success 'submodule changes are shown irrespective of diff.submodule' '
+	test_config_global protocol.file.allow always &&
+
 	git init sub-repo &&
 	test_commit -C sub-repo sub-first &&
 	sub_oid1=$(git -C sub-repo rev-parse HEAD) &&
