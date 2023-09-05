@@ -2,12 +2,12 @@
 .\"     Title: git-config
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 06/27/2022
+.\"      Date: 12/12/2022
 .\"    Manual: Git Manual
-.\"    Source: Git 2.37.0
+.\"    Source: Git 2.39.0
 .\"  Language: English
 .\"
-.TH "GIT\-CONFIG" "1" "06/27/2022" "Git 2\&.37\&.0" "Git Manual"
+.TH "GIT\-CONFIG" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -511,24 +511,18 @@ When using
 \fBpager\&.config\fR is only respected when listing configuration, i\&.e\&., when using \fB\-\-list\fR or any of the \fB\-\-get\-*\fR which may return multiple results\&. The default is to use a pager\&.
 .SH "FILES"
 .sp
-If not set explicitly with \fB\-\-file\fR, there are four files where \fIgit config\fR will search for configuration options:
+By default, \fIgit config\fR will read configuration options from multiple files:
 .PP
 $(prefix)/etc/gitconfig
 .RS 4
 System\-wide configuration file\&.
 .RE
 .PP
-$XDG_CONFIG_HOME/git/config
+$XDG_CONFIG_HOME/git/config, ~/\&.gitconfig
 .RS 4
-Second user\-specific configuration file\&. If $XDG_CONFIG_HOME is not set or empty,
-\fB$HOME/\&.config/git/config\fR
-will be used\&. Any single\-valued variable set in this file will be overwritten by whatever is in
-\fB~/\&.gitconfig\fR\&. It is a good idea not to create this file if you sometimes use older versions of Git, as support for this file was added fairly recently\&.
-.RE
-.PP
-~/\&.gitconfig
-.RS 4
-User\-specific configuration file\&. Also called "global" configuration file\&.
+User\-specific configuration files\&. When the XDG_CONFIG_HOME environment variable is not set or empty, $HOME/\&.config/ is used as $XDG_CONFIG_HOME\&.
+.sp
+These are also called "global" configuration files\&. If both files exist, both files are read in the order given above\&.
 .RE
 .PP
 $GIT_DIR/config
@@ -543,15 +537,62 @@ This is optional and is only searched when
 is present in $GIT_DIR/config\&.
 .RE
 .sp
-If no further options are given, all reading options will read all of these files that are available\&. If the global or the system\-wide configuration file are not available they will be ignored\&. If the repository configuration file is not available or readable, \fIgit config\fR will exit with a non\-zero error code\&. However, in neither case will an error message be issued\&.
+You may also provide additional configuration parameters when running any git command by using the \fB\-c\fR option\&. See \fBgit\fR(1) for details\&.
+.sp
+Options will be read from all of these files that are available\&. If the global or the system\-wide configuration files are missing or unreadable they will be ignored\&. If the repository configuration file is missing or unreadable, \fIgit config\fR will exit with a non\-zero error code\&. An error message is produced if the file is unreadable, but not if it is missing\&.
 .sp
 The files are read in the order given above, with last value found taking precedence over values read earlier\&. When multiple values are taken then all values of a key from all files will be used\&.
 .sp
-You may override individual configuration parameters when running any git command by using the \fB\-c\fR option\&. See \fBgit\fR(1) for details\&.
+By default, options are only written to the repository specific configuration file\&. Note that this also affects options like \fB\-\-replace\-all\fR and \fB\-\-unset\fR\&. \fB\fIgit config\fR\fR\fB will only ever change one file at a time\fR\&.
 .sp
-All writing options will per default write to the repository specific configuration file\&. Note that this also affects options like \fB\-\-replace\-all\fR and \fB\-\-unset\fR\&. \fB\fIgit config\fR\fR\fB will only ever change one file at a time\fR\&.
+You can limit which configuration sources are read from or written to by specifying the path of a file with the \fB\-\-file\fR option, or by specifying a configuration scope with \fB\-\-system\fR, \fB\-\-global\fR, \fB\-\-local\fR, or \fB\-\-worktree\fR\&. For more, see the section called \(lqOPTIONS\(rq above\&.
+.SH "SCOPES"
 .sp
-You can override these rules using the \fB\-\-global\fR, \fB\-\-system\fR, \fB\-\-local\fR, \fB\-\-worktree\fR, and \fB\-\-file\fR command\-line options; see the section called \(lqOPTIONS\(rq above\&.
+Each configuration source falls within a configuration scope\&. The scopes are:
+.PP
+system
+.RS 4
+$(prefix)/etc/gitconfig
+.RE
+.PP
+global
+.RS 4
+$XDG_CONFIG_HOME/git/config
+.sp
+~/\&.gitconfig
+.RE
+.PP
+local
+.RS 4
+$GIT_DIR/config
+.RE
+.PP
+worktree
+.RS 4
+$GIT_DIR/config\&.worktree
+.RE
+.PP
+command
+.RS 4
+GIT_CONFIG_{COUNT,KEY,VALUE} environment variables (see
+the section called \(lqENVIRONMENT\(rq
+below)
+.sp
+the
+\fB\-c\fR
+option
+.RE
+.sp
+With the exception of \fIcommand\fR, each scope corresponds to a command line option: \fB\-\-system\fR, \fB\-\-global\fR, \fB\-\-local\fR, \fB\-\-worktree\fR\&.
+.sp
+When reading options, specifying a scope will only read options from the files within that scope\&. When writing options, specifying a scope will write to the files within that scope (instead of the repository specific configuration file)\&. See the section called \(lqOPTIONS\(rq above for a complete description\&.
+.sp
+Most configuration options are respected regardless of the scope it is defined in, but some options are only respected in certain scopes\&. See the respective option\(cqs documentation for the full details\&.
+.SS "Protected configuration"
+.sp
+Protected configuration refers to the \fIsystem\fR, \fIglobal\fR, and \fIcommand\fR scopes\&. For security reasons, certain options are only respected when they are specified in protected configuration, and ignored otherwise\&.
+.sp
+Git treats these scopes as if they are controlled by the user or a trusted administrator\&. This is because an attacker who controls these scopes can do substantial harm without using Git, so it is assumed that the user\(cqs environment protects these scopes against attackers\&.
 .SH "ENVIRONMENT"
 .PP
 GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM
@@ -1933,15 +1974,61 @@ are supported\&.
 .PP
 core\&.bigFileThreshold
 .RS 4
-Files larger than this size are stored deflated, without attempting delta compression\&. Storing large files without delta compression avoids excessive memory usage, at the slight expense of increased disk usage\&. Additionally files larger than this size are always treated as binary\&.
-.sp
-Default is 512 MiB on all platforms\&. This should be reasonable for most projects as source code and other text files can still be delta compressed, but larger binary media files won\(cqt be\&.
-.sp
-Common unit suffixes of
+The size of files considered "big", which as discussed below changes the behavior of numerous git commands, as well as how such files are stored within the repository\&. The default is 512 MiB\&. Common unit suffixes of
 \fIk\fR,
 \fIm\fR, or
 \fIg\fR
 are supported\&.
+.sp
+Files above the configured limit will be:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Stored deflated in packfiles, without attempting delta compression\&.
+.sp
+The default limit is primarily set with this use\-case in mind\&. With it, most projects will have their source code and other text files delta compressed, but not larger binary media files\&.
+.sp
+Storing large files without delta compression avoids excessive memory usage, at the slight expense of increased disk usage\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Will be treated as if they were labeled "binary" (see
+\fBgitattributes\fR(5))\&. e\&.g\&.
+\fBgit-log\fR(1)
+and
+\fBgit-diff\fR(1)
+will not compute diffs for files above this limit\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Will generally be streamed when written, which avoids excessive memory usage, at the cost of some fixed overhead\&. Commands that make use of this include
+\fBgit-archive\fR(1),
+\fBgit-fast-import\fR(1),
+\fBgit-index-pack\fR(1),
+\fBgit-unpack-objects\fR(1)
+and
+\fBgit-fsck\fR(1)\&.
+.RE
 .RE
 .PP
 core\&.excludesFile
@@ -2278,7 +2365,7 @@ hardens packfile bitmaps and indexes\&.
 .IP \(bu 2.3
 .\}
 \fBcommit\-graph\fR
-hardens the commit graph file\&.
+hardens the commit\-graph file\&.
 .RE
 .sp
 .RS 4
@@ -2523,7 +2610,7 @@ for more information\&.
 .PP
 core\&.sparseCheckoutCone
 .RS 4
-Enables the "cone mode" of the sparse checkout feature\&. When the sparse\-checkout file contains a limited set of patterns, this mode provides significant performance advantages\&. The "non cone mode" can be requested to allow specifying a more flexible patterns by setting this variable to
+Enables the "cone mode" of the sparse checkout feature\&. When the sparse\-checkout file contains a limited set of patterns, this mode provides significant performance advantages\&. The "non\-cone mode" can be requested to allow specifying more flexible patterns by setting this variable to
 \fIfalse\fR\&. See
 \fBgit-sparse-checkout\fR(1)
 for more information\&.
@@ -2852,6 +2939,46 @@ Override the path for the given tool that may be used to browse HTML help (see
 option in
 \fBgit-help\fR(1)) or a working repository in gitweb (see
 \fBgit-instaweb\fR(1))\&.
+.RE
+.PP
+bundle\&.*
+.RS 4
+The
+\fBbundle\&.*\fR
+keys may appear in a bundle list file found via the
+\fBgit clone \-\-bundle\-uri\fR
+option\&. These keys currently have no effect if placed in a repository config file, though this will change in the future\&. See
+\m[blue]\fBthe bundle URI design document\fR\m[]\&\s-2\u[1]\d\s+2
+for more details\&.
+.RE
+.PP
+bundle\&.version
+.RS 4
+This integer value advertises the version of the bundle list format used by the bundle list\&. Currently, the only accepted value is
+\fB1\fR\&.
+.RE
+.PP
+bundle\&.mode
+.RS 4
+This string value should be either
+\fBall\fR
+or
+\fBany\fR\&. This value describes whether all of the advertised bundles are required to unbundle a complete understanding of the bundled information (\fBall\fR) or if any one of the listed bundle URIs is sufficient (\fBany\fR)\&.
+.RE
+.PP
+bundle\&.<id>\&.*
+.RS 4
+The
+\fBbundle\&.<id>\&.*\fR
+keys are used to describe a single item in the bundle list, grouped under
+\fB<id>\fR
+for identification purposes\&.
+.RE
+.PP
+bundle\&.<id>\&.uri
+.RS 4
+This string value defines the URI by which Git can reach the contents of this
+\fB<id>\fR\&. This URI may be a bundle file or another bundle list\&.
 .RE
 .PP
 checkout\&.defaultRemote
@@ -3853,21 +3980,6 @@ diff\&.<driver>\&.cachetextconv
 Set this option to true to make the diff driver cache the text conversion outputs\&. See
 \fBgitattributes\fR(5)
 for details\&.
-.RE
-.PP
-diff\&.tool
-.RS 4
-Controls which diff tool is used by
-\fBgit-difftool\fR(1)\&. This variable overrides the value configured in
-\fBmerge\&.tool\fR\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom diff tool and requires that a corresponding difftool\&.<tool>\&.cmd variable is defined\&.
-.RE
-.PP
-diff\&.guitool
-.RS 4
-Controls which diff tool is used by
-\fBgit-difftool\fR(1)
-when the \-g/\-\-gui flag is specified\&. This variable overrides the value configured in
-\fBmerge\&.guitool\fR\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom diff tool and requires that a corresponding difftool\&.<guitool>\&.cmd variable is defined\&.
 .PP
 \fBaraxis\fR
 .RS 4
@@ -4066,9 +4178,19 @@ in
 \fBgit-diff\fR(1)\&.
 .RE
 .PP
-difftool\&.<tool>\&.path
+diff\&.tool
 .RS 4
-Override the path for the given tool\&. This is useful in case your tool is not in the PATH\&.
+Controls which diff tool is used by
+\fBgit-difftool\fR(1)\&. This variable overrides the value configured in
+\fBmerge\&.tool\fR\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom diff tool and requires that a corresponding difftool\&.<tool>\&.cmd variable is defined\&.
+.RE
+.PP
+diff\&.guitool
+.RS 4
+Controls which diff tool is used by
+\fBgit-difftool\fR(1)
+when the \-g/\-\-gui flag is specified\&. This variable overrides the value configured in
+\fBmerge\&.guitool\fR\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom diff tool and requires that a corresponding difftool\&.<guitool>\&.cmd variable is defined\&.
 .RE
 .PP
 difftool\&.<tool>\&.cmd
@@ -4078,6 +4200,28 @@ Specify the command to invoke the specified diff tool\&. The specified command i
 is set to the name of the temporary file containing the contents of the diff pre\-image and
 \fIREMOTE\fR
 is set to the name of the temporary file containing the contents of the diff post\-image\&.
+.sp
+See the
+\fB\-\-tool=<tool>\fR
+option in
+\fBgit-difftool\fR(1)
+for more details\&.
+.RE
+.PP
+difftool\&.<tool>\&.path
+.RS 4
+Override the path for the given tool\&. This is useful in case your tool is not in the PATH\&.
+.RE
+.PP
+difftool\&.trustExitCode
+.RS 4
+Exit difftool if the invoked diff tool returns a non\-zero exit status\&.
+.sp
+See the
+\fB\-\-trust\-exit\-code\fR
+option in
+\fBgit-difftool\fR(1)
+for more details\&.
 .RE
 .PP
 difftool\&.prompt
@@ -4205,6 +4349,18 @@ Enable config options that are new to Git, and are being considered for future d
 .\}
 \fBfetch\&.negotiationAlgorithm=skipping\fR
 may improve fetch negotiation times by skipping more commits at a time, reducing the number of round trips\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBgc\&.cruftPacks=true\fR
+reduces disk space used by unreachable objects during garbage collection, preventing loose object explosions\&.
 .RE
 .RE
 .PP
@@ -4393,6 +4549,13 @@ Provides the default value for the
 option to format\-patch\&. Accepts a boolean value, or a name and email address\&. If false, format\-patch defaults to
 \fB\-\-no\-from\fR, using commit authors directly in the "From:" field of patch mails\&. If true, format\-patch defaults to
 \fB\-\-from\fR, using your committer identity in the "From:" field of patch mails and including a "From:" field in the body of the patch mail if different\&. If set to a non\-boolean value, format\-patch uses that value instead of your committer identity\&. Defaults to false\&.
+.RE
+.PP
+format\&.forceInBodyFrom
+.RS 4
+Provides the default value for the
+\fB\-\-[no\-]force\-in\-body\-from\fR
+option to format\-patch\&. Defaults to false\&.
 .RE
 .PP
 format\&.numbered
@@ -4628,6 +4791,13 @@ value will cause fsck to die, but doing the same for
 and
 \fBfetch\&.fsck\&.<msg\-id>\fR
 will only cause git to warn\&.
+.sp
+See
+\fBFsck Messages\fR
+section of
+\fBgit-fsck\fR(1)
+for supported values of
+\fB<msg\-id>\fR\&.
 .RE
 .PP
 fsck\&.skipList
@@ -4657,6 +4827,26 @@ variables will not fall back on the
 configuration if they aren\(cqt set\&. To uniformly configure the same fsck settings in different circumstances all three of them they must all set to the same values\&.
 .sp
 Older versions of Git (before 2\&.20) documented that the object names list should be sorted\&. This was never a requirement, the object names could appear in any order, but when reading the list we tracked whether the list was sorted for the purposes of an internal binary search implementation, which could save itself some work with an already sorted list\&. Unless you had a humongous list there was no reason to go out of your way to pre\-sort the list\&. After Git version 2\&.20 a hash implementation is used instead, so there\(cqs now no reason to pre\-sort the list\&.
+.RE
+.PP
+fsmonitor\&.allowRemote
+.RS 4
+By default, the fsmonitor daemon refuses to work against network\-mounted repositories\&. Setting
+\fBfsmonitor\&.allowRemote\fR
+to
+\fBtrue\fR
+overrides this behavior\&. Only respected when
+\fBcore\&.fsmonitor\fR
+is set to
+\fBtrue\fR\&.
+.RE
+.PP
+fsmonitor\&.socketDir
+.RS 4
+This Mac OS\-specific option, if set, specifies the directory in which to create the Unix domain socket used for communication between the fsmonitor daemon and various Git commands\&. The directory must reside on a native Mac OS filesystem\&. Only respected when
+\fBcore\&.fsmonitor\fR
+is set to
+\fBtrue\fR\&.
 .RE
 .PP
 gc\&.aggressiveDepth
@@ -4994,11 +5184,14 @@ option is set to a value other than
 .PP
 grep\&.threads
 .RS 4
-Number of grep worker threads to use\&. See
-\fBgrep\&.threads\fR
-in
-\fBgit-grep\fR(1)
-for more information\&.
+Number of grep worker threads to use\&. If unset (or set to 0), Git will use as many threads as the number of logical cores available\&.
+.RE
+.PP
+grep\&.fullName
+.RS 4
+If set to true, enable
+\fB\-\-full\-name\fR
+option by default\&.
 .RE
 .PP
 grep\&.fallbackToNoIndex
@@ -6035,6 +6228,13 @@ option, the only supported method is
 uses the basic IMAP plaintext LOGIN command\&.
 .RE
 .PP
+include\&.path, includeIf\&.<condition>\&.path
+.RS 4
+Special variables to include other configuration files\&. See the "CONFIGURATION FILE" section in the main
+\fBgit-config\fR(1)
+documentation, specifically the "Includes" and "Conditional Includes" subsections\&.
+.RE
+.PP
 index\&.recordEndOfIndexEntries
 .RS 4
 Specifies whether the index file should include an "End Of Index Entry" section\&. This reduces index load time on multiprocessor machines but produces a message "ignoring EOIE extension" when reading the index using Git versions before 2\&.20\&. Defaults to
@@ -6163,6 +6363,8 @@ command\&. Setting a value for log\&.date is similar to using
 option\&. See
 \fBgit-log\fR(1)
 for details\&.
+.sp
+If the format is set to "auto:foo" and the pager is in use, format "foo" will be the used for the date format\&. Otherwise "default" will be used\&.
 .RE
 .PP
 log\&.decorate
@@ -6186,6 +6388,15 @@ option of the
 \fBgit log\fR\&.
 .RE
 .PP
+log\&.initialDecorationSet
+.RS 4
+By default,
+\fBgit log\fR
+only shows decorations for certain known ref namespaces\&. If
+\fIall\fR
+is specified, then show all refs as decorations\&.
+.RE
+.PP
 log\&.excludeDecoration
 .RS 4
 Exclude the specified patterns from the log decorations\&. This is similar to the
@@ -6197,7 +6408,9 @@ option\&.
 .PP
 log\&.diffMerges
 .RS 4
-Set default diff format to be used for merge commits\&. See
+Set diff format to be used when
+\fB\-\-diff\-merges=on\fR
+is specified, see
 \fB\-\-diff\-merges\fR
 in
 \fBgit-log\fR(1)
@@ -6253,7 +6466,8 @@ assume
 .PP
 lsrefs\&.unborn
 .RS 4
-May be "advertise" (the default), "allow", or "ignore"\&. If "advertise", the server will respond to the client sending "unborn" (as described in protocol\-v2\&.txt) and will advertise support for this feature during the protocol v2 capability advertisement\&. "allow" is the same as "advertise" except that the server will not advertise support for this feature; this is useful for load\-balanced servers that cannot be updated atomically (for example), since the administrator could configure "allow", then after a delay, configure "advertise"\&.
+May be "advertise" (the default), "allow", or "ignore"\&. If "advertise", the server will respond to the client sending "unborn" (as described in
+\fBgitprotocol-v2\fR(5)) and will advertise support for this feature during the protocol v2 capability advertisement\&. "allow" is the same as "advertise" except that the server will not advertise support for this feature; this is useful for load\-balanced servers that cannot be updated atomically (for example), since the administrator could configure "allow", then after a delay, configure "advertise"\&.
 .RE
 .PP
 mailinfo\&.scissors
@@ -6842,7 +7056,7 @@ normally represent the versions of the file from before Git\(cqs conflict resolu
 \fILOCAL\fR
 and
 \fIREMOTE\fR
-to be overwriten so that only the unresolved conflicts are presented to the merge tool\&. Can be configured per\-tool via the
+to be overwritten so that only the unresolved conflicts are presented to the merge tool\&. Can be configured per\-tool via the
 \fBmergetool\&.<tool>\&.hideResolved\fR
 configuration variable\&. Defaults to
 \fBfalse\fR\&.
@@ -6893,6 +7107,11 @@ Which merge strategy to choose by default when resolving notes conflicts\&. Must
 \fBmanual\fR\&. See "NOTES MERGE STRATEGIES" section of
 \fBgit-notes\fR(1)
 for more information on each strategy\&.
+.sp
+This setting can be overridden by passing the
+\fB\-\-strategy\fR
+option to
+\fBgit-notes\fR(1)\&.
 .RE
 .PP
 notes\&.<name>\&.mergeStrategy
@@ -6904,11 +7123,26 @@ for more information on the available strategies\&.
 .PP
 notes\&.displayRef
 .RS 4
-The (fully qualified) refname from which to show notes when showing commit messages\&. The value of this variable can be set to a glob, in which case notes from all matching refs will be shown\&. You may also specify this configuration variable several times\&. A warning will be issued for refs that do not exist, but a glob that does not match any refs is silently ignored\&.
+Which ref (or refs, if a glob or specified more than once), in addition to the default set by
+\fBcore\&.notesRef\fR
+or
+\fBGIT_NOTES_REF\fR, to read notes from when showing commit messages with the
+\fIgit log\fR
+family of commands\&.
 .sp
 This setting can be overridden with the
 \fBGIT_NOTES_DISPLAY_REF\fR
 environment variable, which must be a colon separated list of refs or globs\&.
+.sp
+A warning will be issued for refs that do not exist, but a glob that does not match any refs is silently ignored\&.
+.sp
+This setting can be disabled by the
+\fB\-\-no\-notes\fR
+option to the
+\fIgit log\fR
+family of commands, or by the
+\fB\-\-notes=<ref>\fR
+option accepted by those commands\&.
 .sp
 The effective value of "core\&.notesRef" (possibly overridden by GIT_NOTES_REF) is also implicitly added to the list of refs to be displayed\&.
 .RE
@@ -6918,9 +7152,13 @@ notes\&.rewrite\&.<command>
 When rewriting commits with <command> (currently
 \fBamend\fR
 or
-\fBrebase\fR) and this variable is set to
-\fBtrue\fR, Git automatically copies your notes from the original to the rewritten commit\&. Defaults to
-\fBtrue\fR, but see "notes\&.rewriteRef" below\&.
+\fBrebase\fR), if this variable is
+\fBfalse\fR, git will not copy notes from the original to the rewritten commit\&. Defaults to
+\fBtrue\fR\&. See also "\fBnotes\&.rewriteRef\fR" below\&.
+.sp
+This setting can be overridden with the
+\fBGIT_NOTES_REWRITE_REF\fR
+environment variable, which must be a colon separated list of refs or globs\&.
 .RE
 .PP
 notes\&.rewriteMode
@@ -6939,15 +7177,17 @@ environment variable\&.
 .PP
 notes\&.rewriteRef
 .RS 4
-When copying notes during a rewrite, specifies the (fully qualified) ref whose notes should be copied\&. The ref may be a glob, in which case notes in all matching refs will be copied\&. You may also specify this configuration several times\&.
+When copying notes during a rewrite, specifies the (fully qualified) ref whose notes should be copied\&. May be a glob, in which case notes in all matching refs will be copied\&. You may also specify this configuration several times\&.
 .sp
 Does not have a default value; you must configure this variable to enable note rewriting\&. Set it to
 \fBrefs/notes/commits\fR
 to enable rewriting for the default commit notes\&.
 .sp
-This setting can be overridden with the
+Can be overridden with the
 \fBGIT_NOTES_REWRITE_REF\fR
-environment variable, which must be a colon separated list of refs or globs\&.
+environment variable\&. See
+\fBnotes\&.rewrite\&.<command>\fR
+above for a further description of its format\&.
 .RE
 .PP
 pack\&.window
@@ -7100,10 +7340,15 @@ When true, git will include a "hash cache" section in the bitmap index (if one i
 When writing a multi\-pack reachability bitmap, no new namehashes are computed; instead, any namehashes stored in an existing bitmap are permuted into their appropriate location when writing a new bitmap\&.
 .RE
 .PP
+pack\&.writeBitmapLookupTable
+.RS 4
+When true, Git will include a "lookup table" section in the bitmap index (if one is written)\&. This table is used to defer loading individual bitmaps as late as possible\&. This can be beneficial in repositories that have relatively large bitmap indexes\&. Defaults to false\&.
+.RE
+.PP
 pack\&.writeReverseIndex
 .RS 4
 When true, git will write a corresponding \&.rev file (see:
-\m[blue]\fBDocumentation/technical/pack\-format\&.txt\fR\m[]\&\s-2\u[1]\d\s+2) for each new packfile that it writes in all places except for
+\fBgitformat-pack\fR(5)) for each new packfile that it writes in all places except for
 \fBgit-fast-import\fR(1)
 and in the bulk checkin mechanism\&. Defaults to false\&.
 .RE
@@ -7136,9 +7381,9 @@ to be equivalent to running
 .PP
 protocol\&.allow
 .RS 4
-If set, provide a user defined default policy for all protocols which don\(cqt explicitly have a policy (\fBprotocol\&.<name>\&.allow\fR)\&. By default, if unset, known\-safe protocols (http, https, git, ssh, file) have a default policy of
+If set, provide a user defined default policy for all protocols which don\(cqt explicitly have a policy (\fBprotocol\&.<name>\&.allow\fR)\&. By default, if unset, known\-safe protocols (http, https, git, ssh) have a default policy of
 \fBalways\fR, known\-dangerous protocols (ext) have a default policy of
-\fBnever\fR, and all other protocols have a default policy of
+\fBnever\fR, and all other protocols (including file) have a default policy of
 \fBuser\fR\&. Supported policies:
 .sp
 .RS 4
@@ -7296,8 +7541,8 @@ If set, clients will attempt to communicate with a server using the specified pr
 .IP \(bu 2.3
 .\}
 \fB2\fR
-\-
-\m[blue]\fBwire protocol version 2\fR\m[]\&\s-2\u[2]\d\s+2\&.
+\- Wire protocol version 2, see
+\fBgitprotocol-v2\fR(5)\&.
 .RE
 .RE
 .PP
@@ -7531,14 +7776,7 @@ This will result in only b (a and c are cleared)\&.
 .PP
 push\&.recurseSubmodules
 .RS 4
-Make sure all submodule commits used by the revisions to be pushed are available on a remote\-tracking branch\&. If the value is
-\fIcheck\fR
-then Git will verify that all submodule commits that changed in the revisions to be pushed are available on at least one remote of the submodule\&. If any commits are missing, the push will be aborted and exit with non\-zero status\&. If the value is
-\fIon\-demand\fR
-then all submodules that changed in the revisions to be pushed will be pushed\&. If on\-demand was not able to push all necessary revisions it will also be aborted and exit with non\-zero status\&. If the value is
-\fIno\fR
-then default behavior of ignoring submodules when pushing is retained\&. You may override this configuration at time of push by specifying
-\fI\-\-recurse\-submodules=check|on\-demand|no\fR\&. If not set,
+May be "check", "on\-demand", "only", or "no", with the same behavior as that of "push \-\-recurse\-submodules"\&. If not set,
 \fIno\fR
 is used by default, unless
 \fIsubmodule\&.recurse\fR
@@ -7562,6 +7800,13 @@ at the time of push overrides this configuration setting\&.
 push\&.negotiate
 .RS 4
 If set to "true", attempt to reduce the size of the packfile sent by rounds of negotiation in which the client and the server attempt to find commits in common\&. If "false", Git will rely solely on the server\(cqs ref advertisement to find commits in common\&.
+.RE
+.PP
+push\&.useBitmaps
+.RS 4
+If set to "false", disable use of bitmaps for "git push" even if
+\fBpack\&.useBitmaps\fR
+is "true", without preventing other git operations from using bitmaps\&. Default is true\&.
 .RE
 .PP
 rebase\&.backend
@@ -7592,6 +7837,13 @@ and
 \fB\-\-autostash\fR
 options of
 \fBgit-rebase\fR(1)\&. Defaults to false\&.
+.RE
+.PP
+rebase\&.updateRefs
+.RS 4
+If set to true enable
+\fB\-\-update\-refs\fR
+option by default\&.
 .RE
 .PP
 rebase\&.missingCommitsCheck
@@ -8067,6 +8319,47 @@ behave as if the
 option is given\&.
 .RE
 .PP
+safe\&.bareRepository
+.RS 4
+Specifies which bare repositories Git will work with\&. The currently supported values are:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBall\fR: Git works with all bare repositories\&. This is the default\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBexplicit\fR: Git only works with bare repositories specified via the top\-level
+\fB\-\-git\-dir\fR
+command\-line option, or the
+\fBGIT_DIR\fR
+environment variable (see
+\fBgit\fR(1))\&.
+.sp
+If you do not use bare repositories in your workflow, then it may be beneficial to set
+\fBsafe\&.bareRepository\fR
+to
+\fBexplicit\fR
+in your global config\&. This will protect you from attacks that involve cloning a repository that contains a bare repository and running a Git command within that directory\&.
+.sp
+This config setting is only respected in protected configuration (see
+the section called \(lqSCOPES\(rq)\&. This prevents the untrusted repository from tampering with this value\&.
+.RE
+.RE
+.PP
 safe\&.directory
 .RS 4
 These config entries specify Git\-tracked directories that are considered safe even if they are owned by someone other than the current user\&. By default, Git will refuse to even parse a Git config of a repository owned by someone else, let alone run its hooks, and this config setting allows users to specify exceptions, e\&.g\&. for intentionally shared repositories (see the
@@ -8079,8 +8372,8 @@ This is a multi\-valued setting, i\&.e\&. you can add more than one directory vi
 \fBsafe\&.directory\fR
 entry with an empty value\&.
 .sp
-This config setting is only respected when specified in a system or global config, not when it is specified in a repository config, via the command line option
-\fB\-c safe\&.directory=<path>\fR, or in environment variables\&.
+This config setting is only respected in protected configuration (see
+the section called \(lqSCOPES\(rq)\&. This prevents the untrusted repository from tampering with this value\&.
 .sp
 The value of this setting is interpolated, i\&.e\&.
 \fB~/<path>\fR
@@ -8143,11 +8436,103 @@ parameters found below, taking precedence over those when this identity is selec
 \fBsendemail\&.identity\fR\&.
 .RE
 .PP
-sendemail\&.aliasesFile, sendemail\&.aliasFileType, sendemail\&.annotate, sendemail\&.bcc, sendemail\&.cc, sendemail\&.ccCmd, sendemail\&.chainReplyTo, sendemail\&.confirm, sendemail\&.envelopeSender, sendemail\&.from, sendemail\&.multiEdit, sendemail\&.signedoffbycc, sendemail\&.smtpPass, sendemail\&.suppresscc, sendemail\&.suppressFrom, sendemail\&.to, sendemail\&.tocmd, sendemail\&.smtpDomain, sendemail\&.smtpServer, sendemail\&.smtpServerPort, sendemail\&.smtpServerOption, sendemail\&.smtpUser, sendemail\&.thread, sendemail\&.transferEncoding, sendemail\&.validate, sendemail\&.xmailer
+sendemail\&.multiEdit
 .RS 4
-See
+If true (default), a single editor instance will be spawned to edit files you have to edit (patches when
+\fB\-\-annotate\fR
+is used, and the summary when
+\fB\-\-compose\fR
+is used)\&. If false, files will be edited one after the other, spawning a new editor each time\&.
+.RE
+.PP
+sendemail\&.confirm
+.RS 4
+Sets the default for whether to confirm before sending\&. Must be one of
+\fIalways\fR,
+\fInever\fR,
+\fIcc\fR,
+\fIcompose\fR, or
+\fIauto\fR\&. See
+\fB\-\-confirm\fR
+in the
 \fBgit-send-email\fR(1)
-for description\&.
+documentation for the meaning of these values\&.
+.RE
+.PP
+sendemail\&.aliasesFile
+.RS 4
+To avoid typing long email addresses, point this to one or more email aliases files\&. You must also supply
+\fBsendemail\&.aliasFileType\fR\&.
+.RE
+.PP
+sendemail\&.aliasFileType
+.RS 4
+Format of the file(s) specified in sendemail\&.aliasesFile\&. Must be one of
+\fImutt\fR,
+\fImailrc\fR,
+\fIpine\fR,
+\fIelm\fR, or
+\fIgnus\fR, or
+\fIsendmail\fR\&.
+.sp
+What an alias file in each format looks like can be found in the documentation of the email program of the same name\&. The differences and limitations from the standard formats are described below:
+.PP
+sendmail
+.RS 4
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Quoted aliases and quoted addresses are not supported: lines that contain a
+\fB"\fR
+symbol are ignored\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Redirection to a file (\fB/path/name\fR) or pipe (\fB|command\fR) is not supported\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+File inclusion (\fB:include: /path/name\fR) is not supported\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Warnings are printed on the standard error output for any explicitly unsupported constructs, and any other lines that are not recognized by the parser\&.
+.RE
+.RE
+.RE
+.PP
+sendemail\&.annotate, sendemail\&.bcc, sendemail\&.cc, sendemail\&.ccCmd, sendemail\&.chainReplyTo, sendemail\&.envelopeSender, sendemail\&.from, sendemail\&.signedoffbycc, sendemail\&.smtpPass, sendemail\&.suppresscc, sendemail\&.suppressFrom, sendemail\&.to, sendemail\&.tocmd, sendemail\&.smtpDomain, sendemail\&.smtpServer, sendemail\&.smtpServerPort, sendemail\&.smtpServerOption, sendemail\&.smtpUser, sendemail\&.thread, sendemail\&.transferEncoding, sendemail\&.validate, sendemail\&.xmailer
+.RS 4
+These configuration variables all provide a default for
+\fBgit-send-email\fR(1)
+command\-line options\&. See its documentation for details\&.
 .RE
 .PP
 sendemail\&.signedoffcc (deprecated)
@@ -8863,7 +9248,7 @@ You might want to enable this to prevent inadvertent credentials exposure, e\&.g
 .sp -1
 .IP \(bu 2.3
 .\}
-The OS or system where you\(cqre running git may not provide way way or otherwise allow you to configure the permissions of the configuration file where the username and/or password are stored\&.
+The OS or system where you\(cqre running git may not provide a way or otherwise allow you to configure the permissions of the configuration file where the username and/or password are stored\&.
 .RE
 .sp
 .RS 4
@@ -9118,7 +9503,8 @@ will feed input intended for
 \fBpack\-objects\fR
 to the hook, and expects a completed packfile on stdout\&.
 .sp
-Note that this configuration variable is ignored if it is seen in the repository\-level config (this is a safety measure against fetching from untrusted repositories)\&.
+Note that this configuration variable is only respected when it is specified in protected configuration (see
+the section called \(lqSCOPES\(rq)\&. This is a safety measure against fetching from untrusted repositories\&.
 .RE
 .PP
 uploadpack\&.allowFilter
@@ -9337,12 +9723,7 @@ and running \fBgit config section\&.Subsection\&.key value2\fR will result in
 Part of the \fBgit\fR(1) suite
 .SH "NOTES"
 .IP " 1." 4
-Documentation/technical/pack-format.txt
+the bundle URI design document
 .RS 4
-\%git-htmldocs/../technical/pack-format.html
-.RE
-.IP " 2." 4
-wire protocol version 2
-.RS 4
-\%git-htmldocs/technical/protocol-v2.html
+\%git-htmldocs/technical/bundle-uri.html
 .RE

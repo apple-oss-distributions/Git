@@ -169,8 +169,8 @@ static NORETURN void die_push_simple(struct branch *branch,
 	if (git_branch_track != BRANCH_TRACK_SIMPLE)
 		advice_automergesimple_maybe = _("\n"
 				 "To avoid automatically configuring "
-				 "upstream branches when their name\n"
-				 "doesn't match the local branch, see option "
+				 "an upstream branch when its name\n"
+				 "won't match the local branch, see option "
 				 "'simple' of branch.autoSetupMerge\n"
 				 "in 'git help config'.\n");
 	die(_("The upstream branch of your current branch does not match\n"
@@ -466,8 +466,16 @@ static int option_parse_recurse_submodules(const struct option *opt,
 
 	if (unset)
 		*recurse_submodules = RECURSE_SUBMODULES_OFF;
-	else
-		*recurse_submodules = parse_push_recurse_submodules_arg(opt->long_name, arg);
+	else {
+		if (!strcmp(arg, "only-is-on-demand")) {
+			if (*recurse_submodules == RECURSE_SUBMODULES_ONLY) {
+				warning(_("recursing into submodule with push.recurseSubmodules=only; using on-demand instead"));
+				*recurse_submodules = RECURSE_SUBMODULES_ON_DEMAND;
+			}
+		} else {
+			*recurse_submodules = parse_push_recurse_submodules_arg(opt->long_name, arg);
+		}
+	}
 
 	return 0;
 }

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-diff-tree(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -3451,7 +3451,7 @@ a space.
 </li>
 <li>
 <p>
-sha1 for "dst"; 0{40} if creation, unmerged or "look at work tree".
+sha1 for "dst"; 0{40} if deletion, unmerged or "work tree out of sync with the index".
 </p>
 </li>
 <li>
@@ -3538,8 +3538,8 @@ X: "unknown" change type (most probably a bug, please report it)
 percentage of similarity between the source and target of the move or
 copy).  Status letter M may be followed by a score (denoting the
 percentage of dissimilarity) for file rewrites.</p></div>
-<div class="paragraph"><p>&lt;sha1&gt; is shown as all 0&#8217;s if a file is new on the filesystem
-and it is out of sync with the index.</p></div>
+<div class="paragraph"><p>The sha1 for "dst" is shown as all 0&#8217;s if a file on the filesystem
+is out of sync with the index.</p></div>
 <div class="paragraph"><p>Example:</p></div>
 <div class="listingblock">
 <div class="content">
@@ -3974,7 +3974,7 @@ the pathname, but if that is <code>NUL</code>, the record will show two paths.</
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-12-10 14:52:02 PST
+ 2021-12-11 07:52:02 JST
 </div>
 </div>
 </body>

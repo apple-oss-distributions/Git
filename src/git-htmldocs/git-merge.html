@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-merge(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -1154,8 +1154,13 @@ will be appended to the specified message.</p></div>
 </dt>
 <dd>
 <p>
-        Allow the rerere mechanism to update the index with the
-        result of auto-conflict resolution if possible.
+        After the rerere mechanism reuses a recorded resolution on
+        the current conflict to update the files in the working
+        tree, allow it to also update the index with the result of
+        resolution.  <code>--no-rerere-autoupdate</code> is a good way to
+        double-check what <code>rerere</code> did and catch potential
+        mismerges, before committing the result to the index with a
+        separate <code>git add</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1777,6 +1782,21 @@ substitutes the changed version instead.</p></div>
 <div class="sectionbody">
 <div class="dlist"><dl>
 <dt class="hdlist1">
+branch.&lt;name&gt;.mergeOptions
+</dt>
+<dd>
+<p>
+        Sets default options for merging into branch &lt;name&gt;. The syntax and
+        supported options are the same as those of <em>git merge</em>, but option
+        values containing whitespace characters are currently not supported.
+</p>
+</dd>
+</dl></div>
+<div class="paragraph"><p>Everything above this line in this section isn&#8217;t included from the
+<a href="git-config.html">git-config(1)</a> documentation. The content that follows is the
+same as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
 merge.conflictStyle
 </dt>
 <dd>
@@ -2281,16 +2301,6 @@ merge.&lt;driver&gt;.recursive
         See <a href="gitattributes.html">gitattributes(5)</a> for details.
 </p>
 </dd>
-<dt class="hdlist1">
-branch.&lt;name&gt;.mergeOptions
-</dt>
-<dd>
-<p>
-        Sets default options for merging into branch &lt;name&gt;. The syntax and
-        supported options are the same as those of <em>git merge</em>, but option
-        values containing whitespace characters are currently not supported.
-</p>
-</dd>
 </dl></div>
 </div>
 </div>
@@ -2316,7 +2326,7 @@ branch.&lt;name&gt;.mergeOptions
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2022-01-05 14:13:29 PST
+ 2022-09-15 05:23:11 JST
 </div>
 </div>
 </body>

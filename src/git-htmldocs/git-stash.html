@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-stash(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -750,17 +750,20 @@ git-stash(1) Manual Page
 <div class="sectionbody">
 <div class="verseblock">
 <pre class="content"><em>git stash</em> list [&lt;log-options&gt;]
-<em>git stash</em> show [-u|--include-untracked|--only-untracked] [&lt;diff-options&gt;] [&lt;stash&gt;]
-<em>git stash</em> drop [-q|--quiet] [&lt;stash&gt;]
-<em>git stash</em> ( pop | apply ) [--index] [-q|--quiet] [&lt;stash&gt;]
+<em>git stash</em> show [-u | --include-untracked | --only-untracked] [&lt;diff-options&gt;] [&lt;stash&gt;]
+<em>git stash</em> drop [-q | --quiet] [&lt;stash&gt;]
+<em>git stash</em> pop [--index] [-q | --quiet] [&lt;stash&gt;]
+<em>git stash</em> apply [--index] [-q | --quiet] [&lt;stash&gt;]
 <em>git stash</em> branch &lt;branchname&gt; [&lt;stash&gt;]
-<em>git stash</em> [push [-p|--patch] [-S|--staged] [-k|--[no-]keep-index] [-q|--quiet]
-             [-u|--include-untracked] [-a|--all] [-m|--message &lt;message&gt;]
+<em>git stash</em> [push [-p | --patch] [-S | --staged] [-k | --[no-]keep-index] [-q | --quiet]
+             [-u | --include-untracked] [-a | --all] [(-m | --message) &lt;message&gt;]
              [--pathspec-from-file=&lt;file&gt; [--pathspec-file-nul]]
              [--] [&lt;pathspec&gt;&#8230;]]
+<em>git stash</em> save [-p | --patch] [-S | --staged] [-k | --[no-]keep-index] [-q | --quiet]
+             [-u | --include-untracked] [-a | --all] [&lt;message&gt;]
 <em>git stash</em> clear
 <em>git stash</em> create [&lt;message&gt;]
-<em>git stash</em> store [-m|--message &lt;message&gt;] [-q|--quiet] &lt;commit&gt;</pre>
+<em>git stash</em> store [(-m | --message) &lt;message&gt;] [-q | --quiet] &lt;commit&gt;</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -792,7 +795,7 @@ stash index (e.g. the integer <code>n</code> is equivalent to <code>stash@{n}</c
 <div class="sectionbody">
 <div class="dlist"><dl>
 <dt class="hdlist1">
-push [-p|--patch] [-S|--staged] [-k|--[no-]keep-index] [-u|--include-untracked] [-a|--all] [-q|--quiet] [-m|--message &lt;message&gt;] [--pathspec-from-file=&lt;file&gt; [--pathspec-file-nul]] [--] [&lt;pathspec&gt;&#8230;]
+push [-p|--patch] [-S|--staged] [-k|--[no-]keep-index] [-u|--include-untracked] [-a|--all] [-q|--quiet] [(-m|--message) &lt;message&gt;] [--pathspec-from-file=&lt;file&gt; [--pathspec-file-nul]] [--] [&lt;pathspec&gt;&#8230;]
 </dt>
 <dd>
 <p>
@@ -1264,6 +1267,46 @@ xargs git log --merges --no-walk --grep=WIP</code></pre>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+stash.showIncludeUntracked
+</dt>
+<dd>
+<p>
+        If this is set to true, the <code>git stash show</code> command will show
+        the untracked files of a stash entry.  Defaults to false. See
+        description of <em>show</em> command in <a href="git-stash.html">git-stash(1)</a>.
+</p>
+</dd>
+<dt class="hdlist1">
+stash.showPatch
+</dt>
+<dd>
+<p>
+        If this is set to true, the <code>git stash show</code> command without an
+        option will show the stash entry in patch form.  Defaults to false.
+        See description of <em>show</em> command in <a href="git-stash.html">git-stash(1)</a>.
+</p>
+</dd>
+<dt class="hdlist1">
+stash.showStat
+</dt>
+<dd>
+<p>
+        If this is set to true, the <code>git stash show</code> command without an
+        option will show diffstat of the stash entry.  Defaults to true.
+        See description of <em>show</em> command in <a href="git-stash.html">git-stash(1)</a>.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
 <div class="paragraph"><p><a href="git-checkout.html">git-checkout(1)</a>,
@@ -1284,7 +1327,7 @@ xargs git log --merges --no-walk --grep=WIP</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-11-29 15:54:03 PST
+ 2022-10-29 03:53:56 JST
 </div>
 </div>
 </body>

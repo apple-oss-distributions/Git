@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-fast-import(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -2600,6 +2600,30 @@ compression.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+fastimport.unpackLimit
+</dt>
+<dd>
+<p>
+        If the number of objects imported by <a href="git-fast-import.html">git-fast-import(1)</a>
+        is below this limit, then the objects will be unpacked into
+        loose object files.  However if the number of imported objects
+        equals or exceeds this limit then the pack will be stored as a
+        pack.  Storing the pack from a fast-import can make the import
+        operation complete faster, especially on slow filesystems.  If
+        not set, the value of <code>transfer.unpackLimit</code> is used instead.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
 <div class="paragraph"><p><a href="git-fast-export.html">git-fast-export(1)</a></p></div>
@@ -2616,7 +2640,7 @@ compression.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-10-18 13:46:42 PDT
+ 2022-09-15 05:23:11 JST
 </div>
 </div>
 </body>

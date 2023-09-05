@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>How to recover an object from scratch</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -793,7 +793,7 @@ corruption). But everything looked pretty reasonable.</p></div>
 has the git packed object header, which is variable-length. We want to
 strip that off so we can start playing with the zlib data directly. You
 can either work your way through it manually (the format is described in
-<a href="../technical/pack-format.html">Documentation/technical/pack-format.txt</a>),
+<a href="../gitformat-pack.html">gitformat-pack(5)</a>),
 or you can walk through it in a debugger. I did the latter, creating a
 valid pack like:</p></div>
 <div class="listingblock">
@@ -1189,7 +1189,7 @@ int main(int argc, char **argv)
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2022-06-27 10:23:02 PDT
+ 2022-12-12 10:25:34 JST
 </div>
 </div>
 </body>

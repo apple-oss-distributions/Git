@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-commit-graph(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -750,7 +750,10 @@ git-commit-graph(1) Manual Page
 <div class="sectionbody">
 <div class="verseblock">
 <pre class="content"><em>git commit-graph verify</em> [--object-dir &lt;dir&gt;] [--shallow] [--[no-]progress]
-<em>git commit-graph write</em> &lt;options&gt; [--object-dir &lt;dir&gt;] [--[no-]progress]</pre>
+<em>git commit-graph write</em> [--object-dir &lt;dir&gt;] [--append]
+                        [--split[=&lt;strategy&gt;]] [--reachable | --stdin-packs | --stdin-commits]
+                        [--changed-paths] [--[no-]max-new-filters &lt;n&gt;] [--[no-]progress]
+                        &lt;split options&gt;</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -930,6 +933,52 @@ Write a commit-graph file containing all commits in the current
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+commitGraph.generationVersion
+</dt>
+<dd>
+<p>
+        Specifies the type of generation number version to use when writing
+        or reading the commit-graph file. If version 1 is specified, then
+        the corrected commit dates will not be written or read. Defaults to
+        2.
+</p>
+</dd>
+<dt class="hdlist1">
+commitGraph.maxNewFilters
+</dt>
+<dd>
+<p>
+        Specifies the default value for the <code>--max-new-filters</code> option of <code>git
+        commit-graph write</code> (c.f., <a href="git-commit-graph.html">git-commit-graph(1)</a>).
+</p>
+</dd>
+<dt class="hdlist1">
+commitGraph.readChangedPaths
+</dt>
+<dd>
+<p>
+        If true, then git will use the changed-path Bloom filters in the
+        commit-graph file (if it exists, and they are present). Defaults to
+        true. See <a href="git-commit-graph.html">git-commit-graph(1)</a> for more information.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_file_format">FILE FORMAT</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>see <a href="gitformat-commit-graph.html">gitformat-commit-graph(5)</a>.</p></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_git">GIT</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Part of the <a href="git.html">git(1)</a> suite</p></div>
@@ -940,7 +989,7 @@ Write a commit-graph file containing all commits in the current
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-11-02 18:01:42 PST
+ 2022-10-29 03:53:56 JST
 </div>
 </div>
 </body>

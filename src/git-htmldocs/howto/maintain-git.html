@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>How to maintain Git</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -1103,7 +1103,7 @@ Prepare <em>jch</em> branch, which is used to represent somewhere
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ Meta/Reintegrate master..seen &gt;Meta/redo-jch.sh</code></pre>
+<pre><code>$ Meta/Reintegrate master..jch &gt;Meta/redo-jch.sh</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1148,7 +1148,7 @@ merged to 'next', add it at the end of the list.  Then:</code></pre>
 <div class="literalblock">
 <div class="content">
 <pre><code>$ git checkout -B jch master
-$ Meta/redo-jch.sh -c1</code></pre>
+$ sh Meta/redo-jch.sh -c1</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1189,6 +1189,15 @@ and rectified.</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
+<pre><code>Then build the rest of 'jch':</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>$ git checkout jch
+$ sh Meta/redo-jch.sh</code></pre>
+</div></div>
+<div class="literalblock">
+<div class="content">
 <pre><code>When all is well, clean up the redo-jch.sh script with</code></pre>
 </div></div>
 <div class="literalblock">
@@ -1208,7 +1217,7 @@ Rebuild <em>seen</em>.
 </p>
 <div class="literalblock">
 <div class="content">
-<pre><code>$ Meta/Reintegrate master..seen &gt;Meta/redo-seen.sh</code></pre>
+<pre><code>$ Meta/Reintegrate jch..seen &gt;Meta/redo-seen.sh</code></pre>
 </div></div>
 <div class="literalblock">
 <div class="content">
@@ -1469,7 +1478,7 @@ $ git update-ref -d $mf/ai/topic</code></pre>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2022-06-27 10:23:03 PDT
+ 2022-12-12 10:25:34 JST
 </div>
 </div>
 </body>

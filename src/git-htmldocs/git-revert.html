@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-revert(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -749,7 +749,7 @@ git-revert(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git revert</em> [--[no-]edit] [-n] [-m parent-number] [-s] [-S[&lt;keyid&gt;]] &lt;commit&gt;&#8230;
+<pre class="content"><em>git revert</em> [--[no-]edit] [-n] [-m &lt;parent-number&gt;] [-s] [-S[&lt;keyid&gt;]] &lt;commit&gt;&#8230;
 <em>git revert</em> (--continue | --skip | --abort | --quit)</pre>
 <div class="attribution">
 </div></div>
@@ -926,8 +926,13 @@ effect to your index in a row.</p></div>
 </dt>
 <dd>
 <p>
-        Allow the rerere mechanism to update the index with the
-        result of auto-conflict resolution if possible.
+        After the rerere mechanism reuses a recorded resolution on
+        the current conflict to update the files in the working
+        tree, allow it to also update the index with the result of
+        resolution.  <code>--no-rerere-autoupdate</code> is a good way to
+        double-check what <code>rerere</code> did and catch potential
+        mismerges, before committing the result to the index with a
+        separate <code>git add</code>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1019,6 +1024,25 @@ effect to your index in a row.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+revert.reference
+</dt>
+<dd>
+<p>
+        Setting this variable to true makes <code>git revert</code> behave
+        as if the <code>--reference</code> option is given.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
 <div class="paragraph"><p><a href="git-cherry-pick.html">git-cherry-pick(1)</a></p></div>
@@ -1035,7 +1059,7 @@ effect to your index in a row.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2022-06-17 10:57:33 PDT
+ 2022-11-29 13:25:14 JST
 </div>
 </div>
 </body>

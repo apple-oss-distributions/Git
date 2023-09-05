@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-show-branch(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -749,12 +749,12 @@ git-show-branch(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git show-branch</em> [-a|--all] [-r|--remotes] [--topo-order | --date-order]
+<pre class="content"><em>git show-branch</em> [-a | --all] [-r | --remotes] [--topo-order | --date-order]
                 [--current] [--color[=&lt;when&gt;] | --no-color] [--sparse]
                 [--more=&lt;n&gt; | --list | --independent | --merge-base]
                 [--no-name | --sha1-name] [--topics]
                 [(&lt;rev&gt; | &lt;glob&gt;)&#8230;]
-<em>git show-branch</em> (-g|--reflog)[=&lt;n&gt;[,&lt;base&gt;]] [--list] [&lt;ref&gt;]</pre>
+<em>git show-branch</em> (-g | --reflog)[=&lt;n&gt;[,&lt;base&gt;]] [--list] [&lt;ref&gt;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -1037,6 +1037,25 @@ topologically related with each other.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+showBranch.default
+</dt>
+<dd>
+<p>
+        The default set of branches for <a href="git-show-branch.html">git-show-branch(1)</a>.
+        See <a href="git-show-branch.html">git-show-branch(1)</a>.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_git">GIT</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Part of the <a href="git.html">git(1)</a> suite</p></div>
@@ -1047,7 +1066,7 @@ topologically related with each other.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-03-10 15:02:33 PDT
+ 2022-10-29 03:53:56 JST
 </div>
 </div>
 </body>

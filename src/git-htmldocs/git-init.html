@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-init(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -996,6 +996,34 @@ Record the pristine state as the first commit in the history.
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+init.templateDir
+</dt>
+<dd>
+<p>
+        Specify the directory from which templates will be copied.
+        (See the "TEMPLATE DIRECTORY" section of <a href="git-init.html">git-init(1)</a>.)
+</p>
+</dd>
+<dt class="hdlist1">
+init.defaultBranch
+</dt>
+<dd>
+<p>
+        Allows overriding the default branch name e.g. when initializing
+        a new repository.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_git">GIT</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Part of the <a href="git.html">git(1)</a> suite</p></div>
@@ -1006,7 +1034,7 @@ Record the pristine state as the first commit in the history.
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-12-10 14:52:02 PST
+ 2022-09-15 05:23:11 JST
 </div>
 </div>
 </body>

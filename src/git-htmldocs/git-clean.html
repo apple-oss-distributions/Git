@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-clean(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -749,7 +749,7 @@ git-clean(1) Manual Page
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
 <div class="verseblock">
-<pre class="content"><em>git clean</em> [-d] [-f] [-i] [-n] [-q] [-e &lt;pattern&gt;] [-x | -X] [--] &lt;path&gt;&#8230;</pre>
+<pre class="content"><em>git clean</em> [-d] [-f] [-i] [-n] [-q] [-e &lt;pattern&gt;] [-x | -X] [--] [&lt;pathspec&gt;&#8230;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -762,8 +762,8 @@ under version control, starting from the current directory.</p></div>
 <div class="paragraph"><p>Normally, only files unknown to Git are removed, but if the <code>-x</code>
 option is specified, ignored files are also removed. This can, for
 example, be useful to remove all build products.</p></div>
-<div class="paragraph"><p>If any optional <code>&lt;path&gt;...</code> arguments are given, only those paths
-are affected.</p></div>
+<div class="paragraph"><p>If any optional <code>&lt;pathspec&gt;...</code> arguments are given, only those paths
+that match the pathspec are affected.</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -775,10 +775,10 @@ are affected.</p></div>
 </dt>
 <dd>
 <p>
-        Normally, when no &lt;path&gt; is specified, git clean will not
+        Normally, when no &lt;pathspec&gt; is specified, git clean will not
         recurse into untracked directories to avoid removing too much.
         Specify -d to have it recurse into such directories as well.
-        If any paths are specified, -d is irrelevant; all untracked
+        If a &lt;pathspec&gt; is specified, -d is irrelevant; all untracked
         files matching the specified paths (with exceptions for nested
         git directories mentioned under <code>--force</code>) will be removed.
 </p>
@@ -957,6 +957,25 @@ help
 </div>
 </div>
 <div class="sect1">
+<h2 id="_configuration">CONFIGURATION</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Everything below this line in this section is selectively included
+from the <a href="git-config.html">git-config(1)</a> documentation. The content is the same
+as what&#8217;s found there:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+clean.requireForce
+</dt>
+<dd>
+<p>
+        A boolean to make git-clean do nothing unless given -f,
+        -i or -n.   Defaults to true.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
 <div class="paragraph"><p><a href="gitignore.html">gitignore(5)</a></p></div>
@@ -973,7 +992,7 @@ help
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2020-03-10 15:02:33 PDT
+ 2022-10-29 03:53:56 JST
 </div>
 </div>
 </body>

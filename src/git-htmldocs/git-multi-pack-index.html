@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-multi-pack-index(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -861,9 +861,10 @@ expire
 </dt>
 <dd>
 <p>
-        Delete the pack-files that are tracked  by the MIDX file, but
-        have no objects referenced by the MIDX. Rewrite the MIDX file
-        afterward to remove all references to these pack-files.
+        Delete the pack-files that are tracked by the MIDX file, but
+        have no objects referenced by the MIDX (with the exception of
+        <code>.keep</code> packs and cruft packs). Rewrite the MIDX file afterward
+        to remove all references to these pack-files.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -942,8 +943,8 @@ Verify the MIDX file for the packfiles in the current <code>.git</code> director
 <h2 id="_see_also">SEE ALSO</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>See <a href="technical/multi-pack-index.html">The Multi-Pack-Index Design
-Document</a> and <a href="technical/pack-format.html">The Multi-Pack-Index
-Format</a> for more information on the multi-pack-index feature.</p></div>
+Document</a> and <a href="gitformat-pack.html">gitformat-pack(5)</a> for more information on the
+multi-pack-index feature and its file format.</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -957,7 +958,7 @@ Format</a> for more information on the multi-pack-index feature.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2021-10-29 16:18:45 PDT
+ 2022-10-11 06:40:17 JST
 </div>
 </div>
 </body>

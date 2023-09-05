@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git-cat-file(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -754,7 +754,7 @@ git-cat-file(1) Manual Page
 <em>git cat-file</em> (-t | -s) [--allow-unknown-type] &lt;object&gt;
 <em>git cat-file</em> (--batch | --batch-check | --batch-command) [--batch-all-objects]
              [--buffer] [--follow-symlinks] [--unordered]
-             [--textconv | --filters]
+             [--textconv | --filters] [-z]
 <em>git cat-file</em> (--textconv | --filters)
              [&lt;rev&gt;:&lt;path|tree-ish&gt; | --path=&lt;path|tree-ish&gt; &lt;rev&gt;]</pre>
 <div class="attribution">
@@ -837,6 +837,19 @@ whitespace, so that the appropriate drivers can be determined.</p></div>
         "tree" with <code>&lt;object&gt;</code> being a commit object that contains it,
         or to ask for a "blob" with <code>&lt;object&gt;</code> being a tag object that
         points at it.
+</p>
+</dd>
+<dt class="hdlist1">
+--[no-]mailmap
+</dt>
+<dt class="hdlist1">
+--[no-]use-mailmap
+</dt>
+<dd>
+<p>
+       Use mailmap file to map author, committer and tagger names
+       and email addresses to canonical real names and email addresses.
+       See <a href="git-shortlog.html">git-shortlog(1)</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1067,6 +1080,16 @@ respectively print:</p></div>
 </div></div>
 </div></div>
 </dd>
+<dt class="hdlist1">
+-z
+</dt>
+<dd>
+<p>
+        Only meaningful with <code>--batch</code>, <code>--batch-check</code>, or
+        <code>--batch-command</code>; input is NUL-delimited instead of
+        newline-delimited.
+</p>
+</dd>
 </dl></div>
 </div>
 </div>
@@ -1250,7 +1273,7 @@ will be reported.</p></div>
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2022-04-07 15:08:14 PDT
+ 2022-08-06 08:26:23 JST
 </div>
 </div>
 </body>

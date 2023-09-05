@@ -65,7 +65,8 @@ done
 for DEFAULT_HTTPD_MODULE_PATH in '/usr/libexec/apache2' \
 				 '/usr/lib/apache2/modules' \
 				 '/usr/lib64/httpd/modules' \
-				 '/usr/lib/httpd/modules'
+				 '/usr/lib/httpd/modules' \
+				 '/usr/libexec/httpd'
 do
 	if test -d "$DEFAULT_HTTPD_MODULE_PATH"
 	then
@@ -172,6 +173,11 @@ prepare_httpd() {
 			export LIB_HTTPD_SVN LIB_HTTPD_SVNPATH
 		fi
 	fi
+}
+
+enable_http2 () {
+	HTTPD_PARA="$HTTPD_PARA -DHTTP2"
+	test_set_prereq HTTP2
 }
 
 start_httpd() {

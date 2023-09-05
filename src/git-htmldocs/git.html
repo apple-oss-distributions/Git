@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 10.1.4" />
+<meta name="generator" content="AsciiDoc 10.2.0" />
 <title>git(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -1440,6 +1440,14 @@ ancillary user utilities.</p></div>
         The Git repository browser.
 </p>
 </dd>
+<dt class="hdlist1">
+<a href="scalar.html">scalar(1)</a>
+</dt>
+<dd>
+<p>
+        A tool for managing large Git repositories.
+</p>
+</dd>
 </dl></div>
 </div>
 <div class="sect2">
@@ -1570,6 +1578,14 @@ ancillary user utilities.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<a href="git-diagnose.html">git-diagnose(1)</a>
+</dt>
+<dd>
+<p>
+        Generate a zip archive of diagnostic information.
+</p>
+</dd>
+<dt class="hdlist1">
 <a href="git-difftool.html">git-difftool(1)</a>
 </dt>
 <dd>
@@ -1606,7 +1622,7 @@ ancillary user utilities.</p></div>
 </dt>
 <dd>
 <p>
-        Show three-way merge without touching index.
+        Perform merge without touching index or working tree.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -1639,6 +1655,14 @@ ancillary user utilities.</p></div>
 <dd>
 <p>
         Check the GPG signature of tags.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="git-version.html">git-version(1)</a>
+</dt>
+<dd>
+<p>
+        Display version information about Git.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2385,22 +2409,6 @@ users typically do not use them directly.</p></div>
 <div class="paragraph"><p>The following documentation pages are guides about Git concepts.</p></div>
 <div class="dlist"><dl>
 <dt class="hdlist1">
-<a href="gitattributes.html">gitattributes(5)</a>
-</dt>
-<dd>
-<p>
-        Defining attributes per path.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="gitcli.html">gitcli(7)</a>
-</dt>
-<dd>
-<p>
-        Git command-line interface and conventions.
-</p>
-</dd>
-<dt class="hdlist1">
 <a href="gitcore-tutorial.html">gitcore-tutorial(7)</a>
 </dt>
 <dd>
@@ -2457,38 +2465,6 @@ users typically do not use them directly.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
-<a href="githooks.html">githooks(5)</a>
-</dt>
-<dd>
-<p>
-        Hooks used by Git.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="gitignore.html">gitignore(5)</a>
-</dt>
-<dd>
-<p>
-        Specifies intentionally untracked files to ignore.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="gitmailmap.html">gitmailmap(5)</a>
-</dt>
-<dd>
-<p>
-        Map author/committer names and/or E-Mail addresses.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="gitmodules.html">gitmodules(5)</a>
-</dt>
-<dd>
-<p>
-        Defining submodule properties.
-</p>
-</dd>
-<dt class="hdlist1">
 <a href="gitnamespaces.html">gitnamespaces(7)</a>
 </dt>
 <dd>
@@ -2502,22 +2478,6 @@ users typically do not use them directly.</p></div>
 <dd>
 <p>
         Helper programs to interact with remote repositories.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="gitrepository-layout.html">gitrepository-layout(5)</a>
-</dt>
-<dd>
-<p>
-        Git Repository Layout.
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="gitrevisions.html">gitrevisions(7)</a>
-</dt>
-<dd>
-<p>
-        Specifying revisions and ranges for Git.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -2550,6 +2510,178 @@ users typically do not use them directly.</p></div>
 <dd>
 <p>
         An overview of recommended workflows with Git.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_repository_command_and_file_interfaces">Repository, command and file interfaces</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>This documentation discusses repository and command interfaces which
+users are expected to interact with directly. See <code>--user-formats</code> in
+<a href="git-help.html">git-help(1)</a> for more details on the criteria.</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+<a href="gitattributes.html">gitattributes(5)</a>
+</dt>
+<dd>
+<p>
+        Defining attributes per path.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitcli.html">gitcli(7)</a>
+</dt>
+<dd>
+<p>
+        Git command-line interface and conventions.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="githooks.html">githooks(5)</a>
+</dt>
+<dd>
+<p>
+        Hooks used by Git.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitignore.html">gitignore(5)</a>
+</dt>
+<dd>
+<p>
+        Specifies intentionally untracked files to ignore.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitmailmap.html">gitmailmap(5)</a>
+</dt>
+<dd>
+<p>
+        Map author/committer names and/or E-Mail addresses.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitmodules.html">gitmodules(5)</a>
+</dt>
+<dd>
+<p>
+        Defining submodule properties.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitrepository-layout.html">gitrepository-layout(5)</a>
+</dt>
+<dd>
+<p>
+        Git Repository Layout.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitrevisions.html">gitrevisions(7)</a>
+</dt>
+<dd>
+<p>
+        Specifying revisions and ranges for Git.
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_file_formats_protocols_and_other_developer_interfaces">File formats, protocols and other developer interfaces</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>This documentation discusses file formats, over-the-wire protocols and
+other git developer interfaces. See <code>--developer-interfaces</code> in
+<a href="git-help.html">git-help(1)</a>.</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+<a href="gitformat-bundle.html">gitformat-bundle(5)</a>
+</dt>
+<dd>
+<p>
+        The bundle file format.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitformat-chunk.html">gitformat-chunk(5)</a>
+</dt>
+<dd>
+<p>
+        Chunk-based file formats.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitformat-commit-graph.html">gitformat-commit-graph(5)</a>
+</dt>
+<dd>
+<p>
+        Git commit-graph format.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitformat-index.html">gitformat-index(5)</a>
+</dt>
+<dd>
+<p>
+        Git index format.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitformat-pack.html">gitformat-pack(5)</a>
+</dt>
+<dd>
+<p>
+        Git pack format.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitformat-signature.html">gitformat-signature(5)</a>
+</dt>
+<dd>
+<p>
+        Git cryptographic signature formats.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitprotocol-capabilities.html">gitprotocol-capabilities(5)</a>
+</dt>
+<dd>
+<p>
+        Protocol v0 and v1 capabilities.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitprotocol-common.html">gitprotocol-common(5)</a>
+</dt>
+<dd>
+<p>
+        Things common to various protocols.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitprotocol-http.html">gitprotocol-http(5)</a>
+</dt>
+<dd>
+<p>
+        Git HTTP-based protocols.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitprotocol-pack.html">gitprotocol-pack(5)</a>
+</dt>
+<dd>
+<p>
+        How packs are transferred over-the-wire.
+</p>
+</dd>
+<dt class="hdlist1">
+<a href="gitprotocol-v2.html">gitprotocol-v2(5)</a>
+</dt>
+<dd>
+<p>
+        Git Wire Protocol, Version 2.
 </p>
 </dd>
 </dl></div>
@@ -2716,7 +2848,11 @@ HEAD
 <div class="sect1">
 <h2 id="_environment_variables">Environment Variables</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Various Git commands use the following environment variables:</p></div>
+<div class="paragraph"><p>Various Git commands pay attention to environment variables and change
+their behavior.  The environment variables marked as "Boolean" take
+their values the same way as Boolean valued configuration variables, e.g.
+"true", "yes", "on" and positive numbers are taken as "yes".</p></div>
+<div class="paragraph"><p>Here are the variables:</p></div>
 <div class="sect2">
 <h3 id="_the_git_repository">The Git Repository</h3>
 <div class="paragraph"><p>These environment variables apply to <em>all</em> core Git commands. Nb: it
@@ -2728,7 +2864,7 @@ Git so take care if using a foreign front-end.</p></div>
 </dt>
 <dd>
 <p>
-        This environment allows the specification of an alternate
+        This environment variable specifies an alternate
         index file. If not specified, the default of <code>$GIT_DIR/index</code>
         is used.
 </p>
@@ -2738,8 +2874,8 @@ Git so take care if using a foreign front-end.</p></div>
 </dt>
 <dd>
 <p>
-        This environment variable allows the specification of an index
-        version for new repositories.  It won&#8217;t affect existing index
+        This environment variable specifies what index version is used
+        when writing the index file out.  It won&#8217;t affect existing index
         files.  By default index file version 2 or 3 is used. See
         <a href="git-update-index.html">git-update-index(1)</a> for more information.
 </p>
@@ -2830,7 +2966,7 @@ double-quotes and respecting backslash escapes. E.g., the value
         When run in a directory that does not have ".git" repository
         directory, Git tries to find such a directory in the parent
         directories to find the top of the working tree, but by default it
-        does not cross filesystem boundaries.  This environment variable
+        does not cross filesystem boundaries.  This Boolean environment variable
         can be set to true to tell Git not to stop at filesystem
         boundaries.  Like <code>GIT_CEILING_DIRECTORIES</code>, this will not affect
         an explicit repository directory set via <code>GIT_DIR</code> or on the
@@ -3111,6 +3247,16 @@ for further details.</p></div>
 </p>
 </dd>
 <dt class="hdlist1">
+<code>GIT_SSL_NO_VERIFY</code>
+</dt>
+<dd>
+<p>
+        Setting and exporting this environment variable to any value
+        tells Git not to verify the SSL certificate when fetching or
+        pushing over HTTPS.
+</p>
+</dd>
+<dt class="hdlist1">
 <code>GIT_ASKPASS</code>
 </dt>
 <dd>
@@ -3127,7 +3273,7 @@ for further details.</p></div>
 </dt>
 <dd>
 <p>
-        If this environment variable is set to <code>0</code>, git will not prompt
+        If this Boolean environment variable is set to false, git will not prompt
         on the terminal (e.g., when asking for HTTP authentication).
 </p>
 </dd>
@@ -3154,10 +3300,10 @@ for further details.</p></div>
 <dd>
 <p>
         Whether to skip reading settings from the system-wide
-        <code>$(prefix)/etc/gitconfig</code> file.  This environment variable can
+        <code>$(prefix)/etc/gitconfig</code> file.  This Boolean environment variable can
         be used along with <code>$HOME</code> and <code>$XDG_CONFIG_HOME</code> to create a
         predictable environment for a picky script, or you can set it
-        temporarily to avoid using a buggy <code>/etc/gitconfig</code> file while
+        to true to temporarily avoid using a buggy <code>/etc/gitconfig</code> file while
         waiting for someone with sufficient permissions to fix it.
 </p>
 </dd>
@@ -3166,6 +3312,7 @@ for further details.</p></div>
 </dt>
 <dd>
 <p>
+
         If this environment variable is set to "1", then commands such
         as <em>git blame</em> (in incremental mode), <em>git rev-list</em>, <em>git log</em>,
         <em>git check-attr</em> and <em>git check-ignore</em> will
@@ -3369,7 +3516,7 @@ for full details.</p></div>
 <p>
         By default, when tracing is activated, Git redacts the values of
         cookies, the "Authorization:" header, the "Proxy-Authorization:"
-        header and packfile URIs. Set this variable to <code>0</code> to prevent this
+        header and packfile URIs. Set this Boolean environment variable to false to prevent this
         redaction.
 </p>
 </dd>
@@ -3378,7 +3525,7 @@ for full details.</p></div>
 </dt>
 <dd>
 <p>
-        Setting this variable to <code>1</code> will cause Git to treat all
+        Setting this Boolean environment variable to true will cause Git to treat all
         pathspecs literally, rather than as glob patterns. For example,
         running <code>GIT_LITERAL_PATHSPECS=1 git log -- '*.c'</code> will search
         for commits that touch the path <code>*.c</code>, not any paths that the
@@ -3392,7 +3539,7 @@ for full details.</p></div>
 </dt>
 <dd>
 <p>
-        Setting this variable to <code>1</code> will cause Git to treat all
+        Setting this Boolean environment variable to true will cause Git to treat all
         pathspecs as glob patterns (aka "glob" magic).
 </p>
 </dd>
@@ -3401,7 +3548,7 @@ for full details.</p></div>
 </dt>
 <dd>
 <p>
-        Setting this variable to <code>1</code> will cause Git to treat all
+        Setting this Boolean environment variable to true will cause Git to treat all
         pathspecs as literal (aka "literal" magic).
 </p>
 </dd>
@@ -3410,7 +3557,7 @@ for full details.</p></div>
 </dt>
 <dd>
 <p>
-        Setting this variable to <code>1</code> will cause Git to treat all
+        Setting this Boolean environment variable to true will cause Git to treat all
         pathspecs as case-insensitive.
 </p>
 </dd>
@@ -3434,7 +3581,7 @@ for full details.</p></div>
 </dt>
 <dd>
 <p>
-        If set to <code>0</code>, ignore broken or badly named refs when iterating
+        If this Boolean environment variable is set to false, ignore broken or badly named refs when iterating
         over lists of refs. Normally Git will try to include any such
         refs, which may cause some operations to fail. This is usually
         preferable, as potentially destructive operations (e.g.,
@@ -3454,9 +3601,7 @@ for full details.</p></div>
         If set to a colon-separated list of protocols, behave as if
         <code>protocol.allow</code> is set to <code>never</code>, and each of the listed
         protocols has <code>protocol.&lt;name&gt;.allow</code> set to <code>always</code>
-        (overriding any existing configuration). In other words, any
-        protocol not mentioned will be disallowed (i.e., this is a
-        whitelist, not a blacklist). See the description of
+        (overriding any existing configuration). See the description of
         <code>protocol.allow</code> in <a href="git-config.html">git-config(1)</a> for more details.
 </p>
 </dd>
@@ -3465,7 +3610,7 @@ for full details.</p></div>
 </dt>
 <dd>
 <p>
-        Set to 0 to prevent protocols used by fetch/push/clone which are
+        Set this Boolean environment variable to false to prevent protocols used by fetch/push/clone which are
         configured to the <code>user</code> state.  This is useful to restrict recursive
         submodule initialization from an untrusted repository or for programs
         which feed potentially-untrusted URLS to git commands.  See
@@ -3501,7 +3646,7 @@ be in the future).</p></div>
 </dt>
 <dd>
 <p>
-        If set to <code>0</code>, Git will complete any requested operation without
+        If this Boolean environment variable is set to false, Git will complete any requested operation without
         performing any optional sub-operations that require taking a lock.
         For example, this will prevent <code>git status</code> from refreshing the
         index as a side effect. This is useful for processes running in
@@ -3662,7 +3807,7 @@ the Git Security mailing list &lt;<a href="mailto:git-security@googlegroups.com"
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2022-05-20 17:49:41 PDT
+ 2022-10-11 06:40:17 JST
 </div>
 </div>
 </body>
