@@ -2913,7 +2913,7 @@ static int apply_one_fragment(struct apply_state *state,
 			break;
 		case ' ':
 			if (plen && (ws_rule & WS_BLANK_AT_EOF) &&
-			    ws_blank_line(patch + 1, plen, ws_rule))
+			    ws_blank_line(patch + 1, plen))
 				is_blank_context = 1;
 			/* fallthrough */
 		case '-':
@@ -2942,7 +2942,7 @@ static int apply_one_fragment(struct apply_state *state,
 				      (first == '+' ? 0 : LINE_COMMON));
 			if (first == '+' &&
 			    (ws_rule & WS_BLANK_AT_EOF) &&
-			    ws_blank_line(patch + 1, plen, ws_rule))
+			    ws_blank_line(patch + 1, plen))
 				added_blank_line = 1;
 			break;
 		case '@': case '\\':
@@ -4418,6 +4418,33 @@ static int create_one_file(struct apply_state *state,
 	if (state->cached)
 		return 0;
 
+	/*
+	 * We already try to detect whether files are beyond a symlink in our
+	 * up-front checks. But in the case where symlinks are created by any
+	 * of the intermediate hunks it can happen that our up-front checks
+	 * didn't yet see the symlink, but at the point of arriving here there
+	 * in fact is one. We thus repeat the check for symlinks here.
+	 *
+	 * Note that this does not make the up-front check obsolete as the
+	 * failure mode is different:
+	 *
+	 * - The up-front checks cause us to abort before we have written
+	 *   anything into the working directory. So when we exit this way the
+	 *   working directory remains clean.
+	 *
+	 * - The checks here happen in the middle of the action where we have
+	 *   already started to apply the patch. The end result will be a dirty
+	 *   working directory.
+	 *
+	 * Ideally, we should update the up-front checks to catch what would
+	 * happen when we apply the patch before we damage the working tree.
+	 * We have all the information necessary to do so.  But for now, as a
+	 * part of embargoed security work, having this check would serve as a
+	 * reasonable first step.
+	 */
+	if (path_is_beyond_symlink(state, path))
+		return error(_("affected file '%s' is beyond a symbolic link"), path);
+
 	res = try_create_file(state, path, mode, buf, size);
 	if (res < 0)
 		return -1;
@@ -4549,7 +4576,7 @@ static int write_out_one_reject(struct apply_state *state, struct patch *patch)
 	FILE *rej;
 	char namebuf[PATH_MAX];
 	struct fragment *frag;
-	int cnt = 0;
+	int fd, cnt = 0;
 	struct strbuf sb = STRBUF_INIT;
 
 	for (cnt = 0, frag = patch->fragments; frag; frag = frag->next) {
@@ -4589,7 +4616,17 @@ static int write_out_one_reject(struct apply_state *state, struct patch *patch)
 	memcpy(namebuf, patch->new_name, cnt);
 	memcpy(namebuf + cnt, ".rej", 5);
 
-	rej = fopen(namebuf, "w");
+	fd = open(namebuf, O_CREAT | O_EXCL | O_WRONLY, 0666);
+	if (fd < 0) {
+		if (errno != EEXIST)
+			return error_errno(_("cannot open %s"), namebuf);
+		if (unlink(namebuf))
+			return error_errno(_("cannot unlink '%s'"), namebuf);
+		fd = open(namebuf, O_CREAT | O_EXCL | O_WRONLY, 0666);
+		if (fd < 0)
+			return error_errno(_("cannot open %s"), namebuf);
+	}
+	rej = fdopen(fd, "w");
 	if (!rej)
 		return error_errno(_("cannot open %s"), namebuf);
 
