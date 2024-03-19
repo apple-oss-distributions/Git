@@ -43,7 +43,13 @@ export OBJROOT ?= $(CURDIR)/roots/obj
 export SYMROOT ?= $(CURDIR)/roots/sym
 export DSTROOT ?= $(CURDIR)/roots/dst
 
+ifdef RC_DEVTOOLS
 PREFIX=$(DEVELOPER_INSTALL_DIR)/usr
+OSV_PREFIX=$(PREFIX)/local
+else
+PREFIX=/usr/local
+OSV_PREFIX=$(PREFIX)
+endif
 
 ifndef SDKROOT
 SDKROOT := $(shell xcrun --sdk macosx.internal --show-sdk-path)
@@ -142,12 +148,14 @@ install: info install-bin install-man install-contrib
 	rm -f "$(DSTROOT)$(PREFIX)"/share/man/man5/gitweb.conf.5
 	rm -f "$(DSTROOT)$(PREFIX)"/share/man/man1/git-instaweb.1
 	rm -f "$(DSTROOT)$(PREFIX)"/share/man/man1/gitweb.1
-	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
-	install -o root -g wheel -m 0644 $(SRCROOT)/Git.plist $(DSTROOT)$(PREFIX)/local/OpenSourceVersions
+	install -d -o root -g wheel -m 0755 $(DSTROOT)$(OSV_PREFIX)/OpenSourceVersions
+	install -o root -g wheel -m 0644 $(SRCROOT)/Git.plist $(DSTROOT)$(OSV_PREFIX)/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitconfig $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitattributes $(DSTROOT)$(PREFIX)/share/git-core
+ifdef RC_DEVTOOLS
 	install -m 0755 -d $(DSTROOT)$(CLTOOLS_INSTALL_DIR)
 	ditto $(DSTROOT)$(DEVELOPER_INSTALL_DIR) $(DSTROOT)$(CLTOOLS_INSTALL_DIR)
+endif
 
 install-contrib:
 	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/share/git-core
