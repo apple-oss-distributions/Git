@@ -25,10 +25,6 @@ ifndef DEVELOPER_INSTALL_DIR
 DEVELOPER_INSTALL_DIR := $(shell xcode-select -p)
 endif
 
-ifndef CLTOOLS_INSTALL_DIR
-CLTOOLS_INSTALL_DIR=/Library/Developer/CommandLineTools
-endif
-
 ifndef LIBRESSL_PREFIX
 LIBRESSL_PREFIX := /usr/local/libressl-by-deployment-target/$(MACOSX_DEPLOYMENT_TARGET)
 endif
@@ -152,10 +148,6 @@ install: info install-bin install-man install-contrib
 	install -o root -g wheel -m 0644 $(SRCROOT)/Git.plist $(DSTROOT)$(OSV_PREFIX)/OpenSourceVersions
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitconfig $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0644 $(SRCROOT)/gitattributes $(DSTROOT)$(PREFIX)/share/git-core
-ifdef RC_DEVTOOLS
-	install -m 0755 -d $(DSTROOT)$(CLTOOLS_INSTALL_DIR)
-	ditto $(DSTROOT)$(DEVELOPER_INSTALL_DIR) $(DSTROOT)$(CLTOOLS_INSTALL_DIR)
-endif
 
 install-contrib:
 	install -d -o root -g wheel -m 0755 $(DSTROOT)$(PREFIX)/share/git-core

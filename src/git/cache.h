@@ -606,6 +606,18 @@ void set_git_work_tree(const char *tree);
 
 #define ALTERNATE_DB_ENVIRONMENT "GIT_ALTERNATE_OBJECT_DIRECTORIES"
 
+/*
+ * Check if a repository is safe and die if it is not, by verifying the
+ * ownership of the worktree (if any), the git directory, and the gitfile (if
+ * any).
+ *
+ * Exemptions for known-safe repositories can be added via `safe.directory`
+ * config settings; for non-bare repositories, their worktree needs to be
+ * added, for bare ones their git directory.
+ */
+void die_upon_dubious_ownership(const char *gitfile, const char *worktree,
+				const char *gitdir);
+
 void setup_work_tree(void);
 /*
  * Find the commondir and gitdir of the repository that contains the current
@@ -644,6 +656,7 @@ int path_inside_repo(const char *prefix, const char *path);
 #define INIT_DB_QUIET 0x0001
 #define INIT_DB_EXIST_OK 0x0002
 
+const char *get_template_dir(const char *option_template);
 int init_db(const char *git_dir, const char *real_git_dir,
 	    const char *template_dir, int hash_algo,
 	    const char *initial_branch, unsigned int flags);
