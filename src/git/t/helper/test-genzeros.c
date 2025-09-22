@@ -1,3 +1,5 @@
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "test-tool.h"
 #include "git-compat-util.h"
 
@@ -17,15 +19,16 @@ int cmd__genzeros(int argc, const char **argv)
 
 	/* Writing out individual NUL bytes is slow... */
 	while (count < 0)
-		if (write(1, zeros, ARRAY_SIZE(zeros)) < 0)
-			return -1;
+		if (xwrite(1, zeros, ARRAY_SIZE(zeros)) < 0)
+			die_errno("write error");
 
 	while (count > 0) {
-		n = write(1, zeros, count < ARRAY_SIZE(zeros) ?
-			  count : ARRAY_SIZE(zeros));
+		n = xwrite(1, zeros,
+			   count < ARRAY_SIZE(zeros)
+			   ? count : ARRAY_SIZE(zeros));
 
 		if (n < 0)
-			return -1;
+			die_errno("write error");
 
 		count -= n;
 	}

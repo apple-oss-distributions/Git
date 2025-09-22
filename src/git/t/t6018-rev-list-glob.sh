@@ -5,7 +5,6 @@ test_description='rev-list/rev-parse --glob'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 commit () {
@@ -187,7 +186,7 @@ test_expect_success 'rev-parse --exclude=ref with --remotes=glob' '
 	compare rev-parse "--exclude=upstream/x --remotes=upstream/*" "upstream/one upstream/two"
 '
 
-for section in receive uploadpack
+for section in fetch receive uploadpack
 do
 	test_expect_success "rev-parse --exclude-hidden=$section with --all" '
 		compare "-c transfer.hideRefs=refs/remotes/ rev-parse" "--branches --tags" "--exclude-hidden=$section --all"
@@ -214,15 +213,13 @@ do
 	for pseudoopt in branches tags remotes
 	do
 		test_expect_success "rev-parse --exclude-hidden=$section fails with --$pseudoopt" '
-			echo "error: --exclude-hidden cannot be used together with --$pseudoopt" >expected &&
 			test_must_fail git rev-parse --exclude-hidden=$section --$pseudoopt 2>err &&
-			test_cmp expected err
+			test_grep "error: options .--exclude-hidden. and .--$pseudoopt. cannot be used together" err
 		'
 
 		test_expect_success "rev-parse --exclude-hidden=$section fails with --$pseudoopt=pattern" '
-			echo "error: --exclude-hidden cannot be used together with --$pseudoopt" >expected &&
 			test_must_fail git rev-parse --exclude-hidden=$section --$pseudoopt=pattern 2>err &&
-			test_cmp expected err
+			test_grep "error: options .--exclude-hidden. and .--$pseudoopt. cannot be used together" err
 		'
 	done
 done

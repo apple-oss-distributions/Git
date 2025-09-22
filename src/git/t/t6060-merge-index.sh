@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='basic git merge-index / git-merge-one-file tests'
+
 . ./test-lib.sh
 
 test_expect_success 'setup diverging branches' '

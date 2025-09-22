@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test noop fetch negotiator'
+
 . ./test-lib.sh
 
 test_expect_success 'noop negotiator does not emit any "have"' '

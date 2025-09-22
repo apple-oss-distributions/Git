@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-receive-pack
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-RECEIVE\-PACK" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-RECEIVE\-PACK" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,14 +34,13 @@ git-receive-pack \- Receive what is pushed into the repository
 .nf
 \fIgit receive\-pack\fR <git\-dir>
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Invoked by \fIgit send\-pack\fR and updates the repository with the information fed from the remote end\&.
 .sp
-This command is usually not invoked directly by the end user\&. The UI for the protocol is on the \fIgit send\-pack\fR side, and the program pair is meant to be used to push updates to remote repository\&. For pull operations, see \fBgit-fetch-pack\fR(1)\&.
+This command is usually not invoked directly by the end user\&. The UI for the protocol is on the \fIgit send\-pack\fR side, and the program pair is meant to be used to push updates to a remote repository\&. For pull operations, see \fBgit-fetch-pack\fR(1)\&.
 .sp
-The command allows for creation and fast\-forwarding of sha1 refs (heads/tags) on the remote end (strictly speaking, it is the local end \fIgit\-receive\-pack\fR runs, but to the user who is sitting at the send\-pack end, it is updating the remote\&. Confused?)
+The command allows for the creation and fast\-forwarding of sha1 refs (heads/tags) on the remote end (strictly speaking, it is the local end \fIgit\-receive\-pack\fR runs, but to the user who is sitting at the send\-pack end, it is updating the remote\&. Confused?)
 .sp
 There are other real\-world examples of using update and post\-update hooks found in the Documentation/howto directory\&.
 .sp
@@ -60,11 +59,15 @@ The repository to sync into\&.
 Used by
 \fBgit-http-backend\fR(1)
 to serve up
-\fB$GIT_URL/info/refs?service=git\-receive\-pack\fR
-requests\&. See
+\fB$GIT_URL/info/refs\fR?service=git\-receive\-pack requests\&. See
 \fB\-\-http\-backend\-info\-refs\fR
 in
 \fBgit-upload-pack\fR(1)\&.
+.RE
+.PP
+\-\-skip\-connectivity\-check
+.RS 4
+Bypasses the connectivity checks that validate the existence of all objects in the transitive closure of reachable objects\&. This option is intended for server operators that want to implement their own object connectivity validation outside of Git\&. This is useful in such cases where the server\-side knows additional information about how Git is being used and thus can rely on certain guarantees to more efficiently compute object connectivity that Git itself cannot make\&. Usage of this option without a reliable external mechanism to ensure full reachable object connectivity risks corrupting the repository and should not be used in the general case\&.
 .RE
 .SH "PRE\-RECEIVE HOOK"
 .sp
@@ -97,9 +100,9 @@ The GPG key ID of the key that signed the push certificate\&.
 \fBGIT_PUSH_CERT_STATUS\fR
 .RS 4
 The status of GPG verification of the push certificate, using the same mnemonic as used in
-\fB%G?\fR
-format of
-\fBgit log\fR
+\fB%G\fR? format of
+\fBgit\fR
+\fBlog\fR
 family of commands (see
 \fBgit-log\fR(1))\&.
 .RE
@@ -203,7 +206,7 @@ Using this hook, it is easy to generate mails describing the updates to the repo
 # mail out commit update information\&.
 while read oval nval ref
 do
-        if expr "$oval" : \(aq0*$\(aq >/dev/null
+        if expr "$oval" : \*(Aq0*$\*(Aq >/dev/null
         then
                 echo "Created a new ref, with the following commits:"
                 git rev\-list \-\-pretty "$nval"
@@ -227,7 +230,6 @@ exit 0
 .RE
 .\}
 .sp
-.sp
 The exit code from this hook invocation is ignored, however a non\-zero exit code will generate an error message\&.
 .sp
 Note that it is possible for refname to not have sha1\-new when this hook runs\&. This can easily occur if another user modifies the ref after it was updated by \fIgit\-receive\-pack\fR, but before the hook was able to evaluate it\&. It is recommended that hooks rely on sha1\-new rather than the current value of refname\&.
@@ -237,7 +239,7 @@ After all other processing, if at least one ref was updated, and if $GIT_DIR/hoo
 .sp
 The exit code from this hook invocation is ignored; the only thing left for \fIgit\-receive\-pack\fR to do at that point is to exit itself anyway\&.
 .sp
-This hook can be used, for example, to run \fBgit update\-server\-info\fR if the repository is packed and is served via a dumb transport\&.
+This hook can be used, for example, to run \fBgit\fR \fBupdate\-server\-info\fR if the repository is packed and is served via a dumb transport\&.
 .sp
 .if n \{\
 .RS 4
@@ -249,7 +251,6 @@ exec git update\-server\-info
 .if n \{\
 .RE
 .\}
-.sp
 .SH "QUARANTINE ENVIRONMENT"
 .sp
 When \fBreceive\-pack\fR takes in objects, they are placed into a temporary "quarantine" directory within the \fB$GIT_DIR/objects\fR directory and migrated into the main object store only after the \fBpre\-receive\fR hook has completed\&. If the push fails before then, the temporary directory is removed entirely\&.

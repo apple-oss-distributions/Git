@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-rm
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-RM" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-RM" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,17 +32,16 @@ git-rm \- Remove files from the working tree and from the index
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit rm\fR [\-f | \-\-force] [\-n] [\-r] [\-\-cached] [\-\-ignore\-unmatch]
-          [\-\-quiet] [\-\-pathspec\-from\-file=<file> [\-\-pathspec\-file\-nul]]
-          [\-\-] [<pathspec>\&...]
+\fBgit\fR \fBrm\fR [\fB\-f\fR | \fB\-\-force\fR] [\fB\-n\fR] [\fB\-r\fR] [\fB\-\-cached\fR] [\fB\-\-ignore\-unmatch\fR]
+       [\fB\-\-quiet\fR] [\fB\-\-pathspec\-from\-file=\fR\fI<file>\fR [\fB\-\-pathspec\-file\-nul\fR]]
+       [\fB\-\-\fR] [\fI<pathspec>\fR\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Remove files matching pathspec from the index, or from the working tree and the index\&. \fBgit rm\fR will not remove a file from just your working directory\&. (There is no option to remove a file only from the working tree and yet keep it in the index; use \fB/bin/rm\fR if you want to do that\&.) The files being removed have to be identical to the tip of the branch, and no updates to their contents can be staged in the index, though that default behavior can be overridden with the \fB\-f\fR option\&. When \fB\-\-cached\fR is given, the staged content has to match either the tip of the branch or the file on disk, allowing the file to be removed from just the index\&. When sparse\-checkouts are in use (see \fBgit-sparse-checkout\fR(1)), \fBgit rm\fR will only remove paths within the sparse\-checkout patterns\&.
+Remove files matching pathspec from the index, or from the working tree and the index\&. \fBgit\fR \fBrm\fR will not remove a file from just your working directory\&. (There is no option to remove a file only from the working tree and yet keep it in the index; use \fB/bin/rm\fR if you want to do that\&.) The files being removed have to be identical to the tip of the branch, and no updates to their contents can be staged in the index, though that default behavior can be overridden with the \fB\-f\fR option\&. When \fB\-\-cached\fR is given, the staged content has to match either the tip of the branch or the file on disk, allowing the file to be removed from just the index\&. When sparse\-checkouts are in use (see \fBgit-sparse-checkout\fR(1)), \fBgit\fR \fBrm\fR will only remove paths within the sparse\-checkout patterns\&.
 .SH "OPTIONS"
 .PP
-<pathspec>\&...
+\fI<pathspec>\fR\&.\&.\&.
 .RS 4
 Files to remove\&. A leading directory name (e\&.g\&.
 \fBdir\fR
@@ -59,73 +58,81 @@ File globbing matches across directory boundaries\&. Thus, given two directories
 \fBd\fR
 and
 \fBd2\fR, there is a difference between using
-\fBgit rm \(aqd*\(aq\fR
-and
-\fBgit rm \(aqd/*\(aq\fR, as the former will also remove all of directory
+\fBgit\fR
+\fBrm\fR
+\*(Aqd*\*(Aq and
+\fBgit\fR
+\fBrm\fR
+\*(Aqd/*\*(Aq, as the former will also remove all of directory
 \fBd2\fR\&.
 .sp
 For more details, see the
-\fIpathspec\fR
+\fI<pathspec>\fR
 entry in
 \fBgitglossary\fR(7)\&.
 .RE
 .PP
-\-f, \-\-force
+\fB\-f\fR, \fB\-\-force\fR
 .RS 4
 Override the up\-to\-date check\&.
 .RE
 .PP
-\-n, \-\-dry\-run
+\fB\-n\fR, \fB\-\-dry\-run\fR
 .RS 4
 Don\(cqt actually remove any file(s)\&. Instead, just show if they exist in the index and would otherwise be removed by the command\&.
 .RE
 .PP
-\-r
+\fB\-r\fR
 .RS 4
 Allow recursive removal when a leading directory name is given\&.
 .RE
 .PP
-\-\-
+\fB\-\-\fR
 .RS 4
 This option can be used to separate command\-line options from the list of files, (useful when filenames might be mistaken for command\-line options)\&.
 .RE
 .PP
-\-\-cached
+\fB\-\-cached\fR
 .RS 4
 Use this option to unstage and remove paths only from the index\&. Working tree files, whether modified or not, will be left alone\&.
 .RE
 .PP
-\-\-ignore\-unmatch
+\fB\-\-ignore\-unmatch\fR
 .RS 4
 Exit with a zero status even if no files matched\&.
 .RE
 .PP
-\-\-sparse
+\fB\-\-sparse\fR
 .RS 4
 Allow updating index entries outside of the sparse\-checkout cone\&. Normally,
-\fBgit rm\fR
+\fBgit\fR
+\fBrm\fR
 refuses to update index entries whose paths do not fit within the sparse\-checkout cone\&. See
 \fBgit-sparse-checkout\fR(1)
 for more\&.
 .RE
 .PP
-\-q, \-\-quiet
+\fB\-q\fR, \fB\-\-quiet\fR
 .RS 4
-\fBgit rm\fR
+\fBgit\fR
+\fBrm\fR
 normally outputs one line (in the form of an
 \fBrm\fR
 command) for each file removed\&. This option suppresses that output\&.
 .RE
 .PP
-\-\-pathspec\-from\-file=<file>
+\fB\-\-pathspec\-from\-file=\fR\fI<file>\fR
 .RS 4
 Pathspec is passed in
-\fB<file>\fR
-instead of commandline args\&. If
-\fB<file>\fR
+\fI<file>\fR
+instead of args\&. If
+\fI<file>\fR
 is exactly
 \fB\-\fR
-then standard input is used\&. Pathspec elements are separated by LF or CR/LF\&. Pathspec elements can be quoted as explained for the configuration variable
+then standard input is used\&. Pathspec elements are separated by
+\fILF\fR
+or
+\fICR\fR/\fILF\fR\&. Pathspec elements can be quoted as explained for the configuration variable
 \fBcore\&.quotePath\fR
 (see
 \fBgit-config\fR(1))\&. See also
@@ -134,17 +141,19 @@ and global
 \fB\-\-literal\-pathspecs\fR\&.
 .RE
 .PP
-\-\-pathspec\-file\-nul
+\fB\-\-pathspec\-file\-nul\fR
 .RS 4
 Only meaningful with
-\fB\-\-pathspec\-from\-file\fR\&. Pathspec elements are separated with NUL character and all other characters are taken literally (including newlines and quotes)\&.
+\fB\-\-pathspec\-from\-file\fR\&. Pathspec elements are separated with
+\fINUL\fR
+character and all other characters are taken literally (including newlines and quotes)\&.
 .RE
 .SH "REMOVING FILES THAT HAVE DISAPPEARED FROM THE FILESYSTEM"
 .sp
-There is no option for \fBgit rm\fR to remove from the index only the paths that have disappeared from the filesystem\&. However, depending on the use case, there are several ways that can be done\&.
+There is no option for \fBgit\fR \fBrm\fR to remove from the index only the paths that have disappeared from the filesystem\&. However, depending on the use case, there are several ways that can be done\&.
 .SS "Using \(lqgit commit \-a\(rq"
 .sp
-If you intend that your next commit should record all modifications of tracked files in the working tree and record all removals of files that have been removed from the working tree with \fBrm\fR (as opposed to \fBgit rm\fR), use \fBgit commit \-a\fR, as it will automatically notice and record all removals\&. You can also have a similar effect without committing by using \fBgit add \-u\fR\&.
+If you intend that your next commit should record all modifications of tracked files in the working tree and record all removals of files that have been removed from the working tree with \fBrm\fR (as opposed to \fBgit\fR \fBrm\fR), use \fBgit\fR \fBcommit\fR \fB\-a\fR, as it will automatically notice and record all removals\&. You can also have a similar effect without committing by using \fBgit\fR \fBadd\fR \fB\-u\fR\&.
 .SS "Using \(lqgit add \-A\(rq"
 .sp
 When accepting a new code drop for a vendor branch, you probably want to record both the removal of paths and additions of new paths as well as modifications of existing paths\&.
@@ -161,7 +170,6 @@ git ls\-files \-z | xargs \-0 rm \-f
 .RE
 .\}
 .sp
-.sp
 and then untar the new code in the working tree\&. Alternately you could \fIrsync\fR the changes into the working tree\&.
 .sp
 After that, the easiest way to record all removals, additions, and modifications in the working tree is:
@@ -176,11 +184,10 @@ git add \-A
 .RE
 .\}
 .sp
-.sp
 See \fBgit-add\fR(1)\&.
 .SS "Other ways"
 .sp
-If all you really want to do is to remove from the index the files that are no longer present in the working tree (perhaps because your working tree is dirty so that you cannot use \fBgit commit \-a\fR), use the following command:
+If all you really want to do is to remove from the index the files that are no longer present in the working tree (perhaps because your working tree is dirty so that you cannot use \fBgit\fR \fBcommit\fR \fB\-a\fR), use the following command:
 .sp
 .if n \{\
 .RS 4
@@ -191,17 +198,16 @@ git diff \-\-name\-only \-\-diff\-filter=D \-z | xargs \-0 git rm \-\-cached
 .if n \{\
 .RE
 .\}
-.sp
 .SH "SUBMODULES"
 .sp
-Only submodules using a gitfile (which means they were cloned with a Git version 1\&.7\&.8 or newer) will be removed from the work tree, as their repository lives inside the \&.git directory of the superproject\&. If a submodule (or one of those nested inside it) still uses a \&.git directory, \fBgit rm\fR will move the submodules git directory into the superprojects git directory to protect the submodule\(cqs history\&. If it exists the submodule\&.<name> section in the \fBgitmodules\fR(5) file will also be removed and that file will be staged (unless \-\-cached or \-n are used)\&.
+Only submodules using a gitfile (which means they were cloned with a Git version 1\&.7\&.8 or newer) will be removed from the work tree, as their repository lives inside the \&.\fBgit\fR directory of the superproject\&. If a submodule (or one of those nested inside it) still uses a \&.\fBgit\fR directory, \fBgit\fR \fBrm\fR moves the submodules git directory into the superprojects git directory to protect the submodule\(cqs history\&. If it exists the \fBsubmodule\&.\fR\fI<name>\fR section in the \fBgitmodules\fR(5) file will also be removed and that file will be staged (unless \fB\-\-cached\fR or \fB\-n\fR are used)\&.
 .sp
-A submodule is considered up to date when the HEAD is the same as recorded in the index, no tracked files are modified and no untracked files that aren\(cqt ignored are present in the submodules work tree\&. Ignored files are deemed expendable and won\(cqt stop a submodule\(cqs work tree from being removed\&.
+A submodule is considered up to date when the \fBHEAD\fR is the same as recorded in the index, no tracked files are modified and no untracked files that aren\(cqt ignored are present in the submodule\(cqs work tree\&. Ignored files are deemed expendable and won\(cqt stop a submodule\(cqs work tree from being removed\&.
 .sp
 If you only want to remove the local checkout of a submodule from your work tree without committing the removal, use \fBgit-submodule\fR(1) \fBdeinit\fR instead\&. Also see \fBgitsubmodules\fR(7) for details on submodule removal\&.
 .SH "EXAMPLES"
 .PP
-\fBgit rm Documentation/\e*\&.txt\fR
+\fBgit\fR \fBrm\fR \fBDocumentation/\e*\&.txt\fR
 .RS 4
 Removes all
 \fB*\&.txt\fR
@@ -216,7 +222,7 @@ is quoted from the shell in this example; this lets Git, and not the shell, expa
 directory\&.
 .RE
 .PP
-\fBgit rm \-f git\-*\&.sh\fR
+\fBgit\fR \fBrm\fR \fB\-f\fR \fBgit\-*\&.sh\fR
 .RS 4
 Because this example lets the shell expand the asterisk (i\&.e\&. you are listing the files explicitly), it does not remove
 \fBsubdir/git\-foo\&.sh\fR\&.

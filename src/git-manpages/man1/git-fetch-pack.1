@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-fetch-pack
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-FETCH\-PACK" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-FETCH\-PACK" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,9 +35,8 @@ git-fetch-pack \- Receive missing objects from another repository
 \fIgit fetch\-pack\fR [\-\-all] [\-\-quiet|\-q] [\-\-keep|\-k] [\-\-thin] [\-\-include\-tag]
         [\-\-upload\-pack=<git\-upload\-pack>]
         [\-\-depth=<n>] [\-\-no\-progress]
-        [\-v] <repository> [<refs>\&...]
+        [\-v] <repository> [<refs>\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Usually you would want to use \fIgit fetch\fR, which is a higher level wrapper of this command, instead\&.
@@ -90,7 +89,7 @@ If the remote side supports it, annotated tags objects will be downloaded on the
 .RS 4
 Use this to specify the path to
 \fIgit\-upload\-pack\fR
-on the remote side, if is not found on your $PATH\&. Installations of sshd ignores the user\(cqs environment setup scripts for login shells (e\&.g\&. \&.bash_profile) and your privately installed git may not be found on the system default $PATH\&. Another workaround suggested is to set up your $PATH in "\&.bashrc", but this flag is for people who do not want to pay the overhead for non\-interactive shells by having a lean \&.bashrc file (they set most of the things up in \&.bash_profile)\&.
+on the remote side, if it is not found on your $PATH\&. Installations of sshd ignores the user\(cqs environment setup scripts for login shells (e\&.g\&. \&.bash_profile) and your privately installed git may not be found on the system default $PATH\&. Another workaround suggested is to set up your $PATH in "\&.bashrc", but this flag is for people who do not want to pay the overhead for non\-interactive shells by having a lean \&.bashrc file (they set most of the things up in \&.bash_profile)\&.
 .RE
 .PP
 \-\-exec=<git\-upload\-pack>
@@ -110,7 +109,7 @@ treats the special depth 2147483647 as infinite even if there is an ancestor\-ch
 Deepen or shorten the history of a shallow repository to include all reachable commits after <date>\&.
 .RE
 .PP
-\-\-shallow\-exclude=<revision>
+\-\-shallow\-exclude=<ref>
 .RS 4
 Deepen or shorten the history of a shallow repository to exclude commits reachable from a specified remote branch or tag\&. This option can be specified multiple times\&.
 .RE
@@ -145,7 +144,7 @@ Run verbosely\&.
 The URL to the remote repository\&.
 .RE
 .PP
-<refs>\&...
+<refs>\&...\:
 .RS 4
 The remote heads to update from\&. This is relative to $GIT_DIR (e\&.g\&. "HEAD", "refs/heads/master")\&. When unspecified, update from all heads the remote side has\&.
 .sp

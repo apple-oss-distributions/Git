@@ -1,20 +1,18 @@
 #include "builtin.h"
 #include "config.h"
-#include "commit.h"
-#include "refs.h"
+#include "hex.h"
 #include "pkt-line.h"
-#include "sideband.h"
 #include "run-command.h"
 #include "remote.h"
 #include "connect.h"
 #include "send-pack.h"
 #include "quote.h"
 #include "transport.h"
-#include "version.h"
 #include "oid-array.h"
-#include "gpg-interface.h"
 #include "gettext.h"
 #include "protocol.h"
+#include "parse-options.h"
+#include "write-or-die.h"
 
 static const char * const send_pack_usage[] = {
 	N_("git send-pack [--mirror] [--dry-run] [--force]\n"
@@ -128,32 +126,31 @@ static void print_helper_status(struct ref *ref)
 	strbuf_release(&buf);
 }
 
-static int send_pack_config(const char *k, const char *v, void *cb)
+static int send_pack_config(const char *k, const char *v,
+			    const struct config_context *ctx, void *cb)
 {
-	git_gpg_config(k, v, NULL);
-
 	if (!strcmp(k, "push.gpgsign")) {
-		const char *value;
-		if (!git_config_get_value("push.gpgsign", &value)) {
-			switch (git_parse_maybe_bool(value)) {
-			case 0:
-				args.push_cert = SEND_PACK_PUSH_CERT_NEVER;
-				break;
-			case 1:
-				args.push_cert = SEND_PACK_PUSH_CERT_ALWAYS;
-				break;
-			default:
-				if (value && !strcasecmp(value, "if-asked"))
-					args.push_cert = SEND_PACK_PUSH_CERT_IF_ASKED;
-				else
-					return error(_("invalid value for '%s'"), k);
-			}
+		switch (git_parse_maybe_bool(v)) {
+		case 0:
+			args.push_cert = SEND_PACK_PUSH_CERT_NEVER;
+			break;
+		case 1:
+			args.push_cert = SEND_PACK_PUSH_CERT_ALWAYS;
+			break;
+		default:
+			if (!strcasecmp(v, "if-asked"))
+				args.push_cert = SEND_PACK_PUSH_CERT_IF_ASKED;
+			else
+				return error(_("invalid value for '%s'"), k);
 		}
 	}
-	return git_default_config(k, v, cb);
+	return git_default_config(k, v, ctx, cb);
 }
 
-int cmd_send_pack(int argc, const char **argv, const char *prefix)
+int cmd_send_pack(int argc,
+		  const char **argv,
+		  const char *prefix,
+		  struct repository *repo)
 {
 	struct refspec rs = REFSPEC_INIT_PUSH;
 	const char *remote_name = NULL;
@@ -206,7 +203,7 @@ int cmd_send_pack(int argc, const char **argv, const char *prefix)
 		OPT_BOOL(0, "stateless-rpc", &stateless_rpc, N_("use stateless RPC protocol")),
 		OPT_BOOL(0, "stdin", &from_stdin, N_("read refs from stdin")),
 		OPT_BOOL(0, "helper-status", &helper_status, N_("print status from remote helper")),
-		OPT_CALLBACK_F(0, CAS_OPT_NAME, &cas, N_("<refname>:<expect>"),
+		OPT_CALLBACK_F(0, "force-with-lease", &cas, N_("<refname>:<expect>"),
 		  N_("require old value of ref to be at this value"),
 		  PARSE_OPT_OPTARG, parseopt_push_cas_option),
 		OPT_BOOL(0, TRANS_OPT_FORCE_IF_INCLUDES, &force_if_includes,
@@ -214,7 +211,7 @@ int cmd_send_pack(int argc, const char **argv, const char *prefix)
 		OPT_END()
 	};
 
-	git_config(send_pack_config, NULL);
+	repo_config(repo, send_pack_config, NULL);
 	argc = parse_options(argc, argv, prefix, options, send_pack_usage, 0);
 	if (argc > 0) {
 		dest = argv[0];
@@ -275,7 +272,7 @@ int cmd_send_pack(int argc, const char **argv, const char *prefix)
 		fd[0] = 0;
 		fd[1] = 1;
 	} else {
-		conn = git_connect(fd, dest, receivepack,
+		conn = git_connect(fd, dest, "git-receive-pack", receivepack,
 			args.verbose ? CONNECT_VERBOSE : 0);
 	}
 
@@ -319,7 +316,7 @@ int cmd_send_pack(int argc, const char **argv, const char *prefix)
 	set_ref_status_for_push(remote_refs, args.send_mirror,
 		args.force_update);
 
-	ret = send_pack(&args, fd, conn, remote_refs, &extra_have);
+	ret = send_pack(repo, &args, fd, conn, remote_refs, &extra_have);
 
 	if (helper_status)
 		print_helper_status(remote_refs);
@@ -339,7 +336,14 @@ int cmd_send_pack(int argc, const char **argv, const char *prefix)
 	}
 
 	if (!ret && !transport_refs_pushed(remote_refs))
+		/* stable plumbing output; do not modify or localize */
 		fprintf(stderr, "Everything up-to-date\n");
 
+	string_list_clear(&push_options, 0);
+	free_refs(remote_refs);
+	free_refs(local_refs);
+	refspec_clear(&rs);
+	oid_array_clear(&shallow);
+	clear_cas_option(&cas);
 	return ret;
 }

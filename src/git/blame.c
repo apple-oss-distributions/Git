@@ -1,11 +1,23 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "refs.h"
 #include "object-store.h"
 #include "cache-tree.h"
 #include "mergesort.h"
+#include "commit.h"
+#include "convert.h"
 #include "diff.h"
 #include "diffcore.h"
+#include "gettext.h"
+#include "hex.h"
+#include "path.h"
+#include "read-cache.h"
+#include "revision.h"
+#include "setup.h"
 #include "tag.h"
+#include "trace2.h"
 #include "blame.h"
 #include "alloc.h"
 #include "commit-slab.h"
@@ -176,12 +188,12 @@ static void set_commit_buffer_from_strbuf(struct repository *r,
 static struct commit *fake_working_tree_commit(struct repository *r,
 					       struct diff_options *opt,
 					       const char *path,
-					       const char *contents_from)
+					       const char *contents_from,
+					       struct object_id *oid)
 {
 	struct commit *commit;
 	struct blame_origin *origin;
 	struct commit_list **parent_tail, *parent;
-	struct object_id head_oid;
 	struct strbuf buf = STRBUF_INIT;
 	const char *ident;
 	time_t now;
@@ -197,17 +209,18 @@ static struct commit *fake_working_tree_commit(struct repository *r,
 	commit->date = now;
 	parent_tail = &commit->parents;
 
-	if (!resolve_ref_unsafe("HEAD", RESOLVE_REF_READING, &head_oid, NULL))
-		die("no such ref: HEAD");
-
-	parent_tail = append_parent(r, parent_tail, &head_oid);
+	parent_tail = append_parent(r, parent_tail, oid);
 	append_merge_parents(r, parent_tail);
 	verify_working_tree_path(r, commit, path);
 
 	origin = make_origin(commit, path);
 
-	ident = fmt_ident("Not Committed Yet", "not.committed.yet",
-			WANT_BLANK_IDENT, NULL, 0);
+	if (contents_from)
+		ident = fmt_ident("External file (--contents)", "external.file",
+				  WANT_BLANK_IDENT, NULL, 0);
+	else
+		ident = fmt_ident("Not Committed Yet", "not.committed.yet",
+				  WANT_BLANK_IDENT, NULL, 0);
 	strbuf_addstr(&msg, "tree 0000000000000000000000000000000000000000\n");
 	for (parent = commit->parents; parent; parent = parent->next)
 		strbuf_addf(&msg, "parent %s\n",
@@ -242,7 +255,7 @@ static struct commit *fake_working_tree_commit(struct repository *r,
 		switch (st.st_mode & S_IFMT) {
 		case S_IFREG:
 			if (opt->flags.allow_textconv &&
-			    textconv_object(r, read_from, mode, null_oid(), 0, &buf_ptr, &buf_len))
+			    textconv_object(r, read_from, mode, null_oid(the_hash_algo), 0, &buf_ptr, &buf_len))
 				strbuf_attach(&buf, buf_ptr, buf_len, buf_len + 1);
 			else if (strbuf_read_file(&buf, read_from, st.st_size) != st.st_size)
 				die_errno("cannot open or read '%s'", read_from);
@@ -264,7 +277,7 @@ static struct commit *fake_working_tree_commit(struct repository *r,
 	convert_to_git(r->index, path, buf.buf, buf.len, &buf, 0);
 	origin->file.ptr = buf.buf;
 	origin->file.size = buf.len;
-	pretend_object_file(buf.buf, buf.len, OBJ_BLOB, &origin->blob_oid);
+	pretend_object_file(the_repository, buf.buf, buf.len, OBJ_BLOB, &origin->blob_oid);
 
 	/*
 	 * Read the current index, replace the path entry with
@@ -1028,8 +1041,9 @@ static void fill_origin_blob(struct diff_options *opt,
 				    &o->blob_oid, 1, &file->ptr, &file_size))
 			;
 		else
-			file->ptr = read_object_file(&o->blob_oid, &type,
-						     &file_size);
+			file->ptr = repo_read_object_file(the_repository,
+							  &o->blob_oid, &type,
+							  &file_size);
 		file->size = file_size;
 
 		if (!file->ptr)
@@ -1235,7 +1249,7 @@ static int fill_blob_sha1_and_mode(struct repository *r,
 		goto error_out;
 	return 0;
  error_out:
-	oidclr(&origin->blob_oid);
+	oidclr(&origin->blob_oid, the_repository->hash_algo);
 	origin->mode = S_IFINVALID;
 	return -1;
 }
@@ -2429,7 +2443,7 @@ static void pass_blame(struct blame_scoreboard *sb, struct blame_origin *origin,
 
 			if (sg_origin[i])
 				continue;
-			if (parse_commit(p))
+			if (repo_parse_commit(the_repository, p))
 				continue;
 			porigin = find(sb->repo, p, origin, sb->bloom_data);
 			if (!porigin)
@@ -2592,7 +2606,7 @@ void assign_blame(struct blame_scoreboard *sb, int opt)
 		 * so hold onto it in the meantime.
 		 */
 		blame_origin_incref(suspect);
-		parse_commit(commit);
+		repo_parse_commit(the_repository, commit);
 		if (sb->reverse ||
 		    (!(commit->object.flags & UNINTERESTING) &&
 		     !(revs->max_age != -1 && commit->date < revs->max_age)))
@@ -2689,7 +2703,7 @@ static struct commit *dwim_reverse_initial(struct rev_info *revs,
 		return NULL;
 
 	/* Do we have HEAD? */
-	if (!resolve_ref_unsafe("HEAD", RESOLVE_REF_READING, &head_oid, NULL))
+	if (!refs_resolve_ref_unsafe(get_main_ref_store(the_repository), "HEAD", RESOLVE_REF_READING, &head_oid, NULL))
 		return NULL;
 	head_commit = lookup_commit_reference_gently(revs->repo,
 						     &head_oid, 1);
@@ -2771,22 +2785,39 @@ void setup_scoreboard(struct blame_scoreboard *sb,
 		sb->commits.compare = compare_commits_by_reverse_commit_date;
 	}
 
-	if (sb->final && sb->contents_from)
-		die(_("cannot use --contents with final commit object name"));
-
 	if (sb->reverse && sb->revs->first_parent_only)
 		sb->revs->children.name = NULL;
 
-	if (!sb->final) {
+	if (sb->contents_from || !sb->final) {
+		struct object_id head_oid, *parent_oid;
+
 		/*
-		 * "--not A B -- path" without anything positive;
-		 * do not default to HEAD, but use the working tree
-		 * or "--contents".
+		 * Build a fake commit at the top of the history, when
+		 * (1) "git blame [^A] --path", i.e. with no positive end
+		 *     of the history range, in which case we build such
+		 *     a fake commit on top of the HEAD to blame in-tree
+		 *     modifications.
+		 * (2) "git blame --contents=file [A] -- path", with or
+		 *     without positive end of the history range but with
+		 *     --contents, in which case we pretend that there is
+		 *     a fake commit on top of the positive end (defaulting to
+		 *     HEAD) that has the given contents in the path.
 		 */
-		setup_work_tree();
+		if (sb->final) {
+			parent_oid = &sb->final->object.oid;
+		} else {
+			if (!refs_resolve_ref_unsafe(get_main_ref_store(the_repository), "HEAD", RESOLVE_REF_READING, &head_oid, NULL))
+				die("no such ref: HEAD");
+			parent_oid = &head_oid;
+		}
+
+		if (!sb->contents_from)
+			setup_work_tree();
+
 		sb->final = fake_working_tree_commit(sb->repo,
 						     &sb->revs->diffopt,
-						     sb->path, sb->contents_from);
+						     sb->path, sb->contents_from,
+						     parent_oid);
 		add_pending_object(sb->revs, &(sb->final->object), ":");
 	}
 
@@ -2838,8 +2869,10 @@ void setup_scoreboard(struct blame_scoreboard *sb,
 				    &sb->final_buf_size))
 			;
 		else
-			sb->final_buf = read_object_file(&o->blob_oid, &type,
-							 &sb->final_buf_size);
+			sb->final_buf = repo_read_object_file(the_repository,
+							      &o->blob_oid,
+							      &type,
+							      &sb->final_buf_size);
 
 		if (!sb->final_buf)
 			die(_("cannot read blob %s for path %s"),
@@ -2898,6 +2931,11 @@ void setup_blame_bloom_data(struct blame_scoreboard *sb)
 
 void cleanup_scoreboard(struct blame_scoreboard *sb)
 {
+	free(sb->lineno);
+	free(sb->final_buf);
+	clear_prio_queue(&sb->commits);
+	oidset_clear(&sb->ignore_list);
+
 	if (sb->bloom_data) {
 		int i;
 		for (i = 0; i < sb->bloom_data->nr; i++) {

@@ -1,10 +1,31 @@
 /*
  * Helper functions for tree diff generation
  */
-#include "cache.h"
+
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "diff.h"
 #include "diffcore.h"
+#include "hash.h"
 #include "tree.h"
+#include "tree-walk.h"
+#include "environment.h"
+#include "repository.h"
+
+/*
+ * Some mode bits are also used internally for computations.
+ *
+ * They *must* not overlap with any valid modes, and they *must* not be emitted
+ * to outside world - i.e. appear on disk or network. In other words, it's just
+ * temporary fields, which we internally use, but they have to stay in-house.
+ *
+ * ( such approach is valid, as standard S_IF* fits into 16 bits, and in Git
+ *   codebase mode is `unsigned int` which is assumed to be at least 32 bits )
+ */
+
+#define S_DIFFTREE_IFXMIN_NEQ	0x80000000
 
 /*
  * internal mode marker, saying a tree entry != entry of tp[imin]
@@ -27,10 +48,11 @@
 		free((x)); \
 } while(0)
 
-static struct combine_diff_path *ll_diff_tree_paths(
-	struct combine_diff_path *p, const struct object_id *oid,
+static void ll_diff_tree_paths(
+	struct combine_diff_path ***tail, const struct object_id *oid,
 	const struct object_id **parents_oid, int nparent,
-	struct strbuf *base, struct diff_options *opt);
+	struct strbuf *base, struct diff_options *opt,
+	int depth);
 static void ll_diff_tree_oid(const struct object_id *old_oid,
 			     const struct object_id *new_oid,
 			     struct strbuf *base, struct diff_options *opt);
@@ -103,72 +125,6 @@ static int emit_diff_first_parent_only(struct diff_options *opt, struct combine_
 
 
 /*
- * Make a new combine_diff_path from path/mode/sha1
- * and append it to paths list tail.
- *
- * Memory for created elements could be reused:
- *
- *	- if last->next == NULL, the memory is allocated;
- *
- *	- if last->next != NULL, it is assumed that p=last->next was returned
- *	  earlier by this function, and p->next was *not* modified.
- *	  The memory is then reused from p.
- *
- * so for clients,
- *
- * - if you do need to keep the element
- *
- *	p = path_appendnew(p, ...);
- *	process(p);
- *	p->next = NULL;
- *
- * - if you don't need to keep the element after processing
- *
- *	pprev = p;
- *	p = path_appendnew(p, ...);
- *	process(p);
- *	p = pprev;
- *	; don't forget to free tail->next in the end
- *
- * p->parent[] remains uninitialized.
- */
-static struct combine_diff_path *path_appendnew(struct combine_diff_path *last,
-	int nparent, const struct strbuf *base, const char *path, int pathlen,
-	unsigned mode, const struct object_id *oid)
-{
-	struct combine_diff_path *p;
-	size_t len = st_add(base->len, pathlen);
-	size_t alloclen = combine_diff_path_size(nparent, len);
-
-	/* if last->next is !NULL - it is a pre-allocated memory, we can reuse */
-	p = last->next;
-	if (p && (alloclen > (intptr_t)p->next)) {
-		FREE_AND_NULL(p);
-	}
-
-	if (!p) {
-		p = xmalloc(alloclen);
-
-		/*
-		 * until we go to it next round, .next holds how many bytes we
-		 * allocated (for faster realloc - we don't need copying old data).
-		 */
-		p->next = (struct combine_diff_path *)(intptr_t)alloclen;
-	}
-
-	last->next = p;
-
-	p->path = (char *)&(p->parent[nparent]);
-	memcpy(p->path, base->buf, base->len);
-	memcpy(p->path + base->len, path, pathlen);
-	p->path[len] = 0;
-	p->mode = mode;
-	oidcpy(&p->oid, oid ? oid : null_oid());
-
-	return p;
-}
-
-/*
  * new path should be added to combine diff
  *
  * 3 cases on how/when it should be called and behaves:
@@ -178,10 +134,10 @@ static struct combine_diff_path *path_appendnew(struct combine_diff_path *last,
  *	 t,  tp		-> path modified/added
  *			   (M for tp[i]=tp[imin], A otherwise)
  */
-static struct combine_diff_path *emit_path(struct combine_diff_path *p,
-	struct strbuf *base, struct diff_options *opt, int nparent,
-	struct tree_desc *t, struct tree_desc *tp,
-	int imin)
+static void emit_path(struct combine_diff_path ***tail,
+		      struct strbuf *base, struct diff_options *opt,
+		      int nparent, struct tree_desc *t, struct tree_desc *tp,
+		      int imin, int depth)
 {
 	unsigned short mode;
 	const char *path;
@@ -221,8 +177,13 @@ static struct combine_diff_path *emit_path(struct combine_diff_path *p,
 
 	if (emitthis) {
 		int keep;
-		struct combine_diff_path *pprev = p;
-		p = path_appendnew(p, nparent, base, path, pathlen, mode, oid);
+		struct combine_diff_path *p;
+
+		strbuf_add(base, path, pathlen);
+		p = combine_diff_path_new(base->buf, base->len, mode,
+					  oid ? oid : null_oid(the_hash_algo),
+					  nparent);
+		strbuf_setlen(base, old_baselen);
 
 		for (i = 0; i < nparent; ++i) {
 			/*
@@ -245,7 +206,7 @@ static struct combine_diff_path *emit_path(struct combine_diff_path *p,
 				mode_i = tp[i].entry.mode;
 			}
 			else {
-				oid_i = null_oid();
+				oid_i = null_oid(the_hash_algo);
 				mode_i = 0;
 			}
 
@@ -257,21 +218,12 @@ static struct combine_diff_path *emit_path(struct combine_diff_path *p,
 		if (opt->pathchange)
 			keep = opt->pathchange(opt, p);
 
-		/*
-		 * If a path was filtered or consumed - we don't need to add it
-		 * to the list and can reuse its memory, leaving it as
-		 * pre-allocated element on the tail.
-		 *
-		 * On the other hand, if path needs to be kept, we need to
-		 * correct its .next to NULL, as it was pre-initialized to how
-		 * much memory was allocated.
-		 *
-		 * see path_appendnew() for details.
-		 */
-		if (!keep)
-			p = pprev;
-		else
-			p->next = NULL;
+		if (keep) {
+			**tail = p;
+			*tail = &p->next;
+		} else {
+			free(p);
+		}
 	}
 
 	if (recurse) {
@@ -287,12 +239,12 @@ static struct combine_diff_path *emit_path(struct combine_diff_path *p,
 
 		strbuf_add(base, path, pathlen);
 		strbuf_addch(base, '/');
-		p = ll_diff_tree_paths(p, oid, parents_oid, nparent, base, opt);
+		ll_diff_tree_paths(tail, oid, parents_oid, nparent, base, opt,
+				   depth + 1);
 		FAST_ARRAY_FREE(parents_oid, nparent);
 	}
 
 	strbuf_setlen(base, old_baselen);
-	return p;
 }
 
 static void skip_uninteresting(struct tree_desc *t, struct strbuf *base,
@@ -302,7 +254,7 @@ static void skip_uninteresting(struct tree_desc *t, struct strbuf *base,
 
 	while (t->size) {
 		match = tree_entry_interesting(opt->repo->index, &t->entry,
-					       base, 0, &opt->pathspec);
+					       base, &opt->pathspec);
 		if (match) {
 			if (match == all_entries_not_interesting)
 				t->size = 0;
@@ -405,14 +357,18 @@ static inline void update_tp_entries(struct tree_desc *tp, int nparent)
 			update_tree_entry(&tp[i]);
 }
 
-static struct combine_diff_path *ll_diff_tree_paths(
-	struct combine_diff_path *p, const struct object_id *oid,
+static void ll_diff_tree_paths(
+	struct combine_diff_path ***tail, const struct object_id *oid,
 	const struct object_id **parents_oid, int nparent,
-	struct strbuf *base, struct diff_options *opt)
+	struct strbuf *base, struct diff_options *opt,
+	int depth)
 {
 	struct tree_desc t, *tp;
 	void *ttree, **tptree;
 	int i;
+
+	if (depth > max_allowed_tree_depth)
+		die("exceeded maximum allowed tree depth");
 
 	FAST_ARRAY_ALLOC(tp, nparent);
 	FAST_ARRAY_ALLOC(tptree, nparent);
@@ -506,8 +462,8 @@ static struct combine_diff_path *ll_diff_tree_paths(
 			}
 
 			/* D += {δ(t,pi) if pi=p[imin];  "+a" if pi > p[imin]} */
-			p = emit_path(p, base, opt, nparent,
-					&t, tp, imin);
+			emit_path(tail, base, opt, nparent,
+				  &t, tp, imin, depth);
 
 		skip_emit_t_tp:
 			/* t↓,  ∀ pi=p[imin]  pi↓ */
@@ -518,8 +474,8 @@ static struct combine_diff_path *ll_diff_tree_paths(
 		/* t < p[imin] */
 		else if (cmp < 0) {
 			/* D += "+t" */
-			p = emit_path(p, base, opt, nparent,
-					&t, /*tp=*/NULL, -1);
+			emit_path(tail, base, opt, nparent,
+				  &t, /*tp=*/NULL, -1, depth);
 
 			/* t↓ */
 			update_tree_entry(&t);
@@ -534,8 +490,8 @@ static struct combine_diff_path *ll_diff_tree_paths(
 						goto skip_emit_tp;
 			}
 
-			p = emit_path(p, base, opt, nparent,
-					/*t=*/NULL, tp, imin);
+			emit_path(tail, base, opt, nparent,
+				  /*t=*/NULL, tp, imin, depth);
 
 		skip_emit_tp:
 			/* ∀ pi=p[imin]  pi↓ */
@@ -548,24 +504,16 @@ static struct combine_diff_path *ll_diff_tree_paths(
 		free(tptree[i]);
 	FAST_ARRAY_FREE(tptree, nparent);
 	FAST_ARRAY_FREE(tp, nparent);
-
-	return p;
 }
 
 struct combine_diff_path *diff_tree_paths(
-	struct combine_diff_path *p, const struct object_id *oid,
+	const struct object_id *oid,
 	const struct object_id **parents_oid, int nparent,
 	struct strbuf *base, struct diff_options *opt)
 {
-	p = ll_diff_tree_paths(p, oid, parents_oid, nparent, base, opt);
-
-	/*
-	 * free pre-allocated last element, if any
-	 * (see path_appendnew() for details about why)
-	 */
-	FREE_AND_NULL(p->next);
-
-	return p;
+	struct combine_diff_path *head = NULL, **tail = &head;
+	ll_diff_tree_paths(&tail, oid, parents_oid, nparent, base, opt, 0);
+	return head;
 }
 
 /*
@@ -681,14 +629,13 @@ static void ll_diff_tree_oid(const struct object_id *old_oid,
 			     const struct object_id *new_oid,
 			     struct strbuf *base, struct diff_options *opt)
 {
-	struct combine_diff_path phead, *p;
+	struct combine_diff_path *paths, *p;
 	pathchange_fn_t pathchange_old = opt->pathchange;
 
-	phead.next = NULL;
 	opt->pathchange = emit_diff_first_parent_only;
-	diff_tree_paths(&phead, new_oid, &old_oid, 1, base, opt);
+	paths = diff_tree_paths(new_oid, &old_oid, 1, base, opt);
 
-	for (p = phead.next; p;) {
+	for (p = paths; p;) {
 		struct combine_diff_path *pprev = p;
 		p = p->next;
 		free(pprev);

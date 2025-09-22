@@ -8,7 +8,7 @@ broken=0
 total=0
 missing_prereq=
 
-while read file
+for file in "$1"/t*-*.counts
 do
 	while read type value
 	do
@@ -44,7 +44,7 @@ then
 		tr -s "," "\n" |
 		grep -v '^$' |
 		sort -u |
-		paste -s -d ' ')
+		paste -s -d ' ' -)
 	if test -n "$unique_missing_prereq"
 	then
 		printf "\nmissing prereq: $unique_missing_prereq\n\n"

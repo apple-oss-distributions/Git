@@ -14,7 +14,6 @@ only the updates to dir/sub.
 Also tested are "git add -u" without limiting, and "git add -u"
 without contents changes, and other conditions'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -63,6 +62,16 @@ test_expect_success 'update did not touch other tracked files' '
 test_expect_success 'update did not touch untracked files' '
 	git ls-files dir2/other >out &&
 	test_must_be_empty out
+'
+
+test_expect_success 'error out when passing untracked path' '
+	git reset --hard &&
+	echo content >>baz &&
+	echo content >>top &&
+	test_must_fail git add -u baz top 2>err &&
+	test_grep -e "error: pathspec .baz. did not match any file(s) known to git" err &&
+	git diff --cached --name-only >actual &&
+	test_must_be_empty actual
 '
 
 test_expect_success 'cache tree has not been corrupted' '
@@ -195,6 +204,17 @@ test_expect_success '"add -u non-existent" should fail' '
 	test_must_fail git add -u non-existent &&
 	git ls-files >actual &&
 	! grep "non-existent" actual
+'
+
+test_expect_success '"commit -a" implies "add -u" if index becomes empty' '
+	git rm -rf \* &&
+	git commit -m clean-slate &&
+	test_commit file1 &&
+	rm file1.t &&
+	test_tick &&
+	git commit -a -m remove &&
+	git ls-tree HEAD: >out &&
+	test_must_be_empty out
 '
 
 test_done

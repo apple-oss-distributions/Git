@@ -1,7 +1,12 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "config.h"
 #include "userdiff.h"
 #include "attr.h"
+#include "strbuf.h"
+#include "environment.h"
 
 static struct userdiff_driver *drivers;
 static int ndrivers;
@@ -15,6 +20,7 @@ static int drivers_alloc;
 		.cflags = REG_EXTENDED, \
 	}, \
 	.word_regex = wrx "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+", \
+	.word_regex_multi_byte = wrx "|[^[:space:]]", \
 }
 #define IPATTERN(lang, rx, wrx) { \
 	.name = lang, \
@@ -24,6 +30,7 @@ static int drivers_alloc;
 		.cflags = REG_EXTENDED | REG_ICASE, \
 	}, \
 	.word_regex = wrx "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+", \
+	.word_regex_multi_byte = wrx "|[^[:space:]]", \
 }
 
 /*
@@ -52,20 +59,30 @@ PATTERNS("bash",
 	 "("
 	 "("
 	     /* POSIX identifier with mandatory parentheses */
-	     "[a-zA-Z_][a-zA-Z0-9_]*[ \t]*\\([ \t]*\\))"
+	     "([a-zA-Z_][a-zA-Z0-9_]*[ \t]*\\([ \t]*\\))"
 	 "|"
 	     /* Bashism identifier with optional parentheses */
-	     "(function[ \t]+[a-zA-Z_][a-zA-Z0-9_]*(([ \t]*\\([ \t]*\\))|([ \t]+))"
+	     "(function[ \t]+[a-zA-Z_][a-zA-Z0-9_]*(([ \t]*\\([ \t]*\\))|([ \t]+)))"
 	 ")"
-	 /* Optional whitespace */
-	 "[ \t]*"
-	 /* Compound command starting with `{`, `(`, `((` or `[[` */
-	 "(\\{|\\(\\(?|\\[\\[)"
+	 /* Everything after the function header is captured  */
+	 ".*$"
 	 /* End of captured text */
 	 ")",
 	 /* -- */
-	 /* Characters not in the default $IFS value */
-	 "[^ \t]+"),
+	 /* Identifiers: variable and function names */
+	  "[a-zA-Z_][a-zA-Z0-9_]*"
+	 /* Shell variables: $VAR, ${VAR} */
+	  "|\\$[a-zA-Z0-9_]+|\\$\\{"
+	  /*Command list separators and redirection operators  */
+	 "|\\|\\||&&|<<|>>"
+	 /* Operators ending in '=' (comparison + compound assignment) */
+	 "|==|!=|<=|>=|[-+*/%&|^]="
+	 /* Additional parameter expansion operators */
+	 "|:=|:-|:\\+|:\\?|##|%%|\\^\\^|,,"
+	 /* Command-line options (to avoid splitting -option) */
+	 "|[-a-zA-Z0-9_]+"
+	 /* Brackets and grouping symbols */
+	 "|\\(|\\)|\\{|\\}|\\[|\\]"),
 PATTERNS("bibtex",
 	 "(@[a-zA-Z]{1,}[ \t]*\\{{0,1}[ \t]*[^ \t\"@',\\#}{~%]*).*$",
 	 /* -- */
@@ -86,12 +103,48 @@ PATTERNS("cpp",
 	 "|\\.[0-9][0-9]*([Ee][-+]?[0-9]+)?[fFlL]?"
 	 "|[-+*/<>%&^|=!]=|--|\\+\\+|<<=?|>>=?|&&|\\|\\||::|->\\*?|\\.\\*|<=>"),
 PATTERNS("csharp",
-	 /* Keywords */
-	 "!^[ \t]*(do|while|for|if|else|instanceof|new|return|switch|case|throw|catch|using)\n"
-	 /* Methods and constructors */
-	 "^[ \t]*(((static|public|internal|private|protected|new|virtual|sealed|override|unsafe|async)[ \t]+)*[][<>@.~_[:alnum:]]+[ \t]+[<>@._[:alnum:]]+[ \t]*\\(.*\\))[ \t]*$\n"
-	 /* Properties */
-	 "^[ \t]*(((static|public|internal|private|protected|new|virtual|sealed|override|unsafe)[ \t]+)*[][<>@.~_[:alnum:]]+[ \t]+[@._[:alnum:]]+)[ \t]*$\n"
+	 /*
+	  * Jump over reserved keywords which are illegal method names, but which
+	  * can be followed by parentheses without special characters in between,
+	  * making them look like methods.
+	  */
+	 "!(^|[ \t]+)" /* Start of line or whitespace. */
+		"(do|while|for|foreach|if|else|new|default|return|switch|case|throw"
+		"|catch|using|lock|fixed)"
+		"([ \t(]+|$)\n" /* Whitespace, "(", or end of line. */
+	 /*
+	  * Methods/constructors:
+	  * The strategy is to identify a minimum of two groups (any combination
+	  * of keywords/type/name) before the opening parenthesis, and without
+	  * final unexpected characters, normally only used in ordinary statements.
+	  */
+	 "^[ \t]*" /* Remove leading whitespace. */
+		"(" /* Start chunk header capture. */
+		"(" /* First group. */
+			"[][[:alnum:]@_.]" /* Name. */
+			"(<[][[:alnum:]@_, \t<>]+>)?" /* Optional generic parameters. */
+		")+"
+		"([ \t]+" /* Subsequent groups, prepended with space. */
+			"([][[:alnum:]@_.](<[][[:alnum:]@_, \t<>]+>)?)+"
+		")+"
+		"[ \t]*" /* Optional space before parameters start. */
+		"\\(" /* Start of method parameters. */
+		"[^;]*" /* Allow complex parameters, but exclude statements (;). */
+		")$\n" /* Close chunk header capture. */
+	 /*
+	  * Properties:
+	  * As with methods, expect a minimum of two groups. But, more trivial than
+	  * methods, the vast majority of properties long enough to be worth
+	  * showing a chunk header for don't include "=:;,()" on the line they are
+	  * defined, since they don't have a parameter list.
+	  */
+	 "^[ \t]*("
+		"([][[:alnum:]@_.](<[][[:alnum:]@_, \t<>]+>)?)+"
+		"([ \t]+"
+			"([][[:alnum:]@_.](<[][[:alnum:]@_, \t<>]+>)?)+"
+		")+" /* Up to here, same as methods regex. */
+		"[^;=:,()]*" /* Compared to methods, no parameter list allowed. */
+		")$\n"
 	 /* Type definitions */
 	 "^[ \t]*(((static|public|internal|private|protected|new|unsafe|sealed|abstract|partial)[ \t]+)*(class|enum|interface|struct|record)[ \t]+.*)$\n"
 	 /* Namespace */
@@ -168,10 +221,14 @@ PATTERNS("html",
 	 "^[ \t]*(<[Hh][1-6]([ \t].*)?>.*)$",
 	 /* -- */
 	 "[^<>= \t]+"),
+PATTERNS("ini",
+	 "^[ \t]*\\[[^]]+\\]",
+	 /* -- */
+	 "[^ \t]+"),
 PATTERNS("java",
 	 "!^[ \t]*(catch|do|for|if|instanceof|new|return|switch|throw|while)\n"
-	 /* Class, enum, and interface declarations */
-	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface)[ \t]+[A-Za-z][A-Za-z0-9_$]*[ \t]+.*)$\n"
+	 /* Class, enum, interface, and record declarations */
+	 "^[ \t]*(([a-z-]+[ \t]+)*(class|enum|interface|record)[ \t]+.*)$\n"
 	 /* Method definitions; note that constructor signatures are not */
 	 /* matched because they are indistinguishable from method calls. */
 	 "^[ \t]*(([A-Za-z_<>&][][?&<>.,A-Za-z_0-9]*[ \t]+)+[A-Za-z_][A-Za-z_0-9]*[ \t]*\\([^;]*)$",
@@ -292,8 +349,8 @@ PATTERNS("scheme",
 	 /* All other words should be delimited by spaces or parentheses */
 	 "|([^][)(}{[ \t])+"),
 PATTERNS("tex", "^(\\\\((sub)*section|chapter|part)\\*{0,1}\\{.*)$",
-	 "\\\\[a-zA-Z@]+|\\\\.|[a-zA-Z0-9\x80-\xff]+"),
-{ "default", NULL, -1, { NULL, 0 } },
+	 "\\\\[a-zA-Z@]+|\\\\.|([a-zA-Z0-9]|[^\x01-\x7f])+"),
+{ .name = "default", .binary = -1 },
 };
 #undef PATTERNS
 #undef IPATTERN
@@ -320,12 +377,30 @@ static int userdiff_find_by_namelen_cb(struct userdiff_driver *driver,
 {
 	struct find_by_namelen_data *cb_data = priv;
 
-	if (!strncmp(driver->name, cb_data->name, cb_data->len) &&
-	    !driver->name[cb_data->len]) {
+	if (!xstrncmpz(driver->name, cb_data->name, cb_data->len)) {
 		cb_data->driver = driver;
 		return 1; /* tell the caller to stop iterating */
 	}
 	return 0;
+}
+
+static int regexec_supports_multi_byte_chars(void)
+{
+	static const char not_space[] = "[^[:space:]]";
+	static const char utf8_multi_byte_char[] = "\xc2\xa3";
+	regex_t re;
+	regmatch_t match;
+	static int result = -1;
+
+	if (result != -1)
+		return result;
+	if (regcomp(&re, not_space, REG_EXTENDED))
+		BUG("invalid regular expression: %s", not_space);
+	result = !regexec(&re, utf8_multi_byte_char, 1, &match, 0) &&
+		match.rm_so == 0 &&
+		match.rm_eo == strlen(utf8_multi_byte_char);
+	regfree(&re);
+	return result;
 }
 
 static struct userdiff_driver *userdiff_find_by_namelen(const char *name, size_t len)
@@ -341,8 +416,11 @@ static struct userdiff_driver *userdiff_find_by_namelen(const char *name, size_t
 static int parse_funcname(struct userdiff_funcname *f, const char *k,
 		const char *v, int cflags)
 {
-	if (git_config_string(&f->pattern, k, v) < 0)
+	f->pattern = NULL;
+	FREE_AND_NULL(f->pattern_owned);
+	if (git_config_string(&f->pattern_owned, k, v) < 0)
 		return -1;
+	f->pattern = f->pattern_owned;
 	f->cflags = cflags;
 	return 0;
 }
@@ -386,14 +464,37 @@ int userdiff_config(const char *k, const char *v)
 		return parse_funcname(&drv->funcname, k, v, REG_EXTENDED);
 	if (!strcmp(type, "binary"))
 		return parse_tristate(&drv->binary, k, v);
-	if (!strcmp(type, "command"))
-		return git_config_string(&drv->external, k, v);
-	if (!strcmp(type, "textconv"))
-		return git_config_string(&drv->textconv, k, v);
+	if (!strcmp(type, "command")) {
+		FREE_AND_NULL(drv->external.cmd);
+		return git_config_string(&drv->external.cmd, k, v);
+	}
+	if (!strcmp(type, "trustexitcode")) {
+		drv->external.trust_exit_code = git_config_bool(k, v);
+		return 0;
+	}
+	if (!strcmp(type, "textconv")) {
+		int ret;
+		FREE_AND_NULL(drv->textconv_owned);
+		ret = git_config_string(&drv->textconv_owned, k, v);
+		drv->textconv = drv->textconv_owned;
+		return ret;
+	}
 	if (!strcmp(type, "cachetextconv"))
 		return parse_bool(&drv->textconv_want_cache, k, v);
-	if (!strcmp(type, "wordregex"))
-		return git_config_string(&drv->word_regex, k, v);
+	if (!strcmp(type, "wordregex")) {
+		int ret;
+		FREE_AND_NULL(drv->word_regex_owned);
+		ret = git_config_string(&drv->word_regex_owned, k, v);
+		drv->word_regex = drv->word_regex_owned;
+		return ret;
+	}
+	if (!strcmp(type, "algorithm")) {
+		int ret;
+		FREE_AND_NULL(drv->algorithm_owned);
+		ret = git_config_string(&drv->algorithm_owned, k, v);
+		drv->algorithm = drv->algorithm_owned;
+		return ret;
+	}
 
 	return 0;
 }
@@ -401,7 +502,13 @@ int userdiff_config(const char *k, const char *v)
 struct userdiff_driver *userdiff_find_by_name(const char *name)
 {
 	int len = strlen(name);
-	return userdiff_find_by_namelen(name, len);
+	struct userdiff_driver *driver = userdiff_find_by_namelen(name, len);
+	if (driver && driver->word_regex_multi_byte) {
+		if (regexec_supports_multi_byte_chars())
+			driver->word_regex = driver->word_regex_multi_byte;
+		driver->word_regex_multi_byte = NULL;
+	}
+	return driver;
 }
 
 struct userdiff_driver *userdiff_find_by_path(struct index_state *istate,
@@ -430,7 +537,8 @@ struct userdiff_driver *userdiff_get_textconv(struct repository *r,
 	if (!driver->textconv)
 		return NULL;
 
-	if (driver->textconv_want_cache && !driver->textconv_cache) {
+	if (driver->textconv_want_cache && !driver->textconv_cache &&
+	    have_git_dir()) {
 		struct notes_cache *c = xmalloc(sizeof(*c));
 		struct strbuf name = STRBUF_INIT;
 

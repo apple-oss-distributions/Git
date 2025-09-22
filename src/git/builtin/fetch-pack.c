@@ -1,4 +1,10 @@
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "builtin.h"
+#include "gettext.h"
+#include "hex.h"
+#include "object-file.h"
 #include "pkt-line.h"
 #include "fetch-pack.h"
 #include "remote.h"
@@ -26,11 +32,11 @@ static void add_sought_entry(struct ref ***sought, int *nr, int *alloc,
 			; /* <oid>, leave oid as name */
 		} else {
 			/* <ref>, clear cruft from oid */
-			oidclr(&oid);
+			oidclr(&oid, the_repository->hash_algo);
 		}
 	} else {
 		/* <ref>, clear cruft from get_oid_hex */
-		oidclr(&oid);
+		oidclr(&oid, the_repository->hash_algo);
 	}
 
 	ref = alloc_ref(name);
@@ -40,12 +46,16 @@ static void add_sought_entry(struct ref ***sought, int *nr, int *alloc,
 	(*sought)[*nr - 1] = ref;
 }
 
-int cmd_fetch_pack(int argc, const char **argv, const char *prefix)
+int cmd_fetch_pack(int argc,
+		   const char **argv,
+		   const char *prefix UNUSED,
+		   struct repository *repo UNUSED)
 {
 	int i, ret;
-	struct ref *ref = NULL;
+	struct ref *fetched_refs = NULL, *remote_refs = NULL;
 	const char *dest = NULL;
 	struct ref **sought = NULL;
+	struct ref **sought_to_free = NULL;
 	int nr_sought = 0, alloc_sought = 0;
 	int fd[2];
 	struct string_list pack_lockfiles = STRING_LIST_INIT_DUP;
@@ -64,6 +74,8 @@ int cmd_fetch_pack(int argc, const char **argv, const char *prefix)
 	memset(&args, 0, sizeof(args));
 	list_objects_filter_init(&args.filter_options);
 	args.uploadpack = "git-upload-pack";
+
+	show_usage_if_asked(argc, argv, fetch_pack_usage);
 
 	for (i = 1; i < argc && *argv[i] == '-'; i++) {
 		const char *arg = argv[i];
@@ -211,8 +223,8 @@ int cmd_fetch_pack(int argc, const char **argv, const char *prefix)
 		int flags = args.verbose ? CONNECT_VERBOSE : 0;
 		if (args.diag_url)
 			flags |= CONNECT_DIAG_URL;
-		conn = git_connect(fd, dest, args.uploadpack,
-				   flags);
+		conn = git_connect(fd, dest, "git-upload-pack",
+				   args.uploadpack, flags);
 		if (!conn)
 			return args.diag_url ? 0 : 1;
 	}
@@ -225,19 +237,27 @@ int cmd_fetch_pack(int argc, const char **argv, const char *prefix)
 	version = discover_version(&reader);
 	switch (version) {
 	case protocol_v2:
-		get_remote_refs(fd[1], &reader, &ref, 0, NULL, NULL,
+		get_remote_refs(fd[1], &reader, &remote_refs, 0, NULL, NULL,
 				args.stateless_rpc);
 		break;
 	case protocol_v1:
 	case protocol_v0:
-		get_remote_heads(&reader, &ref, 0, NULL, &shallow);
+		get_remote_heads(&reader, &remote_refs, 0, NULL, &shallow);
 		break;
 	case protocol_unknown_version:
 		BUG("unknown protocol version");
 	}
 
-	ref = fetch_pack(&args, fd, ref, sought, nr_sought,
+	/*
+	 * Create a shallow copy of `sought` so that we can free all of its entries.
+	 * This is because `fetch_pack()` will modify the array to evict some
+	 * entries, but won't free those.
+	 */
+	DUP_ARRAY(sought_to_free, sought, nr_sought);
+
+	fetched_refs = fetch_pack(&args, fd, remote_refs, sought, nr_sought,
 			 &shallow, pack_lockfiles_ptr, version);
+
 	if (pack_lockfiles.nr) {
 		int i;
 
@@ -257,7 +277,7 @@ int cmd_fetch_pack(int argc, const char **argv, const char *prefix)
 	if (finish_connect(conn))
 		return 1;
 
-	ret = !ref;
+	ret = !fetched_refs;
 
 	/*
 	 * If the heads to pull were given, we should have consumed
@@ -267,11 +287,18 @@ int cmd_fetch_pack(int argc, const char **argv, const char *prefix)
 	 */
 	ret |= report_unmatched_refs(sought, nr_sought);
 
-	while (ref) {
+	for (struct ref *ref = fetched_refs; ref; ref = ref->next)
 		printf("%s %s\n",
 		       oid_to_hex(&ref->old_oid), ref->name);
-		ref = ref->next;
-	}
 
+	for (size_t i = 0; i < nr_sought; i++)
+		free_one_ref(sought_to_free[i]);
+	free(sought_to_free);
+	free(sought);
+	free_refs(fetched_refs);
+	free_refs(remote_refs);
+	list_objects_filter_release(&args.filter_options);
+	oid_array_clear(&shallow);
+	string_list_clear(&pack_lockfiles, 0);
 	return ret;
 }

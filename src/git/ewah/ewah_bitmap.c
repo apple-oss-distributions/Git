@@ -16,10 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
+
 #include "git-compat-util.h"
 #include "ewok.h"
 #include "ewok_rlw.h"
-#include "cache.h"
 
 static inline size_t min_size(size_t a, size_t b)
 {
@@ -256,10 +256,8 @@ void ewah_each_bit(struct ewah_bitmap *self, void (*callback)(size_t, void*), vo
 		++pointer;
 
 		for (k = 0; k < rlw_get_literal_words(word); ++k) {
-			int c;
-
 			/* todo: zero count optimization */
-			for (c = 0; c < BITS_IN_EWORD; ++c, ++pos) {
+			for (size_t c = 0; c < BITS_IN_EWORD; ++c, ++pos) {
 				if ((self->buffer[pointer] & ((eword_t)1 << c)) != 0)
 					callback(pos, payload);
 			}
@@ -371,6 +369,39 @@ void ewah_iterator_init(struct ewah_iterator *it, struct ewah_bitmap *parent)
 
 	if (it->pointer < it->buffer_size)
 		read_new_rlw(it);
+}
+
+void ewah_or_iterator_init(struct ewah_or_iterator *it,
+			   struct ewah_bitmap **parents, size_t nr)
+{
+	size_t i;
+
+	memset(it, 0, sizeof(*it));
+
+	ALLOC_ARRAY(it->its, nr);
+	for (i = 0; i < nr; i++)
+		ewah_iterator_init(&it->its[it->nr++], parents[i]);
+}
+
+int ewah_or_iterator_next(eword_t *next, struct ewah_or_iterator *it)
+{
+	eword_t buf, out = 0;
+	size_t i;
+	int ret = 0;
+
+	for (i = 0; i < it->nr; i++)
+		if (ewah_iterator_next(&buf, &it->its[i])) {
+			out |= buf;
+			ret = 1;
+		}
+
+	*next = out;
+	return ret;
+}
+
+void ewah_or_iterator_release(struct ewah_or_iterator *it)
+{
+	free(it->its);
 }
 
 void ewah_xor(

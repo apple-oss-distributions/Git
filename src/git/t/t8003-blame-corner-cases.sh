@@ -201,13 +201,13 @@ committer David Reiss <dreiss@facebook.com> 1234567890 +0000
 
 some message
 EOF
-  COMMIT=$(git hash-object -t commit -w badcommit) &&
+  COMMIT=$(git hash-object --literally -t commit -w badcommit) &&
   git --no-pager blame $COMMIT -- uno >/dev/null
 '
 
 test_expect_success 'blame -L with invalid start' '
 	test_must_fail git blame -L5 tres 2>errors &&
-	test_i18ngrep "has only 2 lines" errors
+	test_grep "has only 2 lines" errors
 '
 
 test_expect_success 'blame -L with invalid end' '

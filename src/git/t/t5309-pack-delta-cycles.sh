@@ -2,7 +2,6 @@
 
 test_description='test index-pack handling of delta cycles in packfiles'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-pack.sh
 
@@ -61,7 +60,10 @@ test_expect_success 'index-pack detects REF_DELTA cycles' '
 test_expect_success 'failover to an object in another pack' '
 	clear_packs &&
 	git index-pack --stdin <ab.pack &&
-	test_must_fail git index-pack --stdin --fix-thin <cycle.pack
+
+	# This cycle does not fail since the existence of A & B in
+	# the repo allows us to resolve the cycle.
+	git index-pack --stdin --fix-thin <cycle.pack
 '
 
 test_expect_success 'failover to a duplicate object in the same pack' '
@@ -73,7 +75,34 @@ test_expect_success 'failover to a duplicate object in the same pack' '
 		pack_obj $A
 	} >recoverable.pack &&
 	pack_trailer recoverable.pack &&
-	test_must_fail git index-pack --fix-thin --stdin <recoverable.pack
+
+	# This cycle does not fail since the existence of a full copy
+	# of A in the pack allows us to resolve the cycle.
+	git index-pack --fix-thin --stdin <recoverable.pack
+'
+
+test_expect_success 'index-pack works with thin pack A->B->C with B on disk' '
+	git init server &&
+	(
+		cd server &&
+		test_commit_bulk 4
+	) &&
+
+	A=$(git -C server rev-parse HEAD^{tree}) &&
+	B=$(git -C server rev-parse HEAD~1^{tree}) &&
+	C=$(git -C server rev-parse HEAD~2^{tree}) &&
+	git -C server reset --hard HEAD~1 &&
+
+	test-tool -C server pack-deltas --num-objects=2 >thin.pack <<-EOF &&
+	REF_DELTA $A $B
+	REF_DELTA $B $C
+	EOF
+
+	git clone "file://$(pwd)/server" client &&
+	(
+		cd client &&
+		git index-pack --fix-thin --stdin <../thin.pack
+	)
 '
 
 test_done

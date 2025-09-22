@@ -3,15 +3,17 @@
  *
  * Copyright (C) Linus Torvalds, 2005
  */
+
 #include "git-compat-util.h"
-#include "cache.h"
+#include "gettext.h"
+#include "trace2.h"
 
 #ifdef __APPLE__
 #define OS_CRASH_ENABLE_EXPERIMENTAL_LIBTRACE 1
 #include <os/assumes.h>
 #endif
 
-static void vreportf(const char *prefix, const char *err, va_list params)
+static void vfreportf(FILE *f, const char *prefix, const char *err, va_list params)
 {
 	char msg[4096];
 	char *p, *pend = msg + sizeof(msg);
@@ -23,8 +25,11 @@ static void vreportf(const char *prefix, const char *err, va_list params)
 	}
 	memcpy(msg, prefix, prefix_len);
 	p = msg + prefix_len;
-	if (vsnprintf(p, pend - p, err, params) < 0)
+	if (vsnprintf(p, pend - p, err, params) < 0) {
+		fprintf(stderr, _("error: unable to format message: %s\n"),
+			err);
 		*p = '\0'; /* vsnprintf() failed, clip at prefix */
+	}
 
 	for (; p != pend - 1 && *p; p++) {
 		if (iscntrl(*p) && *p != '\t' && *p != '\n')
@@ -32,8 +37,13 @@ static void vreportf(const char *prefix, const char *err, va_list params)
 	}
 
 	*(p++) = '\n'; /* we no longer need a NUL */
-	fflush(stderr);
-	write_in_full(2, msg, p - msg);
+	fflush(f);
+	write_in_full(fileno(f), msg, p - msg);
+}
+
+static void vreportf(const char *prefix, const char *err, va_list params)
+{
+	vfreportf(stderr, prefix, err, params);
 }
 
 static NORETURN void usage_builtin(const char *err, va_list params)
@@ -173,6 +183,22 @@ void NORETURN usage(const char *err)
 	usagef("%s", err);
 }
 
+static void show_usage_if_asked_helper(const char *err, ...)
+{
+	va_list params;
+
+	va_start(params, err);
+	vfreportf(stdout, _("usage: "), err, params);
+	va_end(params);
+	exit(129);
+}
+
+void show_usage_if_asked(int ac, const char **av, const char *err)
+{
+	if (ac == 2 && !strcmp(av[1], "-h"))
+		show_usage_if_asked_helper(err);
+}
+
 void NORETURN die(const char *err, ...)
 {
 	va_list params;
@@ -190,7 +216,7 @@ void NORETURN die(const char *err, ...)
 static const char *fmt_with_err(char *buf, int n, const char *fmt)
 {
 	char str_error[256], *err;
-	int i, j;
+	size_t i, j;
 
 	err = strerror(errno);
 	for (i = j = 0; err[i] && j < sizeof(str_error) - 1; ) {
@@ -366,18 +392,3 @@ void bug_fl(const char *file, int line, const char *fmt, ...)
 	trace2_cmd_error_va(fmt, ap);
 	va_end(ap);
 }
-
-#ifdef SUPPRESS_ANNOTATED_LEAKS
-void unleak_memory(const void *ptr, size_t len)
-{
-	static struct suppressed_leak_root {
-		struct suppressed_leak_root *next;
-		char data[FLEX_ARRAY];
-	} *suppressed_leaks;
-	struct suppressed_leak_root *root;
-
-	FLEX_ALLOC_MEM(root, data, ptr, len);
-	root->next = suppressed_leaks;
-	suppressed_leaks = root;
-}
-#endif

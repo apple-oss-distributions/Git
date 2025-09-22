@@ -1,15 +1,23 @@
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "builtin.h"
-#include "cache.h"
-#include "repository.h"
+#include "environment.h"
+#include "gettext.h"
+#include "hex.h"
 #include "config.h"
 #include "commit.h"
 #include "tag.h"
 #include "refs.h"
+#include "object-name.h"
+#include "pager.h"
 #include "parse-options.h"
 #include "prio-queue.h"
 #include "hash-lookup.h"
 #include "commit-slab.h"
 #include "commit-graph.h"
+#include "wildmatch.h"
+#include "mem-pool.h"
 
 /*
  * One day.  See the 'name a rev shortly after epoch' test in t6120 when
@@ -59,7 +67,7 @@ static void set_commit_cutoff(struct commit *commit)
 static void adjust_cutoff_timestamp_for_slop(void)
 {
 	if (cutoff) {
-		/* check for undeflow */
+		/* check for underflow */
 		if (cutoff > TIME_MIN + CUTOFF_DATE_SLOP)
 			cutoff = cutoff - CUTOFF_DATE_SLOP;
 		else
@@ -108,19 +116,11 @@ static int is_better_name(struct rev_name *name,
 	int name_distance = effective_distance(name->distance, name->generation);
 	int new_distance = effective_distance(distance, generation);
 
-	/*
-	 * When comparing names based on tags, prefer names
-	 * based on the older tag, even if it is farther away.
-	 */
+	/* If both are tags, we prefer the nearer one. */
 	if (from_tag && name->from_tag)
-		return (name->taggerdate > taggerdate ||
-			(name->taggerdate == taggerdate &&
-			 name_distance > new_distance));
+		return name_distance > new_distance;
 
-	/*
-	 * We know that at least one of them is a non-tag at this point.
-	 * favor a tag over a non-tag.
-	 */
+	/* Favor a tag over a non-tag. */
 	if (name->from_tag != from_tag)
 		return from_tag;
 
@@ -158,30 +158,25 @@ static struct rev_name *create_or_update_name(struct commit *commit,
 	return name;
 }
 
-static char *get_parent_name(const struct rev_name *name, int parent_number)
+static char *get_parent_name(const struct rev_name *name, int parent_number,
+			     struct mem_pool *string_pool)
 {
-	struct strbuf sb = STRBUF_INIT;
 	size_t len;
 
 	strip_suffix(name->tip_name, "^0", &len);
 	if (name->generation > 0) {
-		strbuf_grow(&sb, len +
-			    1 + decimal_width(name->generation) +
-			    1 + decimal_width(parent_number));
-		strbuf_addf(&sb, "%.*s~%d^%d", (int)len, name->tip_name,
-			    name->generation, parent_number);
+		return mem_pool_strfmt(string_pool, "%.*s~%d^%d",
+				       (int)len, name->tip_name,
+				       name->generation, parent_number);
 	} else {
-		strbuf_grow(&sb, len +
-			    1 + decimal_width(parent_number));
-		strbuf_addf(&sb, "%.*s^%d", (int)len, name->tip_name,
-			    parent_number);
+		return mem_pool_strfmt(string_pool, "%.*s^%d",
+				       (int)len, name->tip_name, parent_number);
 	}
-	return strbuf_detach(&sb, NULL);
 }
 
 static void name_rev(struct commit *start_commit,
 		const char *tip_name, timestamp_t taggerdate,
-		int from_tag, int deref)
+		int from_tag, int deref, struct mem_pool *string_pool)
 {
 	struct prio_queue queue;
 	struct commit *commit;
@@ -189,7 +184,7 @@ static void name_rev(struct commit *start_commit,
 	size_t parents_to_queue_nr, parents_to_queue_alloc = 0;
 	struct rev_name *start_name;
 
-	parse_commit(start_commit);
+	repo_parse_commit(the_repository, start_commit);
 	if (commit_is_before_cutoff(start_commit))
 		return;
 
@@ -198,9 +193,10 @@ static void name_rev(struct commit *start_commit,
 	if (!start_name)
 		return;
 	if (deref)
-		start_name->tip_name = xstrfmt("%s^0", tip_name);
+		start_name->tip_name = mem_pool_strfmt(string_pool, "%s^0",
+						       tip_name);
 	else
-		start_name->tip_name = xstrdup(tip_name);
+		start_name->tip_name = mem_pool_strdup(string_pool, tip_name);
 
 	memset(&queue, 0, sizeof(queue)); /* Use the prio_queue as LIFO */
 	prio_queue_put(&queue, start_commit);
@@ -219,7 +215,7 @@ static void name_rev(struct commit *start_commit,
 			struct rev_name *parent_name;
 			int generation, distance;
 
-			parse_commit(parent);
+			repo_parse_commit(the_repository, parent);
 			if (commit_is_before_cutoff(parent))
 				continue;
 
@@ -238,7 +234,8 @@ static void name_rev(struct commit *start_commit,
 				if (parent_number > 1)
 					parent_name->tip_name =
 						get_parent_name(name,
-								parent_number);
+								parent_number,
+								string_pool);
 				else
 					parent_name->tip_name = name->tip_name;
 				ALLOC_GROW(parents_to_queue,
@@ -273,17 +270,6 @@ static int subpath_matches(const char *path, const char *filter)
 	return -1;
 }
 
-static const char *name_ref_abbrev(const char *refname, int shorten_unambiguous)
-{
-	if (shorten_unambiguous)
-		refname = shorten_unambiguous_ref(refname, 0);
-	else if (skip_prefix(refname, "refs/heads/", &refname))
-		; /* refname already advanced */
-	else
-		skip_prefix(refname, "refs/", &refname);
-	return refname;
-}
-
 struct name_ref_data {
 	int tags_only;
 	int name_only;
@@ -309,11 +295,20 @@ static void add_to_tip_table(const struct object_id *oid, const char *refname,
 			     int shorten_unambiguous, struct commit *commit,
 			     timestamp_t taggerdate, int from_tag, int deref)
 {
-	refname = name_ref_abbrev(refname, shorten_unambiguous);
+	char *short_refname = NULL;
+
+	if (shorten_unambiguous)
+		short_refname = refs_shorten_unambiguous_ref(get_main_ref_store(the_repository),
+							     refname, 0);
+	else if (skip_prefix(refname, "refs/heads/", &refname))
+		; /* refname already advanced */
+	else
+		skip_prefix(refname, "refs/", &refname);
 
 	ALLOC_GROW(tip_table.table, tip_table.nr + 1, tip_table.alloc);
 	oidcpy(&tip_table.table[tip_table.nr].oid, oid);
-	tip_table.table[tip_table.nr].refname = xstrdup(refname);
+	tip_table.table[tip_table.nr].refname = short_refname ?
+		short_refname : xstrdup(refname);
 	tip_table.table[tip_table.nr].commit = commit;
 	tip_table.table[tip_table.nr].taggerdate = taggerdate;
 	tip_table.table[tip_table.nr].from_tag = from_tag;
@@ -344,7 +339,7 @@ static int cmp_by_tag_and_age(const void *a_, const void *b_)
 	return a->taggerdate != b->taggerdate;
 }
 
-static int name_ref(const char *path, const struct object_id *oid,
+static int name_ref(const char *path, const char *referent UNUSED, const struct object_id *oid,
 		    int flags UNUSED, void *cb_data)
 {
 	struct object *o = parse_object(the_repository, oid);
@@ -421,7 +416,7 @@ static int name_ref(const char *path, const struct object_id *oid,
 	return 0;
 }
 
-static void name_tips(void)
+static void name_tips(struct mem_pool *string_pool)
 {
 	int i;
 
@@ -434,7 +429,7 @@ static void name_tips(void)
 		struct tip_table_entry *e = &tip_table.table[i];
 		if (e->commit) {
 			name_rev(e->commit, e->refname, e->taggerdate,
-				 e->from_tag, e->deref);
+				 e->from_tag, e->deref, string_pool);
 		}
 	}
 }
@@ -504,7 +499,8 @@ static void show_name(const struct object *obj,
 	else if (allow_undefined)
 		printf("undefined\n");
 	else if (always)
-		printf("%s\n", find_unique_abbrev(oid, DEFAULT_ABBREV));
+		printf("%s\n",
+		       repo_find_unique_abbrev(the_repository, oid, DEFAULT_ABBREV));
 	else
 		die("cannot describe '%s'", oid_to_hex(oid));
 	strbuf_release(&buf);
@@ -538,7 +534,7 @@ static void name_rev_line(char *p, struct name_ref_data *data)
 			counter = 0;
 
 			*(p+1) = 0;
-			if (!get_oid(p - (hexsz - 1), &oid)) {
+			if (!repo_get_oid(the_repository, p - (hexsz - 1), &oid)) {
 				struct object *o =
 					lookup_object(the_repository, &oid);
 				if (o)
@@ -564,10 +560,18 @@ static void name_rev_line(char *p, struct name_ref_data *data)
 	strbuf_release(&buf);
 }
 
-int cmd_name_rev(int argc, const char **argv, const char *prefix)
+int cmd_name_rev(int argc,
+		 const char **argv,
+		 const char *prefix,
+		 struct repository *repo UNUSED)
 {
+	struct mem_pool string_pool;
 	struct object_array revs = OBJECT_ARRAY_INIT;
-	int all = 0, annotate_stdin = 0, transform_stdin = 0, allow_undefined = 1, always = 0, peel_tag = 0;
+
+#ifndef WITH_BREAKING_CHANGES
+	int transform_stdin = 0;
+#endif
+	int all = 0, annotate_stdin = 0, allow_undefined = 1, always = 0, peel_tag = 0;
 	struct name_ref_data data = { 0, 0, STRING_LIST_INIT_NODUP, STRING_LIST_INIT_NODUP };
 	struct option opts[] = {
 		OPT_BOOL(0, "name-only", &data.name_only, N_("print only ref-based names (no object names)")),
@@ -578,30 +582,35 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
 				   N_("ignore refs matching <pattern>")),
 		OPT_GROUP(""),
 		OPT_BOOL(0, "all", &all, N_("list all commits reachable from all refs")),
-		OPT_BOOL(0, "stdin", &transform_stdin, N_("deprecated: use --annotate-stdin instead")),
+#ifndef WITH_BREAKING_CHANGES
+		OPT_BOOL_F(0,
+			   "stdin",
+			   &transform_stdin,
+			   N_("deprecated: use --annotate-stdin instead"),
+			   PARSE_OPT_HIDDEN),
+#endif /* WITH_BREAKING_CHANGES */
 		OPT_BOOL(0, "annotate-stdin", &annotate_stdin, N_("annotate text from stdin")),
 		OPT_BOOL(0, "undefined", &allow_undefined, N_("allow to print `undefined` names (default)")),
 		OPT_BOOL(0, "always",     &always,
 			   N_("show abbreviated commit object as fallback")),
-		{
-			/* A Hidden OPT_BOOL */
-			OPTION_SET_INT, 0, "peel-tag", &peel_tag, NULL,
-			N_("dereference tags in the input (internal use)"),
-			PARSE_OPT_NOARG | PARSE_OPT_HIDDEN, NULL, 1,
-		},
+		OPT_HIDDEN_BOOL(0, "peel-tag", &peel_tag,
+			   N_("dereference tags in the input (internal use)")),
 		OPT_END(),
 	};
 
+	mem_pool_init(&string_pool, 0);
 	init_commit_rev_name(&rev_names);
 	git_config(git_default_config, NULL);
 	argc = parse_options(argc, argv, prefix, opts, name_rev_usage, 0);
 
+#ifndef WITH_BREAKING_CHANGES
 	if (transform_stdin) {
 		warning("--stdin is deprecated. Please use --annotate-stdin instead, "
 					"which is functionally equivalent.\n"
 					"This option will be removed in a future release.");
 		annotate_stdin = 1;
 	}
+#endif
 
 	if (all + annotate_stdin + !!argc > 1) {
 		error("Specify either a list, or --all, not both!");
@@ -615,7 +624,7 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
 		struct object *object;
 		struct commit *commit;
 
-		if (get_oid(*argv, &oid)) {
+		if (repo_get_oid(the_repository, *argv, &oid)) {
 			fprintf(stderr, "Could not get sha1 for %s. Skipping.\n",
 					*argv);
 			continue;
@@ -652,8 +661,8 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
 
 	adjust_cutoff_timestamp_for_slop();
 
-	for_each_ref(name_ref, &data);
-	name_tips();
+	refs_for_each_ref(get_main_ref_store(the_repository), name_ref, &data);
+	name_tips(&string_pool);
 
 	if (annotate_stdin) {
 		struct strbuf sb = STRBUF_INIT;
@@ -666,9 +675,9 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
 	} else if (all) {
 		int i, max;
 
-		max = get_max_object_index();
+		max = get_max_object_index(the_repository);
 		for (i = 0; i < max; i++) {
-			struct object *obj = get_indexed_object(i);
+			struct object *obj = get_indexed_object(the_repository, i);
 			if (!obj || obj->type != OBJ_COMMIT)
 				continue;
 			show_name(obj, NULL,
@@ -681,6 +690,9 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
 				  always, allow_undefined, data.name_only);
 	}
 
-	UNLEAK(revs);
+	string_list_clear(&data.ref_filters, 0);
+	string_list_clear(&data.exclude_filters, 0);
+	mem_pool_discard(&string_pool, 0);
+	object_array_clear(&revs);
 	return 0;
 }

@@ -1,9 +1,15 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
+#include "git-zlib.h"
 #include "config.h"
 #include "builtin.h"
 #include "exec-cmd.h"
 #include "run-command.h"
 #include "levenshtein.h"
+#include "gettext.h"
+#include "hash.h"
 #include "help.h"
 #include "command-list.h"
 #include "string-list.h"
@@ -13,6 +19,11 @@
 #include "parse-options.h"
 #include "prompt.h"
 #include "fsmonitor-ipc.h"
+#include "repository.h"
+
+#ifndef NO_CURL
+#include "git-curl-compat.h" /* For LIBCURL_VERSION only */
+#endif
 
 struct category_description {
 	uint32_t category;
@@ -156,7 +167,7 @@ void add_cmdname(struct cmdnames *cmds, const char *name, int len)
 	cmds->names[cmds->cnt++] = ent;
 }
 
-static void clean_cmdnames(struct cmdnames *cmds)
+void cmdnames_release(struct cmdnames *cmds)
 {
 	int i;
 	for (i = 0; i < cmds->cnt; ++i)
@@ -203,7 +214,7 @@ void exclude_cmds(struct cmdnames *cmds, struct cmdnames *excludes)
 		else if (cmp == 0) {
 			ei++;
 			free(cmds->names[ci++]);
-		} else if (cmp > 0)
+		} else
 			ei++;
 	}
 
@@ -307,7 +318,8 @@ void load_command_list(const char *prefix,
 	exclude_cmds(other_cmds, main_cmds);
 }
 
-static int get_colopts(const char *var, const char *value, void *data)
+static int get_colopts(const char *var, const char *value,
+		       const struct config_context *ctx UNUSED, void *data)
 {
 	unsigned int *colopts = data;
 
@@ -357,8 +369,8 @@ void list_all_main_cmds(struct string_list *list)
 	for (i = 0; i < main_cmds.cnt; i++)
 		string_list_append(list, main_cmds.names[i]->name);
 
-	clean_cmdnames(&main_cmds);
-	clean_cmdnames(&other_cmds);
+	cmdnames_release(&main_cmds);
+	cmdnames_release(&other_cmds);
 }
 
 void list_all_other_cmds(struct string_list *list)
@@ -373,8 +385,8 @@ void list_all_other_cmds(struct string_list *list)
 	for (i = 0; i < other_cmds.cnt; i++)
 		string_list_append(list, other_cmds.names[i]->name);
 
-	clean_cmdnames(&main_cmds);
-	clean_cmdnames(&other_cmds);
+	cmdnames_release(&main_cmds);
+	cmdnames_release(&other_cmds);
 }
 
 void list_cmds_by_category(struct string_list *list,
@@ -457,12 +469,16 @@ void list_developer_interfaces_help(void)
 	putchar('\n');
 }
 
-static int get_alias(const char *var, const char *value, void *data)
+static int get_alias(const char *var, const char *value,
+		     const struct config_context *ctx UNUSED, void *data)
 {
 	struct string_list *list = data;
 
-	if (skip_prefix(var, "alias.", &var))
+	if (skip_prefix(var, "alias.", &var)) {
+		if (!value)
+			return config_error_nonbool(var);
 		string_list_append(list, var)->util = xstrdup(value);
+	}
 
 	return 0;
 }
@@ -533,37 +549,63 @@ int is_in_cmdlist(struct cmdnames *c, const char *s)
 	return 0;
 }
 
-static int autocorrect;
-static struct cmdnames aliases;
+struct help_unknown_cmd_config {
+	int autocorrect;
+	struct cmdnames aliases;
+};
 
+#define AUTOCORRECT_SHOW (-4)
 #define AUTOCORRECT_PROMPT (-3)
 #define AUTOCORRECT_NEVER (-2)
 #define AUTOCORRECT_IMMEDIATELY (-1)
 
-static int git_unknown_cmd_config(const char *var, const char *value, void *cb)
+static int parse_autocorrect(const char *value)
 {
+	switch (git_parse_maybe_bool_text(value)) {
+		case 1:
+			return AUTOCORRECT_IMMEDIATELY;
+		case 0:
+			return AUTOCORRECT_SHOW;
+		default: /* other random text */
+			break;
+	}
+
+	if (!strcmp(value, "prompt"))
+		return AUTOCORRECT_PROMPT;
+	if (!strcmp(value, "never"))
+		return AUTOCORRECT_NEVER;
+	if (!strcmp(value, "immediate"))
+		return AUTOCORRECT_IMMEDIATELY;
+	if (!strcmp(value, "show"))
+		return AUTOCORRECT_SHOW;
+
+	return 0;
+}
+
+static int git_unknown_cmd_config(const char *var, const char *value,
+				  const struct config_context *ctx,
+				  void *cb)
+{
+	struct help_unknown_cmd_config *cfg = cb;
 	const char *p;
 
 	if (!strcmp(var, "help.autocorrect")) {
-		if (!value)
-			return config_error_nonbool(var);
-		if (!strcmp(value, "never")) {
-			autocorrect = AUTOCORRECT_NEVER;
-		} else if (!strcmp(value, "immediate")) {
-			autocorrect = AUTOCORRECT_IMMEDIATELY;
-		} else if (!strcmp(value, "prompt")) {
-			autocorrect = AUTOCORRECT_PROMPT;
-		} else {
-			int v = git_config_int(var, value);
-			autocorrect = (v < 0)
-				? AUTOCORRECT_IMMEDIATELY : v;
+		int v = parse_autocorrect(value);
+
+		if (!v) {
+			v = git_config_int(var, value, ctx->kvi);
+			if (v < 0 || v == 1)
+				v = AUTOCORRECT_IMMEDIATELY;
 		}
+
+		cfg->autocorrect = v;
 	}
+
 	/* Also use aliases for command lookup */
 	if (skip_prefix(var, "alias.", &p))
-		add_cmdname(&aliases, p, strlen(p));
+		add_cmdname(&cfg->aliases, p, strlen(p));
 
-	return git_default_config(var, value, cb);
+	return 0;
 }
 
 static int levenshtein_compare(const void *p1, const void *p2)
@@ -594,32 +636,30 @@ static const char bad_interpreter_advice[] =
 	N_("'%s' appears to be a git command, but we were not\n"
 	"able to execute it. Maybe git-%s is broken?");
 
-const char *help_unknown_cmd(const char *cmd)
+char *help_unknown_cmd(const char *cmd)
 {
+	struct help_unknown_cmd_config cfg = { 0 };
 	int i, n, best_similarity = 0;
-	struct cmdnames main_cmds, other_cmds;
+	struct cmdnames main_cmds = { 0 };
+	struct cmdnames other_cmds = { 0 };
 	struct cmdname_help *common_cmds;
 
-	memset(&main_cmds, 0, sizeof(main_cmds));
-	memset(&other_cmds, 0, sizeof(other_cmds));
-	memset(&aliases, 0, sizeof(aliases));
-
-	read_early_config(git_unknown_cmd_config, NULL);
+	read_early_config(the_repository, git_unknown_cmd_config, &cfg);
 
 	/*
 	 * Disable autocorrection prompt in a non-interactive session
 	 */
-	if ((autocorrect == AUTOCORRECT_PROMPT) && (!isatty(0) || !isatty(2)))
-		autocorrect = AUTOCORRECT_NEVER;
+	if ((cfg.autocorrect == AUTOCORRECT_PROMPT) && (!isatty(0) || !isatty(2)))
+		cfg.autocorrect = AUTOCORRECT_NEVER;
 
-	if (autocorrect == AUTOCORRECT_NEVER) {
+	if (cfg.autocorrect == AUTOCORRECT_NEVER) {
 		fprintf_ln(stderr, _("git: '%s' is not a git command. See 'git --help'."), cmd);
 		exit(1);
 	}
 
 	load_command_list("git-", &main_cmds, &other_cmds);
 
-	add_cmd_list(&main_cmds, &aliases);
+	add_cmd_list(&main_cmds, &cfg.aliases);
 	add_cmd_list(&main_cmds, &other_cmds);
 	QSORT(main_cmds.names, main_cmds.cnt, cmdname_compare);
 	uniq(&main_cmds);
@@ -678,20 +718,20 @@ const char *help_unknown_cmd(const char *cmd)
 		     n++)
 			; /* still counting */
 	}
-	if (autocorrect && n == 1 && SIMILAR_ENOUGH(best_similarity)) {
-		const char *assumed = main_cmds.names[0]->name;
-		main_cmds.names[0] = NULL;
-		clean_cmdnames(&main_cmds);
+	if (cfg.autocorrect && cfg.autocorrect != AUTOCORRECT_SHOW && n == 1 &&
+	    SIMILAR_ENOUGH(best_similarity)) {
+		char *assumed = xstrdup(main_cmds.names[0]->name);
+
 		fprintf_ln(stderr,
 			   _("WARNING: You called a Git command named '%s', "
 			     "which does not exist."),
 			   cmd);
-		if (autocorrect == AUTOCORRECT_IMMEDIATELY)
+		if (cfg.autocorrect == AUTOCORRECT_IMMEDIATELY)
 			fprintf_ln(stderr,
 				   _("Continuing under the assumption that "
 				     "you meant '%s'."),
 				   assumed);
-		else if (autocorrect == AUTOCORRECT_PROMPT) {
+		else if (cfg.autocorrect == AUTOCORRECT_PROMPT) {
 			char *answer;
 			struct strbuf msg = STRBUF_INIT;
 			strbuf_addf(&msg, _("Run '%s' instead [y/N]? "), assumed);
@@ -704,9 +744,13 @@ const char *help_unknown_cmd(const char *cmd)
 			fprintf_ln(stderr,
 				   _("Continuing in %0.1f seconds, "
 				     "assuming that you meant '%s'."),
-				   (float)autocorrect/10.0, assumed);
-			sleep_millisec(autocorrect * 100);
+				   (float)cfg.autocorrect/10.0, assumed);
+			sleep_millisec(cfg.autocorrect * 100);
 		}
+
+		cmdnames_release(&cfg.aliases);
+		cmdnames_release(&main_cmds);
+		cmdnames_release(&other_cmds);
 		return assumed;
 	}
 
@@ -749,10 +793,27 @@ void get_version_info(struct strbuf *buf, int show_build_options)
 
 		if (fsmonitor_ipc__is_supported())
 			strbuf_addstr(buf, "feature: fsmonitor--daemon\n");
+#if defined LIBCURL_VERSION
+		strbuf_addf(buf, "libcurl: %s\n", LIBCURL_VERSION);
+#endif
+#if defined OPENSSL_VERSION_TEXT
+		strbuf_addf(buf, "OpenSSL: %s\n", OPENSSL_VERSION_TEXT);
+#endif
+#if defined ZLIBNG_VERSION
+		strbuf_addf(buf, "zlib-ng: %s\n", ZLIBNG_VERSION);
+#elif defined ZLIB_VERSION
+		strbuf_addf(buf, "zlib: %s\n", ZLIB_VERSION);
+#endif
+		strbuf_addf(buf, "SHA-1: %s\n", SHA1_BACKEND);
+#if defined SHA1_UNSAFE_BACKEND
+		strbuf_addf(buf, "non-collision-detecting-SHA-1: %s\n",
+			    SHA1_UNSAFE_BACKEND);
+#endif
+		strbuf_addf(buf, "SHA-256: %s\n", SHA256_BACKEND);
 	}
 }
 
-int cmd_version(int argc, const char **argv, const char *prefix)
+int cmd_version(int argc, const char **argv, const char *prefix, struct repository *repository UNUSED)
 {
 	struct strbuf buf = STRBUF_INIT;
 	int build_options = 0;
@@ -781,7 +842,7 @@ struct similar_ref_cb {
 	struct string_list *similar_refs;
 };
 
-static int append_similar_ref(const char *refname,
+static int append_similar_ref(const char *refname, const char *referent UNUSED,
 			      const struct object_id *oid UNUSED,
 			      int flags UNUSED, void *cb_data)
 {
@@ -792,7 +853,7 @@ static int append_similar_ref(const char *refname,
 	if (starts_with(refname, "refs/remotes/") &&
 	    !strcmp(branch, cb->base_ref))
 		string_list_append_nodup(cb->similar_refs,
-					 shorten_unambiguous_ref(refname, 1));
+					 refs_shorten_unambiguous_ref(get_main_ref_store(the_repository), refname, 1));
 	return 0;
 }
 
@@ -803,7 +864,8 @@ static struct string_list guess_refs(const char *ref)
 
 	ref_cb.base_ref = ref;
 	ref_cb.similar_refs = &similar_refs;
-	for_each_ref(append_similar_ref, &ref_cb);
+	refs_for_each_ref(get_main_ref_store(the_repository),
+			  append_similar_ref, &ref_cb);
 	return similar_refs;
 }
 

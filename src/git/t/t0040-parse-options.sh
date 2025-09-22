@@ -5,7 +5,6 @@
 
 test_description='our own option parser'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 cat >expect <<\EOF
@@ -13,29 +12,38 @@ usage: test-tool parse-options <options>
 
     A helper function for the parse-options API.
 
-    --yes                 get a boolean
+    --[no-]yes            get a boolean
     -D, --no-doubt        begins with 'no-'
+    --doubt               opposite of --no-doubt
     -B, --no-fear         be brave
-    -b, --boolean         increment by one
-    -4, --or4             bitwise-or boolean with ...0100
-    --neg-or4             same as --no-or4
+    -b, --[no-]boolean    increment by one
+    -4, --[no-]or4        bitwise-or boolean with ...0100
+    --[no-]neg-or4        same as --no-or4
 
-    -i, --integer <n>     get a integer
+    -i, --[no-]integer <n>
+                          get a integer
+    --[no-]i16 <n>        get a 16 bit integer
     -j <n>                get a integer, too
-    -m, --magnitude <n>   get a magnitude
-    --set23               set integer to 23
+    -u, --unsigned <n>    get an unsigned integer
+    --u16 <n>             get a 16 bit unsigned integer
+    --[no-]set23          set integer to 23
     --mode1               set integer to 1 (cmdmode option)
     --mode2               set integer to 2 (cmdmode option)
-    -L, --length <str>    get length of <str>
-    -F, --file <file>     set file to <file>
+    --[no-]mode34 (3|4)   set integer to 3 or 4 (cmdmode option)
+    -L, --[no-]length <str>
+                          get length of <str>
+    -F, --[no-]file <file>
+                          set file to <file>
 
 String options
-    -s, --string <string>
+    -s, --[no-]string <string>
                           get a string
-    --string2 <str>       get another string
-    --st <st>             get another string (pervert ordering)
+    --[no-]string2 <str>  get another string
+    --[no-]st <st>        get another string (pervert ordering)
     -o <str>              get another string
-    --list <str>          add str to list
+    --longhelp            help text of this entry
+                          spans multiple lines
+    --[no-]list <str>     add str to list
 
 Magic arguments
     -NUM                  set integer to NUM
@@ -44,16 +52,17 @@ Magic arguments
     --no-ambiguous        negative ambiguity
 
 Standard options
-    --abbrev[=<n>]        use <n> digits to display object names
-    -v, --verbose         be verbose
-    -n, --dry-run         dry run
-    -q, --quiet           be quiet
-    --expect <string>     expected output in the variable dump
+    --[no-]abbrev[=<n>]   use <n> digits to display object names
+    -v, --[no-]verbose    be verbose
+    -n, --[no-]dry-run    dry run
+    -q, --[no-]quiet      be quiet
+    --[no-]expect <string>
+                          expected output in the variable dump
 
 Alias
-    -A, --alias-source <string>
+    -A, --[no-]alias-source <string>
                           get a string
-    -Z, --alias-target <string>
+    -Z, --[no-]alias-target <string>
                           alias of --alias-source
 
 EOF
@@ -104,32 +113,36 @@ test_expect_success 'OPT_BOOL() no negation #2' 'check_unknown_i18n --no-no-fear
 
 test_expect_success 'OPT_BOOL() positivation' 'check boolean: 0 -D --doubt'
 
-test_expect_success 'OPT_INT() negative' 'check integer: -2345 -i -2345'
+test_expect_success 'OPT_INTEGER() negative' 'check integer: -2345 -i -2345'
+test_expect_success 'OPT_INTEGER() kilo' 'check integer: 239616 -i 234k'
+test_expect_success 'OPT_INTEGER() negative kilo' 'check integer: -239616 -i -234k'
 
-test_expect_success 'OPT_MAGNITUDE() simple' '
-	check magnitude: 2345678 -m 2345678
+test_expect_success 'OPT_UNSIGNED() simple' '
+	check unsigned: 2345678 -u 2345678
 '
 
-test_expect_success 'OPT_MAGNITUDE() kilo' '
-	check magnitude: 239616 -m 234k
+test_expect_success 'OPT_UNSIGNED() kilo' '
+	check unsigned: 239616 -u 234k
 '
 
-test_expect_success 'OPT_MAGNITUDE() mega' '
-	check magnitude: 104857600 -m 100m
+test_expect_success 'OPT_UNSIGNED() mega' '
+	check unsigned: 104857600 -u 100m
 '
 
-test_expect_success 'OPT_MAGNITUDE() giga' '
-	check magnitude: 1073741824 -m 1g
+test_expect_success 'OPT_UNSIGNED() giga' '
+	check unsigned: 1073741824 -u 1g
 '
 
-test_expect_success 'OPT_MAGNITUDE() 3giga' '
-	check magnitude: 3221225472 -m 3g
+test_expect_success 'OPT_UNSIGNED() 3giga' '
+	check unsigned: 3221225472 -u 3g
 '
 
 cat >expect <<\EOF
 boolean: 2
 integer: 1729
-magnitude: 16384
+i16: 0
+unsigned: 16384
+u16: 0
 timestamp: 0
 string: 123
 abbrev: 7
@@ -140,7 +153,7 @@ file: prefix/my.file
 EOF
 
 test_expect_success 'short options' '
-	test-tool parse-options -s123 -b -i 1729 -m 16k -b -vv -n -F my.file \
+	test-tool parse-options -s123 -b -i 1729 -u 16k -b -vv -n -F my.file \
 	>output 2>output.err &&
 	test_cmp expect output &&
 	test_must_be_empty output.err
@@ -149,7 +162,9 @@ test_expect_success 'short options' '
 cat >expect <<\EOF
 boolean: 2
 integer: 1729
-magnitude: 16384
+i16: 9000
+unsigned: 16384
+u16: 32768
 timestamp: 0
 string: 321
 abbrev: 10
@@ -160,11 +175,30 @@ file: prefix/fi.le
 EOF
 
 test_expect_success 'long options' '
-	test-tool parse-options --boolean --integer 1729 --magnitude 16k \
-		--boolean --string2=321 --verbose --verbose --no-dry-run \
+	test-tool parse-options --boolean --integer 1729 --i16 9000 --unsigned 16k \
+		--u16 32k --boolean --string2=321 --verbose --verbose --no-dry-run \
 		--abbrev=10 --file fi.le --obsolete \
 		>output 2>output.err &&
 	test_must_be_empty output.err &&
+	test_cmp expect output
+'
+
+test_expect_success 'abbreviate to something longer than SHA1 length' '
+	cat >expect <<-EOF &&
+	boolean: 0
+	integer: 0
+	i16: 0
+	unsigned: 0
+	u16: 0
+	timestamp: 0
+	string: (not set)
+	abbrev: 100
+	verbose: -1
+	quiet: 0
+	dry run: no
+	file: (not set)
+	EOF
+	test-tool parse-options --abbrev=100 >output &&
 	test_cmp expect output
 '
 
@@ -202,6 +236,22 @@ test_expect_success 'superfluous value provided: boolean' '
 	test_cmp expect actual
 '
 
+test_expect_success 'superfluous value provided: boolean, abbreviated' '
+	cat >expect <<-\EOF &&
+	error: option `yes'\'' takes no value
+	EOF
+	test_expect_code 129 env GIT_TEST_DISALLOW_ABBREVIATED_OPTIONS=false \
+	test-tool parse-options --ye=hi 2>actual &&
+	test_cmp expect actual &&
+
+	cat >expect <<-\EOF &&
+	error: option `no-yes'\'' takes no value
+	EOF
+	test_expect_code 129 env GIT_TEST_DISALLOW_ABBREVIATED_OPTIONS=false \
+	test-tool parse-options --no-ye=hi 2>actual &&
+	test_cmp expect actual
+'
+
 test_expect_success 'superfluous value provided: cmdmode' '
 	cat >expect <<-\EOF &&
 	error: option `mode1'\'' takes no value
@@ -213,7 +263,9 @@ test_expect_success 'superfluous value provided: cmdmode' '
 cat >expect <<\EOF
 boolean: 1
 integer: 13
-magnitude: 0
+i16: 0
+unsigned: 0
+u16: 0
 timestamp: 0
 string: 123
 abbrev: 7
@@ -236,7 +288,9 @@ test_expect_success 'intermingled arguments' '
 cat >expect <<\EOF
 boolean: 0
 integer: 2
-magnitude: 0
+i16: 0
+unsigned: 0
+u16: 0
 timestamp: 0
 string: (not set)
 abbrev: 7
@@ -303,7 +357,9 @@ cat >expect <<\EOF
 Callback: "four", 0
 boolean: 5
 integer: 4
-magnitude: 0
+i16: 0
+unsigned: 0
+u16: 0
 timestamp: 0
 string: (not set)
 abbrev: 7
@@ -328,7 +384,9 @@ test_expect_success 'OPT_CALLBACK() and callback errors work' '
 cat >expect <<\EOF
 boolean: 1
 integer: 23
-magnitude: 0
+i16: 0
+unsigned: 0
+u16: 0
 timestamp: 0
 string: (not set)
 abbrev: 7
@@ -359,19 +417,41 @@ test_expect_success 'OPT_NEGBIT() works' '
 '
 
 test_expect_success 'OPT_CMDMODE() works' '
-	test-tool parse-options --expect="integer: 1" --mode1
+	test-tool parse-options --expect="integer: 1" --mode1 &&
+	test-tool parse-options --expect="integer: 3" --mode34=3
 '
 
-test_expect_success 'OPT_CMDMODE() detects incompatibility' '
+test_expect_success 'OPT_CMDMODE() detects incompatibility (1)' '
 	test_must_fail test-tool parse-options --mode1 --mode2 >output 2>output.err &&
 	test_must_be_empty output &&
-	test_i18ngrep "incompatible with --mode" output.err
+	test_grep "mode1" output.err &&
+	test_grep "mode2" output.err &&
+	test_grep "cannot be used together" output.err
 '
 
-test_expect_success 'OPT_CMDMODE() detects incompatibility with something else' '
+test_expect_success 'OPT_CMDMODE() detects incompatibility (2)' '
 	test_must_fail test-tool parse-options --set23 --mode2 >output 2>output.err &&
 	test_must_be_empty output &&
-	test_i18ngrep "incompatible with something else" output.err
+	test_grep "mode2" output.err &&
+	test_grep "set23" output.err &&
+	test_grep "cannot be used together" output.err
+'
+
+test_expect_success 'OPT_CMDMODE() detects incompatibility (3)' '
+	test_must_fail test-tool parse-options --mode2 --set23 >output 2>output.err &&
+	test_must_be_empty output &&
+	test_grep "mode2" output.err &&
+	test_grep "set23" output.err &&
+	test_grep "cannot be used together" output.err
+'
+
+test_expect_success 'OPT_CMDMODE() detects incompatibility (4)' '
+	test_must_fail test-tool parse-options --mode2 --mode34=3 \
+		>output 2>output.err &&
+	test_must_be_empty output &&
+	test_grep "mode2" output.err &&
+	test_grep "mode34.3" output.err &&
+	test_grep "cannot be used together" output.err
 '
 
 test_expect_success 'OPT_COUNTUP() with PARSE_OPT_NODASH works' '
@@ -385,7 +465,9 @@ test_expect_success 'OPT_NUMBER_CALLBACK() works' '
 cat >expect <<\EOF
 boolean: 0
 integer: 0
-magnitude: 0
+i16: 0
+unsigned: 0
+u16: 0
 timestamp: 0
 string: (not set)
 abbrev: 7
@@ -709,16 +791,35 @@ test_expect_success 'subcommands are incompatible with KEEP_DASHDASH unless in c
 	grep ^BUG err
 '
 
-test_expect_success 'negative magnitude' '
-	test_must_fail test-tool parse-options --magnitude -1 >out 2>err &&
+test_expect_success 'negative unsigned' '
+	test_must_fail test-tool parse-options --unsigned -1 >out 2>err &&
 	grep "non-negative integer" err &&
 	test_must_be_empty out
 '
 
-test_expect_success 'magnitude with units but no numbers' '
-	test_must_fail test-tool parse-options --magnitude m >out 2>err &&
+test_expect_success 'unsigned with units but no numbers' '
+	test_must_fail test-tool parse-options --unsigned m >out 2>err &&
 	grep "non-negative integer" err &&
 	test_must_be_empty out
+'
+
+test_expect_success 'i16 limits range' '
+	test-tool parse-options --i16 32767 >out &&
+	test_grep "i16: 32767" out &&
+	test_must_fail test-tool parse-options --i16 32768 2>err &&
+	test_grep "value 32768 for option .i16. not in range \[-32768,32767\]" err &&
+
+	test-tool parse-options --i16 -32768 >out &&
+	test_grep "i16: -32768" out &&
+	test_must_fail test-tool parse-options --i16 -32769 2>err &&
+	test_grep "value -32769 for option .i16. not in range \[-32768,32767\]" err
+'
+
+test_expect_success 'u16 limits range' '
+	test-tool parse-options --u16 65535 >out &&
+	test_grep "u16: 65535" out &&
+	test_must_fail test-tool parse-options --u16 65536 2>err &&
+	test_grep "value 65536 for option .u16. not in range \[0,65535\]" err
 '
 
 test_done

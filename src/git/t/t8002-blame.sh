@@ -7,6 +7,12 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 TEST_CREATE_REPO_NO_TEMPLATE=1
 . ./test-lib.sh
 
+if ! test_have_prereq PERL_TEST_HELPERS
+then
+	skip_all='skipping blame colors tests; Perl not available'
+	test_done
+fi
+
 PROG='git blame -c'
 . "$TEST_DIRECTORY"/annotate-tests.sh
 
@@ -101,7 +107,7 @@ test_expect_success 'set up abbrev tests' '
 		expect=$1 && shift &&
 		echo $sha1 | cut -c 1-$expect >expect &&
 		git blame "$@" abbrev.t >actual &&
-		perl -lne "/[0-9a-f]+/ and print \$&" <actual >actual.sha &&
+		sed -n "s/^[\^]\{0,1\}\([0-9a-f][0-9a-f]*\).*/\1/p" actual >actual.sha &&
 		test_cmp expect actual.sha
 	}
 '
@@ -124,6 +130,32 @@ test_expect_success 'blame --abbrev with full length behaves like -l' '
 
 test_expect_success '--no-abbrev works like --abbrev with full length' '
 	check_abbrev $hexsz --no-abbrev
+'
+
+test_expect_success 'blame --abbrev gets truncated' '
+	check_abbrev $hexsz --abbrev=9000 HEAD
+'
+
+test_expect_success 'blame --abbrev gets truncated with boundary commit' '
+	check_abbrev $hexsz --abbrev=9000 ^HEAD
+'
+
+test_expect_success 'blame --abbrev -b truncates the blank boundary' '
+	# Note that `--abbrev=` always gets incremented by 1, which is why we
+	# expect 11 leading spaces and not 10.
+	cat >expect <<-EOF &&
+	$(printf "%11s" "") (<author@example.com> 2005-04-07 15:45:13 -0700 1) abbrev
+	EOF
+	git blame -b --abbrev=10 ^HEAD -- abbrev.t >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'blame with excessive --abbrev and -b culls to hash length' '
+	cat >expect <<-EOF &&
+	$(printf "%${hexsz}s" "") (<author@example.com> 2005-04-07 15:45:13 -0700 1) abbrev
+	EOF
+	git blame -b --abbrev=9000 ^HEAD -- abbrev.t >actual &&
+	test_cmp expect actual
 '
 
 test_expect_success '--exclude-promisor-objects does not BUG-crash' '

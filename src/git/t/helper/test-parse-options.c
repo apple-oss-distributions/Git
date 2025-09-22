@@ -1,12 +1,12 @@
 #include "test-tool.h"
-#include "cache.h"
 #include "parse-options.h"
+#include "strbuf.h"
 #include "string-list.h"
 #include "trace2.h"
 
 static int boolean = 0;
 static int integer = 0;
-static unsigned long magnitude = 0;
+static unsigned long unsigned_integer = 0;
 static timestamp_t timestamp;
 static int abbrev = 7;
 static int verbose = -1; /* unspecified */
@@ -20,6 +20,19 @@ static struct {
 	const char *arg;
 	int unset;
 } length_cb;
+
+static int mode34_callback(const struct option *opt, const char *arg, int unset)
+{
+	if (unset)
+		*(int *)opt->value = 0;
+	else if (!strcmp(arg, "3"))
+		*(int *)opt->value = 3;
+	else if (!strcmp(arg, "4"))
+		*(int *)opt->value = 4;
+	else
+		return error("invalid value for '%s': '%s'", "--mode34", arg);
+	return 0;
+}
 
 static int length_callback(const struct option *opt, const char *arg, int unset)
 {
@@ -107,23 +120,37 @@ int cmd__parse_options(int argc, const char **argv)
 	};
 	struct string_list expect = STRING_LIST_INIT_NODUP;
 	struct string_list list = STRING_LIST_INIT_NODUP;
+	uint16_t u16 = 0;
+	int16_t i16 = 0;
 
 	struct option options[] = {
 		OPT_BOOL(0, "yes", &boolean, "get a boolean"),
 		OPT_BOOL('D', "no-doubt", &boolean, "begins with 'no-'"),
-		{ OPTION_SET_INT, 'B', "no-fear", &boolean, NULL,
-		  "be brave", PARSE_OPT_NOARG | PARSE_OPT_NONEG, NULL, 1 },
+		{
+			.type = OPTION_SET_INT,
+			.short_name = 'B',
+			.long_name = "no-fear",
+			.value = &boolean,
+			.help = "be brave",
+			.flags = PARSE_OPT_NOARG | PARSE_OPT_NONEG,
+			.defval = 1,
+		},
 		OPT_COUNTUP('b', "boolean", &boolean, "increment by one"),
 		OPT_BIT('4', "or4", &boolean,
 			"bitwise-or boolean with ...0100", 4),
 		OPT_NEGBIT(0, "neg-or4", &boolean, "same as --no-or4", 4),
 		OPT_GROUP(""),
 		OPT_INTEGER('i', "integer", &integer, "get a integer"),
+		OPT_INTEGER(0, "i16", &i16, "get a 16 bit integer"),
 		OPT_INTEGER('j', NULL, &integer, "get a integer, too"),
-		OPT_MAGNITUDE('m', "magnitude", &magnitude, "get a magnitude"),
+		OPT_UNSIGNED('u', "unsigned", &unsigned_integer, "get an unsigned integer"),
+		OPT_UNSIGNED(0, "u16", &u16, "get a 16 bit unsigned integer"),
 		OPT_SET_INT(0, "set23", &integer, "set integer to 23", 23),
 		OPT_CMDMODE(0, "mode1", &integer, "set integer to 1 (cmdmode option)", 1),
 		OPT_CMDMODE(0, "mode2", &integer, "set integer to 2 (cmdmode option)", 2),
+		OPT_CALLBACK_F(0, "mode34", &integer, "(3|4)",
+			"set integer to 3 or 4 (cmdmode option)",
+			PARSE_OPT_CMDMODE, mode34_callback),
 		OPT_CALLBACK('L', "length", &integer, "str",
 			"get length of <str>", length_callback),
 		OPT_FILENAME('F', "file", &file, "set file to <file>"),
@@ -133,16 +160,33 @@ int cmd__parse_options(int argc, const char **argv)
 		OPT_STRING(0, "st", &string, "st", "get another string (pervert ordering)"),
 		OPT_STRING('o', NULL, &string, "str", "get another string"),
 		OPT_NOOP_NOARG(0, "obsolete"),
+		OPT_SET_INT_F(0, "longhelp", &integer, "help text of this entry\n"
+			      "spans multiple lines", 0, PARSE_OPT_NONEG),
 		OPT_STRING_LIST(0, "list", &list, "str", "add str to list"),
 		OPT_GROUP("Magic arguments"),
 		OPT_NUMBER_CALLBACK(&integer, "set integer to NUM",
 			number_callback),
-		{ OPTION_COUNTUP, '+', NULL, &boolean, NULL, "same as -b",
-		  PARSE_OPT_NOARG | PARSE_OPT_NONEG | PARSE_OPT_NODASH },
-		{ OPTION_COUNTUP, 0, "ambiguous", &ambiguous, NULL,
-		  "positive ambiguity", PARSE_OPT_NOARG | PARSE_OPT_NONEG },
-		{ OPTION_COUNTUP, 0, "no-ambiguous", &ambiguous, NULL,
-		  "negative ambiguity", PARSE_OPT_NOARG | PARSE_OPT_NONEG },
+		{
+			.type = OPTION_COUNTUP,
+			.short_name = '+',
+			.value = &boolean,
+			.help = "same as -b",
+			.flags = PARSE_OPT_NOARG | PARSE_OPT_NONEG | PARSE_OPT_NODASH,
+		},
+		{
+			.type = OPTION_COUNTUP,
+			.long_name = "ambiguous",
+			.value = &ambiguous,
+			.help = "positive ambiguity",
+			.flags = PARSE_OPT_NOARG | PARSE_OPT_NONEG,
+		},
+		{
+			.type = OPTION_COUNTUP,
+			.long_name = "no-ambiguous",
+			.value = &ambiguous,
+			.help = "negative ambiguity",
+			.flags = PARSE_OPT_NOARG | PARSE_OPT_NONEG,
+		},
 		OPT_GROUP("Standard options"),
 		OPT__ABBREV(&abbrev),
 		OPT__VERBOSE(&verbose, "be verbose"),
@@ -156,7 +200,6 @@ int cmd__parse_options(int argc, const char **argv)
 		OPT_ALIAS('Z', "alias-target", "alias-source"),
 		OPT_END(),
 	};
-	int i;
 	int ret = 0;
 
 	trace2_cmd_name("_parse_");
@@ -171,7 +214,9 @@ int cmd__parse_options(int argc, const char **argv)
 	}
 	show(&expect, &ret, "boolean: %d", boolean);
 	show(&expect, &ret, "integer: %d", integer);
-	show(&expect, &ret, "magnitude: %lu", magnitude);
+	show(&expect, &ret, "i16: %"PRIdMAX, (intmax_t) i16);
+	show(&expect, &ret, "unsigned: %lu", unsigned_integer);
+	show(&expect, &ret, "u16: %"PRIuMAX, (uintmax_t) u16);
 	show(&expect, &ret, "timestamp: %"PRItime, timestamp);
 	show(&expect, &ret, "string: %s", string ? string : "(not set)");
 	show(&expect, &ret, "abbrev: %d", abbrev);
@@ -180,15 +225,16 @@ int cmd__parse_options(int argc, const char **argv)
 	show(&expect, &ret, "dry run: %s", dry_run ? "yes" : "no");
 	show(&expect, &ret, "file: %s", file ? file : "(not set)");
 
-	for (i = 0; i < list.nr; i++)
+	for (size_t i = 0; i < list.nr; i++)
 		show(&expect, &ret, "list: %s", list.items[i].string);
 
-	for (i = 0; i < argc; i++)
+	for (int i = 0; i < argc; i++)
 		show(&expect, &ret, "arg %02d: %s", i, argv[i]);
 
 	expect.strdup_strings = 1;
 	string_list_clear(&expect, 0);
 	string_list_clear(&list, 0);
+	free(file);
 
 	return ret;
 }
@@ -263,14 +309,16 @@ int cmd__parse_options_flags(int argc, const char **argv)
 	return parse_options_flags__cmd(argc, argv, test_flags);
 }
 
-static int subcmd_one(int argc, const char **argv, const char *prefix)
+static int subcmd_one(int argc, const char **argv, const char *prefix UNUSED,
+		      struct repository *repo UNUSED)
 {
 	printf("fn: subcmd_one\n");
 	print_args(argc, argv);
 	return 0;
 }
 
-static int subcmd_two(int argc, const char **argv, const char *prefix)
+static int subcmd_two(int argc, const char **argv, const char *prefix UNUSED,
+		      struct repository *repo UNUSED)
 {
 	printf("fn: subcmd_two\n");
 	print_args(argc, argv);
@@ -300,7 +348,7 @@ static int parse_subcommand__cmd(int argc, const char **argv,
 
 	printf("opt: %d\n", opt);
 
-	return fn(argc, argv, NULL);
+	return fn(argc, argv, NULL, NULL);
 }
 
 int cmd__parse_subcommand(int argc, const char **argv)

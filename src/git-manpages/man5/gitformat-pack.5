@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitformat-pack
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITFORMAT\-PACK" "5" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITFORMAT\-PACK" "5" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -37,10 +37,9 @@ $GIT_DIR/objects/pack/pack\-\fR\&.rev
 $GIT_DIR/objects/pack/pack\-*\&.mtimes
 $GIT_DIR/objects/pack/multi\-pack\-index
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-The Git pack format is now Git stores most of its primary repository data\&. Over the lietime af a repository loose objects (if any) and smaller packs are consolidated into larger pack(s)\&. See \fBgit-gc\fR(1) and \fBgit-pack-objects\fR(1)\&.
+The Git pack format is how Git stores most of its primary repository data\&. Over the lifetime of a repository, loose objects (if any) and smaller packs are consolidated into larger pack(s)\&. See \fBgit-gc\fR(1) and \fBgit-pack-objects\fR(1)\&.
 .sp
 The pack format is also used over\-the\-wire, see e\&.g\&. \fBgitprotocol-v2\fR(5), as well as being a part of other container formats in the case of \fBgitformat-bundle\fR(5)\&.
 .SH "CHECKSUMS AND OBJECT IDS"
@@ -63,7 +62,7 @@ A header appears at the beginning and consists of the following:
 .\}
 .nf
 4\-byte signature:
-    The signature is: {\(aqP\(aq, \(aqA\(aq, \(aqC\(aq, \(aqK\(aq}
+    The signature is: {\*(AqP\*(Aq, \*(AqA\*(Aq, \*(AqC\*(Aq, \*(AqK\*(Aq}
 .fi
 .if n \{\
 .RE
@@ -73,9 +72,9 @@ A header appears at the beginning and consists of the following:
 .RS 4
 .\}
 .nf
-4\-byte version number (network byte order):
-    Git currently accepts version number 2 or 3 but
-    generates version 2 only\&.
+   4\-byte version number (network byte order):
+Git currently accepts version number 2 or 3 but
+       generates version 2 only\&.
 .fi
 .if n \{\
 .RE
@@ -111,7 +110,7 @@ more than 4G objects in a pack\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-The header is followed by number of object entries, each of which looks like this:
+The header is followed by a number of object entries, each of which looks like this:
 .sp
 .if n \{\
 .RS 4
@@ -129,12 +128,12 @@ compressed data
 .RS 4
 .\}
 .nf
-(deltified representation)
-n\-byte type and length (3\-bit type, (n\-1)*7+4\-bit length)
-base object name if OBJ_REF_DELTA or a negative relative
-    offset from the delta object\(aqs position in the pack if this
-    is an OBJ_OFS_DELTA object
-compressed delta data
+   (deltified representation)
+   n\-byte type and length (3\-bit type, (n\-1)*7+4\-bit length)
+   base object name if OBJ_REF_DELTA or a negative relative
+offset from the delta object\*(Aqs position in the pack if this
+is an OBJ_OFS_DELTA object
+   compressed delta data
 .fi
 .if n \{\
 .RE
@@ -144,7 +143,7 @@ compressed delta data
 .RS 4
 .\}
 .nf
-Observation: length of each object is encoded in a variable
+Observation: the length of each object is encoded in a variable
 length format and is not constrained to 32\-bit or anything\&.
 .fi
 .if n \{\
@@ -246,7 +245,7 @@ Both ofs\-delta and ref\-delta store the "delta" to be applied to another object
 .sp
 The base object could also be deltified if it\(cqs in the same pack\&. Ref\-delta can also refer to an object outside the pack (i\&.e\&. the so\-called "thin pack")\&. When stored on disk however, the pack should be self contained to avoid cyclic dependency\&.
 .sp
-The delta data starts with the size of the base object and the size of the object to be reconstructed\&. These sizes are encoded using the size encoding from above\&. The remainder of the delta data is a sequence of instructions to reconstruct the object from the base object\&. If the base object is deltified, it must be converted to canonical form first\&. Each instruction appends more and more data to the target object until it\(cqs complete\&. There are two supported instructions so far: one for copy a byte range from the source object and one for inserting new data embedded in the instruction itself\&.
+The delta data starts with the size of the base object and the size of the object to be reconstructed\&. These sizes are encoded using the size encoding from above\&. The remainder of the delta data is a sequence of instructions to reconstruct the object from the base object\&. If the base object is deltified, it must be converted to canonical form first\&. Each instruction appends more and more data to the target object until it\(cqs complete\&. There are two supported instructions so far: one for copying a byte range from the source object and one for inserting new data embedded in the instruction itself\&.
 .sp
 Each instruction has variable length\&. Instruction type is determined by the seventh bit of the first octet\&. The following diagrams follow the convention in RFC 1951 (Deflate compressed data format)\&.
 .sp
@@ -272,7 +271,7 @@ Each instruction has variable length\&. Instruction type is determined by the se
 .sp
 This is the instruction format to copy a byte range from the source object\&. It encodes the offset to copy from and the number of bytes to copy\&. Offset and size are in little\-endian order\&.
 .sp
-All offset and size bytes are optional\&. This is to reduce the instruction size when encoding small offsets or sizes\&. The first seven bits in the first octet determines which of the next seven octets is present\&. If bit zero is set, offset1 is present\&. If bit one is set offset2 is present and so on\&.
+All offset and size bytes are optional\&. This is to reduce the instruction size when encoding small offsets or sizes\&. The first seven bits in the first octet determine which of the next seven octets is present\&. If bit zero is set, offset1 is present\&. If bit one is set offset2 is present and so on\&.
 .sp
 Note that a more compact instruction does not change offset and size encoding\&. For example, if only offset2 is omitted like below, offset3 still contains bits 16\-23\&. It does not become offset2 and contains bits 8\-15 even if it\(cqs right next to offset1\&.
 .sp
@@ -311,7 +310,7 @@ In its most compact form, this instruction only takes up one byte (0x80) with bo
 .RE
 .\}
 .sp
-This is the instruction to construct target object without the base object\&. The following data is appended to the target object\&. The first seven bits of the first octet determines the size of data in bytes\&. The size must be non\-zero\&.
+This is the instruction to construct the target object without the base object\&. The following data is appended to the target object\&. The first seven bits of the first octet determine the size of data in bytes\&. The size must be non\-zero\&.
 .RE
 .sp
 .it 1 an-trap
@@ -422,34 +421,34 @@ Pack Idx file:
 .RS 4
 .\}
 .nf
-        \-\-  +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
-fanout      | fanout[0] = 2 (for example)    |\-\&.
-table       +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ |
-            | fanout[1]                      | |
-            +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ |
-            | fanout[2]                      | |
-            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |
-            | fanout[255] = total objects    |\-\-\-\&.
-        \-\-  +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ | |
-main        | offset                         | | |
-index       | object name 00XXXXXXXXXXXXXXXX | | |
-table       +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ | |
-            | offset                         | | |
-            | object name 00XXXXXXXXXXXXXXXX | | |
-            +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+<+ |
-          \&.\-| offset                         |   |
-          | | object name 01XXXXXXXXXXXXXXXX |   |
-          | +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+   |
-          | | offset                         |   |
-          | | object name 01XXXXXXXXXXXXXXXX |   |
-          | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   |
-          | | offset                         |   |
-          | | object name FFXXXXXXXXXXXXXXXX |   |
-        \-\-| +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+<\-\-+
-trailer   | | packfile checksum              |
-          | +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
-          | | idxfile checksum               |
-          | +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+	\-\-  +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+fanout	    | fanout[0] = 2 (for example)    |\-\&.
+table	    +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ |
+	    | fanout[1]                      | |
+	    +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ |
+	    | fanout[2]                      | |
+	    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |
+	    | fanout[255] = total objects    |\-\-\-\&.
+	\-\-  +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ | |
+main	    | offset                         | | |
+index	    | object name 00XXXXXXXXXXXXXXXX | | |
+table	    +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+ | |
+	    | offset                         | | |
+	    | object name 00XXXXXXXXXXXXXXXX | | |
+	    +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+<+ |
+	  \&.\-| offset                         |   |
+	  | | object name 01XXXXXXXXXXXXXXXX |   |
+	  | +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+   |
+	  | | offset                         |   |
+	  | | object name 01XXXXXXXXXXXXXXXX |   |
+	  | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   |
+	  | | offset                         |   |
+	  | | object name FFXXXXXXXXXXXXXXXX |   |
+	\-\-| +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+<\-\-+
+trailer	  | | packfile checksum              |
+	  | +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+	  | | idxfile checksum               |
+	  | +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
           \&.\-\-\-\-\-\-\-\&.
                   |
 Pack file entry: <+
@@ -462,27 +461,27 @@ Pack file entry: <+
 .RS 4
 .\}
 .nf
-packed object header:
-   1\-byte size extension bit (MSB)
-          type (next 3 bit)
-          size0 (lower 4\-bit)
-   n\-byte sizeN (as long as MSB is set, each 7\-bit)
-           size0\&.\&.sizeN form 4+7+7+\&.\&.+7 bit integer, size0
-           is the least significant part, and sizeN is the
-           most significant part\&.
-packed object data:
-   If it is not DELTA, then deflated bytes (the size above
-           is the size before compression)\&.
-   If it is REF_DELTA, then
-     base object name (the size above is the
-           size of the delta data that follows)\&.
-     delta data, deflated\&.
-   If it is OFS_DELTA, then
-     n\-byte offset (see below) interpreted as a negative
-           offset from the type\-byte of the header of the
-           ofs\-delta entry (the size above is the size of
-           the delta data that follows)\&.
-     delta data, deflated\&.
+    packed object header:
+1\-byte size extension bit (MSB)
+       type (next 3 bit)
+       size0 (lower 4\-bit)
+       n\-byte sizeN (as long as MSB is set, each 7\-bit)
+	size0\&.\&.sizeN form 4+7+7+\&.\&.+7 bit integer, size0
+	is the least significant part, and sizeN is the
+	most significant part\&.
+    packed object data:
+       If it is not DELTA, then deflated bytes (the size above
+	is the size before compression)\&.
+If it is REF_DELTA, then
+  base object name (the size above is the
+	size of the delta data that follows)\&.
+         delta data, deflated\&.
+If it is OFS_DELTA, then
+  n\-byte offset (see below) interpreted as a negative
+	offset from the type\-byte of the header of the
+	ofs\-delta entry (the size above is the size of
+	the delta data that follows)\&.
+  delta data, deflated\&.
 .fi
 .if n \{\
 .RE
@@ -492,12 +491,12 @@ packed object data:
 .RS 4
 .\}
 .nf
-offset encoding:
-     n bytes with MSB set in all but the last one\&.
-     The offset is then the number constructed by
-     concatenating the lower 7 bit of each byte, and
-     for n >= 2 adding 2^7 + 2^14 + \&.\&.\&. + 2^(7*(n\-1))
-     to the result\&.
+  offset encoding:
+n bytes with MSB set in all but the last one\&.
+The offset is then the number constructed by
+concatenating the lower 7 bit of each byte, and
+for n >= 2 adding 2^7 + 2^14 + \&.\&.\&. + 2^(7*(n\-1))
+to the result\&.
 .fi
 .if n \{\
 .RE
@@ -607,7 +606,7 @@ The same trailer as a v1 pack file:
 .RS 4
 .\}
 .nf
-A copy of the pack checksum at the end of
+A copy of the pack checksum at the end of the
 corresponding packfile\&.
 .fi
 .if n \{\
@@ -779,7 +778,7 @@ HEADER:
 .\}
 .nf
 4\-byte signature:
-    The signature is: {\(aqM\(aq, \(aqI\(aq, \(aqD\(aq, \(aqX\(aq}
+    The signature is: {\*(AqM\*(Aq, \*(AqI\*(Aq, \*(AqD\*(Aq, \*(AqX\*(Aq}
 .fi
 .if n \{\
 .RE
@@ -802,9 +801,9 @@ HEADER:
 .nf
 1\-byte Object Id Version
     We infer the length of object IDs (OIDs) from this value:
-        1 => SHA\-1
-        2 => SHA\-256
-    If the hash type does not match the repository\(aqs hash algorithm,
+	1 => SHA\-1
+	2 => SHA\-256
+    If the hash type does not match the repository\*(Aqs hash algorithm,
     the multi\-pack\-index file should be ignored with a warning
     presented to the user\&.
 .fi
@@ -888,11 +887,12 @@ CHUNK DATA:
 .RS 4
 .\}
 .nf
-Packfile Names (ID: {\(aqP\(aq, \(aqN\(aq, \(aqA\(aq, \(aqM\(aq})
-    Stores the packfile names as concatenated, null\-terminated strings\&.
-    Packfiles must be listed in lexicographic order for fast lookups by
-    name\&. This is the only chunk not guaranteed to be a multiple of four
-    bytes in length, so should be the last chunk for alignment reasons\&.
+Packfile Names (ID: {\*(AqP\*(Aq, \*(AqN\*(Aq, \*(AqA\*(Aq, \*(AqM\*(Aq})
+    Store the names of packfiles as a sequence of NUL\-terminated
+    strings\&. There is no extra padding between the filenames,
+    and they are listed in lexicographic order\&. The chunk itself
+    is padded at the end with between 0 and 3 NUL bytes to make the
+    chunk size a multiple of 4 bytes\&.
 .fi
 .if n \{\
 .RE
@@ -902,7 +902,24 @@ Packfile Names (ID: {\(aqP\(aq, \(aqN\(aq, \(aqA\(aq, \(aqM\(aq})
 .RS 4
 .\}
 .nf
-OID Fanout (ID: {\(aqO\(aq, \(aqI\(aq, \(aqD\(aq, \(aqF\(aq})
+Bitmapped Packfiles (ID: {\*(AqB\*(Aq, \*(AqT\*(Aq, \*(AqM\*(Aq, \*(AqP\*(Aq})
+    Stores a table of two 4\-byte unsigned integers in network order\&.
+    Each table entry corresponds to a single pack (in the order that
+    they appear above in the `PNAM` chunk)\&. The values for each table
+    entry are as follows:
+    \- The first bit position (in pseudo\-pack order, see below) to
+      contain an object from that pack\&.
+    \- The number of bits whose objects are selected from that pack\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+OID Fanout (ID: {\*(AqO\*(Aq, \*(AqI\*(Aq, \*(AqD\*(Aq, \*(AqF\*(Aq})
     The ith entry, F[i], stores the number of OIDs with first
     byte at most i\&. Thus F[255] stores the total
     number of objects\&.
@@ -915,7 +932,7 @@ OID Fanout (ID: {\(aqO\(aq, \(aqI\(aq, \(aqD\(aq, \(aqF\(aq})
 .RS 4
 .\}
 .nf
-OID Lookup (ID: {\(aqO\(aq, \(aqI\(aq, \(aqD\(aq, \(aqL\(aq})
+OID Lookup (ID: {\*(AqO\*(Aq, \*(AqI\*(Aq, \*(AqD\*(Aq, \*(AqL\*(Aq})
     The OIDs for all objects in the MIDX are stored in lexicographic
     order in this chunk\&.
 .fi
@@ -927,18 +944,18 @@ OID Lookup (ID: {\(aqO\(aq, \(aqI\(aq, \(aqD\(aq, \(aqL\(aq})
 .RS 4
 .\}
 .nf
-Object Offsets (ID: {\(aqO\(aq, \(aqO\(aq, \(aqF\(aq, \(aqF\(aq})
+Object Offsets (ID: {\*(AqO\*(Aq, \*(AqO\*(Aq, \*(AqF\*(Aq, \*(AqF\*(Aq})
     Stores two 4\-byte values for every object\&.
     1: The pack\-int\-id for the pack storing this object\&.
     2: The offset within the pack\&.
-        If all offsets are less than 2^32, then the large offset chunk
-        will not exist and offsets are stored as in IDX v1\&.
-        If there is at least one offset value larger than 2^32\-1, then
-        the large offset chunk must exist, and offsets larger than
-        2^31\-1 must be stored in it instead\&. If the large offset chunk
-        exists and the 31st bit is on, then removing that bit reveals
-        the row in the large offsets containing the 8\-byte offset of
-        this object\&.
+	If all offsets are less than 2^32, then the large offset chunk
+	will not exist and offsets are stored as in IDX v1\&.
+	If there is at least one offset value larger than 2^32\-1, then
+	the large offset chunk must exist, and offsets larger than
+	2^31\-1 must be stored in it instead\&. If the large offset chunk
+	exists and the 31st bit is on, then removing that bit reveals
+	the row in the large offsets containing the 8\-byte offset of
+	this object\&.
 .fi
 .if n \{\
 .RE
@@ -948,7 +965,7 @@ Object Offsets (ID: {\(aqO\(aq, \(aqO\(aq, \(aqF\(aq, \(aqF\(aq})
 .RS 4
 .\}
 .nf
-[Optional] Object Large Offsets (ID: {\(aqL\(aq, \(aqO\(aq, \(aqF\(aq, \(aqF\(aq})
+[Optional] Object Large Offsets (ID: {\*(AqL\*(Aq, \*(AqO\*(Aq, \*(AqF\*(Aq, \*(AqF\*(Aq})
     8\-byte offsets into large packfiles\&.
 .fi
 .if n \{\
@@ -959,7 +976,7 @@ Object Offsets (ID: {\(aqO\(aq, \(aqO\(aq, \(aqF\(aq, \(aqF\(aq})
 .RS 4
 .\}
 .nf
-[Optional] Bitmap pack order (ID: {\(aqR\(aq, \(aqI\(aq, \(aqD\(aq, \(aqX\(aq})
+[Optional] Bitmap pack order (ID: {\*(AqR\*(Aq, \*(AqI\*(Aq, \*(AqD\*(Aq, \*(AqX\*(Aq})
     A list of MIDX positions (one per object in the MIDX, num_objects in
     total, each a 4\-byte unsigned integer in network byte order), sorted
     according to their relative bitmap/pseudo\-pack positions\&.
@@ -1007,7 +1024,7 @@ Given the list of packs and their counts of objects, you can na\(:ively reconstr
 .sp
 Callers could handle duplicates themselves by reading objects in order of their bit\-position, but that\(cqs linear in the number of objects, and much too expensive for ordinary bitmap lookups\&. Building a reverse index solves this, since it is the logical inverse of the index, and that index has already removed duplicates\&. But, building a reverse index on the fly can be expensive\&. Since we already have an on\-disk format for pack\-based reverse indexes, let\(cqs reuse it for the MIDX\(cqs pseudo\-pack, too\&.
 .sp
-Objects from the MIDX are ordered as follows to string together the pseudo\-pack\&. Let \fBpack(o)\fR return the pack from which \fBo\fR was selected by the MIDX, and define an ordering of packs based on their numeric ID (as stored by the MIDX)\&. Let \fBoffset(o)\fR return the object offset of \fBo\fR within \fBpack(o)\fR\&. Then, compare \fBo1\fR and \fBo2\fR as follows:
+Objects from the MIDX are ordered as follows to string together the pseudo\-pack\&. Let \fBpack\fR(\fBo\fR) return the pack from which \fBo\fR was selected by the MIDX, and define an ordering of packs based on their numeric ID (as stored by the MIDX)\&. Let \fBoffset\fR(\fBo\fR) return the object offset of \fBo\fR within \fBpack\fR(\fBo\fR)\&. Then, compare \fBo1\fR and \fBo2\fR as follows:
 .sp
 .RS 4
 .ie n \{\
@@ -1018,10 +1035,8 @@ Objects from the MIDX are ordered as follows to string together the pseudo\-pack
 .IP \(bu 2.3
 .\}
 If one of
-\fBpack(o1)\fR
-and
-\fBpack(o2)\fR
-is preferred and the other is not, then the preferred one sorts first\&.
+\fBpack\fR(\fBo1\fR) and
+\fBpack\fR(\fBo2\fR) is preferred and the other is not, then the preferred one sorts first\&.
 .sp
 (This is a detail that allows the MIDX bitmap to determine which pack should be used by the pack\-reuse mechanism, since it can ask the MIDX for the pack containing the object at bit position 0)\&.
 .RE
@@ -1035,7 +1050,8 @@ is preferred and the other is not, then the preferred one sorts first\&.
 .IP \(bu 2.3
 .\}
 If
-\fBpack(o1) \(!= pack(o2)\fR, then sort the two objects in descending order based on the pack ID\&.
+\fBpack\fR(\fBo1\fR) \(!=
+\fBpack\fR(\fBo2\fR), then sort the two objects in descending order based on the pack ID\&.
 .RE
 .sp
 .RS 4
@@ -1047,23 +1063,132 @@ If
 .IP \(bu 2.3
 .\}
 Otherwise,
-\fBpack(o1) = pack(o2)\fR, and the objects are sorted in pack\-order (i\&.e\&.,
+\fBpack\fR(\fBo1\fR)
+\fB=\fR
+\fBpack\fR(\fBo2\fR), and the objects are sorted in pack\-order (i\&.e\&.,
 \fBo1\fR
 sorts ahead of
 \fBo2\fR
 exactly when
-\fBoffset(o1) < offset(o2)\fR)\&.
+\fBoffset\fR(\fBo1\fR) <
+\fBoffset\fR(\fBo2\fR))\&.
 .RE
 .sp
 In short, a MIDX\(cqs pseudo\-pack is the de\-duplicated concatenation of objects in packs stored by the MIDX, laid out in pack order, and the packs arranged in MIDX order (with the preferred pack coming first)\&.
 .sp
 The MIDX\(cqs reverse index is stored in the optional \fIRIDX\fR chunk within the MIDX itself\&.
+.SS "\fBBTMP\fR chunk"
+.sp
+The Bitmapped Packfiles (\fBBTMP\fR) chunk encodes additional information about the objects in the multi\-pack index\(cqs reachability bitmap\&. Recall that objects from the MIDX are arranged in "pseudo\-pack" order (see above) for reachability bitmaps\&.
+.sp
+From the example above, suppose we have packs "a", "b", and "c", with 10, 15, and 20 objects, respectively\&. In pseudo\-pack order, those would be arranged as follows:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+|a,0|a,1|\&.\&.\&.|a,9|b,0|b,1|\&.\&.\&.|b,14|c,0|c,1|\&.\&.\&.|c,19|
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+When working with single\-pack bitmaps (or, equivalently, multi\-pack reachability bitmaps with a preferred pack), \fBgit-pack-objects\fR(1) performs \(lqverbatim\(rq reuse, attempting to reuse chunks of the bitmapped or preferred packfile instead of adding objects to the packing list\&.
+.sp
+When a chunk of bytes is reused from an existing pack, any objects contained therein do not need to be added to the packing list, saving memory and CPU time\&. But a chunk from an existing packfile can only be reused when the following conditions are met:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+The chunk contains only objects which were requested by the caller (i\&.e\&. does not contain any objects which the caller didn\(cqt ask for explicitly or implicitly)\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+All objects stored in non\-thin packs as offset\- or reference\-deltas also include their base object in the resulting pack\&.
+.RE
+.sp
+The \fBBTMP\fR chunk encodes the necessary information in order to implement multi\-pack reuse over a set of packfiles as described above\&. Specifically, the \fBBTMP\fR chunk encodes three pieces of information (all 32\-bit unsigned integers in network byte\-order) for each packfile \fBp\fR that is stored in the MIDX, as follows:
+.PP
+\fBbitmap_pos\fR
+.RS 4
+The first bit position (in pseudo\-pack order) in the multi\-pack index\(cqs reachability bitmap occupied by an object from
+\fBp\fR\&.
+.RE
+.PP
+\fBbitmap_nr\fR
+.RS 4
+The number of bit positions (including the one at
+\fBbitmap_pos\fR) that encode objects from that pack
+\fBp\fR\&.
+.RE
+.sp
+For example, the \fBBTMP\fR chunk corresponding to the above example (with packs \(lqa\(rq, \(lqb\(rq, and \(lqc\(rq) would look like:
+.TS
+allbox tab(:);
+ltB ltB ltB.
+T{
+\ \&
+T}:T{
+\fBbitmap_pos\fR
+T}:T{
+\fBbitmap_nr\fR
+T}
+.T&
+lt lt lt
+lt lt lt
+lt lt lt.
+T{
+.sp
+packfile \(lqa\(rq
+T}:T{
+.sp
+\fB0\fR
+T}:T{
+.sp
+\fB10\fR
+T}
+T{
+.sp
+packfile \(lqb\(rq
+T}:T{
+.sp
+\fB10\fR
+T}:T{
+.sp
+\fB15\fR
+T}
+T{
+.sp
+packfile \(lqc\(rq
+T}:T{
+.sp
+\fB25\fR
+T}:T{
+.sp
+\fB20\fR
+T}
+.TE
+.sp 1
+.sp
+With this information in place, we can treat each packfile as individually reusable in the same fashion as verbatim pack reuse is performed on individual packs prior to the implementation of the \fBBTMP\fR chunk\&.
 .SH "CRUFT PACKS"
 .sp
 The cruft packs feature offer an alternative to Git\(cqs traditional mechanism of removing unreachable objects\&. This document provides an overview of Git\(cqs pruning mechanism, and how a cruft pack can be used instead to accomplish the same\&.
 .SS "Background"
 .sp
-To remove unreachable objects from your repository, Git offers \fBgit repack \-Ad\fR (see \fBgit-repack\fR(1))\&. Quoting from the documentation:
+To remove unreachable objects from your repository, Git offers \fBgit\fR \fBrepack\fR \fB\-Ad\fR (see \fBgit-repack\fR(1))\&. Quoting from the documentation:
 .sp
 .if n \{\
 .RS 4
@@ -1071,23 +1196,22 @@ To remove unreachable objects from your repository, Git offers \fBgit repack \-A
 .nf
 [\&.\&.\&.] unreachable objects in a previous pack become loose, unpacked objects,
 instead of being left in the old pack\&. [\&.\&.\&.] loose unreachable objects will be
-pruned according to normal expiry rules with the next \(aqgit gc\(aq invocation\&.
+pruned according to normal expiry rules with the next \*(Aqgit gc\*(Aq invocation\&.
 .fi
 .if n \{\
 .RE
 .\}
 .sp
-.sp
 Unreachable objects aren\(cqt removed immediately, since doing so could race with an incoming push which may reference an object which is about to be deleted\&. Instead, those unreachable objects are stored as loose objects and stay that way until they are older than the expiration window, at which point they are removed by \fBgit-prune\fR(1)\&.
 .sp
 Git must store these unreachable objects loose in order to keep track of their per\-object mtimes\&. If these unreachable objects were written into one big pack, then either freshening that pack (because an object contained within it was re\-written) or creating a new pack of unreachable objects would cause the pack\(cqs mtime to get updated, and the objects within it would never leave the expiration window\&. Instead, objects are stored loose in order to keep track of the individual object mtimes and avoid a situation where all cruft objects are freshened at once\&.
 .sp
-This can lead to undesirable situations when a repository contains many unreachable objects which have not yet left the grace period\&. Having large directories in the shards of \fB\&.git/objects\fR can lead to decreased performance in the repository\&. But given enough unreachable objects, this can lead to inode starvation and degrade the performance of the whole system\&. Since we can never pack those objects, these repositories often take up a large amount of disk space, since we can only zlib compress them, but not store them in delta chains\&.
+This can lead to undesirable situations when a repository contains many unreachable objects which have not yet left the grace period\&. Having large directories in the shards of \&.\fBgit/objects\fR can lead to decreased performance in the repository\&. But given enough unreachable objects, this can lead to inode starvation and degrade the performance of the whole system\&. Since we can never pack those objects, these repositories often take up a large amount of disk space, since we can only zlib compress them, but not store them in delta chains\&.
 .SS "Cruft packs"
 .sp
 A cruft pack eliminates the need for storing unreachable objects in a loose state by including the per\-object mtimes in a separate file alongside a single pack containing all loose objects\&.
 .sp
-A cruft pack is written by \fBgit repack \-\-cruft\fR when generating a new pack\&. \fBgit-pack-objects\fR(1)\(aqs \fB\-\-cruft\fR option\&. Note that \fBgit repack \-\-cruft\fR is a classic all\-into\-one repack, meaning that everything in the resulting pack is reachable, and everything else is unreachable\&. Once written, the \fB\-\-cruft\fR option instructs \fBgit repack\fR to generate another pack containing only objects not packed in the previous step (which equates to packing all unreachable objects together)\&. This progresses as follows:
+A cruft pack is written by \fBgit\fR \fBrepack\fR \fB\-\-cruft\fR when generating a new pack\&. \fBgit-pack-objects\fR(1)\*(Aqs \fB\-\-cruft\fR option\&. Note that \fBgit\fR \fBrepack\fR \fB\-\-cruft\fR is a classic all\-into\-one repack, meaning that everything in the resulting pack is reachable, and everything else is unreachable\&. Once written, the \fB\-\-cruft\fR option instructs \fBgit\fR \fBrepack\fR to generate another pack containing only objects not packed in the previous step (which equates to packing all unreachable objects together)\&. This progresses as follows:
 .sp
 .RS 4
 .ie n \{\
@@ -1119,47 +1243,15 @@ Perform a reachability traversal based on the tips gathered in the previous step
 .sp -1
 .IP "  3." 4.2
 .\}
-Write the pack out, along with a
-\fB\&.mtimes\fR
+Write the pack out, along with a \&.\fBmtimes\fR
 file that records the per\-object timestamps\&.
 .RE
 .sp
 This mode is invoked internally by \fBgit-repack\fR(1) when instructed to write a cruft pack\&. Crucially, the set of in\-core kept packs is exactly the set of packs which will not be deleted by the repack; in other words, they contain all of the repository\(cqs reachable objects\&.
 .sp
-When a repository already has a cruft pack, \fBgit repack \-\-cruft\fR typically only adds objects to it\&. An exception to this is when \fBgit repack\fR is given the \fB\-\-cruft\-expiration\fR option, which allows the generated cruft pack to omit expired objects instead of waiting for \fBgit-gc\fR(1) to expire those objects later on\&.
+When a repository already has a cruft pack, \fBgit\fR \fBrepack\fR \fB\-\-cruft\fR typically only adds objects to it\&. An exception to this is when \fBgit\fR \fBrepack\fR is given the \fB\-\-cruft\-expiration\fR option, which allows the generated cruft pack to omit expired objects instead of waiting for \fBgit-gc\fR(1) to expire those objects later on\&.
 .sp
 It is \fBgit-gc\fR(1) that is typically responsible for removing expired unreachable objects\&.
-.SS "Caution for mixed\-version environments"
-.sp
-Repositories that have cruft packs in them will continue to work with any older version of Git\&. Note, however, that previous versions of Git which do not understand the \fB\&.mtimes\fR file will use the cruft pack\(cqs mtime as the mtime for all of the objects in it\&. In other words, do not expect older (pre\-cruft pack) versions of Git to interpret or even read the contents of the \fB\&.mtimes\fR file\&.
-.sp
-Note that having mixed versions of Git GC\-ing the same repository can lead to unreachable objects never being completely pruned\&. This can happen under the following circumstances:
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-An older version of Git running GC explodes the contents of an existing cruft pack loose, using the cruft pack\(cqs mtime\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-A newer version running GC collects those loose objects into a cruft pack, where the \&.mtime file reflects the loose object\(cqs actual mtimes, but the cruft pack mtime is "now"\&.
-.RE
-.sp
-Repeating this process will lead to unreachable objects not getting pruned as a result of repeatedly resetting the objects\(aq mtimes to the present time\&.
-.sp
-If you are GC\-ing repositories in a mixed version environment, consider omitting the \fB\-\-cruft\fR option when using \fBgit-repack\fR(1) and \fBgit-gc\fR(1), and leaving the \fBgc\&.cruftPacks\fR configuration unset until all writers understand cruft packs\&.
 .SS "Alternatives"
 .sp
 Notable alternatives to this design include:
@@ -1172,23 +1264,10 @@ Notable alternatives to this design include:
 .sp -1
 .IP \(bu 2.3
 .\}
-The location of the per\-object mtime data, and
+The location of the per\-object mtime data\&.
 .RE
 .sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-Storing unreachable objects in multiple cruft packs\&.
-.RE
-.sp
-On the location of mtime data, a new auxiliary file tied to the pack was chosen to avoid complicating the \fB\&.idx\fR format\&. If the \fB\&.idx\fR format were ever to gain support for optional chunks of data, it may make sense to consolidate the \fB\&.mtimes\fR format into the \fB\&.idx\fR itself\&.
-.sp
-Storing unreachable objects among multiple cruft packs (e\&.g\&., creating a new cruft pack during each repacking operation including only unreachable objects which aren\(cqt already stored in an earlier cruft pack) is significantly more complicated to construct, and so aren\(cqt pursued here\&. The obvious drawback to the current implementation is that the entire cruft pack must be re\-written from scratch\&.
+On the location of mtime data, a new auxiliary file tied to the pack was chosen to avoid complicating the \&.\fBidx\fR format\&. If the \&.\fBidx\fR format were ever to gain support for optional chunks of data, it may make sense to consolidate the \&.\fBmtimes\fR format into the \&.\fBidx\fR itself\&.
 .SH "GIT"
 .sp
 Part of the \fBgit\fR(1) suite

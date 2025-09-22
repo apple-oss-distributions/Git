@@ -1,19 +1,40 @@
 #ifndef REFS_H
 #define REFS_H
 
-#include "cache.h"
 #include "commit.h"
+#include "repository.h"
+#include "repo-settings.h"
 
+struct fsck_options;
 struct object_id;
 struct ref_store;
-struct repository;
 struct strbuf;
 struct string_list;
 struct string_list_item;
 struct worktree;
 
+enum ref_storage_format ref_storage_format_by_name(const char *name);
+const char *ref_storage_format_to_name(enum ref_storage_format ref_storage_format);
+
+enum ref_transaction_error {
+	/* Default error code */
+	REF_TRANSACTION_ERROR_GENERIC = -1,
+	/* Ref name conflict like A vs A/B */
+	REF_TRANSACTION_ERROR_NAME_CONFLICT = -2,
+	/* Ref to be created already exists */
+	REF_TRANSACTION_ERROR_CREATE_EXISTS = -3,
+	/* ref expected but doesn't exist */
+	REF_TRANSACTION_ERROR_NONEXISTENT_REF = -4,
+	/* Provided old_oid or old_target of reference doesn't match actual */
+	REF_TRANSACTION_ERROR_INCORRECT_OLD_VALUE = -5,
+	/* Provided new_oid or new_target is invalid */
+	REF_TRANSACTION_ERROR_INVALID_NEW_VALUE = -6,
+	/* Expected ref to be symref, but is a regular ref */
+	REF_TRANSACTION_ERROR_EXPECTED_SYMREF = -7,
+};
+
 /*
- * Resolve a reference, recursively following symbolic refererences.
+ * Resolve a reference, recursively following symbolic references.
  *
  * Return the name of the non-symbolic reference that ultimately pointed
  * at the resolved object name.  The return value, if not NULL, is a
@@ -57,7 +78,7 @@ struct worktree;
  * Even with RESOLVE_REF_ALLOW_BAD_NAME, names that escape the refs/
  * directory and do not consist of all caps and underscores cannot be
  * resolved. The function returns NULL for such ref names.
- * Caps and underscores refers to the special refs, such as HEAD,
+ * Caps and underscores refers to the pseudorefs, such as HEAD,
  * FETCH_HEAD and friends, that all live outside of the refs/ directory.
  */
 #define RESOLVE_REF_READING 0x01
@@ -70,19 +91,26 @@ const char *refs_resolve_ref_unsafe(struct ref_store *refs,
 				    struct object_id *oid,
 				    int *flags);
 
-const char *resolve_ref_unsafe(const char *refname, int resolve_flags,
-			       struct object_id *oid, int *flags);
-
 char *refs_resolve_refdup(struct ref_store *refs,
 			  const char *refname, int resolve_flags,
 			  struct object_id *oid, int *flags);
-char *resolve_refdup(const char *refname, int resolve_flags,
-		     struct object_id *oid, int *flags);
 
-int read_ref_full(const char *refname, int resolve_flags,
-		  struct object_id *oid, int *flags);
-int read_ref(const char *refname, struct object_id *oid);
+int refs_read_ref_full(struct ref_store *refs, const char *refname,
+		       int resolve_flags, struct object_id *oid, int *flags);
 
+int refs_read_ref(struct ref_store *refs, const char *refname, struct object_id *oid);
+
+#define NOT_A_SYMREF -2
+
+/*
+ * Read the symbolic ref named "refname" and write its immediate referent into
+ * the provided buffer. Referent is left empty if "refname" is not a symbolic
+ * ref. It does not resolve the symbolic reference recursively in case the
+ * target is also a symbolic ref.
+ *
+ * Returns 0 on success, -2 if the "refname" is not a symbolic ref,
+ * -1 otherwise.
+ */
 int refs_read_symbolic_ref(struct ref_store *ref_store, const char *refname,
 			   struct strbuf *referent);
 
@@ -101,36 +129,51 @@ int refs_read_symbolic_ref(struct ref_store *ref_store, const char *refname,
  * both "foo" and with "foo/bar/baz" but not with "foo/bar" or
  * "foo/barbados".
  *
+ * If `initial_transaction` is truish, then all collision checks with
+ * preexisting refs are skipped.
+ *
  * extras and skip must be sorted.
  */
-
-int refs_verify_refname_available(struct ref_store *refs,
-				  const char *refname,
-				  const struct string_list *extras,
-				  const struct string_list *skip,
-				  struct strbuf *err);
+enum ref_transaction_error refs_verify_refname_available(struct ref_store *refs,
+						 const char *refname,
+						 const struct string_list *extras,
+						 const struct string_list *skip,
+						 unsigned int initial_transaction,
+						 struct strbuf *err);
 
 int refs_ref_exists(struct ref_store *refs, const char *refname);
 
-int ref_exists(const char *refname);
-
-int should_autocreate_reflog(const char *refname);
+int should_autocreate_reflog(enum log_refs_config log_all_ref_updates,
+			     const char *refname);
 
 int is_branch(const char *refname);
 
-int refs_init_db(struct strbuf *err);
+#define REF_STORE_CREATE_ON_DISK_IS_WORKTREE (1 << 0)
+
+int ref_store_create_on_disk(struct ref_store *refs, int flags, struct strbuf *err);
+
+/*
+ * Release all memory and resources associated with the ref store.
+ */
+void ref_store_release(struct ref_store *ref_store);
+
+/*
+ * Remove the ref store from disk. This deletes all associated data.
+ */
+int ref_store_remove_on_disk(struct ref_store *refs, struct strbuf *err);
 
 /*
  * Return the peeled value of the oid currently being iterated via
  * for_each_ref(), etc. This is equivalent to calling:
  *
- *   peel_object(oid, &peeled);
+ *   peel_object(r, oid, &peeled);
  *
  * with the "oid" value given to the each_ref_fn callback, except
  * that some ref storage may be able to answer the query without
  * actually loading the object in memory.
  */
-int peel_iterated_oid(const struct object_id *base, struct object_id *peeled);
+int peel_iterated_oid(struct repository *r,
+		      const struct object_id *base, struct object_id *peeled);
 
 /**
  * Resolve refname in the nested "gitlink" repository in the specified
@@ -138,8 +181,9 @@ int peel_iterated_oid(const struct object_id *base, struct object_id *peeled);
  * successful, return 0 and set oid to the name of the object;
  * otherwise, return a non-zero value.
  */
-int resolve_gitlink_ref(const char *submodule, const char *refname,
-			struct object_id *oid);
+int repo_resolve_gitlink_ref(struct repository *r,
+			     const char *submodule, const char *refname,
+			     struct object_id *oid);
 
 /*
  * Return true iff abbrev_name is a possible abbreviation for
@@ -159,22 +203,42 @@ int expand_ref(struct repository *r, const char *str, int len, struct object_id 
 int repo_dwim_ref(struct repository *r, const char *str, int len,
 		  struct object_id *oid, char **ref, int nonfatal_dangling_mark);
 int repo_dwim_log(struct repository *r, const char *str, int len, struct object_id *oid, char **ref);
-static inline int dwim_ref(const char *str, int len, struct object_id *oid,
-			   char **ref, int nonfatal_dangling_mark)
-{
-	return repo_dwim_ref(the_repository, str, len, oid, ref,
-			     nonfatal_dangling_mark);
-}
-int dwim_log(const char *str, int len, struct object_id *oid, char **ref);
 
 /*
  * Retrieves the default branch name for newly-initialized repositories.
  *
- * The return value of `repo_default_branch_name()` is an allocated string. The
- * return value of `git_default_branch_name()` is a singleton.
+ * The return value is an allocated string.
  */
-const char *git_default_branch_name(int quiet);
 char *repo_default_branch_name(struct repository *r, int quiet);
+
+/*
+ * Copy "name" to "sb", expanding any special @-marks as handled by
+ * repo_interpret_branch_name(). The result is a non-qualified branch name
+ * (so "foo" or "origin/master" instead of "refs/heads/foo" or
+ * "refs/remotes/origin/master").
+ *
+ * Note that the resulting name may not be a syntactically valid refname.
+ *
+ * If "allowed" is non-zero, restrict the set of allowed expansions. See
+ * repo_interpret_branch_name() for details.
+ */
+void copy_branchname(struct strbuf *sb, const char *name,
+		       unsigned allowed);
+
+/*
+ * Like copy_branchname() above, but confirm that the result is
+ * syntactically valid to be used as a local branch name in refs/heads/.
+ *
+ * The return value is "0" if the result is valid, and "-1" otherwise.
+ */
+int check_branch_ref(struct strbuf *sb, const char *name);
+
+/*
+ * Similar for a tag name in refs/tags/.
+ *
+ * The return value is "0" if the result is valid, and "-1" otherwise.
+ */
+int check_tag_ref(struct strbuf *sb, const char *name);
 
 /*
  * A ref_transaction represents a collection of reference updates that
@@ -210,11 +274,9 @@ char *repo_default_branch_name(struct repository *r, int quiet);
  *
  *   Or
  *
- *   - Call `initial_ref_transaction_commit()` if the ref database is
- *     known to be empty and have no other writers (e.g. during
- *     clone). This is likely to be much faster than
- *     `ref_transaction_commit()`. `ref_transaction_prepare()` should
- *     *not* be called before `initial_ref_transaction_commit()`.
+ *   - Call `ref_transaction_begin()` with REF_TRANSACTION_FLAG_INITIAL if the
+ *     ref database is known to be empty and have no other writers (e.g. during
+ *     clone). This is likely to be much faster than without the flag.
  *
  * - Then finally, call `ref_transaction_free()` to free the
  *   `ref_transaction` data structure.
@@ -230,7 +292,7 @@ char *repo_default_branch_name(struct repository *r, int quiet);
  *         struct strbuf err = STRBUF_INIT;
  *         int ret = 0;
  *
- *         transaction = ref_store_transaction_begin(refs, &err);
+ *         transaction = ref_store_transaction_begin(refs, 0, &err);
  *         if (!transaction ||
  *             ref_transaction_update(...) ||
  *             ref_transaction_create(...) ||
@@ -297,18 +359,8 @@ struct ref_transaction;
  * arguments is only guaranteed to be valid for the duration of a
  * single callback invocation.
  */
-typedef int each_ref_fn(const char *refname,
+typedef int each_ref_fn(const char *refname, const char *referent,
 			const struct object_id *oid, int flags, void *cb_data);
-
-/*
- * The same as each_ref_fn, but also with a repository argument that
- * contains the repository associated with the callback.
- */
-typedef int each_repo_ref_fn(struct repository *r,
-			     const char *refname,
-			     const struct object_id *oid,
-			     int flags,
-			     void *cb_data);
 
 /*
  * The following functions invoke the specified callback function for
@@ -331,53 +383,57 @@ int refs_for_each_branch_ref(struct ref_store *refs,
 			     each_ref_fn fn, void *cb_data);
 int refs_for_each_remote_ref(struct ref_store *refs,
 			     each_ref_fn fn, void *cb_data);
+int refs_for_each_replace_ref(struct ref_store *refs,
+			      each_ref_fn fn, void *cb_data);
 
-/* just iterates the head ref. */
-int head_ref(each_ref_fn fn, void *cb_data);
-
-/* iterates all refs. */
-int for_each_ref(each_ref_fn fn, void *cb_data);
-
-/**
- * iterates all refs which have a defined prefix and strips that prefix from
- * the passed variable refname.
+/*
+ * references matching any pattern in "exclude_patterns" are omitted from the
+ * result set on a best-effort basis.
  */
-int for_each_ref_in(const char *prefix, each_ref_fn fn, void *cb_data);
-
 int refs_for_each_fullref_in(struct ref_store *refs, const char *prefix,
+			     const char **exclude_patterns,
 			     each_ref_fn fn, void *cb_data);
-int for_each_fullref_in(const char *prefix, each_ref_fn fn, void *cb_data);
 
 /**
  * iterate all refs in "patterns" by partitioning patterns into disjoint sets
  * and iterating the longest-common prefix of each set.
  *
+ * references matching any pattern in "exclude_patterns" are omitted from the
+ * result set on a best-effort basis.
+ *
  * callers should be prepared to ignore references that they did not ask for.
  */
 int refs_for_each_fullref_in_prefixes(struct ref_store *refs,
-				      const char *namespace, const char **patterns,
+				      const char *namespace,
+				      const char **patterns,
+				      const char **exclude_patterns,
 				      each_ref_fn fn, void *cb_data);
 
-/**
- * iterate refs from the respective area.
- */
-int for_each_tag_ref(each_ref_fn fn, void *cb_data);
-int for_each_branch_ref(each_ref_fn fn, void *cb_data);
-int for_each_remote_ref(each_ref_fn fn, void *cb_data);
-int for_each_replace_ref(struct repository *r, each_repo_ref_fn fn, void *cb_data);
-
 /* iterates all refs that match the specified glob pattern. */
-int for_each_glob_ref(each_ref_fn fn, const char *pattern, void *cb_data);
+int refs_for_each_glob_ref(struct ref_store *refs, each_ref_fn fn,
+			   const char *pattern, void *cb_data);
 
-int for_each_glob_ref_in(each_ref_fn fn, const char *pattern,
-			 const char *prefix, void *cb_data);
+int refs_for_each_glob_ref_in(struct ref_store *refs, each_ref_fn fn,
+			      const char *pattern, const char *prefix, void *cb_data);
 
-int head_ref_namespaced(each_ref_fn fn, void *cb_data);
-int for_each_namespaced_ref(each_ref_fn fn, void *cb_data);
+int refs_head_ref_namespaced(struct ref_store *refs, each_ref_fn fn, void *cb_data);
+
+/*
+ * references matching any pattern in "exclude_patterns" are omitted from the
+ * result set on a best-effort basis.
+ */
+int refs_for_each_namespaced_ref(struct ref_store *refs,
+				 const char **exclude_patterns,
+				 each_ref_fn fn, void *cb_data);
 
 /* can be used to learn about broken ref and symref */
 int refs_for_each_rawref(struct ref_store *refs, each_ref_fn fn, void *cb_data);
-int for_each_rawref(each_ref_fn fn, void *cb_data);
+
+/*
+ * Iterates over all refs including root refs, i.e. pseudorefs and HEAD.
+ */
+int refs_for_each_include_root_refs(struct ref_store *refs, each_ref_fn fn,
+				    void *cb_data);
 
 /*
  * Normalizes partial refs to their fully qualified form.
@@ -396,32 +452,53 @@ static inline const char *has_glob_specials(const char *pattern)
 	return strpbrk(pattern, "?*[");
 }
 
-void warn_dangling_symref(FILE *fp, const char *msg_fmt, const char *refname);
-void warn_dangling_symrefs(FILE *fp, const char *msg_fmt,
-			   const struct string_list *refnames);
+void refs_warn_dangling_symref(struct ref_store *refs, FILE *fp,
+			       const char *msg_fmt, const char *refname);
+void refs_warn_dangling_symrefs(struct ref_store *refs, FILE *fp,
+				const char *msg_fmt, const struct string_list *refnames);
 
 /*
  * Flags for controlling behaviour of pack_refs()
  * PACK_REFS_PRUNE: Prune loose refs after packing
- * PACK_REFS_ALL:   Pack _all_ refs, not just tags and already packed refs
+ * PACK_REFS_AUTO: Pack refs on a best effort basis. The heuristics and end
+ *                 result are decided by the ref backend. Backends may ignore
+ *                 this flag and fall back to a normal repack.
  */
-#define PACK_REFS_PRUNE 0x0001
-#define PACK_REFS_ALL   0x0002
+#define PACK_REFS_PRUNE (1 << 0)
+#define PACK_REFS_AUTO  (1 << 1)
+
+struct pack_refs_opts {
+	unsigned int flags;
+	struct ref_exclusions *exclusions;
+	struct string_list *includes;
+};
 
 /*
  * Write a packed-refs file for the current repository.
  * flags: Combination of the above PACK_REFS_* flags.
  */
-int refs_pack_refs(struct ref_store *refs, unsigned int flags);
+int refs_pack_refs(struct ref_store *refs, struct pack_refs_opts *opts);
 
 /*
  * Setup reflog before using. Fill in err and return -1 on failure.
  */
 int refs_create_reflog(struct ref_store *refs, const char *refname,
 		       struct strbuf *err);
-int safe_create_reflog(const char *refname, struct strbuf *err);
 
-/** Reads log for the value of ref during at_time. **/
+/**
+ * Reads log for the value of ref during at_time (in which case "cnt" should be
+ * negative) or the reflog "cnt" entries from the top (in which case "at_time"
+ * should be 0).
+ *
+ * If we found the reflog entry in question, returns 0 (and details of the
+ * entry can be found in the out-parameters).
+ *
+ * If we ran out of reflog entries, the out-parameters are filled with the
+ * details of the oldest entry we did find, and the function returns 1. Note
+ * that there is one important special case here! If the reflog was empty
+ * and the caller asked for the 0-th cnt, we will return "1" but leave the
+ * "oid" field untouched.
+ **/
 int read_ref_at(struct ref_store *refs,
 		const char *refname, unsigned int flags,
 		timestamp_t at_time, int cnt,
@@ -430,7 +507,6 @@ int read_ref_at(struct ref_store *refs,
 
 /** Check if a particular reflog exists */
 int refs_reflog_exists(struct ref_store *refs, const char *refname);
-int reflog_exists(const char *refname);
 
 /*
  * Delete the specified reference. If old_oid is non-NULL, then
@@ -444,8 +520,6 @@ int refs_delete_ref(struct ref_store *refs, const char *msg,
 		    const char *refname,
 		    const struct object_id *old_oid,
 		    unsigned int flags);
-int delete_ref(const char *msg, const char *refname,
-	       const struct object_id *old_oid, unsigned int flags);
 
 /*
  * Delete the specified references. If there are any problems, emit
@@ -455,12 +529,9 @@ int delete_ref(const char *msg, const char *refname,
  */
 int refs_delete_refs(struct ref_store *refs, const char *msg,
 		     struct string_list *refnames, unsigned int flags);
-int delete_refs(const char *msg, struct string_list *refnames,
-		unsigned int flags);
 
 /** Delete a reflog */
 int refs_delete_reflog(struct ref_store *refs, const char *refname);
-int delete_reflog(const char *refname);
 
 /*
  * Callback to process a reflog entry found by the iteration functions (see
@@ -477,7 +548,7 @@ int delete_reflog(const char *refname);
  * from UTC.  Its absolute value is formed by multiplying the hour
  * part by 100 and adding the minute part.  For example, 1 hour ahead
  * of UTC, CET == "+0100", is represented as positive one hundred (not
- * postiive sixty).
+ * positive sixty).
  *
  * The msg parameter is a single complete line; a reflog message given
  * to refs_delete_ref, refs_update_ref, etc. is returned to the
@@ -506,34 +577,38 @@ int refs_for_each_reflog_ent_reverse(struct ref_store *refs,
 				     void *cb_data);
 
 /*
- * Iterate over reflog entries in the log for `refname` in the main ref store.
+ * The signature for the callback function for the refs_for_each_reflog()
+ * functions below. The memory pointed to by the refname argument is only
+ * guaranteed to be valid for the duration of a single callback invocation.
  */
-
-/* oldest entry first */
-int for_each_reflog_ent(const char *refname, each_reflog_ent_fn fn, void *cb_data);
-
-/* youngest entry first */
-int for_each_reflog_ent_reverse(const char *refname, each_reflog_ent_fn fn, void *cb_data);
+typedef int each_reflog_fn(const char *refname, void *cb_data);
 
 /*
  * Calls the specified function for each reflog file until it returns nonzero,
  * and returns the value. Reflog file order is unspecified.
  */
-int refs_for_each_reflog(struct ref_store *refs, each_ref_fn fn, void *cb_data);
-int for_each_reflog(each_ref_fn fn, void *cb_data);
+int refs_for_each_reflog(struct ref_store *refs, each_reflog_fn fn, void *cb_data);
 
 #define REFNAME_ALLOW_ONELEVEL 1
 #define REFNAME_REFSPEC_PATTERN 2
 
 /*
  * Return 0 iff refname has the correct format for a refname according
- * to the rules described in Documentation/git-check-ref-format.txt.
+ * to the rules described in Documentation/git-check-ref-format.adoc.
  * If REFNAME_ALLOW_ONELEVEL is set in flags, then accept one-level
  * reference names.  If REFNAME_REFSPEC_PATTERN is set in flags, then
  * allow a single "*" wildcard character in the refspec. No leading or
  * repeated slashes are accepted.
  */
 int check_refname_format(const char *refname, int flags);
+
+/*
+ * Check the reference database for consistency. Return 0 if refs and
+ * reflogs are consistent, and non-zero otherwise. The errors will be
+ * written to stderr.
+ */
+int refs_fsck(struct ref_store *refs, struct fsck_options *o,
+	      struct worktree *wt);
 
 /*
  * Apply the rules from check_refname_format, but mutate the result until it
@@ -545,23 +620,21 @@ const char *prettify_refname(const char *refname);
 
 char *refs_shorten_unambiguous_ref(struct ref_store *refs,
 				   const char *refname, int strict);
-char *shorten_unambiguous_ref(const char *refname, int strict);
 
 /** rename ref, return 0 on success **/
 int refs_rename_ref(struct ref_store *refs, const char *oldref,
 		    const char *newref, const char *logmsg);
-int rename_ref(const char *oldref, const char *newref,
-			const char *logmsg);
 
 /** copy ref, return 0 on success **/
 int refs_copy_existing_ref(struct ref_store *refs, const char *oldref,
 		    const char *newref, const char *logmsg);
-int copy_existing_ref(const char *oldref, const char *newref,
-			const char *logmsg);
 
-int refs_create_symref(struct ref_store *refs, const char *refname,
+int refs_update_symref(struct ref_store *refs, const char *refname,
 		       const char *target, const char *logmsg);
-int create_symref(const char *refname, const char *target, const char *logmsg);
+
+int refs_update_symref_extended(struct ref_store *refs, const char *refname,
+		       const char *target, const char *logmsg,
+		       struct strbuf *referent, int create_only);
 
 enum action_on_err {
 	UPDATE_REFS_MSG_ON_ERR,
@@ -569,13 +642,35 @@ enum action_on_err {
 	UPDATE_REFS_QUIET_ON_ERR
 };
 
+enum ref_transaction_flag {
+	/*
+	 * The ref transaction is part of the initial creation of the ref store
+	 * and can thus assume that the ref store is completely empty. This
+	 * allows the backend to perform the transaction more efficiently by
+	 * skipping certain checks.
+	 *
+	 * It is a bug to set this flag when there might be other processes
+	 * accessing the repository or if there are existing references that
+	 * might conflict with the ones being created. All old_oid values must
+	 * either be absent or null_oid.
+	 */
+	REF_TRANSACTION_FLAG_INITIAL = (1 << 0),
+
+	/*
+	 * The transaction mechanism by default fails all updates if any conflict
+	 * is detected. This flag allows transactions to partially apply updates
+	 * while rejecting updates which do not match the expected state.
+	 */
+	REF_TRANSACTION_ALLOW_FAILURE = (1 << 1),
+};
+
 /*
  * Begin a reference transaction.  The reference transaction must
  * be freed by calling ref_transaction_free().
  */
 struct ref_transaction *ref_store_transaction_begin(struct ref_store *refs,
+						    unsigned int flags,
 						    struct strbuf *err);
-struct ref_transaction *ref_transaction_begin(struct strbuf *err);
 
 /*
  * Reference transaction updates
@@ -600,6 +695,16 @@ struct ref_transaction *ref_transaction_begin(struct strbuf *err);
  *         or null_oid, meaning that the reference must not exist
  *         before the update. A copy of this value is made in the
  *         transaction.
+ *
+ *     new_target -- the target reference that the reference will be
+ *         updated to point to. If the reference is a regular reference,
+ *         it will be converted to a symbolic reference. Cannot be set
+ *         together with `new_oid`. A copy of this value is made in the
+ *         transaction.
+ *
+ *     old_target -- the reference that the reference must be pointing to.
+ *         Canont be set together with `old_oid`. A copy of this value is
+ *         made in the transaction.
  *
  *     flags -- flags affecting the update, passed to
  *         update_ref_lock(). Possible flags: REF_NO_DEREF,
@@ -650,12 +755,18 @@ struct ref_transaction *ref_transaction_begin(struct strbuf *err);
 #define REF_SKIP_REFNAME_VERIFICATION (1 << 11)
 
 /*
+ * Skip creation of a reflog entry, even if it would have otherwise been
+ * created.
+ */
+#define REF_SKIP_CREATE_REFLOG (1 << 12)
+
+/*
  * Bitmask of all of the flags that are allowed to be passed in to
  * ref_transaction_update() and friends:
  */
 #define REF_TRANSACTION_UPDATE_ALLOWED_FLAGS                                  \
 	(REF_NO_DEREF | REF_FORCE_CREATE_REFLOG | REF_SKIP_OID_VERIFICATION | \
-	 REF_SKIP_REFNAME_VERIFICATION)
+	 REF_SKIP_REFNAME_VERIFICATION | REF_SKIP_CREATE_REFLOG)
 
 /*
  * Add a reference update to transaction. `new_oid` is the value that
@@ -666,7 +777,11 @@ struct ref_transaction *ref_transaction_begin(struct strbuf *err);
  * beforehand. The old value is checked after the lock is taken to
  * prevent races. If the old value doesn't agree with old_oid, the
  * whole transaction fails. If old_oid is NULL, then the previous
- * value is not checked.
+ * value is not checked. If `old_target` is not NULL, treat the reference
+ * as a symbolic ref and validate that its target before the update is
+ * `old_target`. If the `new_target` is not NULL, then the reference
+ * will be updated to a symbolic ref which targets `new_target`.
+ * Together, these allow us to update between regular refs and symrefs.
  *
  * See the above comment "Reference transaction updates" for more
  * information.
@@ -675,6 +790,8 @@ int ref_transaction_update(struct ref_transaction *transaction,
 			   const char *refname,
 			   const struct object_id *new_oid,
 			   const struct object_id *old_oid,
+			   const char *new_target,
+			   const char *old_target,
 			   unsigned int flags, const char *msg,
 			   struct strbuf *err);
 
@@ -690,6 +807,7 @@ int ref_transaction_update(struct ref_transaction *transaction,
 int ref_transaction_create(struct ref_transaction *transaction,
 			   const char *refname,
 			   const struct object_id *new_oid,
+			   const char *new_target,
 			   unsigned int flags, const char *msg,
 			   struct strbuf *err);
 
@@ -704,7 +822,9 @@ int ref_transaction_create(struct ref_transaction *transaction,
 int ref_transaction_delete(struct ref_transaction *transaction,
 			   const char *refname,
 			   const struct object_id *old_oid,
-			   unsigned int flags, const char *msg,
+			   const char *old_target,
+			   unsigned int flags,
+			   const char *msg,
 			   struct strbuf *err);
 
 /*
@@ -718,13 +838,9 @@ int ref_transaction_delete(struct ref_transaction *transaction,
 int ref_transaction_verify(struct ref_transaction *transaction,
 			   const char *refname,
 			   const struct object_id *old_oid,
+			   const char *old_target,
 			   unsigned int flags,
 			   struct strbuf *err);
-
-/* Naming conflict (for example, the ref names A and A/B conflict). */
-#define TRANSACTION_NAME_CONFLICT -1
-/* All other errors. */
-#define TRANSACTION_GENERIC_ERROR -2
 
 /*
  * Perform the preparatory stages of committing `transaction`. Acquire
@@ -763,20 +879,6 @@ int ref_transaction_abort(struct ref_transaction *transaction,
 			  struct strbuf *err);
 
 /*
- * Like ref_transaction_commit(), but optimized for creating
- * references when originally initializing a repository (e.g., by "git
- * clone"). It writes the new references directly to packed-refs
- * without locking the individual references.
- *
- * It is a bug to call this function when there might be other
- * processes accessing the repository or if there are existing
- * references that might conflict with the ones being created. All
- * old_oid values must either be absent or null_oid.
- */
-int initial_ref_transaction_commit(struct ref_transaction *transaction,
-				   struct strbuf *err);
-
-/*
  * Execute the given callback function for each of the reference updates which
  * have been queued in the given transaction. `old_oid` and `new_oid` may be
  * `NULL` pointers depending on whether the update has these object IDs set or
@@ -789,6 +891,21 @@ typedef void ref_transaction_for_each_queued_update_fn(const char *refname,
 void ref_transaction_for_each_queued_update(struct ref_transaction *transaction,
 					    ref_transaction_for_each_queued_update_fn cb,
 					    void *cb_data);
+
+/*
+ * Execute the given callback function for each of the reference updates which
+ * have been rejected in the given transaction.
+ */
+typedef void ref_transaction_for_each_rejected_update_fn(const char *refname,
+							 const struct object_id *old_oid,
+							 const struct object_id *new_oid,
+							 const char *old_target,
+							 const char *new_target,
+							 enum ref_transaction_error err,
+							 void *cb_data);
+void ref_transaction_for_each_rejected_update(struct ref_transaction *transaction,
+					      ref_transaction_for_each_rejected_update_fn cb,
+					      void *cb_data);
 
 /*
  * Free `*transaction` and all associated data.
@@ -806,12 +923,9 @@ void ref_transaction_free(struct ref_transaction *transaction);
 int refs_update_ref(struct ref_store *refs, const char *msg, const char *refname,
 		    const struct object_id *new_oid, const struct object_id *old_oid,
 		    unsigned int flags, enum action_on_err onerr);
-int update_ref(const char *msg, const char *refname,
-	       const struct object_id *new_oid, const struct object_id *old_oid,
-	       unsigned int flags, enum action_on_err onerr);
 
 int parse_hide_refs_config(const char *var, const char *value, const char *,
-			   struct string_list *);
+			   struct strvec *);
 
 /*
  * Check whether a ref is hidden. If no namespace is set, both the first and
@@ -821,7 +935,22 @@ int parse_hide_refs_config(const char *var, const char *value, const char *,
  * the ref is outside that namespace, the first parameter is NULL. The second
  * parameter always points to the full ref name.
  */
-int ref_is_hidden(const char *, const char *, const struct string_list *);
+int ref_is_hidden(const char *, const char *, const struct strvec *);
+
+/*
+ * Returns an array of patterns to use as excluded_patterns, if none of the
+ * hidden references use the token '!' or '^'.
+ */
+const char **hidden_refs_to_excludes(const struct strvec *hide_refs);
+
+/*
+ * Prefix all exclude patterns with the namespace, if any. This is required
+ * because exclude patterns apply to the stripped reference name, not the full
+ * reference name with the namespace.
+ */
+const char **get_namespaced_exclude_patterns(const char **exclude_patterns,
+					     const char *namespace,
+					     struct strvec *out);
 
 /* Is this a per-worktree ref living in the refs/ namespace? */
 int is_per_worktree_ref(const char *refname);
@@ -860,7 +989,7 @@ enum expire_reflog_flags {
 
 /*
  * The following interface is used for reflog expiration. The caller
- * calls reflog_expire(), supplying it with three callback functions,
+ * calls refs_reflog_expire(), supplying it with three callback functions,
  * of the following types. The callback functions define the
  * expiration policy that is desired.
  *
@@ -897,12 +1026,6 @@ int refs_reflog_expire(struct ref_store *refs,
 		       reflog_expiry_should_prune_fn should_prune_fn,
 		       reflog_expiry_cleanup_fn cleanup_fn,
 		       void *policy_cb_data);
-int reflog_expire(const char *refname,
-		  unsigned int flags,
-		  reflog_expiry_prepare_fn prepare_fn,
-		  reflog_expiry_should_prune_fn should_prune_fn,
-		  reflog_expiry_cleanup_fn cleanup_fn,
-		  void *policy_cb_data);
 
 struct ref_store *get_main_ref_store(struct repository *r);
 
@@ -950,17 +1073,18 @@ struct ref_store *get_main_ref_store(struct repository *r);
  * For backwards compatibility, submodule=="" is treated the same as
  * submodule==NULL.
  */
-struct ref_store *get_submodule_ref_store(const char *submodule);
+struct ref_store *repo_get_submodule_ref_store(struct repository *repo,
+					       const char *submodule);
 struct ref_store *get_worktree_ref_store(const struct worktree *wt);
 
 /*
  * Some of the names specified by refs have special meaning to Git.
- * Organize these namespaces in a comon 'ref_namespace' array for
+ * Organize these namespaces in a common 'ref_namespace' array for
  * reference from multiple places in the codebase.
  */
 
 struct ref_namespace_info {
-	char *ref;
+	const char *ref;
 	enum decoration_type decoration;
 
 	/*
@@ -997,5 +1121,73 @@ extern struct ref_namespace_info ref_namespace[NAMESPACE__COUNT];
  * variables. Modify a namespace as specified by its ref_namespace key.
  */
 void update_ref_namespace(enum ref_namespace namespace, char *ref);
+
+/*
+ * Check whether the provided name names a root reference. This function only
+ * performs a syntactic check.
+ *
+ * A root ref is a reference that lives in the root of the reference hierarchy.
+ * These references must conform to special syntax:
+ *
+ *   - Their name must be all-uppercase or underscores ("_").
+ *
+ *   - Their name must end with "_HEAD". As a special rule, "HEAD" is a root
+ *     ref, as well.
+ *
+ *   - Their name may not contain a slash.
+ *
+ * There is a special set of irregular root refs that exist due to historic
+ * reasons, only. This list shall not be expanded in the future:
+ *
+ *   - AUTO_MERGE
+ *
+ *   - BISECT_EXPECTED_REV
+ *
+ *   - NOTES_MERGE_PARTIAL
+ *
+ *   - NOTES_MERGE_REF
+ *
+ *   - MERGE_AUTOSTASH
+ */
+int is_root_ref(const char *refname);
+
+/*
+ * Pseudorefs are refs that have different semantics compared to
+ * "normal" refs. These refs can thus not be stored in the ref backend,
+ * but must always be accessed via the filesystem. The following refs
+ * are pseudorefs:
+ *
+ * - FETCH_HEAD may contain multiple object IDs, and each one of them
+ *   carries additional metadata like where it came from.
+ *
+ * - MERGE_HEAD may contain multiple object IDs when merging multiple
+ *   heads.
+ *
+ * Reading, writing or deleting references must consistently go either
+ * through the filesystem (pseudorefs) or through the reference
+ * backend (normal ones).
+ */
+int is_pseudo_ref(const char *refname);
+
+/*
+ * The following flags can be passed to `repo_migrate_ref_storage_format()`:
+ *
+ *   - REPO_MIGRATE_REF_STORAGE_FORMAT_DRYRUN: perform a dry-run migration
+ *     without touching the main repository. The result will be written into a
+ *     temporary ref storage directory.
+ *
+ *   - REPO_MIGRATE_REF_STORAGE_FORMAT_SKIP_REFLOG: skip migration of reflogs.
+ */
+#define REPO_MIGRATE_REF_STORAGE_FORMAT_DRYRUN      (1 << 0)
+#define REPO_MIGRATE_REF_STORAGE_FORMAT_SKIP_REFLOG (1 << 1)
+
+/*
+ * Migrate the ref storage format used by the repository to the
+ * specified one.
+ */
+int repo_migrate_ref_storage_format(struct repository *repo,
+				    enum ref_storage_format format,
+				    unsigned int flags,
+				    struct strbuf *err);
 
 #endif /* REFS_H */

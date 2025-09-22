@@ -1,11 +1,11 @@
 #ifndef PRETTY_H
 #define PRETTY_H
 
-#include "cache.h"
 #include "date.h"
 #include "string-list.h"
 
 struct commit;
+struct repository;
 struct strbuf;
 struct process_trailer_options;
 
@@ -35,11 +35,10 @@ struct pretty_print_context {
 	 */
 	enum cmit_fmt fmt;
 	int abbrev;
-	const char *after_subject;
+	char *after_subject;
 	int preserve_subject;
 	struct date_mode date_mode;
 	unsigned date_mode_explicit:1;
-	int print_email_subject;
 	int expand_tabs_in_log;
 	int need_8bit_cte;
 	char *notes_message;
@@ -96,13 +95,13 @@ void pp_user_info(struct pretty_print_context *pp, const char *what,
 			const char *encoding);
 
 /*
- * Format title line of commit message taken from "msg_p" and
+ * Format subject line of commit message taken from "msg_p" and
  * put it into "sb".
  * First line of "msg_p" is also affected.
  */
-void pp_title_line(struct pretty_print_context *pp, const char **msg_p,
-			struct strbuf *sb, const char *encoding,
-			int need_8bit_cte);
+void pp_email_subject(struct pretty_print_context *pp, const char **msg_p,
+		      struct strbuf *sb, const char *encoding,
+		      int need_8bit_cte);
 
 /*
  * Get current state of commit message from "msg_p" and continue formatting
@@ -120,10 +119,6 @@ void repo_format_commit_message(struct repository *r,
 			const struct commit *commit,
 			const char *format, struct strbuf *sb,
 			const struct pretty_print_context *context);
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define format_commit_message(c, f, s, con) \
-	repo_format_commit_message(the_repository, c, f, s, con)
-#endif
 
 /*
  * Parse given arguments from "arg", check it for correctness and
@@ -153,6 +148,8 @@ int commit_format_is_empty(enum cmit_fmt);
 /* Make subject of commit message suitable for filename */
 void format_sanitized_subject(struct strbuf *sb, const char *msg, size_t len);
 
+int has_non_ascii(const char *text);
+
 /*
  * Set values of fields in "struct process_trailer_options"
  * according to trailers arguments.
@@ -170,7 +167,7 @@ int format_set_trailers_options(struct process_trailer_options *opts,
  * a well-known sentinel date if they appear bogus.
  */
 const char *show_ident_date(const struct ident_split *id,
-			    const struct date_mode *mode);
+			    struct date_mode mode);
 
 
 #endif /* PRETTY_H */

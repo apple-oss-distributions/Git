@@ -142,7 +142,7 @@ test_expect_success '"list" all worktrees --porcelain with prunable' '
 	rm -rf prunable &&
 	git worktree list --porcelain >out &&
 	sed -n "/^worktree .*\/prunable$/,/^$/p" <out >only_prunable &&
-	test_i18ngrep "^prunable gitdir file points to non-existent location$" only_prunable
+	test_grep "^prunable gitdir file points to non-existent location$" only_prunable
 '
 
 test_expect_success '"list" all worktrees with prunable consistent with "prune"' '
@@ -154,8 +154,8 @@ test_expect_success '"list" all worktrees with prunable consistent with "prune"'
 	grep "/prunable  *[0-9a-f].* prunable$" out &&
 	! grep "/unprunable  *[0-9a-f].* unprunable$" out &&
 	git worktree prune --verbose 2>out &&
-	test_i18ngrep "^Removing worktrees/prunable" out &&
-	test_i18ngrep ! "^Removing worktrees/unprunable" out
+	test_grep "^Removing worktrees/prunable" out &&
+	test_grep ! "^Removing worktrees/unprunable" out
 '
 
 test_expect_success '"list" --verbose and --porcelain mutually exclusive' '
@@ -260,6 +260,7 @@ test_expect_success 'broken main worktree still at the top' '
 '
 
 test_expect_success 'linked worktrees are sorted' '
+	test_when_finished "rm -rf sorted" &&
 	mkdir sorted &&
 	git init sorted/main &&
 	(
@@ -267,6 +268,27 @@ test_expect_success 'linked worktrees are sorted' '
 		test_tick &&
 		test_commit new &&
 		git worktree add ../first &&
+		git worktree add ../second &&
+		git worktree list --porcelain >out &&
+		grep ^worktree out >actual
+	) &&
+	cat >expected <<-EOF &&
+	worktree $(pwd)/sorted/main
+	worktree $(pwd)/sorted/first
+	worktree $(pwd)/sorted/second
+	EOF
+	test_cmp expected sorted/main/actual
+'
+
+test_expect_success 'linked worktrees with relative paths are shown with absolute paths' '
+	test_when_finished "rm -rf sorted" &&
+	mkdir sorted &&
+	git init sorted/main &&
+	(
+		cd sorted/main &&
+		test_tick &&
+		test_commit new &&
+		git worktree add --relative-paths ../first &&
 		git worktree add ../second &&
 		git worktree list --porcelain >out &&
 		grep ^worktree out >actual

@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='send-pack --stdin tests'
+
 . ./test-lib.sh
 
 create_ref () {

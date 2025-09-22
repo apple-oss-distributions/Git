@@ -1,7 +1,6 @@
 #ifndef TR2_TLS_H
 #define TR2_TLS_H
 
-#include "strbuf.h"
 #include "trace2/tr2_ctr.h"
 #include "trace2/tr2_tmr.h"
 
@@ -12,7 +11,7 @@
  */
 
 /*
- * Arbitry limit for thread names for column alignment.
+ * Arbitrary limit for thread names for column alignment.
  */
 #define TR2_MAX_THREAD_NAME (24)
 

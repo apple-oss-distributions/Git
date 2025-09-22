@@ -1,17 +1,17 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
 #include "dir.h"
-#include "tag.h"
+#include "gettext.h"
+#include "hex.h"
 #include "commit.h"
-#include "tree.h"
-#include "blob.h"
 #include "diff.h"
-#include "tree-walk.h"
 #include "revision.h"
-#include "list-objects.h"
 #include "list-objects-filter.h"
 #include "list-objects-filter-options.h"
 #include "oidmap.h"
 #include "oidset.h"
+#include "object-name.h"
 #include "object-store.h"
 
 /* Remember to update object flag allocation in object.h */
@@ -244,7 +244,7 @@ static void filter_trees_free(void *filter_data) {
 	struct filter_trees_depth_data *d = filter_data;
 	if (!d)
 		return;
-	oidmap_free(&d->seen_at_depth, 1);
+	oidmap_clear(&d->seen_at_depth, 1);
 	free(d);
 }
 
@@ -544,6 +544,8 @@ static void filter_sparse_oid__init(
 	filter->filter_data = d;
 	filter->filter_object_fn = filter_sparse;
 	filter->free_fn = filter_sparse_free;
+
+	object_context_release(&oc);
 }
 
 /*
@@ -713,15 +715,6 @@ static void filter_combine__free(void *filter_data)
 	free(d);
 }
 
-static void add_all(struct oidset *dest, struct oidset *src) {
-	struct oidset_iter iter;
-	struct object_id *src_oid;
-
-	oidset_iter_init(src, &iter);
-	while ((src_oid = oidset_iter_next(&iter)) != NULL)
-		oidset_insert(dest, src_oid);
-}
-
 static void filter_combine__finalize_omits(
 	struct oidset *omits,
 	void *filter_data)
@@ -730,7 +723,7 @@ static void filter_combine__finalize_omits(
 	size_t sub;
 
 	for (sub = 0; sub < d->nr; sub++) {
-		add_all(omits, &d->sub[sub].omits);
+		oidset_insert_from_set(omits, &d->sub[sub].omits);
 		oidset_clear(&d->sub[sub].omits);
 	}
 }

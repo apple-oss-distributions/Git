@@ -10,6 +10,12 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
 
+if ! test_have_prereq ICONV
+then
+	skip_all='skipping patch i18n tests; iconv not available'
+	test_done
+fi
+
 check_encoding () {
 	# Make sure characters are not corrupted
 	cnt="$1" header="$2" i=1 j=0
@@ -298,7 +304,7 @@ test_expect_success 'am --no-utf8 (U/L)' '
 
 	# commit-tree will warn that the commit message does not contain valid UTF-8
 	# as mailinfo did not convert it
-	test_i18ngrep "did not conform" err &&
+	test_grep "did not conform" err &&
 
 	check_encoding 2
 '

@@ -5,9 +5,23 @@ on: [push, pull_request]
 env:
   DEVELOPER: 1
 
+# If more than one workflow run is triggered for the very same commit hash
+# (which happens when multiple branches pointing to the same commit), only
+# the first one is allowed to run, the second will be kept in the "queued"
+# state. This allows a successful completion of the first run to be reused
+# in the second run via the `skip-if-redundant` logic in the `config` job.
+#
+# The only caveat is that if a workflow run is triggered for the same commit
+# hash that another run is already being held, that latter run will be
+# canceled. For more details about the `concurrency` attribute, see:
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#concurrency
+concurrency:
+  group: ${{ github.sha }}
+
 jobs:
   ci-config:
     name: config
+    if: vars.CI_BRANCHES == '' || contains(vars.CI_BRANCHES, github.ref_name)
     runs-on: ubuntu-latest
     outputs:
       enabled: ${{ steps.check-ref.outputs.enabled }}${{ steps.skip-if-redundant.outputs.enabled }}
@@ -30,10 +44,13 @@ jobs:
         name: check whether CI is enabled for ref
         run: |
           enabled=yes
-          if test -x config-repo/ci/config/allow-ref &&
-             ! config-repo/ci/config/allow-ref '${{ github.ref }}'
+          if test -x config-repo/ci/config/allow-ref
           then
-            enabled=no
+            echo "::warning::ci/config/allow-ref is deprecated; use CI_BRANCHES instead"
+            if ! config-repo/ci/config/allow-ref '${{ github.ref }}'
+            then
+              enabled=no
+            fi
           fi
 
           skip_concurrent=yes
@@ -142,7 +159,7 @@ jobs:
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
       uses: actions/upload-artifact@v4
       with:
-        name: failed-tests-windows
+        name: failed-tests-windows-${{ matrix.nr }}
         path: ${{env.FAILED_TEST_ARTIFACTS}}
   vs-build:
     name: win+VS build
@@ -164,16 +181,12 @@ jobs:
         repository: 'microsoft/vcpkg'
         path: 'compat/vcbuild/vcpkg'
     - name: download vcpkg artifacts
-      shell: powershell
-      run: |
-        $urlbase = "https://dev.azure.com/git/git/_apis/build/builds"
-        $id = ((Invoke-WebRequest -UseBasicParsing "${urlbase}?definitions=9&statusFilter=completed&resultFilter=succeeded&`$top=1").content | ConvertFrom-JSON).value[0].id
-        $downloadUrl = ((Invoke-WebRequest -UseBasicParsing "${urlbase}/$id/artifacts").content | ConvertFrom-JSON).value[0].resource.downloadUrl
-        (New-Object Net.WebClient).DownloadFile($downloadUrl, "compat.zip")
-        Expand-Archive compat.zip -DestinationPath . -Force
-        Remove-Item compat.zip
+      uses: git-for-windows/get-azure-pipelines-artifact@v0
+      with:
+        repository: git/git
+        definitionId: 9
     - name: add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1
+      uses: microsoft/setup-msbuild@v2
     - name: copy dlls to root
       shell: cmd
       run: compat\vcbuild\vcpkg_copy_dlls.bat release
@@ -233,8 +246,60 @@ jobs:
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
       uses: actions/upload-artifact@v4
       with:
-        name: failed-tests-windows
+        name: failed-tests-windows-vs-${{ matrix.nr }}
         path: ${{env.FAILED_TEST_ARTIFACTS}}
+
+  windows-meson-build:
+    name: win+Meson build
+    needs: ci-config
+    if: needs.ci-config.outputs.enabled == 'yes'
+    runs-on: windows-latest
+    concurrency:
+      group: windows-meson-build-${{ github.ref }}
+      cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+    - name: Set up dependencies
+      shell: pwsh
+      run: pip install meson ninja
+    - name: Setup
+      shell: pwsh
+      run: meson setup build --vsenv -Dbuildtype=release -Dperl=disabled -Dcredential_helpers=wincred
+    - name: Compile
+      shell: pwsh
+      run: meson compile -C build
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-meson-artifacts
+        path: build
+  windows-meson-test:
+    name: win+Meson test
+    runs-on: windows-latest
+    needs: [ci-config, windows-meson-build]
+    strategy:
+      fail-fast: false
+      matrix:
+        nr: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    concurrency:
+      group: windows-meson-test-${{ matrix.nr }}-${{ github.ref }}
+      cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+    - name: Set up dependencies
+      shell: pwsh
+      run: pip install meson ninja
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-meson-artifacts
+        path: build
+    - name: Test
+      shell: pwsh
+      run: meson test -C build --list | Select-Object -Skip 1 | Select-String .* | Group-Object -Property { $_.LineNumber % 10 } | Where-Object Name -EQ ${{ matrix.nr }} | ForEach-Object { meson test -C build --no-rebuild --print-errorlogs $_.Group }
+
   regular:
     name: ${{matrix.vector.jobname}} (${{matrix.vector.pool}})
     needs: ci-config
@@ -246,56 +311,50 @@ jobs:
       fail-fast: false
       matrix:
         vector:
-          - jobname: linux-clang
-            cc: clang
-            pool: ubuntu-latest
-          - jobname: linux-sha256
-            cc: clang
-            pool: ubuntu-latest
-          - jobname: linux-gcc
-            cc: gcc
-            cc_package: gcc-8
-            pool: ubuntu-20.04
-          - jobname: linux-TEST-vars
-            cc: gcc
-            cc_package: gcc-8
-            pool: ubuntu-20.04
           - jobname: osx-clang
+            cc: clang
+            pool: macos-13
+          - jobname: osx-reftable
             cc: clang
             pool: macos-13
           - jobname: osx-gcc
             cc: gcc-13
             pool: macos-13
-          - jobname: linux-gcc-default
-            cc: gcc
-            pool: ubuntu-latest
-          - jobname: linux-leaks
-            cc: gcc
-            pool: ubuntu-latest
-          - jobname: linux-asan
-            cc: gcc
-            pool: ubuntu-latest
-          - jobname: linux-ubsan
-            cc: gcc
-            pool: ubuntu-latest
+          - jobname: osx-meson
+            cc: clang
+            pool: macos-13
     env:
       CC: ${{matrix.vector.cc}}
       CC_PACKAGE: ${{matrix.vector.cc_package}}
       jobname: ${{matrix.vector.jobname}}
-      runs_on_pool: ${{matrix.vector.pool}}
+      CI_JOB_IMAGE: ${{matrix.vector.pool}}
+      TEST_OUTPUT_DIRECTORY: ${{github.workspace}}/t
     runs-on: ${{matrix.vector.pool}}
     steps:
     - uses: actions/checkout@v4
     - run: ci/install-dependencies.sh
     - run: ci/run-build-and-tests.sh
-    - run: ci/print-test-failures.sh
+    - name: print test failures
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+      run: ci/print-test-failures.sh
     - name: Upload failed tests' directories
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
       uses: actions/upload-artifact@v4
       with:
         name: failed-tests-${{matrix.vector.jobname}}
         path: ${{env.FAILED_TEST_ARTIFACTS}}
+  fuzz-smoke-test:
+    name: fuzz smoke test
+    needs: ci-config
+    if: needs.ci-config.outputs.enabled == 'yes'
+    env:
+      CC: clang
+      CI_JOB_IMAGE: ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: ci/install-dependencies.sh
+    - run: ci/run-build-and-minimal-fuzzers.sh
   dockerized:
     name: ${{matrix.vector.jobname}} (${{matrix.vector.image}})
     needs: ci-config
@@ -307,34 +366,80 @@ jobs:
       fail-fast: false
       matrix:
         vector:
-        - jobname: linux-musl
-          image: alpine
+        - jobname: linux-sha256
+          image: ubuntu:rolling
+          cc: clang
+        - jobname: linux-reftable
+          image: ubuntu:rolling
+          cc: clang
+        - jobname: linux-TEST-vars
+          image: ubuntu:20.04
+          cc: gcc
+          cc_package: gcc-8
+        - jobname: linux-breaking-changes
+          cc: gcc
+          image: ubuntu:rolling
+        - jobname: linux-leaks
+          image: ubuntu:rolling
+          cc: gcc
+        - jobname: linux-reftable-leaks
+          image: ubuntu:rolling
+          cc: gcc
+        - jobname: linux-asan-ubsan
+          image: ubuntu:rolling
+          cc: clang
+        - jobname: linux-meson
+          image: ubuntu:rolling
+          cc: gcc
+        - jobname: linux-musl-meson
+          image: alpine:latest
+        # Supported until 2025-04-02.
         - jobname: linux32
-          image: daald/ubuntu32:xenial
+          image: i386/ubuntu:focal
         - jobname: pedantic
-          image: fedora
+          image: fedora:latest
+        # A RHEL 8 compatible distro.  Supported until 2029-05-31.
+        - jobname: almalinux-8
+          image: almalinux:8
+        # Supported until 2026-08-31.
+        - jobname: debian-11
+          image: debian:11
     env:
       jobname: ${{matrix.vector.jobname}}
+      CC: ${{matrix.vector.cc}}
+      CI_JOB_IMAGE: ${{matrix.vector.image}}
+      CUSTOM_PATH: /custom
     runs-on: ubuntu-latest
     container: ${{matrix.vector.image}}
     steps:
-    - uses: actions/checkout@v4
-      if: matrix.vector.jobname != 'linux32'
-    - uses: actions/checkout@v1 # cannot be upgraded because Node.js Actions aren't supported in this container
+    - name: prepare libc6 for actions
       if: matrix.vector.jobname == 'linux32'
-    - run: ci/install-docker-dependencies.sh
-    - run: ci/run-build-and-tests.sh
-    - run: ci/print-test-failures.sh
+      run: apt -q update && apt -q -y install libc6-amd64 lib64stdc++6
+    - name: install git in container
+      run: |
+        if command -v git
+        then
+          : # nothing to do
+        elif command -v apk
+        then
+          apk add --update git
+        elif command -v dnf
+        then
+          dnf -yq update && dnf -yq install git
+        else
+          apt-get -q update && apt-get -q -y install git
+        fi
+    - uses: actions/checkout@v4
+    - run: ci/install-dependencies.sh
+    - run: useradd builder --create-home
+    - run: chown -R builder .
+    - run: sudo --preserve-env --set-home --user=builder ci/run-build-and-tests.sh
+    - name: print test failures
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+      run: sudo --preserve-env --set-home --user=builder ci/print-test-failures.sh
     - name: Upload failed tests' directories
-      if: failure() && env.FAILED_TEST_ARTIFACTS != '' && matrix.vector.jobname != 'linux32'
+      if: failure() && env.FAILED_TEST_ARTIFACTS != ''
       uses: actions/upload-artifact@v4
-      with:
-        name: failed-tests-${{matrix.vector.jobname}}
-        path: ${{env.FAILED_TEST_ARTIFACTS}}
-    - name: Upload failed tests' directories
-      if: failure() && env.FAILED_TEST_ARTIFACTS != '' && matrix.vector.jobname == 'linux32'
-      uses: actions/upload-artifact@v1 # cannot be upgraded because Node.js Actions aren't supported in this container
       with:
         name: failed-tests-${{matrix.vector.jobname}}
         path: ${{env.FAILED_TEST_ARTIFACTS}}
@@ -343,6 +448,7 @@ jobs:
     if: needs.ci-config.outputs.enabled == 'yes'
     env:
       jobname: StaticAnalysis
+      CI_JOB_IMAGE: ubuntu-22.04
     runs-on: ubuntu-22.04
     concurrency:
       group: static-analysis-${{ github.ref }}
@@ -357,20 +463,12 @@ jobs:
     if: needs.ci-config.outputs.enabled == 'yes'
     env:
       jobname: sparse
-    runs-on: ubuntu-20.04
+      CI_JOB_IMAGE: ubuntu-22.04
+    runs-on: ubuntu-22.04
     concurrency:
       group: sparse-${{ github.ref }}
       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
     steps:
-    - name: Download a current `sparse` package
-      # Ubuntu's `sparse` version is too old for us
-      uses: git-for-windows/get-azure-pipelines-artifact@v0
-      with:
-        repository: git/git
-        definitionId: 10
-        artifact: sparse-20.04
-    - name: Install the current `sparse` package
-      run: sudo dpkg -i sparse-20.04/sparse_*.deb
     - uses: actions/checkout@v4
     - name: Install other dependencies
       run: ci/install-dependencies.sh
@@ -384,6 +482,7 @@ jobs:
       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
     env:
       jobname: Documentation
+      CI_JOB_IMAGE: ubuntu-latest
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

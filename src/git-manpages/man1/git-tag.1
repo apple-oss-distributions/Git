@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-tag
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-TAG" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-TAG" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,32 +33,32 @@ git-tag \- Create, list, delete or verify a tag object signed with GPG
 .sp
 .nf
 \fIgit tag\fR [\-a | \-s | \-u <key\-id>] [\-f] [\-m <msg> | \-F <file>] [\-e]
+        [(\-\-trailer <token>[(=|:)<value>])\&...\:]
         <tagname> [<commit> | <object>]
-\fIgit tag\fR \-d <tagname>\&...
+\fIgit tag\fR \-d <tagname>\&...\:
 \fIgit tag\fR [\-n[<num>]] \-l [\-\-contains <commit>] [\-\-no\-contains <commit>]
         [\-\-points\-at <object>] [\-\-column[=<options>] | \-\-no\-column]
         [\-\-create\-reflog] [\-\-sort=<key>] [\-\-format=<format>]
-        [\-\-merged <commit>] [\-\-no\-merged <commit>] [<pattern>\&...]
-\fIgit tag\fR \-v [\-\-format=<format>] <tagname>\&...
+        [\-\-merged <commit>] [\-\-no\-merged <commit>] [<pattern>\&...\:]
+\fIgit tag\fR \-v [\-\-format=<format>] <tagname>\&...\:
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Add a tag reference in \fBrefs/tags/\fR, unless \fB\-d/\-l/\-v\fR is given to delete, list or verify tags\&.
 .sp
 Unless \fB\-f\fR is given, the named tag must not yet exist\&.
 .sp
-If one of \fB\-a\fR, \fB\-s\fR, or \fB\-u <key\-id>\fR is passed, the command creates a \fItag\fR object, and requires a tag message\&. Unless \fB\-m <msg>\fR or \fB\-F <file>\fR is given, an editor is started for the user to type in the tag message\&.
+If one of \fB\-a\fR, \fB\-s\fR, or \fB\-u\fR \fI<key\-id>\fR is passed, the command creates a \fItag\fR object, and requires a tag message\&. Unless \fB\-m\fR \fI<msg>\fR or \fB\-F\fR \fI<file>\fR is given, an editor is started for the user to type in the tag message\&.
 .sp
-If \fB\-m <msg>\fR or \fB\-F <file>\fR is given and \fB\-a\fR, \fB\-s\fR, and \fB\-u <key\-id>\fR are absent, \fB\-a\fR is implied\&.
+If \fB\-m\fR \fI<msg>\fR or \fB\-F\fR \fI<file>\fR or \fB\-\-trailer\fR \fI<token>\fR[\fB=\fR\fI<value>\fR] is given and \fB\-a\fR, \fB\-s\fR, and \fB\-u\fR \fI<key\-id>\fR are absent, \fB\-a\fR is implied\&.
 .sp
 Otherwise, a tag reference that points directly at the given object (i\&.e\&., a lightweight tag) is created\&.
 .sp
-A GnuPG signed tag object will be created when \fB\-s\fR or \fB\-u <key\-id>\fR is used\&. When \fB\-u <key\-id>\fR is not used, the committer identity for the current user is used to find the GnuPG key for signing\&. The configuration variable \fBgpg\&.program\fR is used to specify custom GnuPG binary\&.
+A GnuPG signed tag object will be created when \fB\-s\fR or \fB\-u\fR \fI<key\-id>\fR is used\&. When \fB\-u\fR \fI<key\-id>\fR is not used, the committer identity for the current user is used to find the GnuPG key for signing\&. The configuration variable \fBgpg\&.program\fR is used to specify custom GnuPG binary\&.
 .sp
 Tag objects (created with \fB\-a\fR, \fB\-s\fR, or \fB\-u\fR) are called "annotated" tags; they contain a creation date, the tagger name and e\-mail, a tagging message, and an optional GnuPG signature\&. Whereas a "lightweight" tag is simply a name for an object (usually a commit object)\&.
 .sp
-Annotated tags are meant for release while lightweight tags are meant for private or temporary object labels\&. For this reason, some git commands for naming objects (like \fBgit describe\fR) will ignore lightweight tags by default\&.
+Annotated tags are meant for release while lightweight tags are meant for private or temporary object labels\&. For this reason, some git commands for naming objects (like \fBgit\fR \fBdescribe\fR) will ignore lightweight tags by default\&.
 .SH "OPTIONS"
 .PP
 \-a, \-\-annotate
@@ -113,8 +113,11 @@ The default is not to print any annotation lines\&. If no number is given to
 \-l, \-\-list
 .RS 4
 List tags\&. With optional
-\fB<pattern>\&.\&.\&.\fR, e\&.g\&.
-\fBgit tag \-\-list \(aqv\-*\(aq\fR, list only the tags that match the pattern(s)\&.
+\fI<pattern>\fR\&.\&.\&., e\&.g\&.
+\fBgit\fR
+\fBtag\fR
+\fB\-\-list\fR
+\*(Aqv\-*\*(Aq, list only the tags that match the pattern(s)\&.
 .sp
 Running "git tag" without arguments also lists all tags\&. The pattern is a shell wildcard (i\&.e\&., matched using fnmatch(3))\&. Multiple patterns may be given; if any of them matches, the tag is shown\&.
 .sp
@@ -128,7 +131,8 @@ is provided\&. See the documentation for each of those options for details\&.
 Sort based on the key given\&. Prefix
 \fB\-\fR
 to sort in descending order of the value\&. You may use the \-\-sort=<key> option multiple times, in which case the last key becomes the primary key\&. Also supports "version:refname" or "v:refname" (tag names are treated as versions)\&. The "version:refname" sort order can also be affected by the "versionsort\&.suffix" configuration variable\&. The keys supported are the same as those in
-\fBgit for\-each\-ref\fR\&. Sort order defaults to the value configured for the
+\fBgit\fR
+\fBfor\-each\-ref\fR\&. Sort order defaults to the value configured for the
 \fBtag\&.sort\fR
 variable if it exists, or lexicographic order otherwise\&. See
 \fBgit-config\fR(1)\&.
@@ -139,13 +143,13 @@ variable if it exists, or lexicographic order otherwise\&. See
 Respect any colors specified in the
 \fB\-\-format\fR
 option\&. The
-\fB<when>\fR
+\fI<when>\fR
 field must be one of
 \fBalways\fR,
 \fBnever\fR, or
 \fBauto\fR
 (if
-\fB<when>\fR
+\fI<when>\fR
 is absent, behave as if
 \fBalways\fR
 was given)\&.
@@ -154,6 +158,11 @@ was given)\&.
 \-i, \-\-ignore\-case
 .RS 4
 Sorting and filtering tags are case insensitive\&.
+.RE
+.PP
+\-\-omit\-empty
+.RS 4
+Do not print a newline after formatted refs where the format expands to the empty string\&.
 .RE
 .PP
 \-\-column[=<options>], \-\-no\-column
@@ -212,7 +221,8 @@ options are given, their values are concatenated as separate paragraphs\&. Impli
 if none of
 \fB\-a\fR,
 \fB\-s\fR, or
-\fB\-u <key\-id>\fR
+\fB\-u\fR
+\fI<key\-id>\fR
 is given\&.
 .RE
 .PP
@@ -225,8 +235,25 @@ to read the message from the standard input\&. Implies
 if none of
 \fB\-a\fR,
 \fB\-s\fR, or
-\fB\-u <key\-id>\fR
+\fB\-u\fR
+\fI<key\-id>\fR
 is given\&.
+.RE
+.PP
+\-\-trailer <token>[(=|:)<value>]
+.RS 4
+Specify a (<token>, <value>) pair that should be applied as a trailer\&. (e\&.g\&.
+\fBgit\fR
+\fBtag\fR
+\fB\-\-trailer\fR
+"Custom\-Key:
+\fBvalue\fR" will add a "Custom\-Key" trailer to the tag message\&.) The
+\fBtrailer\&.*\fR
+configuration variables (\fBgit-interpret-trailers\fR(1)) can be used to define if a duplicated trailer is omitted, where in the run of trailers each trailer would appear, and other details\&. The trailers can be extracted in
+\fBgit\fR
+\fBtag\fR
+\fB\-\-list\fR, using
+\fB\-\-format=\fR"%(\fBtrailers\fR)" placeholder\&.
 .RE
 .PP
 \-e, \-\-edit
@@ -272,10 +299,9 @@ only overrides an earlier
 \-\-format=<format>
 .RS 4
 A string that interpolates
-\fB%(fieldname)\fR
-from a tag ref being shown and the object it points at\&. The format is the same as that of
+\fB%\fR(\fBfieldname\fR) from a tag ref being shown and the object it points at\&. The format is the same as that of
 \fBgit-for-each-ref\fR(1)\&. When unspecified, defaults to
-\fB%(refname:strip=2)\fR\&.
+\fB%\fR(\fBrefname:strip=2\fR)\&.
 .RE
 .PP
 <tagname>
@@ -290,19 +316,18 @@ The object that the new tag will refer to, usually a commit\&. Defaults to HEAD\
 .RE
 .SH "CONFIGURATION"
 .sp
-By default, \fIgit tag\fR in sign\-with\-default mode (\-s) will use your committer identity (of the form \fBYour Name <your@email\&.address>\fR) to find a key\&. If you want to use a different default key, you can specify it in the repository configuration as follows:
+By default, \fIgit tag\fR in sign\-with\-default mode (\-s) will use your committer identity (of the form \fBYour\fR \fBName\fR <your@email\&.\fBaddress\fR>) to find a key\&. If you want to use a different default key, you can specify it in the repository configuration as follows:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
 [user]
-    signingKey = <gpg\-key_id>
+    signingKey = <gpg\-key\-id>
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 \fBpager\&.tag\fR is only respected when listing tags, i\&.e\&., when \fB\-l\fR is used or implied\&. The default is to use a pager\&. See \fBgit-config\fR(1)\&.
 .SH "DISCUSSION"
@@ -324,7 +349,7 @@ But if you have pushed things out (or others could just read your repository dir
 .\}
 The sane thing\&. Just admit you screwed up, and use a different name\&. Others have already seen one tag\-name, and if you keep the same name, you may be in the situation that two people both have "version X", but they actually have
 \fIdifferent\fR
-"X"\(aqs\&. So just call it "X\&.1" and be done with it\&.
+"X"\*(Aqs\&. So just call it "X\&.1" and be done with it\&.
 .RE
 .sp
 .RS 4
@@ -373,7 +398,6 @@ Sorry for the inconvenience\&.
 .RE
 .\}
 .sp
-.sp
 Does this seem a bit complicated? It \fBshould\fR be\&. There is no way that it would be correct to just "fix" it automatically\&. People need to know that their tags might have been changed\&.
 .SS "On Automatic following"
 .sp
@@ -397,7 +421,6 @@ to get the following updates\&.\&.\&.
 .RE
 .\}
 .sp
-.sp
 becomes:
 .sp
 .if n \{\
@@ -409,7 +432,6 @@ $ git pull git://git\&.\&.\&.\&./proj\&.git master
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 In such a case, you do not want to automatically follow the other person\(cqs tags\&.
 .sp
@@ -435,7 +457,6 @@ $ GIT_COMMITTER_DATE="2006\-10\-02 10:31" git tag \-s v1\&.0\&.1
 .if n \{\
 .RE
 .\}
-.sp
 .SH "DATE FORMATS"
 .sp
 The \fBGIT_AUTHOR_DATE\fR and \fBGIT_COMMITTER_DATE\fR environment variables support the following date formats:
@@ -443,18 +464,24 @@ The \fBGIT_AUTHOR_DATE\fR and \fBGIT_COMMITTER_DATE\fR environment variables sup
 Git internal format
 .RS 4
 It is
-\fB<unix\-timestamp> <time\-zone\-offset>\fR, where
-\fB<unix\-timestamp>\fR
+\fI<unix\-timestamp>\fR
+\fI<time\-zone\-offset>\fR, where
+\fI<unix\-timestamp>\fR
 is the number of seconds since the UNIX epoch\&.
-\fB<time\-zone\-offset>\fR
+\fI<time\-zone\-offset>\fR
 is a positive or negative offset from UTC\&. For example CET (which is 1 hour ahead of UTC) is
 \fB+0100\fR\&.
 .RE
 .PP
 RFC 2822
 .RS 4
-The standard email format as described by RFC 2822, for example
-\fBThu, 07 Apr 2005 22:13:13 +0200\fR\&.
+The standard date format as described by RFC 2822, for example
+\fBThu\fR,
+\fB07\fR
+\fBApr\fR
+\fB2005\fR
+\fB22:13:13\fR
+\fB+0200\fR\&.
 .RE
 .PP
 ISO 8601
@@ -485,6 +512,17 @@ and
 \fBDD\&.MM\&.YYYY\fR\&.
 .sp .5v
 .RE
+.RE
+.SH "FILES"
+.PP
+\fB$GIT_DIR/TAG_EDITMSG\fR
+.RS 4
+This file contains the message of an in\-progress annotated tag\&. If
+\fBgit\fR
+\fBtag\fR
+exits due to an error before creating an annotated tag then the tag message that has been provided by the user in an editor session will be available in this file, but may be overwritten by the next invocation of
+\fBgit\fR
+\fBtag\fR\&.
 .RE
 .SH "NOTES"
 .sp

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-repack
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-REPACK" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-REPACK" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,9 +32,10 @@ git-repack \- Pack unpacked objects in a repository
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit repack\fR [\-a] [\-A] [\-d] [\-f] [\-F] [\-l] [\-n] [\-q] [\-b] [\-m] [\-\-window=<n>] [\-\-depth=<n>] [\-\-threads=<n>] [\-\-keep\-pack=<pack\-name>] [\-\-write\-midx]
+\fIgit repack\fR [\-a] [\-A] [\-d] [\-f] [\-F] [\-l] [\-n] [\-q] [\-b] [\-m]
+        [\-\-window=<n>] [\-\-depth=<n>] [\-\-threads=<n>] [\-\-keep\-pack=<pack\-name>]
+        [\-\-write\-midx] [\-\-name\-hash\-version=<n>] [\-\-path\-walk]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 This command is used to combine all objects that do not currently reside in a "pack", into a pack\&. It can also be used to re\-organize existing packs into a single, more efficient pack\&.
@@ -48,9 +49,13 @@ Packs are used to reduce the load on mirror systems, backup engines, disk storag
 .RS 4
 Instead of incrementally packing the unpacked objects, pack everything referenced into a single pack\&. Especially useful when packing a repository that is used for private development\&. Use with
 \fB\-d\fR\&. This will clean up the objects that
-\fBgit prune\fR
+\fBgit\fR
+\fBprune\fR
 leaves behind, but
-\fBgit fsck \-\-full \-\-dangling\fR
+\fBgit\fR
+\fBfsck\fR
+\fB\-\-full\fR
+\fB\-\-dangling\fR
 shows as dangling\&.
 .sp
 Note that users fetching over dumb protocols will have to fetch the whole new pack in order to get any contained object, no matter how many other objects in that pack they already have locally\&.
@@ -82,7 +87,8 @@ Same as
 \fB\-a\fR, unless
 \fB\-d\fR
 is used\&. Then any unreachable objects are packed into a separate cruft pack\&. Unreachable objects can be pruned using the normal expiry rules with the next
-\fBgit gc\fR
+\fBgit\fR
+\fBgc\fR
 invocation (see
 \fBgit-gc\fR(1))\&. Incompatible with
 \fB\-k\fR\&.
@@ -91,18 +97,42 @@ invocation (see
 \-\-cruft\-expiration=<approxidate>
 .RS 4
 Expire unreachable objects older than
-\fB<approxidate>\fR
+\fI<approxidate>\fR
 immediately instead of waiting for the next
-\fBgit gc\fR
+\fBgit\fR
+\fBgc\fR
 invocation\&. Only useful with
-\fB\-\-cruft \-d\fR\&.
+\fB\-\-cruft\fR
+\fB\-d\fR\&.
+.RE
+.PP
+\-\-max\-cruft\-size=<n>
+.RS 4
+Overrides
+\fB\-\-max\-pack\-size\fR
+for cruft packs\&. Inherits the value of
+\fB\-\-max\-pack\-size\fR
+(if any) by default\&. See the documentation for
+\fB\-\-max\-pack\-size\fR
+for more details\&.
+.RE
+.PP
+\-\-combine\-cruft\-below\-size=<n>
+.RS 4
+When generating cruft packs without pruning, only repack existing cruft packs whose size is strictly less than
+\fI<n>\fR, where
+\fI<n>\fR
+represents a number of bytes, which can optionally be suffixed with "k", "m", or "g"\&. Cruft packs whose size is greater than or equal to
+\fI<n>\fR
+are left as\-is and not repacked\&. Useful when you want to avoid repacking large cruft pack(s) in repositories that have many and/or large unreachable objects\&.
 .RE
 .PP
 \-\-expire\-to=<dir>
 .RS 4
 Write a cruft pack containing pruned objects (if any) to the directory
-\fB<dir>\fR\&. This option is useful for keeping a copy of any pruned objects in a separate directory as a backup\&. Only useful with
-\fB\-\-cruft \-d\fR\&.
+\fI<dir>\fR\&. This option is useful for keeping a copy of any pruned objects in a separate directory as a backup\&. Only useful with
+\fB\-\-cruft\fR
+\fB\-d\fR\&.
 .RE
 .PP
 \-l
@@ -162,7 +192,8 @@ The default value for \-\-window is 10 and \-\-depth is 50\&. The maximum depth 
 \-\-threads=<n>
 .RS 4
 This option is passed through to
-\fBgit pack\-objects\fR\&.
+\fBgit\fR
+\fBpack\-objects\fR\&.
 .RE
 .PP
 \-\-window\-memory=<n>
@@ -186,6 +217,38 @@ is set\&. Note that this option may result in a larger and slower repository; se
 \fBpack\&.packSizeLimit\fR\&.
 .RE
 .PP
+\-\-filter=<filter\-spec>
+.RS 4
+Remove objects matching the filter specification from the resulting packfile and put them into a separate packfile\&. Note that objects used in the working directory are not filtered out\&. So for the split to fully work, it\(cqs best to perform it in a bare repo and to use the
+\fB\-a\fR
+and
+\fB\-d\fR
+options along with this option\&. Also
+\fB\-\-no\-write\-bitmap\-index\fR
+(or the
+\fBrepack\&.writebitmaps\fR
+config option set to
+\fBfalse\fR) should be used otherwise writing bitmap index will fail, as it supposes a single packfile containing all the objects\&. See
+\fBgit-rev-list\fR(1)
+for valid
+\fI<filter\-spec>\fR
+forms\&.
+.RE
+.PP
+\-\-filter\-to=<dir>
+.RS 4
+Write the pack containing filtered out objects to the directory
+\fI<dir>\fR\&. Only useful with
+\fB\-\-filter\fR\&. This can be used for putting the pack on a separate object directory that is accessed through the Git alternates mechanism\&.
+\fBWARNING:\fR
+If the packfile containing the filtered out objects is not accessible, the repo can become corrupt as it might not be possible to access the objects in that packfile\&. See the
+\fBobjects\fR
+and
+\fBobjects/info/alternates\fR
+sections of
+\fBgitrepository-layout\fR(5)\&.
+.RE
+.PP
 \-b, \-\-write\-bitmap\-index
 .RS 4
 Write a reachability bitmap index as part of the repack\&. This only makes sense when used with
@@ -198,10 +261,8 @@ or
 .PP
 \-\-pack\-kept\-objects
 .RS 4
-Include objects in
-\fB\&.keep\fR
-files when repacking\&. Note that we still do not delete
-\fB\&.keep\fR
+Include objects in \&.\fBkeep\fR
+files when repacking\&. Note that we still do not delete \&.\fBkeep\fR
 packs after
 \fBpack\-objects\fR
 finishes\&. This means that we may duplicate objects, but this makes the option safe to use when there are concurrent pushes or fetches\&. This option is generally only useful if you are writing bitmaps with
@@ -212,19 +273,19 @@ or
 .PP
 \-\-keep\-pack=<pack\-name>
 .RS 4
-Exclude the given pack from repacking\&. This is the equivalent of having
-\fB\&.keep\fR
+Exclude the given pack from repacking\&. This is the equivalent of having \&.\fBkeep\fR
 file on the pack\&.
-\fB<pack\-name>\fR
+\fI<pack\-name>\fR
 is the pack file name without leading directory (e\&.g\&.
-\fBpack\-123\&.pack\fR)\&. The option could be specified multiple times to keep multiple packs\&.
+\fBpack\-123\&.pack\fR)\&. The option can be specified multiple times to keep multiple packs\&.
 .RE
 .PP
 \-\-unpack\-unreachable=<when>
 .RS 4
 When loosening unreachable objects, do not bother loosening any objects older than
-\fB<when>\fR\&. This can be used to optimize out the write of any objects that would be immediately pruned by a follow\-up
-\fBgit prune\fR\&.
+\fI<when>\fR\&. This can be used to optimize out the write of any objects that would be immediately pruned by a follow\-up
+\fBgit\fR
+\fBprune\fR\&.
 .RE
 .PP
 \-k, \-\-keep\-unreachable
@@ -242,24 +303,23 @@ option to
 \fBgit-pack-objects\fR(1)\&.
 .RE
 .PP
-\-g=<factor>, \-\-geometric=<factor>
+\-g<factor>, \-\-geometric=<factor>
 .RS 4
 Arrange resulting pack structure so that each successive pack contains at least
-\fB<factor>\fR
+\fI<factor>\fR
 times the number of objects as the next\-largest pack\&.
 .sp
-\fBgit repack\fR
+\fBgit\fR
+\fBrepack\fR
 ensures this by determining a "cut" of packfiles that need to be repacked into one in order to ensure a geometric progression\&. It picks the smallest set of packfiles such that as many of the larger packfiles (by count of objects contained in that pack) may be left intact\&.
 .sp
 Unlike other repack modes, the set of objects to pack is determined uniquely by the set of packs being "rolled\-up"; in other words, the packs determined to need to be combined in order to restore a geometric progression\&.
 .sp
-When
-\fB\-\-unpacked\fR
-is specified, loose objects are implicitly included in this "roll\-up", without respect to their reachability\&. This is subject to change in the future\&. This option (implying a drastically different repack mode) is not guaranteed to work with all other combinations of option to
-\fBgit repack\fR\&.
+Loose objects are implicitly included in this "roll\-up", without respect to their reachability\&. This is subject to change in the future\&.
 .sp
 When writing a multi\-pack bitmap,
-\fBgit repack\fR
+\fBgit\fR
+\fBrepack\fR
 selects the largest resulting pack as the preferred pack for object selection by the MIDX (see
 \fBgit-multi-pack-index\fR(1))\&.
 .RE
@@ -268,6 +328,28 @@ selects the largest resulting pack as the preferred pack for object selection by
 .RS 4
 Write a multi\-pack index (see
 \fBgit-multi-pack-index\fR(1)) containing the non\-redundant packs\&.
+.RE
+.PP
+\-\-name\-hash\-version=<n>
+.RS 4
+Provide this argument to the underlying
+\fBgit\fR
+\fBpack\-objects\fR
+process\&. See
+\fBgit-pack-objects\fR(1)
+for full details\&.
+.RE
+.PP
+\-\-path\-walk
+.RS 4
+Pass the
+\fB\-\-path\-walk\fR
+option to the underlying
+\fBgit\fR
+\fBpack\-objects\fR
+process\&. See
+\fBgit-pack-objects\fR(1)
+for full details\&.
 .RE
 .SH "CONFIGURATION"
 .sp

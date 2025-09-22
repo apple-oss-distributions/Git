@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-commit-tree
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-COMMIT\-TREE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-COMMIT\-TREE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,11 +32,10 @@ git-commit-tree \- Create a new commit object
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit commit\-tree\fR <tree> [(\-p <parent>)\&...]
-\fIgit commit\-tree\fR [(\-p <parent>)\&...] [\-S[<keyid>]] [(\-m <message>)\&...]
-                  [(\-F <file>)\&...] <tree>
+\fIgit commit\-tree\fR <tree> [(\-p <parent>)\&...\:]
+\fIgit commit\-tree\fR [(\-p <parent>)\&...\:] [\-S[<keyid>]] [(\-m <message>)\&...\:]
+                  [(\-F <file>)\&...\:] <tree>
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 This is usually not what an end user wants to run directly\&. See \fBgit-commit\fR(1) instead\&.
@@ -49,7 +48,7 @@ A commit object may have any number of parents\&. With exactly one parent, it is
 .sp
 While a tree represents a particular directory state of a working directory, a commit represents that state in "time", and explains how to get there\&.
 .sp
-Normally a commit would identify a new "HEAD" state, and while Git doesn\(cqt care where you save the note about that state, in practice we tend to just write the result to the file that is pointed at by \fB\&.git/HEAD\fR, so that we can always see what the last committed state was\&.
+Normally a commit would identify a new "HEAD" state, and while Git doesn\(cqt care where you save the note about that state, in practice we tend to just write the result to the file that is pointed at by \&.\fBgit/HEAD\fR, so that we can always see what the last committed state was\&.
 .SH "OPTIONS"
 .PP
 <tree>
@@ -131,18 +130,24 @@ The \fBGIT_AUTHOR_DATE\fR and \fBGIT_COMMITTER_DATE\fR environment variables sup
 Git internal format
 .RS 4
 It is
-\fB<unix\-timestamp> <time\-zone\-offset>\fR, where
-\fB<unix\-timestamp>\fR
+\fI<unix\-timestamp>\fR
+\fI<time\-zone\-offset>\fR, where
+\fI<unix\-timestamp>\fR
 is the number of seconds since the UNIX epoch\&.
-\fB<time\-zone\-offset>\fR
+\fI<time\-zone\-offset>\fR
 is a positive or negative offset from UTC\&. For example CET (which is 1 hour ahead of UTC) is
 \fB+0100\fR\&.
 .RE
 .PP
 RFC 2822
 .RS 4
-The standard email format as described by RFC 2822, for example
-\fBThu, 07 Apr 2005 22:13:13 +0200\fR\&.
+The standard date format as described by RFC 2822, for example
+\fBThu\fR,
+\fB07\fR
+\fBApr\fR
+\fB2005\fR
+\fB22:13:13\fR
+\fB+0200\fR\&.
 .RE
 .PP
 ISO 8601
@@ -197,7 +202,7 @@ The contents of the blob objects are uninterpreted sequences of bytes\&. There i
 .sp -1
 .IP \(bu 2.3
 .\}
-Path names are encoded in UTF\-8 normalization form C\&. This applies to tree objects, the index file, ref names, as well as path names in command line arguments, environment variables and config files (\fB\&.git/config\fR
+Path names are encoded in UTF\-8 normalization form C\&. This applies to tree objects, the index file, ref names, as well as path names in command line arguments, environment variables and config files (\&.\fBgit/config\fR
 (see
 \fBgit-config\fR(1)),
 \fBgitignore\fR(5),
@@ -231,13 +236,14 @@ Although we encourage that the commit log messages are encoded in UTF\-8, both t
 .sp -1
 .IP "  1." 4.2
 .\}
-\fIgit commit\fR
+\fBgit\fR
+\fBcommit\fR
 and
-\fIgit commit\-tree\fR
-issues a warning if the commit log message given to it does not look like a valid UTF\-8 string, unless you explicitly say your project uses a legacy encoding\&. The way to say this is to have
+\fBgit\fR
+\fBcommit\-tree\fR
+issue a warning if the commit log message given to it does not look like a valid UTF\-8 string, unless you explicitly say your project uses a legacy encoding\&. The way to say this is to have
 \fBi18n\&.commitEncoding\fR
-in
-\fB\&.git/config\fR
+in \&.\fBgit/config\fR
 file, like this:
 .sp
 .if n \{\
@@ -253,7 +259,7 @@ file, like this:
 .sp
 Commit objects created with the above setting record the value of
 \fBi18n\&.commitEncoding\fR
-in its
+in their
 \fBencoding\fR
 header\&. This is to help other people who look at them later\&. Lack of this header implies that the commit log message is encoded in UTF\-8\&.
 .RE
@@ -266,15 +272,17 @@ header\&. This is to help other people who look at them later\&. Lack of this he
 .sp -1
 .IP "  2." 4.2
 .\}
-\fIgit log\fR,
-\fIgit show\fR,
-\fIgit blame\fR
+\fBgit\fR
+\fBlog\fR,
+\fBgit\fR
+\fBshow\fR,
+\fBgit\fR
+\fBblame\fR
 and friends look at the
 \fBencoding\fR
 header of a commit object, and try to re\-code the log message into UTF\-8 unless otherwise specified\&. You can specify the desired output encoding with
 \fBi18n\&.logOutputEncoding\fR
-in
-\fB\&.git/config\fR
+in \&.\fBgit/config\fR
 file, like this:
 .sp
 .if n \{\

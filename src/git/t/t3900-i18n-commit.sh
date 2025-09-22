@@ -7,6 +7,12 @@ test_description='commit and log output encodings'
 
 . ./test-lib.sh
 
+if ! test_have_prereq ICONV
+then
+	skip_all='skipping commit i18n tests; iconv not available'
+	test_done
+fi
+
 compare_with () {
 	git show -s $1 | sed -e '1,/^$/d' -e 's/^    //' >current &&
 	case "$3" in
@@ -45,7 +51,7 @@ test_expect_success 'UTF-8 invalid characters refused' '
 	printf "Commit message\n\nInvalid surrogate:\355\240\200\n" \
 		>"$HOME/invalid" &&
 	git commit -a -F "$HOME/invalid" 2>"$HOME"/stderr &&
-	test_i18ngrep "did not conform" "$HOME"/stderr
+	test_grep "did not conform" "$HOME"/stderr
 '
 
 test_expect_success 'UTF-8 overlong sequences rejected' '
@@ -55,7 +61,7 @@ test_expect_success 'UTF-8 overlong sequences rejected' '
 	printf "\340\202\251ommit message\n\nThis is not a space:\300\240\n" \
 		>"$HOME/invalid" &&
 	git commit -a -F "$HOME/invalid" 2>"$HOME"/stderr &&
-	test_i18ngrep "did not conform" "$HOME"/stderr
+	test_grep "did not conform" "$HOME"/stderr
 '
 
 test_expect_success 'UTF-8 non-characters refused' '
@@ -64,7 +70,7 @@ test_expect_success 'UTF-8 non-characters refused' '
 	printf "Commit message\n\nNon-character:\364\217\277\276\n" \
 		>"$HOME/invalid" &&
 	git commit -a -F "$HOME/invalid" 2>"$HOME"/stderr &&
-	test_i18ngrep "did not conform" "$HOME"/stderr
+	test_grep "did not conform" "$HOME"/stderr
 '
 
 test_expect_success 'UTF-8 non-characters refused' '
@@ -73,7 +79,7 @@ test_expect_success 'UTF-8 non-characters refused' '
 	printf "Commit message\n\nNon-character:\357\267\220\n" \
 		>"$HOME/invalid" &&
 	git commit -a -F "$HOME/invalid" 2>"$HOME"/stderr &&
-	test_i18ngrep "did not conform" "$HOME"/stderr
+	test_grep "did not conform" "$HOME"/stderr
 '
 
 for H in ISO8859-1 eucJP ISO-2022-JP

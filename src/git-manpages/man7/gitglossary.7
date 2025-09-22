@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitglossary
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITGLOSSARY" "7" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITGLOSSARY" "7" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -47,10 +47,8 @@ bare repository
 .RS 4
 A bare repository is normally an appropriately named
 directory
-with a
-\fB\&.git\fR
-suffix that does not have a locally checked\-out copy of any of the files under revision control\&. That is, all of the Git administrative and control files that would normally be present in the hidden
-\fB\&.git\fR
+with a \&.\fBgit\fR
+suffix that does not have a locally checked\-out copy of any of the files under revision control\&. That is, all of the Git administrative and control files that would normally be present in the hidden \&.\fBgit\fR
 sub\-directory are directly present in the
 \fBrepository\&.git\fR
 directory instead, and no other files are present and checked out\&. Usually publishers of public repositories make bare repositories available\&.
@@ -187,7 +185,9 @@ A
 commit object
 or an
 object
-that can be recursively dereferenced to a commit object\&. The following are all commit\-ishes: a commit object, a
+that can be recursively
+dereferenced
+to a commit object\&. The following are all commit\-ishes: a commit object, a
 tag object
 that points to a commit object, a tag object that points to a tag object that points to a commit object, etc\&.
 .RE
@@ -219,6 +219,26 @@ in the
 repository\&.
 .RE
 .PP
+dereference
+.RS 4
+Referring to a
+symbolic ref: the action of accessing the
+reference
+pointed at by a symbolic ref\&. Recursive dereferencing involves repeating the aforementioned process on the resulting ref until a non\-symbolic reference is found\&.
+.sp
+Referring to a
+tag object: the action of accessing the
+object
+a tag points at\&. Tags are recursively dereferenced by repeating the operation on the result object until the result has either a specified
+object type
+(where applicable) or any non\-"tag" object type\&. A synonym for "recursive dereference" in the context of tags is "peel"\&.
+.sp
+Referring to a
+commit object: the action of accessing the commit\(cqs tree object\&. Commits cannot be dereferenced recursively\&.
+.sp
+Unless otherwise specified, "dereferencing" as it used in the context of Git commands or protocols is implicitly recursive\&.
+.RE
+.PP
 detached HEAD
 .RS 4
 Normally the
@@ -231,11 +251,14 @@ commit
 that isn\(cqt necessarily the tip of any particular branch\&. The HEAD in such a state is called "detached"\&.
 .sp
 Note that commands that operate on the history of the current branch (e\&.g\&.
-\fBgit commit\fR
+\fBgit\fR
+\fBcommit\fR
 to build a new history on top of it) still work while the HEAD is detached\&. They update the HEAD to point at the tip of the updated history without affecting any branch\&. Commands that update or inquire information
 \fIabout\fR
 the current branch (e\&.g\&.
-\fBgit branch \-\-set\-upstream\-to\fR
+\fBgit\fR
+\fBbranch\fR
+\fB\-\-set\-upstream\-to\fR
 that sets what remote\-tracking branch the current branch integrates with) obviously do not work, as there is no (real) current branch to ask about in this state\&.
 .RE
 .PP
@@ -269,7 +292,7 @@ merge
 where you have a
 revision
 and you are "merging" another
-branch\(aqs changes that happen to be a descendant of what you have\&. In such a case, you do not make a new
+branch\*(Aqs changes that happen to be a descendant of what you have\&. In such a case, you do not make a new
 merge
 commit
 but instead just update your branch to point at the same revision as the branch you are merging\&. This will happen frequently on a
@@ -304,19 +327,21 @@ repository
 .PP
 gitfile
 .RS 4
-A plain file
-\fB\&.git\fR
-at the root of a working tree that points at the directory that is the real repository\&.
+A plain file \&.\fBgit\fR
+at the root of a working tree that points at the directory that is the real repository\&. For proper use see
+\fBgit-worktree\fR(1)
+or
+\fBgit-submodule\fR(1)\&. For syntax see
+\fBgitrepository-layout\fR(5)\&.
 .RE
 .PP
 grafts
 .RS 4
-Grafts enables two otherwise different lines of development to be joined together by recording fake ancestry information for commits\&. This way you can make Git pretend the set of
+Grafts enable two otherwise different lines of development to be joined together by recording fake ancestry information for commits\&. This way you can make Git pretend the set of
 parents
 a
 commit
-has is different from what was recorded when the commit was created\&. Configured via the
-\fB\&.git/info/grafts\fR
+has is different from what was recorded when the commit was created\&. Configured via the \&.\fBgit/info/grafts\fR
 file\&.
 .sp
 Note that the grafts mechanism is outdated and can lead to problems transferring objects between repositories; see
@@ -364,8 +389,7 @@ hook
 .RS 4
 During the normal execution of several Git commands, call\-outs are made to optional scripts that allow a developer to add functionality or checking\&. Typically, the hooks allow for a command to be pre\-verified and potentially aborted, and allow for a post\-notification after the operation is done\&. The hook scripts are found in the
 \fB$GIT_DIR/hooks/\fR
-directory, and are enabled by simply removing the
-\fB\&.sample\fR
+directory, and are enabled by simply removing the \&.\fBsample\fR
 suffix from the filename\&. In earlier versions of Git you had to make them executable\&.
 .RE
 .PP
@@ -453,6 +477,15 @@ more than two
 branches\&.
 .RE
 .PP
+orphan
+.RS 4
+The act of getting on a
+branch
+that does not exist yet (i\&.e\&., an
+unborn
+branch)\&. After such an operation, the commit first created becomes a commit without a parent, starting a new history\&.
+.RE
+.PP
 origin
 .RS 4
 The default upstream
@@ -461,7 +494,9 @@ repository\&. Most projects have at least one upstream project which they track\
 is used for that purpose\&. New upstream updates will be fetched into
 remote\-tracking branches
 named origin/name\-of\-upstream\-branch, which you can see using
-\fBgit branch \-r\fR\&.
+\fBgit\fR
+\fBbranch\fR
+\fB\-r\fR\&.
 .RE
 .PP
 overlay
@@ -543,9 +578,7 @@ is followed by zero or more "magic signature" letters (which optionally is termi
 .sp
 In the long form, the leading colon
 \fB:\fR
-is followed by an open parenthesis
-\fB(\fR, a comma\-separated list of zero or more "magic words", and a close parentheses
-\fB)\fR, and the remainder is the pattern to match against the path\&.
+is followed by an open parenthesis (, a comma\-separated list of zero or more "magic words", and a close parentheses ), and the remainder is the pattern to match against the path\&.
 .sp
 A pathspec with only a colon means "there is no pathspec"\&. This form should not be combined with other pathspec\&.
 .PP
@@ -561,9 +594,7 @@ literal
 .RS 4
 Wildcards in the pattern such as
 \fB*\fR
-or
-\fB?\fR
-are treated as literal characters\&.
+or ? are treated as literal characters\&.
 .RE
 .PP
 icase
@@ -585,7 +616,7 @@ Two consecutive asterisks ("\fB**\fR") in patterns matched against full pathname
 .sp -1
 .IP \(bu 2.3
 .\}
-A leading "\fB**\fR" followed by a slash means match in all directories\&. For example, "\fB**/foo\fR" matches file or directory "\fBfoo\fR" anywhere, the same as pattern "\fBfoo\fR"\&. "\fB**/foo/bar\fR" matches file or directory "\fBbar\fR" anywhere that is directly under directory "\fBfoo\fR"\&.
+A leading "\fB**\fR" followed by a slash means match in all directories\&. For example, "\fB**/foo\fR" matches file or directory "\fBfoo\fR" anywhere\&. "\fB**/foo/bar\fR" matches file or directory "\fBbar\fR" anywhere that is directly under directory "\fBfoo\fR"\&.
 .RE
 .sp
 .RS 4
@@ -596,8 +627,7 @@ A leading "\fB**\fR" followed by a slash means match in all directories\&. For e
 .sp -1
 .IP \(bu 2.3
 .\}
-A trailing "\fB/**\fR" matches everything inside\&. For example, "\fBabc/**\fR" matches all files inside directory "abc", relative to the location of the
-\fB\&.gitignore\fR
+A trailing "\fB/**\fR" matches everything inside\&. For example, "\fBabc/**\fR" matches all files inside directory "abc", relative to the location of the \&.\fBgitignore\fR
 file, with infinite depth\&.
 .RE
 .sp
@@ -683,7 +713,7 @@ be set to the string
 .sp -1
 .IP \(bu 2.3
 .\}
-"\fB!ATTR\fR" requires that the attribute
+"!ATTR" requires that the attribute
 \fBATTR\fR
 be unspecified\&.
 .sp
@@ -693,9 +723,7 @@ Note that when matching against a tree object, attributes are still obtained fro
 .PP
 exclude
 .RS 4
-After a path matches any non\-exclude pathspec, it will be run through all exclude pathspecs (magic signature:
-\fB!\fR
-or its synonym
+After a path matches any non\-exclude pathspec, it will be run through all exclude pathspecs (magic signature: ! or its synonym
 \fB^\fR)\&. If it matches, the path is ignored\&. When there is no non\-exclude pathspec, the exclusion is applied to the result set as if invoked without any pathspec\&.
 .RE
 .RE
@@ -705,6 +733,14 @@ parent
 A
 commit object
 contains a (possibly empty) list of the logical predecessor(s) in the line of development, i\&.e\&. its parents\&.
+.RE
+.PP
+peel
+.RS 4
+The action of recursively
+dereferencing
+a
+tag object\&.
 .RE
 .PP
 pickaxe
@@ -744,18 +780,39 @@ and any refs that start with
 .PP
 pseudoref
 .RS 4
-Pseudorefs are a class of files under
-\fB$GIT_DIR\fR
-which behave like refs for the purposes of rev\-parse, but which are treated specially by git\&. Pseudorefs both have names that are all\-caps, and always start with a line consisting of a
-SHA\-1
-followed by whitespace\&. So, HEAD is not a pseudoref, because it is sometimes a symbolic ref\&. They might optionally contain some additional data\&.
+A ref that has different semantics than normal refs\&. These refs can be read via normal Git commands, but cannot be written to by commands like
+\fBgit-update-ref\fR(1)\&.
+.sp
+The following pseudorefs are known to Git:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBFETCH_HEAD\fR
+is written by
+\fBgit-fetch\fR(1)
+or
+\fBgit-pull\fR(1)\&. It may refer to multiple object IDs\&. Each object ID is annotated with metadata indicating where it was fetched from and its fetch status\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
 \fBMERGE_HEAD\fR
-and
-\fBCHERRY_PICK_HEAD\fR
-are examples\&. Unlike
-per\-worktree refs, these files cannot be symbolic refs, and never have reflogs\&. They also cannot be updated through the normal ref update machinery\&. Instead, they are updated by directly writing to the files\&. However, they can be read as if they were refs, so
-\fBgit rev\-parse MERGE_HEAD\fR
-will work\&.
+is written by
+\fBgit-merge\fR(1)
+when resolving merge conflicts\&. It contains all commit IDs which are being merged\&.
+.RE
 .RE
 .PP
 pull
@@ -822,10 +879,7 @@ of that branch to the result\&.
 .PP
 ref
 .RS 4
-A name that begins with
-\fBrefs/\fR
-(e\&.g\&.
-\fBrefs/heads/master\fR) that points to an
+A name that points to an
 object name
 or another ref (the latter is called a
 symbolic ref)\&. For convenience, a ref can sometimes be abbreviated when used as an argument to a Git command; see
@@ -833,13 +887,94 @@ symbolic ref)\&. For convenience, a ref can sometimes be abbreviated when used a
 for details\&. Refs are stored in the
 repository\&.
 .sp
-The ref namespace is hierarchical\&. Different subhierarchies are used for different purposes (e\&.g\&. the
-\fBrefs/heads/\fR
-hierarchy is used to represent local branches)\&.
+The ref namespace is hierarchical\&. Ref names must either start with
+\fBrefs/\fR
+or be located in the root of the hierarchy\&. For the latter, their name must follow these rules:
 .sp
-There are a few special\-purpose refs that do not begin with
-\fBrefs/\fR\&. The most notable example is
-\fBHEAD\fR\&.
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+The name consists of only upper\-case characters or underscores\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+The name ends with "\fB_HEAD\fR" or is equal to "\fBHEAD\fR"\&.
+.sp
+There are some irregular refs in the root of the hierarchy that do not match these rules\&. The following list is exhaustive and shall not be extended in the future:
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBAUTO_MERGE\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBBISECT_EXPECTED_REV\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBNOTES_MERGE_PARTIAL\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBNOTES_MERGE_REF\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBMERGE_AUTOSTASH\fR
+.sp
+Different subhierarchies are used for different purposes\&. For example, the
+\fBrefs/heads/\fR
+hierarchy is used to represent local branches whereas the
+\fBrefs/tags/\fR
+hierarchy is used to represent local tags\&.\&.
+.RE
 .RE
 .PP
 reflog
@@ -861,7 +996,11 @@ and
 push
 to describe the mapping between remote
 ref
-and local ref\&.
+and local ref\&. See
+\fBgit-fetch\fR(1)
+or
+\fBgit-push\fR(1)
+for details\&.
 .RE
 .PP
 remote repository
@@ -939,8 +1078,9 @@ shallow clone
 Mostly a synonym to
 shallow repository
 but the phrase makes it more explicit that it was created by running
-\fBgit clone \-\-depth=\&.\&.\&.\fR
-command\&.
+\fBgit\fR
+\fBclone\fR
+\fB\-\-depth=\&.\&.\fR\&. command\&.
 .RE
 .PP
 shallow repository
@@ -990,7 +1130,9 @@ Symbolic reference: instead of containing the
 SHA\-1
 id itself, it is of the format
 \fIref: refs/some/thing\fR
-and when referenced, it recursively dereferences to this reference\&.
+and when referenced, it recursively
+dereferences
+to this reference\&.
 \fIHEAD\fR
 is a prime example of a symref\&. Symbolic references are manipulated with the
 \fBgit-symbolic-ref\fR(1)
@@ -1032,6 +1174,12 @@ branch
 that is used by a developer to identify a conceptual line of development\&. Since branches are very easy and inexpensive, it is often desirable to have several small branches that each contain very well defined concepts or small incremental yet related changes\&.
 .RE
 .PP
+trailer
+.RS 4
+Key\-value metadata\&. Trailers are optionally found at the end of a commit message\&. Might be called "footers" or "tags" in other communities\&. See
+\fBgit-interpret-trailers\fR(1)\&.
+.RE
+.PP
 tree
 .RS 4
 Either a
@@ -1058,14 +1206,30 @@ A
 tree object
 or an
 object
-that can be recursively dereferenced to a tree object\&. Dereferencing a
+that can be recursively
+dereferenced
+to a tree object\&. Dereferencing a
 commit object
 yields the tree object corresponding to the
-revision\(aqs top
+revision\*(Aqs top
 directory\&. The following are all tree\-ishes: a
 commit\-ish, a tree object, a
 tag object
 that points to a tree object, a tag object that points to a tag object that points to a tree object, etc\&.
+.RE
+.PP
+unborn
+.RS 4
+The
+HEAD
+can point at a
+branch
+that does not yet exist and that does not have any commit on it yet, and such a branch is called an unborn branch\&. The most typical way users encounter an unborn branch is by creating a repository anew without cloning from elsewhere\&. The HEAD would point at the
+\fImain\fR
+(or
+\fImaster\fR, depending on your configuration) branch that is yet to be born\&. Also some operations can get you on an unborn branch with their
+orphan
+option\&.
 .RE
 .PP
 unmerged index

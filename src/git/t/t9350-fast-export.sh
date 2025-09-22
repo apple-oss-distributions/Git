@@ -8,6 +8,7 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY/lib-gpg.sh"
 
 test_expect_success 'setup' '
 
@@ -124,7 +125,7 @@ test_expect_success 'fast-export --show-original-ids | git fast-import' '
 	test $MUSS = $(git rev-parse --verify refs/tags/muss)
 '
 
-test_expect_success 'reencoding iso-8859-7' '
+test_expect_success ICONV 'reencoding iso-8859-7' '
 
 	test_when_finished "git reset --hard HEAD~1" &&
 	test_config i18n.commitencoding iso-8859-7 &&
@@ -236,7 +237,7 @@ EOF
 
 test_expect_success 'set up faked signed tag' '
 
-	cat signed-tag-import | git fast-import
+	git fast-import <signed-tag-import
 
 '
 
@@ -253,6 +254,24 @@ test_expect_success 'signed-tags=verbatim' '
 
 '
 
+test_expect_success 'signed-tags=warn-verbatim' '
+
+	git fast-export --signed-tags=warn-verbatim sign-your-name >output 2>err &&
+	grep PGP output &&
+	test -s err
+
+'
+
+# 'warn' is a backward-compatibility alias for 'warn-verbatim'; test
+# that it keeps working.
+test_expect_success 'signed-tags=warn' '
+
+	git fast-export --signed-tags=warn sign-your-name >output 2>err &&
+	grep PGP output &&
+	test -s err
+
+'
+
 test_expect_success 'signed-tags=strip' '
 
 	git fast-export --signed-tags=strip sign-your-name > output &&
@@ -266,10 +285,95 @@ test_expect_success 'signed-tags=warn-strip' '
 	test -s err
 '
 
+test_expect_success GPG 'set up signed commit' '
+
+	# Generate a commit with both "gpgsig" and "encoding" set, so
+	# that we can test that fast-import gets the ordering correct
+	# between the two.
+	test_config i18n.commitEncoding ISO-8859-1 &&
+	git checkout -f -b commit-signing main &&
+	echo Sign your name >file-sign &&
+	git add file-sign &&
+	git commit -S -m "signed commit" &&
+	COMMIT_SIGNING=$(git rev-parse --verify commit-signing)
+
+'
+
+test_expect_success GPG 'signed-commits default is same as strip' '
+	git fast-export --reencode=no commit-signing >out1 2>err &&
+	git fast-export --reencode=no --signed-commits=strip commit-signing >out2 &&
+	test_cmp out1 out2
+'
+
+test_expect_success GPG 'signed-commits=abort' '
+
+	test_must_fail git fast-export --signed-commits=abort commit-signing
+
+'
+
+test_expect_success GPG 'signed-commits=verbatim' '
+
+	git fast-export --signed-commits=verbatim --reencode=no commit-signing >output &&
+	grep "^gpgsig sha" output &&
+	grep "encoding ISO-8859-1" output &&
+	(
+		cd new &&
+		git fast-import &&
+		STRIPPED=$(git rev-parse --verify refs/heads/commit-signing) &&
+		test $COMMIT_SIGNING = $STRIPPED
+	) <output
+
+'
+
+test_expect_success GPG 'signed-commits=warn-verbatim' '
+
+	git fast-export --signed-commits=warn-verbatim --reencode=no commit-signing >output 2>err &&
+	grep "^gpgsig sha" output &&
+	grep "encoding ISO-8859-1" output &&
+	test -s err &&
+	(
+		cd new &&
+		git fast-import &&
+		STRIPPED=$(git rev-parse --verify refs/heads/commit-signing) &&
+		test $COMMIT_SIGNING = $STRIPPED
+	) <output
+
+'
+
+test_expect_success GPG 'signed-commits=strip' '
+
+	git fast-export --signed-commits=strip --reencode=no commit-signing >output &&
+	! grep ^gpgsig output &&
+	grep "^encoding ISO-8859-1" output &&
+	sed "s/commit-signing/commit-strip-signing/" output | (
+		cd new &&
+		git fast-import &&
+		STRIPPED=$(git rev-parse --verify refs/heads/commit-strip-signing) &&
+		test $COMMIT_SIGNING != $STRIPPED
+	)
+
+'
+
+test_expect_success GPG 'signed-commits=warn-strip' '
+
+	git fast-export --signed-commits=warn-strip --reencode=no commit-signing >output 2>err &&
+	! grep ^gpgsig output &&
+	grep "^encoding ISO-8859-1" output &&
+	test -s err &&
+	sed "s/commit-signing/commit-strip-signing/" output | (
+		cd new &&
+		git fast-import &&
+		STRIPPED=$(git rev-parse --verify refs/heads/commit-strip-signing) &&
+		test $COMMIT_SIGNING != $STRIPPED
+	)
+
+'
+
 test_expect_success 'setup submodule' '
 
 	test_config_global protocol.file.allow always &&
 	git checkout -f main &&
+	test_might_fail git update-ref -d refs/heads/commit-signing &&
 	mkdir sub &&
 	(
 		cd sub &&
@@ -373,7 +477,7 @@ EOF
 
 test_expect_success 'cope with tagger-less tags' '
 
-	TAG=$(git hash-object -t tag -w tag-content) &&
+	TAG=$(git hash-object --literally -t tag -w tag-content) &&
 	git update-ref refs/tags/sonnenschein $TAG &&
 	git fast-export -C -C --signed-tags=strip --all > output &&
 	test $(grep -c "^tag " output) = 4 &&
@@ -420,7 +524,7 @@ M 100644 :1 there
 
 EOF
 
-test_expect_success 'dropping tag of filtered out object' '
+test_expect_success ICONV 'dropping tag of filtered out object' '
 (
 	cd limit-by-paths &&
 	git fast-export --tag-of-filtered-object=drop mytag -- there > output &&
@@ -437,7 +541,7 @@ msg
 
 EOF
 
-test_expect_success 'rewriting tag of filtered out object' '
+test_expect_success ICONV 'rewriting tag of filtered out object' '
 (
 	cd limit-by-paths &&
 	git fast-export --tag-of-filtered-object=rewrite mytag -- there > output &&
@@ -537,7 +641,7 @@ test_expect_success 'full-tree re-shows unmodified files'        '
 
 test_expect_success 'set-up a few more tags for tag export tests' '
 	git checkout -f main &&
-	HEAD_TREE=$(git show -s --pretty=raw HEAD | grep tree | sed "s/tree //") &&
+	HEAD_TREE=$(git show -s --pretty=raw HEAD | sed -n "/tree/s/tree //p") &&
 	git tag    tree_tag        -m "tagging a tree" $HEAD_TREE &&
 	git tag -a tree_tag-obj    -m "tagging a tree" $HEAD_TREE &&
 	git tag    tag-obj_tag     -m "tagging a tag" tree_tag-obj &&
@@ -610,7 +714,7 @@ test_expect_success 'directory becomes symlink'        '
 	(cd result && git show main:foo)
 '
 
-test_expect_success 'fast-export quotes pathnames' '
+test_expect_success PERL_TEST_HELPERS 'fast-export quotes pathnames' '
 	git init crazy-paths &&
 	test_config -C crazy-paths core.protectNTFS false &&
 	(cd crazy-paths &&
@@ -631,7 +735,7 @@ test_expect_success 'fast-export quotes pathnames' '
 	 git rev-list HEAD >expect &&
 	 git init result &&
 	 cd result &&
-	 git fast-import <../export.out &&
+	 git -c core.protectNTFS=false fast-import <../export.out &&
 	 git rev-list HEAD >actual &&
 	 test_cmp ../expect actual
 	)
@@ -666,7 +770,7 @@ M 100644 :13 file
 
 EOF
 
-test_expect_success 'avoid uninteresting refs' '
+test_expect_success ICONV 'avoid uninteresting refs' '
 	> tmp-marks &&
 	git fast-export --import-marks=tmp-marks \
 		--export-marks=tmp-marks main > /dev/null &&
@@ -685,7 +789,7 @@ from :14
 
 EOF
 
-test_expect_success 'refs are updated even if no commits need to be exported' '
+test_expect_success ICONV 'refs are updated even if no commits need to be exported' '
 	> tmp-marks &&
 	git fast-export --import-marks=tmp-marks \
 		--export-marks=tmp-marks main > /dev/null &&
@@ -789,6 +893,16 @@ test_expect_success 'fast-export --first-parent outputs all revisions output by 
 		test_cmp expected actual &&
 		test_line_count = 4 actual
 	)
+'
+
+test_expect_success 'fast-export handles --end-of-options' '
+	git update-ref refs/heads/nodash HEAD &&
+	git update-ref refs/heads/--dashes HEAD &&
+	git fast-export --end-of-options nodash >expect &&
+	git fast-export --end-of-options --dashes >actual.raw &&
+	# fix up lines which mention the ref for comparison
+	sed s/--dashes/nodash/ <actual.raw >actual &&
+	test_cmp expect actual
 '
 
 test_done

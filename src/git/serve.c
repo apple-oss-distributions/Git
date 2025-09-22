@@ -1,29 +1,54 @@
-#include "cache.h"
+#include "git-compat-util.h"
 #include "repository.h"
 #include "config.h"
+#include "hash.h"
 #include "pkt-line.h"
 #include "version.h"
 #include "ls-refs.h"
 #include "protocol-caps.h"
 #include "serve.h"
 #include "upload-pack.h"
+#include "bundle-uri.h"
+#include "trace2.h"
+#include "promisor-remote.h"
 
 static int advertise_sid = -1;
+static int advertise_object_info = -1;
 static int client_hash_algo = GIT_HASH_SHA1;
 
-static int always_advertise(struct repository *r,
-			    struct strbuf *value)
+static int always_advertise(struct repository *r UNUSED,
+			    struct strbuf *value UNUSED)
 {
 	return 1;
 }
 
-static int agent_advertise(struct repository *r,
+static int agent_advertise(struct repository *r UNUSED,
 			   struct strbuf *value)
 {
 	if (value)
 		strbuf_addstr(value, git_user_agent_sanitized());
 	return 1;
 }
+
+static int promisor_remote_advertise(struct repository *r,
+				     struct strbuf *value)
+{
+	if (value) {
+		char *info = promisor_remote_info(r);
+		if (!info)
+			return 0;
+		strbuf_addstr(value, info);
+		free(info);
+	}
+	return 1;
+}
+
+static void promisor_remote_receive(struct repository *r,
+				    const char *remotes)
+{
+	mark_promisor_remotes_as_accepted(r, remotes);
+}
+
 
 static int object_format_advertise(struct repository *r,
 				   struct strbuf *value)
@@ -33,7 +58,7 @@ static int object_format_advertise(struct repository *r,
 	return 1;
 }
 
-static void object_format_receive(struct repository *r,
+static void object_format_receive(struct repository *r UNUSED,
 				  const char *algo_name)
 {
 	if (!algo_name)
@@ -47,7 +72,7 @@ static void object_format_receive(struct repository *r,
 static int session_id_advertise(struct repository *r, struct strbuf *value)
 {
 	if (advertise_sid == -1 &&
-	    git_config_get_bool("transfer.advertisesid", &advertise_sid))
+	    repo_config_get_bool(r, "transfer.advertisesid", &advertise_sid))
 		advertise_sid = 0;
 	if (!advertise_sid)
 		return 0;
@@ -56,12 +81,23 @@ static int session_id_advertise(struct repository *r, struct strbuf *value)
 	return 1;
 }
 
-static void session_id_receive(struct repository *r,
+static void session_id_receive(struct repository *r UNUSED,
 			       const char *client_sid)
 {
 	if (!client_sid)
 		client_sid = "";
 	trace2_data_string("transfer", NULL, "client-sid", client_sid);
+}
+
+static int object_info_advertise(struct repository *r, struct strbuf *value UNUSED)
+{
+	if (advertise_object_info == -1 &&
+	    repo_config_get_bool(r, "transfer.advertiseobjectinfo",
+				 &advertise_object_info)) {
+		/* disabled by default */
+		advertise_object_info = 0;
+	}
+	return advertise_object_info;
 }
 
 struct protocol_capability {
@@ -132,24 +168,33 @@ static struct protocol_capability capabilities[] = {
 	},
 	{
 		.name = "object-info",
-		.advertise = always_advertise,
+		.advertise = object_info_advertise,
 		.command = cap_object_info,
+	},
+	{
+		.name = "bundle-uri",
+		.advertise = bundle_uri_advertise,
+		.command = bundle_uri_command,
+	},
+	{
+		.name = "promisor-remote",
+		.advertise = promisor_remote_advertise,
+		.receive = promisor_remote_receive,
 	},
 };
 
-void protocol_v2_advertise_capabilities(void)
+void protocol_v2_advertise_capabilities(struct repository *r)
 {
 	struct strbuf capability = STRBUF_INIT;
 	struct strbuf value = STRBUF_INIT;
-	int i;
 
 	/* serve by default supports v2 */
 	packet_write_fmt(1, "version 2\n");
 
-	for (i = 0; i < ARRAY_SIZE(capabilities); i++) {
+	for (size_t i = 0; i < ARRAY_SIZE(capabilities); i++) {
 		struct protocol_capability *c = &capabilities[i];
 
-		if (c->advertise(the_repository, &value)) {
+		if (c->advertise(r, &value)) {
 			strbuf_addstr(&capability, c->name);
 
 			if (value.len) {
@@ -172,12 +217,10 @@ void protocol_v2_advertise_capabilities(void)
 
 static struct protocol_capability *get_capability(const char *key, const char **value)
 {
-	int i;
-
 	if (!key)
 		return NULL;
 
-	for (i = 0; i < ARRAY_SIZE(capabilities); i++) {
+	for (size_t i = 0; i < ARRAY_SIZE(capabilities); i++) {
 		struct protocol_capability *c = &capabilities[i];
 		const char *out;
 		if (!skip_prefix(key, c->name, &out))
@@ -195,20 +238,20 @@ static struct protocol_capability *get_capability(const char *key, const char **
 	return NULL;
 }
 
-static int receive_client_capability(const char *key)
+static int receive_client_capability(struct repository *r, const char *key)
 {
 	const char *value;
 	const struct protocol_capability *c = get_capability(key, &value);
 
-	if (!c || c->command || !c->advertise(the_repository, NULL))
+	if (!c || c->command || !c->advertise(r, NULL))
 		return 0;
 
 	if (c->receive)
-		c->receive(the_repository, value);
+		c->receive(r, value);
 	return 1;
 }
 
-static int parse_command(const char *key, struct protocol_capability **command)
+static int parse_command(struct repository *r, const char *key, struct protocol_capability **command)
 {
 	const char *out;
 
@@ -219,7 +262,7 @@ static int parse_command(const char *key, struct protocol_capability **command)
 		if (*command)
 			die("command '%s' requested after already requesting command '%s'",
 			    out, (*command)->name);
-		if (!cmd || !cmd->advertise(the_repository, NULL) || !cmd->command || value)
+		if (!cmd || !cmd->advertise(r, NULL) || !cmd->command || value)
 			die("invalid command '%s'", out);
 
 		*command = cmd;
@@ -234,7 +277,7 @@ enum request_state {
 	PROCESS_REQUEST_DONE,
 };
 
-static int process_request(void)
+static int process_request(struct repository *r)
 {
 	enum request_state state = PROCESS_REQUEST_KEYS;
 	struct packet_reader reader;
@@ -259,8 +302,8 @@ static int process_request(void)
 		case PACKET_READ_EOF:
 			BUG("Should have already died when seeing EOF");
 		case PACKET_READ_NORMAL:
-			if (parse_command(reader.line, &command) ||
-			    receive_client_capability(reader.line))
+			if (parse_command(r, reader.line, &command) ||
+			    receive_client_capability(r, reader.line))
 				seen_capability_or_command = 1;
 			else
 				die("unknown capability '%s'", reader.line);
@@ -300,30 +343,30 @@ static int process_request(void)
 	if (!command)
 		die("no command requested");
 
-	if (client_hash_algo != hash_algo_by_ptr(the_repository->hash_algo))
-		die("mismatched object format: server %s; client %s\n",
-		    the_repository->hash_algo->name,
+	if (client_hash_algo != hash_algo_by_ptr(r->hash_algo))
+		die("mismatched object format: server %s; client %s",
+		    r->hash_algo->name,
 		    hash_algos[client_hash_algo].name);
 
-	command->command(the_repository, &reader);
+	command->command(r, &reader);
 
 	return 0;
 }
 
-void protocol_v2_serve_loop(int stateless_rpc)
+void protocol_v2_serve_loop(struct repository *r, int stateless_rpc)
 {
 	if (!stateless_rpc)
-		protocol_v2_advertise_capabilities();
+		protocol_v2_advertise_capabilities(r);
 
 	/*
 	 * If stateless-rpc was requested then exit after
 	 * a single request/response exchange
 	 */
 	if (stateless_rpc) {
-		process_request();
+		process_request(r);
 	} else {
 		for (;;)
-			if (process_request())
+			if (process_request(r))
 				break;
 	}
 }

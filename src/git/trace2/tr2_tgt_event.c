@@ -1,6 +1,9 @@
-#include "cache.h"
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "config.h"
 #include "json-writer.h"
+#include "repository.h"
 #include "run-command.h"
 #include "version.h"
 #include "trace2/tr2_dst.h"
@@ -23,7 +26,7 @@ static struct tr2_dst tr2dst_event = {
  * a new field to an existing event, do not require an increment to the EVENT
  * format version.
  */
-#define TR2_EVENT_VERSION "3"
+#define TR2_EVENT_VERSION "4"
 
 /*
  * Region nesting limit for messages written to the event target.
@@ -334,7 +337,7 @@ static void fn_alias_fl(const char *file, int line, const char *alias,
 }
 
 static void fn_child_start_fl(const char *file, int line,
-			      uint64_t us_elapsed_absolute,
+			      uint64_t us_elapsed_absolute UNUSED,
 			      const struct child_process *cmd)
 {
 	const char *event_name = "child_start";
@@ -366,7 +369,8 @@ static void fn_child_start_fl(const char *file, int line,
 }
 
 static void fn_child_exit_fl(const char *file, int line,
-			     uint64_t us_elapsed_absolute, int cid, int pid,
+			     uint64_t us_elapsed_absolute UNUSED,
+			     int cid, int pid,
 			     int code, uint64_t us_elapsed_child)
 {
 	const char *event_name = "child_exit";
@@ -387,7 +391,8 @@ static void fn_child_exit_fl(const char *file, int line,
 }
 
 static void fn_child_ready_fl(const char *file, int line,
-			      uint64_t us_elapsed_absolute, int cid, int pid,
+			      uint64_t us_elapsed_absolute UNUSED,
+			      int cid, int pid,
 			      const char *ready, uint64_t us_elapsed_child)
 {
 	const char *event_name = "child_ready";
@@ -408,7 +413,7 @@ static void fn_child_ready_fl(const char *file, int line,
 }
 
 static void fn_thread_start_fl(const char *file, int line,
-			       uint64_t us_elapsed_absolute)
+			       uint64_t us_elapsed_absolute UNUSED)
 {
 	const char *event_name = "thread_start";
 	struct json_writer jw = JSON_WRITER_INIT;
@@ -422,7 +427,7 @@ static void fn_thread_start_fl(const char *file, int line,
 }
 
 static void fn_thread_exit_fl(const char *file, int line,
-			      uint64_t us_elapsed_absolute,
+			      uint64_t us_elapsed_absolute UNUSED,
 			      uint64_t us_elapsed_thread)
 {
 	const char *event_name = "thread_exit";
@@ -438,7 +443,8 @@ static void fn_thread_exit_fl(const char *file, int line,
 	jw_release(&jw);
 }
 
-static void fn_exec_fl(const char *file, int line, uint64_t us_elapsed_absolute,
+static void fn_exec_fl(const char *file, int line,
+		       uint64_t us_elapsed_absolute UNUSED,
 		       int exec_id, const char *exe, const char **argv)
 {
 	const char *event_name = "exec";
@@ -459,8 +465,8 @@ static void fn_exec_fl(const char *file, int line, uint64_t us_elapsed_absolute,
 }
 
 static void fn_exec_result_fl(const char *file, int line,
-			      uint64_t us_elapsed_absolute, int exec_id,
-			      int code)
+			      uint64_t us_elapsed_absolute UNUSED,
+			      int exec_id, int code)
 {
 	const char *event_name = "exec_result";
 	struct json_writer jw = JSON_WRITER_INIT;
@@ -476,18 +482,19 @@ static void fn_exec_result_fl(const char *file, int line,
 }
 
 static void fn_param_fl(const char *file, int line, const char *param,
-			const char *value)
+			const char *value, const struct key_value_info *kvi)
 {
 	const char *event_name = "def_param";
 	struct json_writer jw = JSON_WRITER_INIT;
-	enum config_scope scope = current_config_scope();
+	enum config_scope scope = kvi->scope;
 	const char *scope_name = config_scope_name(scope);
 
 	jw_object_begin(&jw, 0);
 	event_fmt_prepare(event_name, file, line, NULL, &jw);
 	jw_object_string(&jw, "scope", scope_name);
 	jw_object_string(&jw, "param", param);
-	jw_object_string(&jw, "value", value);
+	if (value)
+		jw_object_string(&jw, "value", value);
 	jw_end(&jw);
 
 	tr2_dst_write_line(&tr2dst_event, &jw.json);
@@ -510,7 +517,7 @@ static void fn_repo_fl(const char *file, int line,
 }
 
 static void fn_region_enter_printf_va_fl(const char *file, int line,
-					 uint64_t us_elapsed_absolute,
+					 uint64_t us_elapsed_absolute UNUSED,
 					 const char *category,
 					 const char *label,
 					 const struct repository *repo,
@@ -537,7 +544,7 @@ static void fn_region_enter_printf_va_fl(const char *file, int line,
 }
 
 static void fn_region_leave_printf_va_fl(
-	const char *file, int line, uint64_t us_elapsed_absolute,
+	const char *file, int line, uint64_t us_elapsed_absolute UNUSED,
 	uint64_t us_elapsed_region, const char *category, const char *label,
 	const struct repository *repo, const char *fmt, va_list ap)
 {
@@ -618,6 +625,24 @@ static void fn_data_json_fl(const char *file, int line,
 	}
 }
 
+static void fn_printf_va_fl(const char *file, int line,
+			    uint64_t us_elapsed_absolute,
+			    const char *fmt, va_list ap)
+{
+	const char *event_name = "printf";
+	struct json_writer jw = JSON_WRITER_INIT;
+	double t_abs = (double)us_elapsed_absolute / 1000000.0;
+
+	jw_object_begin(&jw, 0);
+	event_fmt_prepare(event_name, file, line, NULL, &jw);
+	jw_object_double(&jw, "t_abs", 6, t_abs);
+	maybe_add_string_va(&jw, "msg", fmt, ap);
+	jw_end(&jw);
+
+	tr2_dst_write_line(&tr2dst_event, &jw.json);
+	jw_release(&jw);
+}
+
 static void fn_timer(const struct tr2_timer_metadata *meta,
 		     const struct tr2_timer *timer,
 		     int is_final_data)
@@ -690,7 +715,7 @@ struct tr2_tgt tr2_tgt_event = {
 	.pfn_region_leave_printf_va_fl = fn_region_leave_printf_va_fl,
 	.pfn_data_fl = fn_data_fl,
 	.pfn_data_json_fl = fn_data_json_fl,
-	.pfn_printf_va_fl = NULL,
+	.pfn_printf_va_fl = fn_printf_va_fl,
 	.pfn_timer = fn_timer,
 	.pfn_counter = fn_counter,
 };

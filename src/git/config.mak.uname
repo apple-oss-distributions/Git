@@ -8,7 +8,6 @@ uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 uname_M := $(shell sh -c 'uname -m 2>/dev/null || echo not')
 uname_O := $(shell sh -c 'uname -o 2>/dev/null || echo not')
 uname_R := $(shell sh -c 'uname -r 2>/dev/null || echo not')
-uname_P := $(shell sh -c 'uname -p 2>/dev/null || echo not')
 uname_V := $(shell sh -c 'uname -v 2>/dev/null || echo not')
 
 ifneq ($(findstring MINGW,$(uname_S)),)
@@ -49,25 +48,26 @@ ifeq ($(uname_S),OSF1)
 endif
 ifeq ($(uname_S),Linux)
 	HAVE_ALLOCA_H = YesPlease
+	# override in config.mak if you have glibc >= 2.38
 	NO_STRLCPY = YesPlease
+	CSPRNG_METHOD = getrandom
 	HAVE_PATHS_H = YesPlease
 	LIBC_CONTAINS_LIBINTL = YesPlease
 	HAVE_DEV_TTY = YesPlease
 	HAVE_CLOCK_GETTIME = YesPlease
 	HAVE_CLOCK_MONOTONIC = YesPlease
-	# -lrt is needed for clock_gettime on glibc <= 2.16
-	NEEDS_LIBRT = YesPlease
 	HAVE_SYNC_FILE_RANGE = YesPlease
 	HAVE_GETDELIM = YesPlease
 	FREAD_READS_DIRECTORIES = UnfortunatelyYes
-	BASIC_CFLAGS += -DHAVE_SYSINFO
+	HAVE_SYSINFO = YesPlease
 	PROCFS_EXECUTABLE_PATH = /proc/self/exe
 	HAVE_PLATFORM_PROCINFO = YesPlease
 	COMPAT_OBJS += compat/linux/procinfo.o
 	# centos7/rhel7 provides gcc 4.8.5 and zlib 1.2.7.
-	ifneq ($(findstring .el7.,$(uname_R)),)
+        ifneq ($(findstring .el7.,$(uname_R)),)
 		BASIC_CFLAGS += -std=c99
-	endif
+        endif
+	LINK_FUZZ_PROGRAMS = YesPlease
 endif
 ifeq ($(uname_S),GNU/kFreeBSD)
 	HAVE_ALLOCA_H = YesPlease
@@ -95,13 +95,13 @@ ifeq ($(uname_S),UnixWare)
 	NO_MEMMEM = YesPlease
 endif
 ifeq ($(uname_S),SCO_SV)
-	ifeq ($(uname_R),3.2)
+        ifeq ($(uname_R),3.2)
 		CFLAGS = -O2
-	endif
-	ifeq ($(uname_R),5)
+        endif
+        ifeq ($(uname_R),5)
 		CC = cc
 		BASIC_CFLAGS += -Kthread
-	endif
+        endif
 	NEEDS_SOCKET = YesPlease
 	NEEDS_NSL = YesPlease
 	NEEDS_SSL_WITH_CRYPTO = YesPlease
@@ -124,19 +124,19 @@ ifeq ($(uname_S),Darwin)
 	# - MacOS 10.0.* and MacOS 10.1.0 = Darwin 1.*
 	# - MacOS 10.x.* = Darwin (x+4).* for (1 <= x)
 	# i.e. "begins with [15678] and a dot" means "10.4.* or older".
-	ifeq ($(shell expr "$(uname_R)" : '[15678]\.'),2)
+        ifeq ($(shell expr "$(uname_R)" : '[15678]\.'),2)
 		OLD_ICONV = UnfortunatelyYes
 		NO_APPLE_COMMON_CRYPTO = YesPlease
-	endif
-	ifeq ($(shell expr "$(uname_R)" : '[15]\.'),2)
+        endif
+        ifeq ($(shell expr "$(uname_R)" : '[15]\.'),2)
 		NO_STRLCPY = YesPlease
-	endif
-	ifeq ($(shell test "`expr "$(uname_R)" : '\([0-9][0-9]*\)\.'`" -ge 11 && echo 1),1)
+        endif
+        ifeq ($(shell test "`expr "$(uname_R)" : '\([0-9][0-9]*\)\.'`" -ge 11 && echo 1),1)
 		HAVE_GETDELIM = YesPlease
-	endif
-	ifeq ($(shell test "`expr "$(uname_R)" : '\([0-9][0-9]*\)\.'`" -ge 20 && echo 1),1)
+        endif
+        ifeq ($(shell test "`expr "$(uname_R)" : '\([0-9][0-9]*\)\.'`" -ge 20 && echo 1),1)
 		OPEN_RETURNS_EINTR = UnfortunatelyYes
-	endif
+        endif
 	NO_MEMMEM = YesPlease
 	USE_ST_TIMESPEC = YesPlease
 	HAVE_DEV_TTY = YesPlease
@@ -152,22 +152,35 @@ ifeq ($(uname_S),Darwin)
 	# Workaround for `gettext` being keg-only and not even being linked via
 	# `brew link --force gettext`, should be obsolete as of
 	# https://github.com/Homebrew/homebrew-core/pull/53489
-	ifeq ($(shell test -d /usr/local/opt/gettext/ && echo y),y)
+        ifeq ($(shell test -d /usr/local/opt/gettext/ && echo y),y)
 		BASIC_CFLAGS += -I/usr/local/include -I/usr/local/opt/gettext/include
 		BASIC_LDFLAGS += -L/usr/local/lib -L/usr/local/opt/gettext/lib
-		ifeq ($(shell test -x /usr/local/opt/gettext/bin/msgfmt && echo y),y)
+                ifeq ($(shell test -x /usr/local/opt/gettext/bin/msgfmt && echo y),y)
 			MSGFMT = /usr/local/opt/gettext/bin/msgfmt
-		endif
-	endif
+                endif
+	# On newer ARM-based machines the default installation path has changed to
+	# /opt/homebrew. Include it in our search paths so that the user does not
+	# have to configure this manually.
+	#
+	# Note that we do not employ the same workaround as above where we manually
+	# add gettext. The issue was fixed more than three years ago by now, and at
+	# that point there haven't been any ARM-based Macs yet.
+        else ifeq ($(shell test -d /opt/homebrew/ && echo y),y)
+		BASIC_CFLAGS += -I/opt/homebrew/include
+		BASIC_LDFLAGS += -L/opt/homebrew/lib
+                ifeq ($(shell test -x /opt/homebrew/bin/msgfmt && echo y),y)
+			MSGFMT = /opt/homebrew/bin/msgfmt
+                endif
+        endif
 
 	# The builtin FSMonitor on MacOS builds upon Simple-IPC.  Both require
 	# Unix domain sockets and PThreads.
-	ifndef NO_PTHREADS
-	ifndef NO_UNIX_SOCKETS
+        ifndef NO_PTHREADS
+        ifndef NO_UNIX_SOCKETS
 	FSMONITOR_DAEMON_BACKEND = darwin
 	FSMONITOR_OS_SETTINGS = darwin
-	endif
-	endif
+        endif
+        endif
 
 	BASIC_LDFLAGS += -framework CoreServices
 endif
@@ -183,7 +196,7 @@ ifeq ($(uname_S),SunOS)
 	NO_REGEX = YesPlease
 	NO_MSGFMT_EXTENDED_OPTIONS = YesPlease
 	HAVE_DEV_TTY = YesPlease
-	ifeq ($(uname_R),5.6)
+        ifeq ($(uname_R),5.6)
 		SOCKLEN_T = int
 		NO_HSTRERROR = YesPlease
 		NO_IPV6 = YesPlease
@@ -193,8 +206,8 @@ ifeq ($(uname_S),SunOS)
 		NO_STRLCPY = YesPlease
 		NO_STRTOUMAX = YesPlease
 		GIT_TEST_CMP = cmp
-	endif
-	ifeq ($(uname_R),5.7)
+        endif
+        ifeq ($(uname_R),5.7)
 		NEEDS_RESOLV = YesPlease
 		NO_IPV6 = YesPlease
 		NO_SOCKADDR_STORAGE = YesPlease
@@ -203,25 +216,25 @@ ifeq ($(uname_S),SunOS)
 		NO_STRLCPY = YesPlease
 		NO_STRTOUMAX = YesPlease
 		GIT_TEST_CMP = cmp
-	endif
-	ifeq ($(uname_R),5.8)
+        endif
+        ifeq ($(uname_R),5.8)
 		NO_UNSETENV = YesPlease
 		NO_SETENV = YesPlease
 		NO_STRTOUMAX = YesPlease
 		GIT_TEST_CMP = cmp
-	endif
-	ifeq ($(uname_R),5.9)
+        endif
+        ifeq ($(uname_R),5.9)
 		NO_UNSETENV = YesPlease
 		NO_SETENV = YesPlease
 		NO_STRTOUMAX = YesPlease
 		GIT_TEST_CMP = cmp
-	endif
+        endif
 	INSTALL = /usr/ucb/install
 	TAR = gtar
 	BASIC_CFLAGS += -D__EXTENSIONS__ -D__sun__
 endif
 ifeq ($(uname_O),Cygwin)
-	ifeq ($(shell expr "$(uname_R)" : '1\.[1-6]\.'),4)
+        ifeq ($(shell expr "$(uname_R)" : '1\.[1-6]\.'),4)
 		NO_D_TYPE_IN_DIRENT = YesPlease
 		NO_STRCASESTR = YesPlease
 		NO_MEMMEM = YesPlease
@@ -232,9 +245,17 @@ ifeq ($(uname_O),Cygwin)
 		# On some boxes NO_MMAP is needed, and not so elsewhere.
 		# Try commenting this out if you suspect MMAP is more efficient
 		NO_MMAP = YesPlease
-	else
-		NO_REGEX = UnfortunatelyYes
-	endif
+        else
+                ifeq ($(shell expr "$(uname_R)" : '1\.7\.'),4)
+		        NO_REGEX = UnfortunatelyYes
+                endif
+        endif
+	HAVE_DEV_TTY = YesPlease
+	HAVE_GETDELIM = YesPlease
+	HAVE_CLOCK_GETTIME = YesPlease
+	HAVE_CLOCK_MONOTONIC = YesPlease
+	HAVE_SYSINFO = YesPlease
+	CSPRNG_METHOD = arc4random
 	HAVE_ALLOCA_H = YesPlease
 	NEEDS_LIBICONV = YesPlease
 	NO_FAST_WORKING_DIRECTORY = UnfortunatelyYes
@@ -250,25 +271,25 @@ ifeq ($(uname_S),FreeBSD)
 	NEEDS_LIBICONV = YesPlease
 	# Versions up to 10.1 require OLD_ICONV; 10.2 and beyond don't.
 	# A typical version string looks like "10.2-RELEASE".
-	ifeq ($(shell expr "$(uname_R)" : '[1-9]\.'),2)
+        ifeq ($(shell expr "$(uname_R)" : '[1-9]\.'),2)
 		OLD_ICONV = YesPlease
-	endif
-	ifeq ($(firstword $(subst -, ,$(uname_R))),10.0)
+        endif
+        ifeq ($(firstword $(subst -, ,$(uname_R))),10.0)
 		OLD_ICONV = YesPlease
-	endif
-	ifeq ($(firstword $(subst -, ,$(uname_R))),10.1)
+        endif
+        ifeq ($(firstword $(subst -, ,$(uname_R))),10.1)
 		OLD_ICONV = YesPlease
-	endif
+        endif
 	NO_MEMMEM = YesPlease
 	BASIC_CFLAGS += -I/usr/local/include
 	BASIC_LDFLAGS += -L/usr/local/lib
 	DIR_HAS_BSD_GROUP_SEMANTICS = YesPlease
 	USE_ST_TIMESPEC = YesPlease
-	ifeq ($(shell expr "$(uname_R)" : '4\.'),2)
+        ifeq ($(shell expr "$(uname_R)" : '4\.'),2)
 		PTHREAD_LIBS = -pthread
 		NO_UINTMAX_T = YesPlease
 		NO_STRTOUMAX = YesPlease
-	endif
+        endif
 	PYTHON_PATH = /usr/local/bin/python
 	PERL_PATH = /usr/local/bin/perl
 	HAVE_PATHS_H = YesPlease
@@ -280,17 +301,14 @@ ifeq ($(uname_S),FreeBSD)
 	FILENO_IS_A_MACRO = UnfortunatelyYes
 endif
 ifeq ($(uname_S),OpenBSD)
-	NO_STRCASESTR = YesPlease
-	NO_MEMMEM = YesPlease
+	DIR_HAS_BSD_GROUP_SEMANTICS = YesPlease
 	USE_ST_TIMESPEC = YesPlease
 	NEEDS_LIBICONV = YesPlease
 	BASIC_CFLAGS += -I/usr/local/include
 	BASIC_LDFLAGS += -L/usr/local/lib
 	HAVE_PATHS_H = YesPlease
 	HAVE_BSD_SYSCTL = YesPlease
-	HAVE_BSD_KERN_PROC_SYSCTL = YesPlease
 	CSPRNG_METHOD = arc4random
-	PROCFS_EXECUTABLE_PATH = /proc/curproc/file
 	FREAD_READS_DIRECTORIES = UnfortunatelyYes
 	FILENO_IS_A_MACRO = UnfortunatelyYes
 endif
@@ -304,9 +322,9 @@ ifeq ($(uname_S),MirBSD)
 	CSPRNG_METHOD = arc4random
 endif
 ifeq ($(uname_S),NetBSD)
-	ifeq ($(shell expr "$(uname_R)" : '[01]\.'),2)
+        ifeq ($(shell expr "$(uname_R)" : '[01]\.'),2)
 		NEEDS_LIBICONV = YesPlease
-	endif
+        endif
 	BASIC_CFLAGS += -I/usr/pkg/include
 	BASIC_LDFLAGS += -L/usr/pkg/lib $(CC_LD_DYNPATH)/usr/pkg/lib
 	USE_ST_TIMESPEC = YesPlease
@@ -330,14 +348,14 @@ ifeq ($(uname_S),AIX)
 	BASIC_CFLAGS += -D_LARGE_FILES
 	FILENO_IS_A_MACRO = UnfortunatelyYes
 	NEED_ACCESS_ROOT_HANDLER = UnfortunatelyYes
-	ifeq ($(shell expr "$(uname_V)" : '[1234]'),1)
+        ifeq ($(shell expr "$(uname_V)" : '[1234]'),1)
 		NO_PTHREADS = YesPlease
-	else
+        else
 		PTHREAD_LIBS = -lpthread
-	endif
-	ifeq ($(shell expr "$(uname_V).$(uname_R)" : '5\.1'),3)
+        endif
+        ifeq ($(shell expr "$(uname_V).$(uname_R)" : '5\.1'),3)
 		INLINE = ''
-	endif
+        endif
 	GIT_TEST_CMP = cmp
 endif
 ifeq ($(uname_S),GNU)
@@ -397,29 +415,33 @@ ifeq ($(uname_S),HP-UX)
 	NO_SYS_SELECT_H = YesPlease
 	SNPRINTF_RETURNS_BOGUS = YesPlease
 	NO_NSEC = YesPlease
-	ifeq ($(uname_R),B.11.00)
+        ifeq ($(uname_R),B.11.00)
 		NO_INET_NTOP = YesPlease
 		NO_INET_PTON = YesPlease
-	endif
-	ifeq ($(uname_R),B.10.20)
+        endif
+        ifeq ($(uname_R),B.10.20)
 		# Override HP-UX 11.x setting:
 		INLINE =
 		SOCKLEN_T = size_t
 		NO_PREAD = YesPlease
 		NO_INET_NTOP = YesPlease
 		NO_INET_PTON = YesPlease
-	endif
+        endif
 	GIT_TEST_CMP = cmp
 endif
 ifeq ($(uname_S),Windows)
 	GIT_VERSION := $(GIT_VERSION).MSVC
 	pathsep = ;
 	# Assume that this is built in Git for Windows' SDK
-	ifeq (MINGW32,$(MSYSTEM))
+        ifeq (MINGW32,$(MSYSTEM))
 		prefix = /mingw32
-	else
-		prefix = /mingw64
-	endif
+        else
+                ifeq (CLANGARM64,$(MSYSTEM))
+			prefix = /clangarm64
+                else
+			prefix = /mingw64
+                endif
+        endif
 	# Prepend MSVC 64-bit tool-chain to PATH.
 	#
 	# A regular Git Bash *does not* have cl.exe in its $PATH. As there is a
@@ -434,7 +456,6 @@ ifeq ($(uname_S),Windows)
 	NO_POLL = YesPlease
 	NO_SYMLINK_HEAD = YesPlease
 	NO_IPV6 = YesPlease
-	NO_UNIX_SOCKETS = YesPlease
 	NO_SETENV = YesPlease
 	NO_STRCASESTR = YesPlease
 	NO_STRLCPY = YesPlease
@@ -472,7 +493,7 @@ ifeq ($(uname_S),Windows)
 	NO_POSIX_GOODIES = UnfortunatelyYes
 	NATIVE_CRLF = YesPlease
 	DEFAULT_HELP_FORMAT = html
-ifeq (/mingw64,$(subst 32,64,$(prefix)))
+ifeq (/mingw64,$(subst 32,64,$(subst clangarm,mingw,$(prefix))))
 	# Move system config into top-level /etc/
 	ETC_GITCONFIG = ../etc/gitconfig
 	ETC_GITATTRIBUTES = ../etc/gitattributes
@@ -526,6 +547,8 @@ else
 endif
 	X = .exe
 
+	EXTRA_PROGRAMS += headless-git$X
+
 compat/msvc.o: compat/msvc.c compat/mingw.c GIT-CFLAGS
 endif
 ifeq ($(uname_S),Interix)
@@ -535,16 +558,16 @@ ifeq ($(uname_S),Interix)
 	NO_MKDTEMP = YesPlease
 	NO_STRTOUMAX = YesPlease
 	NO_NSEC = YesPlease
-	ifeq ($(uname_R),3.5)
+        ifeq ($(uname_R),3.5)
 		NO_INET_NTOP = YesPlease
 		NO_INET_PTON = YesPlease
 		NO_SOCKADDR_STORAGE = YesPlease
-	endif
-	ifeq ($(uname_R),5.2)
+        endif
+        ifeq ($(uname_R),5.2)
 		NO_INET_NTOP = YesPlease
 		NO_INET_PTON = YesPlease
 		NO_SOCKADDR_STORAGE = YesPlease
-	endif
+        endif
 endif
 ifeq ($(uname_S),Minix)
 	NO_IPV6 = YesPlease
@@ -564,12 +587,12 @@ ifeq ($(uname_S),NONSTOP_KERNEL)
 	# still not compile in c89 mode, due to non-const array initializations.
 	CC = cc -c99
 	# Build down-rev compatible objects that don't use our new getopt_long.
-	ifeq ($(uname_R).$(uname_V),J06.21)
+        ifeq ($(uname_R).$(uname_V),J06.21)
 		CC += -WRVU=J06.20
-	endif
-	ifeq ($(uname_R).$(uname_V),L17.02)
+        endif
+        ifeq ($(uname_R).$(uname_V),L17.02)
 		CC += -WRVU=L16.05
-	endif
+        endif
 	# Disable all optimization, seems to result in bad code, with -O or -O2
 	# or even -O1 (default), /usr/local/libexec/git-core/git-pack-objects
 	# abends on "git push". Needs more investigation.
@@ -623,7 +646,23 @@ ifeq ($(uname_S),NONSTOP_KERNEL)
 	SANE_TOOL_PATH = /usr/coreutils/bin:/usr/local/bin
 	SHELL_PATH = /usr/coreutils/bin/bash
 endif
+ifeq ($(uname_S),OS/390)
+	NO_SYS_POLL_H = YesPlease
+	NO_STRCASESTR = YesPlease
+	NO_REGEX = YesPlease
+	NO_MMAP = YesPlease
+	NO_NSEC = YesPlease
+	NO_STRLCPY = YesPlease
+	NO_MEMMEM = YesPlease
+	NO_GECOS_IN_PWENT = YesPlease
+	HAVE_STRINGS_H = YesPlease
+	NEEDS_MODE_TRANSLATION = YesPlease
+	HAVE_ZOS_GET_EXECUTABLE_PATH = YesPlease
+endif
 ifeq ($(uname_S),MINGW)
+        ifeq ($(shell expr "$(uname_R)" : '1\.'),2)
+		$(error "Building with MSys is no longer supported")
+        endif
 	pathsep = ;
 	HAVE_ALLOCA_H = YesPlease
 	NO_PREAD = YesPlease
@@ -631,7 +670,6 @@ ifeq ($(uname_S),MINGW)
 	NO_LIBGEN_H = YesPlease
 	NO_POLL = YesPlease
 	NO_SYMLINK_HEAD = YesPlease
-	NO_UNIX_SOCKETS = YesPlease
 	NO_SETENV = YesPlease
 	NO_STRCASESTR = YesPlease
 	NO_STRLCPY = YesPlease
@@ -653,7 +691,6 @@ ifeq ($(uname_S),MINGW)
 	USE_WIN32_IPC = YesPlease
 	USE_WIN32_MMAP = YesPlease
 	MMAP_PREVENTS_DELETE = UnfortunatelyYes
-	USE_NED_ALLOCATOR = YesPlease
 	UNRELIABLE_FSTAT = UnfortunatelyYes
 	OBJECT_CREATION_USES_RENAMES = UnfortunatelyNeedsTo
 	NO_REGEX = YesPlease
@@ -678,60 +715,49 @@ ifeq ($(uname_S),MINGW)
 	RC = windres -O coff
 	NATIVE_CRLF = YesPlease
 	X = .exe
-ifneq (,$(wildcard ../THIS_IS_MSYSGIT))
-	htmldir = doc/git/html/
-	prefix =
+	# MSys2
+	prefix = /usr/
+	# Enable DEP
+	BASIC_LDFLAGS += -Wl,--nxcompat
+	# Enable ASLR (unless debugging)
+        ifneq (,$(findstring -O,$(filter-out -O0 -Og,$(CFLAGS))))
+		BASIC_LDFLAGS += -Wl,--dynamicbase
+        endif
+        ifeq (MINGW32,$(MSYSTEM))
+		prefix = /mingw32
+		HOST_CPU = i686
+		BASIC_LDFLAGS += -Wl,--pic-executable,-e,_mainCRTStartup
+        endif
+        ifeq (MINGW64,$(MSYSTEM))
+		prefix = /mingw64
+		HOST_CPU = x86_64
+		BASIC_LDFLAGS += -Wl,--pic-executable,-e,mainCRTStartup
+        else ifeq (CLANGARM64,$(MSYSTEM))
+		prefix = /clangarm64
+		HOST_CPU = aarch64
+		BASIC_LDFLAGS += -Wl,--pic-executable,-e,mainCRTStartup
+        else
+		COMPAT_CFLAGS += -D_USE_32BIT_TIME_T
+		BASIC_LDFLAGS += -Wl,--large-address-aware
+        endif
+	CC = gcc
+	COMPAT_CFLAGS += -D__USE_MINGW_ANSI_STDIO=0 -DDETECT_MSYS_TTY \
+		-fstack-protector-strong
+	EXTLIBS += -lntdll
+	EXTRA_PROGRAMS += headless-git$X
 	INSTALL = /bin/install
-	EXTLIBS += /mingw/lib/libz.a
 	INTERNAL_QSORT = YesPlease
 	HAVE_LIBCHARSET_H = YesPlease
-	NO_GETTEXT = YesPlease
-	NO_PYTHON = YesPlease
-	COMPAT_CFLAGS += -D__USE_MINGW_ACCESS
-else
-	ifneq ($(shell expr "$(uname_R)" : '1\.'),2)
-		# MSys2
-		prefix = /usr/
-		# Enable DEP
-		BASIC_LDFLAGS += -Wl,--nxcompat
-		# Enable ASLR (unless debugging)
-		ifneq (,$(findstring -O,$(filter-out -O0 -Og,$(CFLAGS))))
-			BASIC_LDFLAGS += -Wl,--dynamicbase
-		endif
-		ifeq (MINGW32,$(MSYSTEM))
-			prefix = /mingw32
-			HOST_CPU = i686
-			BASIC_LDFLAGS += -Wl,--pic-executable,-e,_mainCRTStartup
-		endif
-		ifeq (MINGW64,$(MSYSTEM))
-			prefix = /mingw64
-			HOST_CPU = x86_64
-			BASIC_LDFLAGS += -Wl,--pic-executable,-e,mainCRTStartup
-		else
-			COMPAT_CFLAGS += -D_USE_32BIT_TIME_T
-			BASIC_LDFLAGS += -Wl,--large-address-aware
-		endif
-		CC = gcc
-		COMPAT_CFLAGS += -D__USE_MINGW_ANSI_STDIO=0 -DDETECT_MSYS_TTY \
-			-fstack-protector-strong
-		EXTLIBS += -lntdll
-		INSTALL = /bin/install
-		INTERNAL_QSORT = YesPlease
-		HAVE_LIBCHARSET_H = YesPlease
-		USE_GETTEXT_SCHEME = fallthrough
-		USE_LIBPCRE = YesPlease
+	USE_GETTEXT_SCHEME = fallthrough
+	USE_LIBPCRE = YesPlease
+        ifneq (CLANGARM64,$(MSYSTEM))
 		USE_NED_ALLOCATOR = YesPlease
-		ifeq (/mingw64,$(subst 32,64,$(prefix)))
-			# Move system config into top-level /etc/
-			ETC_GITCONFIG = ../etc/gitconfig
-			ETC_GITATTRIBUTES = ../etc/gitattributes
-		endif
-	else
-		COMPAT_CFLAGS += -D__USE_MINGW_ANSI_STDIO
-		NO_CURL = YesPlease
-		NO_PYTHON = YesPlease
-	endif
-endif
+        endif
+        ifeq (/mingw64,$(subst 32,64,$(subst clangarm,mingw,$(prefix))))
+		# Move system config into top-level /etc/
+		ETC_GITCONFIG = ../etc/gitconfig
+		ETC_GITATTRIBUTES = ../etc/gitattributes
+        endif
 endif
 ifeq ($(uname_S),QNX)
 	COMPAT_CFLAGS += -DSA_RESTART=0
@@ -747,83 +773,3 @@ ifeq ($(uname_S),QNX)
 	NO_STRCASESTR = YesPlease
 	NO_STRLCPY = YesPlease
 endif
-
-vcxproj:
-	# Require clean work tree
-	git update-index -q --refresh && \
-	git diff-files --quiet && \
-	git diff-index --cached --quiet HEAD --
-
-	# Make .vcxproj files and add them
-	perl contrib/buildsystems/generate -g Vcxproj
-	git add -f git.sln {*,*/lib,t/helper/*}/*.vcxproj
-
-	# Generate the LinkOrCopyBuiltins.targets and LinkOrCopyRemoteHttp.targets file
-	(echo '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' && \
-	 echo '  <Target Name="CopyBuiltins_AfterBuild" AfterTargets="AfterBuild">' && \
-	 for name in $(BUILT_INS);\
-	 do \
-	   echo '    <Copy SourceFiles="$$(OutDir)\git.exe" DestinationFiles="$$(OutDir)\'"$$name"'" SkipUnchangedFiles="true" UseHardlinksIfPossible="true" />'; \
-	 done && \
-	 echo '  </Target>' && \
-	 echo '</Project>') >git/LinkOrCopyBuiltins.targets
-	(echo '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' && \
-	 echo '  <Target Name="CopyBuiltins_AfterBuild" AfterTargets="AfterBuild">' && \
-	 for name in $(REMOTE_CURL_ALIASES); \
-	 do \
-	   echo '    <Copy SourceFiles="$$(OutDir)\'"$(REMOTE_CURL_PRIMARY)"'" DestinationFiles="$$(OutDir)\'"$$name"'" SkipUnchangedFiles="true" UseHardlinksIfPossible="true" />'; \
-	 done && \
-	 echo '  </Target>' && \
-	 echo '</Project>') >git-remote-http/LinkOrCopyRemoteHttp.targets
-	git add -f git/LinkOrCopyBuiltins.targets git-remote-http/LinkOrCopyRemoteHttp.targets
-
-	# Add generated headers
-	$(MAKE) MSVC=1 SKIP_VCPKG=1 prefix=/mingw64 $(GENERATED_H)
-	git add -f $(GENERATED_H)
-
-	# Add scripts
-	rm -f perl/perl.mak
-	$(MAKE) MSVC=1 SKIP_VCPKG=1 prefix=/mingw64 $(SCRIPT_LIB) $(SCRIPTS)
-	# Strip out the sane tool path, needed only for building
-	sed -i '/^git_broken_path_fix ".*/d' git-sh-setup
-	git add -f $(SCRIPT_LIB) $(SCRIPTS)
-
-	# Add Perl module
-	$(MAKE) $(LIB_PERL_GEN)
-	git add -f perl/build
-
-	# Add bin-wrappers, for testing
-	rm -rf bin-wrappers/
-	$(MAKE) MSVC=1 SKIP_VCPKG=1 prefix=/mingw64 $(test_bindir_programs)
-	# Ensure that the GIT_EXEC_PATH is a Unix-y one, and that the absolute
-	# path of the repository is not hard-coded (GIT_EXEC_PATH will be set
-	# by test-lib.sh according to the current setup)
-	sed -i -e 's/^\(GIT_EXEC_PATH\)=.*/test -n "$${\1##*:*}" ||\
-			\1="$$(cygpath -u "$$\1")"/' \
-		-e "s|'$$(pwd)|\"\$$GIT_EXEC_PATH\"'|g" bin-wrappers/*
-	# Ensure that test-* helpers find the .dll files copied to top-level
-	sed -i 's|^PATH=.*|&:"$$GIT_EXEC_PATH"|' bin-wrappers/test-*
-	# We do not want to force hard-linking builtins
-	sed -i 's|\(git\)-\([-a-z]*\)\.exe"|\1.exe" \2|g' \
-		bin-wrappers/git-{receive-pack,upload-archive}
-	git add -f $(test_bindir_programs)
-	# remote-ext is a builtin, but invoked as if it were external
-	sed 's|receive-pack|remote-ext|g' \
-		<bin-wrappers/git-receive-pack >bin-wrappers/git-remote-ext
-	git add -f bin-wrappers/git-remote-ext
-
-	# Add templates
-	$(MAKE) -C templates
-	git add -f templates/boilerplates.made templates/blt/
-
-	# Add the translated messages
-	make MSVC=1 SKIP_VCPKG=1 prefix=/mingw64 $(MOFILES)
-	git add -f $(MOFILES)
-
-	# Add build options
-	$(MAKE) MSVC=1 SKIP_VCPKG=1 prefix=/mingw64 GIT-BUILD-OPTIONS
-	git add -f GIT-BUILD-OPTIONS
-
-	# Commit the whole shebang
-	git commit -m "Generate Visual Studio solution" \
-		-m "Auto-generated by \`$(MAKE)$(MAKEFLAGS) $@\`"

@@ -146,7 +146,7 @@ test_expect_success 'push from/to new branch fails with upstream and simple ' '
 #  - the default push succeeds
 #
 # A previous test expected this to fail, but for the wrong reasons:
-# it expected a fail becaause the branch is new and cannot be pushed, but
+# it expected to fail because the branch is new and cannot be pushed, but
 # in fact it was failing because of an ambiguous remote
 #
 test_expect_failure 'push from/to new branch fails with matching ' '
@@ -179,7 +179,7 @@ test_expect_success 'push from/to new branch succeeds with simple if push.autoSe
 test_expect_success '"matching" fails if none match' '
 	git init --bare empty &&
 	test_must_fail git push empty : 2>actual &&
-	test_i18ngrep "Perhaps you should specify a branch" actual
+	test_grep "Perhaps you should specify a branch" actual
 '
 
 test_expect_success 'push ambiguously named branch with upstream, matching and simple' '

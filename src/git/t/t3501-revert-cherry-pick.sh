@@ -1,14 +1,6 @@
 #!/bin/sh
 
-test_description='test cherry-pick and revert with renames
-
-  --
-   + rename2: renames oops to opos
-  +  rename1: renames oops to spoo
-  +  added:   adds extra line to oops
-  ++ initial: has lines in oops
-
-'
+test_description='miscellaneous basic tests for cherry-pick and revert'
 
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
@@ -50,7 +42,7 @@ test_expect_success 'cherry-pick --nonsense' '
 	git diff --exit-code HEAD &&
 	test_must_fail git cherry-pick --nonsense 2>msg &&
 	git diff --exit-code HEAD "$pos" &&
-	test_i18ngrep "[Uu]sage:" msg
+	test_grep "[Uu]sage:" msg
 '
 
 test_expect_success 'revert --nonsense' '
@@ -59,8 +51,16 @@ test_expect_success 'revert --nonsense' '
 	git diff --exit-code HEAD &&
 	test_must_fail git revert --nonsense 2>msg &&
 	git diff --exit-code HEAD "$pos" &&
-	test_i18ngrep "[Uu]sage:" msg
+	test_grep "[Uu]sage:" msg
 '
+
+# the following two test cherry-pick and revert with renames
+#
+# --
+#  + rename2: renames oops to opos
+# +  rename1: renames oops to spoo
+# +  added:   adds extra line to oops
+# ++ initial: has lines in oops
 
 test_expect_success 'cherry-pick after renaming branch' '
 
@@ -98,16 +98,24 @@ test_expect_success 'revert forbidden on dirty working tree' '
 	echo content >extra_file &&
 	git add extra_file &&
 	test_must_fail git revert HEAD 2>errors &&
-	test_i18ngrep "your local changes would be overwritten by " errors
+	test_grep "your local changes would be overwritten by " errors
 
 '
 
 test_expect_success 'cherry-pick on unborn branch' '
-	git checkout --orphan unborn &&
+	git switch --orphan unborn &&
 	git rm --cached -r . &&
-	rm -rf * &&
 	git cherry-pick initial &&
-	git diff --quiet initial &&
+	git diff --exit-code initial &&
+	test_cmp_rev ! initial HEAD
+'
+
+test_expect_success 'cherry-pick on unborn branch with --allow-empty' '
+	git checkout --detach &&
+	git branch -D unborn &&
+	git switch --orphan unborn &&
+	git cherry-pick initial --allow-empty &&
+	git diff --exit-code initial &&
 	test_cmp_rev ! initial HEAD
 '
 
@@ -169,10 +177,34 @@ test_expect_success 'advice from failed revert' '
 	hint: You can instead skip this commit with "git revert --skip".
 	hint: To abort and get back to the state before "git revert",
 	hint: run "git revert --abort".
+	hint: Disable this message with "git config set advice.mergeConflict false"
 	EOF
 	test_commit --append --no-tag "double-add dream" dream dream &&
 	test_must_fail git revert HEAD^ 2>actual &&
 	test_cmp expected actual
+'
+
+test_expect_subject () {
+	echo "$1" >expect &&
+	git log -1 --pretty=%s >actual &&
+	test_cmp expect actual
+}
+
+test_expect_success 'titles of fresh reverts' '
+	test_commit --no-tag A file1 &&
+	test_commit --no-tag B file1 &&
+	git revert --no-edit HEAD &&
+	test_expect_subject "Revert \"B\"" &&
+	git revert --no-edit HEAD &&
+	test_expect_subject "Reapply \"B\"" &&
+	git revert --no-edit HEAD &&
+	test_expect_subject "Revert \"Reapply \"B\"\""
+'
+
+test_expect_success 'title of legacy double revert' '
+	test_commit --no-tag "Revert \"Revert \"B\"\"" file1 &&
+	git revert --no-edit HEAD &&
+	test_expect_subject "Revert \"Revert \"Revert \"B\"\"\""
 '
 
 test_expect_success 'identification of reverted commit (default)' '
@@ -192,6 +224,20 @@ test_expect_success 'identification of reverted commit (--reference)' '
 	git cat-file commit HEAD >actual.raw &&
 	grep "^This reverts " actual.raw >actual &&
 	echo "This reverts commit $(git show -s --pretty=reference HEAD^)." >expect &&
+	test_cmp expect actual
+'
+
+test_expect_success 'git revert --reference with core.commentChar' '
+	test_when_finished "git reset --hard to-ident" &&
+	git checkout --detach to-ident &&
+	GIT_EDITOR="head -n4 >actual" git -c core.commentChar=% revert \
+		--edit --reference HEAD &&
+	cat <<-EOF >expect &&
+	% *** SAY WHY WE ARE REVERTING ON THE TITLE LINE ***
+
+	This reverts commit $(git show -s --pretty=reference HEAD^).
+
+	EOF
 	test_cmp expect actual
 '
 

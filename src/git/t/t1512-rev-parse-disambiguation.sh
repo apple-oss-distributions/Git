@@ -24,6 +24,7 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY/lib-loose.sh"
 
 test_cmp_failed_rev_parse () {
 	dir=$1
@@ -67,8 +68,8 @@ test_expect_success 'ambiguous loose bad object parsed as OBJ_BAD' '
 		cd blob.bad &&
 
 		# Both have the prefix "bad0"
-		echo xyzfaowcoh | git hash-object -t bad -w --stdin --literally &&
-		echo xyzhjpyvwl | git hash-object -t bad -w --stdin --literally
+		echo xyzfaowcoh | loose_obj objects bad &&
+		echo xyzhjpyvwl | loose_obj objects bad
 	) &&
 
 	test_cmp_failed_rev_parse blob.bad bad0 <<-\EOF
@@ -129,7 +130,7 @@ test_expect_success 'blob and tree' '
 
 test_expect_success 'warn ambiguity when no candidate matches type hint' '
 	test_must_fail git rev-parse --verify 000000000^{commit} 2>actual &&
-	test_i18ngrep "short object ID 000000000 is ambiguous" actual
+	test_grep "short object ID 000000000 is ambiguous" actual
 '
 
 test_expect_success 'disambiguate tree-ish' '
@@ -470,10 +471,10 @@ test_expect_success 'cat-file --batch and --batch-check show ambiguous' '
 	echo "0000 ambiguous" >expect &&
 	echo 0000 | git cat-file --batch-check >actual 2>err &&
 	test_cmp expect actual &&
-	test_i18ngrep hint: err &&
+	test_grep hint: err &&
 	echo 0000 | git cat-file --batch >actual 2>err &&
 	test_cmp expect actual &&
-	test_i18ngrep hint: err
+	test_grep hint: err
 '
 
 test_done

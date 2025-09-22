@@ -6,9 +6,7 @@ test_description="recursive merge corner cases w/ renames but not criss-crosses"
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
-. "$TEST_DIRECTORY"/lib-merge.sh
 
 test_setup_rename_delete_untracked () {
 	git init rename-delete-untracked &&
@@ -317,12 +315,7 @@ test_expect_success 'rename/directory conflict + clean content merge' '
 		git ls-files -u >out &&
 		test_line_count = 1 out &&
 		git ls-files -o >out &&
-		if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-		then
-			test_line_count = 1 out
-		else
-			test_line_count = 2 out
-		fi &&
+		test_line_count = 1 out &&
 
 		echo 0 >expect &&
 		git cat-file -p base:file >>expect &&
@@ -351,12 +344,7 @@ test_expect_success 'rename/directory conflict + content merge conflict' '
 		git ls-files -u >out &&
 		test_line_count = 3 out &&
 		git ls-files -o >out &&
-		if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-		then
-			test_line_count = 1 out
-		else
-			test_line_count = 2 out
-		fi &&
+		test_line_count = 1 out &&
 
 		git cat-file -p left-conflict:newfile >left &&
 		git cat-file -p base:file    >base &&
@@ -370,14 +358,8 @@ test_expect_success 'rename/directory conflict + content merge conflict' '
 
 		git rev-parse >expect   \
 			base:file       left-conflict:newfile right:file &&
-		if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-		then
-			git rev-parse >actual \
-				:1:newfile~HEAD :2:newfile~HEAD :3:newfile~HEAD
-		else
-			git rev-parse >actual \
-				:1:newfile      :2:newfile      :3:newfile
-		fi &&
+		git rev-parse >actual \
+			:1:newfile~HEAD :2:newfile~HEAD :3:newfile~HEAD &&
 		test_cmp expect actual &&
 
 		test_path_is_file newfile/realfile &&
@@ -476,7 +458,7 @@ test_expect_success 'handle rename-with-content-merge vs. add' '
 		git checkout A^0 &&
 
 		test_must_fail git merge -s recursive B^0 >out &&
-		test_i18ngrep "CONFLICT (.*/add)" out &&
+		test_grep "CONFLICT (.*/add)" out &&
 
 		git ls-files -s >out &&
 		test_line_count = 2 out &&
@@ -522,7 +504,7 @@ test_expect_success 'handle rename-with-content-merge vs. add, merge other way' 
 		git checkout B^0 &&
 
 		test_must_fail git merge -s recursive A^0 >out &&
-		test_i18ngrep "CONFLICT (.*/add)" out &&
+		test_grep "CONFLICT (.*/add)" out &&
 
 		git ls-files -s >out &&
 		test_line_count = 2 out &&
@@ -602,7 +584,7 @@ test_expect_success 'handle rename/rename (2to1) conflict correctly' '
 		git checkout B^0 &&
 
 		test_must_fail git merge -s recursive C^0 >out &&
-		test_i18ngrep "CONFLICT (\(.*\)/\1)" out &&
+		test_grep "CONFLICT (\(.*\)/\1)" out &&
 
 		git ls-files -s >out &&
 		test_line_count = 2 out &&
@@ -897,7 +879,7 @@ test_setup_rad () {
 	)
 }
 
-test_expect_merge_algorithm failure success 'rad-check: rename/add/delete conflict' '
+test_expect_success 'rad-check: rename/add/delete conflict' '
 	test_setup_rad &&
 	(
 		cd rad &&
@@ -914,8 +896,8 @@ test_expect_merge_algorithm failure success 'rad-check: rename/add/delete confli
 		# be flexible in the type of console output message(s) reported
 		# for this particular case; we will be more stringent about the
 		# contents of the index and working directory.
-		test_i18ngrep "CONFLICT (.*/add)" out &&
-		test_i18ngrep "CONFLICT (rename.*/delete)" out &&
+		test_grep "CONFLICT (.*/add)" out &&
+		test_grep "CONFLICT (rename.*/delete)" out &&
 		test_must_be_empty err &&
 
 		git ls-files -s >file_count &&
@@ -970,7 +952,7 @@ test_setup_rrdd () {
 	)
 }
 
-test_expect_merge_algorithm failure success 'rrdd-check: rename/rename(2to1)/delete/delete conflict' '
+test_expect_success 'rrdd-check: rename/rename(2to1)/delete/delete conflict' '
 	test_setup_rrdd &&
 	(
 		cd rrdd &&
@@ -988,8 +970,8 @@ test_expect_merge_algorithm failure success 'rrdd-check: rename/rename(2to1)/del
 		# be flexible in the type of console output message(s) reported
 		# for this particular case; we will be more stringent about the
 		# contents of the index and working directory.
-		test_i18ngrep "CONFLICT (\(.*\)/\1)" out &&
-		test_i18ngrep "CONFLICT (rename.*delete)" out &&
+		test_grep "CONFLICT (\(.*\)/\1)" out &&
+		test_grep "CONFLICT (rename.*delete)" out &&
 		test_must_be_empty err &&
 
 		git ls-files -s >file_count &&
@@ -1059,7 +1041,7 @@ test_setup_mod6 () {
 	)
 }
 
-test_expect_merge_algorithm failure success 'mod6-check: chains of rename/rename(1to2) and rename/rename(2to1)' '
+test_expect_success 'mod6-check: chains of rename/rename(1to2) and rename/rename(2to1)' '
 	test_setup_mod6 &&
 	(
 		cd mod6 &&
@@ -1068,7 +1050,7 @@ test_expect_merge_algorithm failure success 'mod6-check: chains of rename/rename
 
 		test_must_fail git merge -s recursive B^0 >out 2>err &&
 
-		test_i18ngrep "CONFLICT (rename/rename)" out &&
+		test_grep "CONFLICT (rename/rename)" out &&
 		test_must_be_empty err &&
 
 		git ls-files -s >file_count &&
@@ -1159,7 +1141,6 @@ test_conflicts_with_adds_and_renames() {
 	#   4) There should not be any three~* files in the working
 	#      tree
 	test_setup_collision_conflict () {
-	#test_expect_success "setup simple $sideL/$sideR conflict" '
 		git init simple_${sideL}_${sideR} &&
 		(
 			cd simple_${sideL}_${sideR} &&
@@ -1236,7 +1217,6 @@ test_conflicts_with_adds_and_renames() {
 			fi &&
 			test_tick && git commit -m R
 		)
-	#'
 	}
 
 	test_expect_success "check simple $sideL/$sideR conflict" '

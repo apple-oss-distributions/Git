@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-sh-setup
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-SH\-SETUP" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-SH\-SETUP" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,14 +34,13 @@ git-sh-setup \- Common Git shell script setup code
 .nf
 \fI\&. "$(git \-\-exec\-path)/git\-sh\-setup"\fR
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 This is not a command the end user would want to run\&. Ever\&. This documentation is meant for people who are studying the Porcelain\-ish scripts and/or are writing new ones\&.
 .sp
-The \fIgit sh\-setup\fR scriptlet is designed to be sourced (using \fB\&.\fR) by other shell scripts to set up some variables pointing at the normal Git directories and a few helper shell functions\&.
+The \fIgit sh\-setup\fR scriptlet is designed to be sourced (using \&.) by other shell scripts to set up some variables pointing at the normal Git directories and a few helper shell functions\&.
 .sp
-Before sourcing it, your script should set up a few variables; \fBUSAGE\fR (and \fBLONG_USAGE\fR, if any) is used to define message given by \fBusage()\fR shell function\&. \fBSUBDIRECTORY_OK\fR can be set if the script can run from a subdirectory of the working tree (some commands do not)\&.
+Before sourcing it, your script should set up a few variables; \fBUSAGE\fR (and \fBLONG_USAGE\fR, if any) is used to define the message given by \fBusage\fR() shell function\&. \fBSUBDIRECTORY_OK\fR can be set if the script can run from a subdirectory of the working tree (some commands do not)\&.
 .sp
 The scriptlet sets \fBGIT_DIR\fR and \fBGIT_OBJECT_DIRECTORY\fR shell variables, but does \fBnot\fR export them to the environment\&.
 .SH "FUNCTIONS"
@@ -97,7 +96,10 @@ checks if the working tree associated with the repository exists, and otherwise 
 require_clean_work_tree <action> [<hint>]
 .RS 4
 checks that the working tree and index associated with the repository have no uncommitted changes to tracked files\&. Otherwise it emits an error message of the form
-\fBCannot <action>: <reason>\&. <hint>\fR, and dies\&. Example:
+\fBCannot\fR
+\fI<action>\fR\fB:\fR
+\fI<reason>\fR\&.
+\fI<hint>\fR, and dies\&. Example:
 .sp
 .if n \{\
 .RS 4
@@ -108,7 +110,6 @@ require_clean_work_tree rebase "Please commit or stash them\&."
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .PP
 get_author_ident_from_commit

@@ -1,5 +1,10 @@
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "builtin.h"
+#include "abspath.h"
+#include "gettext.h"
 #include "parse-options.h"
+#include "path.h"
 #include "diagnose.h"
 
 static const char * const diagnose_usage[] = {
@@ -8,14 +13,17 @@ static const char * const diagnose_usage[] = {
 	NULL
 };
 
-int cmd_diagnose(int argc, const char **argv, const char *prefix)
+int cmd_diagnose(int argc,
+		 const char **argv,
+		 const char *prefix,
+		 struct repository *repo UNUSED)
 {
 	struct strbuf zip_path = STRBUF_INIT;
 	time_t now = time(NULL);
 	struct tm tm;
 	enum diagnose_mode mode = DIAGNOSE_STATS;
 	char *option_output = NULL;
-	char *option_suffix = "%Y-%m-%d-%H%M";
+	const char *option_suffix = "%Y-%m-%d-%H%M";
 	char *prefixed_filename;
 
 	const struct option diagnose_options[] = {
@@ -42,7 +50,7 @@ int cmd_diagnose(int argc, const char **argv, const char *prefix)
 	strbuf_addftime(&zip_path, option_suffix, localtime_r(&now, &tm), 0, 0);
 	strbuf_addstr(&zip_path, ".zip");
 
-	switch (safe_create_leading_directories(zip_path.buf)) {
+	switch (safe_create_leading_directories(the_repository, zip_path.buf)) {
 	case SCLD_OK:
 	case SCLD_EXISTS:
 		break;
@@ -52,7 +60,7 @@ int cmd_diagnose(int argc, const char **argv, const char *prefix)
 	}
 
 	/* Prepare diagnostics */
-	if (create_diagnostics_archive(&zip_path, mode))
+	if (create_diagnostics_archive(the_repository, &zip_path, mode))
 		die_errno(_("unable to create diagnostics archive %s"),
 			  zip_path.buf);
 

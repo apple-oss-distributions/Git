@@ -9,7 +9,6 @@ exec </dev/null
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 add_line_into_file()
@@ -142,11 +141,6 @@ test_expect_success 'main@{n} for various n' '
 	git rev-parse --verify main@{$Nm1} &&
 	test_must_fail git rev-parse --verify main@{$N} &&
 	test_must_fail git rev-parse --verify main@{$Np1}
-'
-
-test_expect_success SYMLINKS,REFFILES 'ref resolution not confused by broken symlinks' '
-	ln -s does-not-exist .git/refs/heads/broken &&
-	test_must_fail git rev-parse --verify broken
 '
 
 test_expect_success 'options can appear after --verify' '

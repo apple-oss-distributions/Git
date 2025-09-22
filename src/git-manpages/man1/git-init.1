@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-init
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-INIT" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-INIT" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,119 +32,162 @@ git-init \- Create an empty Git repository or reinitialize an existing one
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit init\fR [\-q | \-\-quiet] [\-\-bare] [\-\-template=<template\-directory>]
-          [\-\-separate\-git\-dir <git\-dir>] [\-\-object\-format=<format>]
-          [\-b <branch\-name> | \-\-initial\-branch=<branch\-name>]
-          [\-\-shared[=<permissions>]] [<directory>]
+\fBgit\fR \fBinit\fR [\fB\-q\fR | \fB\-\-quiet\fR] [\fB\-\-bare\fR] [\fB\-\-template=\fR\fI<template\-directory>\fR]
+	 [\fB\-\-separate\-git\-dir\fR \fI<git\-dir>\fR] [\fB\-\-object\-format=\fR\fI<format>\fR]
+	 [\fB\-\-ref\-format=\fR\fI<format>\fR]
+	 [\fB\-b\fR \fI<branch\-name>\fR | \fB\-\-initial\-branch=\fR\fI<branch\-name>\fR]
+	 [\fB\-\-shared\fR[\fB=\fR\fI<permissions>\fR]] [\fI<directory>\fR]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-This command creates an empty Git repository \- basically a \fB\&.git\fR directory with subdirectories for \fBobjects\fR, \fBrefs/heads\fR, \fBrefs/tags\fR, and template files\&. An initial branch without any commits will be created (see the \fB\-\-initial\-branch\fR option below for its name)\&.
+This command creates an empty Git repository \- basically a \&.\fBgit\fR directory with subdirectories for \fBobjects\fR, \fBrefs/heads\fR, \fBrefs/tags\fR, and template files\&. An initial branch without any commits will be created (see the \fB\-\-initial\-branch\fR option below for its name)\&.
 .sp
-If the \fB$GIT_DIR\fR environment variable is set then it specifies a path to use instead of \fB\&./\&.git\fR for the base of the repository\&.
+If the \fBGIT_DIR\fR environment variable is set then it specifies a path to use instead of \&.\fB/\&.git\fR for the base of the repository\&.
 .sp
-If the object storage directory is specified via the \fB$GIT_OBJECT_DIRECTORY\fR environment variable then the sha1 directories are created underneath \- otherwise the default \fB$GIT_DIR/objects\fR directory is used\&.
+If the object storage directory is specified via the \fBGIT_OBJECT_DIRECTORY\fR environment variable then the sha1 directories are created underneath; otherwise, the default \fB$GIT_DIR/objects\fR directory is used\&.
 .sp
-Running \fIgit init\fR in an existing repository is safe\&. It will not overwrite things that are already there\&. The primary reason for rerunning \fIgit init\fR is to pick up newly added templates (or to move the repository to another place if \-\-separate\-git\-dir is given)\&.
+Running \fBgit\fR \fBinit\fR in an existing repository is safe\&. It will not overwrite things that are already there\&. The primary reason for rerunning \fBgit\fR \fBinit\fR is to pick up newly added templates (or to move the repository to another place if \fB\-\-separate\-git\-dir\fR is given)\&.
 .SH "OPTIONS"
 .PP
-\-q, \-\-quiet
+\fB\-q\fR, \fB\-\-quiet\fR
 .RS 4
 Only print error and warning messages; all other output will be suppressed\&.
 .RE
 .PP
-\-\-bare
+\fB\-\-bare\fR
 .RS 4
 Create a bare repository\&. If
 \fBGIT_DIR\fR
 environment is not set, it is set to the current working directory\&.
 .RE
 .PP
-\-\-object\-format=<format>
+\fB\-\-object\-format=\fR\fI<format>\fR
 .RS 4
-Specify the given object format (hash algorithm) for the repository\&. The valid values are
-\fIsha1\fR
+Specify the given object
+\fI<format>\fR
+(hash algorithm) for the repository\&. The valid values are
+\fBsha1\fR
 and (if enabled)
-\fIsha256\fR\&.
-\fIsha1\fR
+\fBsha256\fR\&.
+\fBsha1\fR
 is the default\&.
 .sp
-THIS OPTION IS EXPERIMENTAL! SHA\-256 support is experimental and still in an early stage\&. A SHA\-256 repository will in general not be able to share work with "regular" SHA\-1 repositories\&. It should be assumed that, e\&.g\&., Git internal file formats in relation to SHA\-256 repositories may change in backwards\-incompatible ways\&. Only use
-\fB\-\-object\-format=sha256\fR
-for testing purposes\&.
+Note: At present, there is no interoperability between SHA\-256 repositories and SHA\-1 repositories\&.
+.RE
+.sp
+Historically, we warned that SHA\-256 repositories may later need backward incompatible changes when we introduce such interoperability features\&. Today, we only expect compatible changes\&. Furthermore, if such changes prove to be necessary, it can be expected that SHA\-256 repositories created with today\(cqs Git will be usable by future versions of Git without data loss\&.
+.PP
+\fB\-\-ref\-format=\fR\fI<format>\fR
+.RS 4
+Specify the given ref storage
+\fI<format>\fR
+for the repository\&. The valid values are:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBfiles\fR
+for loose files with packed\-refs\&. This is the default\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBreftable\fR
+for the reftable format\&. This format is experimental and its internals are subject to change\&.
+.RE
 .RE
 .PP
-\-\-template=<template\-directory>
+\fB\-\-template=\fR\fI<template\-directory>\fR
 .RS 4
 Specify the directory from which templates will be used\&. (See the "TEMPLATE DIRECTORY" section below\&.)
 .RE
 .PP
-\-\-separate\-git\-dir=<git\-dir>
+\fB\-\-separate\-git\-dir=\fR\fI<git\-dir>\fR
 .RS 4
 Instead of initializing the repository as a directory to either
 \fB$GIT_DIR\fR
-or
-\fB\&./\&.git/\fR, create a text file there containing the path to the actual repository\&. This file acts as filesystem\-agnostic Git symbolic link to the repository\&.
+or \&.\fB/\&.git/\fR, create a text file there containing the path to the actual repository\&. This file acts as a filesystem\-agnostic Git symbolic link to the repository\&.
 .sp
-If this is reinitialization, the repository will be moved to the specified path\&.
+If this is a reinitialization, the repository will be moved to the specified path\&.
 .RE
 .PP
-\-b <branch\-name>, \-\-initial\-branch=<branch\-name>
+\fB\-b\fR \fI<branch\-name>\fR, \fB\-\-initial\-branch=\fR\fI<branch\-name>\fR
 .RS 4
-Use the specified name for the initial branch in the newly created repository\&. If not specified, fall back to the default name (currently
+Use
+\fI<branch\-name>\fR
+for the initial branch in the newly created repository\&. If not specified, fall back to the default name (currently
 \fBmaster\fR, but this is subject to change in the future; the name can be customized via the
 \fBinit\&.defaultBranch\fR
 configuration variable)\&.
 .RE
 .PP
-\-\-shared[=(false|true|umask|group|all|world|everybody|<perm>)]
+\fB\-\-shared\fR[\fB=\fR(\fBfalse\fR|\fBtrue\fR|\fBumask\fR|\fBgroup\fR|\fBall\fR|\fBworld\fR|\fBeverybody\fR|\fI<perm>\fR)]
 .RS 4
-Specify that the Git repository is to be shared amongst several users\&. This allows users belonging to the same group to push into that repository\&. When specified, the config variable "core\&.sharedRepository" is set so that files and directories under
+Specify that the Git repository is to be shared amongst several users\&. This allows users belonging to the same group to push into that repository\&. When specified, the config variable
+\fBcore\&.sharedRepository\fR
+is set so that files and directories under
 \fB$GIT_DIR\fR
-are created with the requested permissions\&. When not specified, Git will use permissions reported by umask(2)\&.
+are created with the requested permissions\&. When not specified, Git will use permissions reported by
+\fBumask\fR(2)\&.
 .sp
 The option can have the following values, defaulting to
-\fIgroup\fR
+\fBgroup\fR
 if no value is given:
 .PP
-\fIumask\fR (or \fIfalse\fR)
+\fBumask\fR, \fBfalse\fR
 .RS 4
-Use permissions reported by umask(2)\&. The default, when
+Use permissions reported by
+\fBumask\fR(2)\&. The default, when
 \fB\-\-shared\fR
 is not specified\&.
 .RE
 .PP
-\fIgroup\fR (or \fItrue\fR)
+\fBgroup\fR, \fBtrue\fR
 .RS 4
-Make the repository group\-writable, (and g+sx, since the git group may be not the primary group of all users)\&. This is used to loosen the permissions of an otherwise safe umask(2) value\&. Note that the umask still applies to the other permission bits (e\&.g\&. if umask is
-\fI0022\fR, using
-\fIgroup\fR
+Make the repository group\-writable, (and
+\fBg+sx\fR, since the git group may not be the primary group of all users)\&. This is used to loosen the permissions of an otherwise safe
+\fBumask\fR(2) value\&. Note that the umask still applies to the other permission bits (e\&.g\&. if umask is
+\fB0022\fR, using
+\fBgroup\fR
 will not remove read privileges from other (non\-group) users)\&. See
-\fI0xxx\fR
+\fB0xxx\fR
 for how to exactly specify the repository permissions\&.
 .RE
 .PP
-\fIall\fR (or \fIworld\fR or \fIeverybody\fR)
+\fBall\fR, \fBworld\fR, \fBeverybody\fR
 .RS 4
 Same as
-\fIgroup\fR, but make the repository readable by all users\&.
+\fBgroup\fR, but make the repository readable by all users\&.
 .RE
 .PP
 \fI<perm>\fR
 .RS 4
 \fI<perm>\fR
-is a 3\-digit octal number prefixed with \(oq0` and each file will have mode
+is a 3\-digit octal number prefixed with
+\fB0\fR
+and each file will have mode
 \fI<perm>\fR\&.
 \fI<perm>\fR
-will override users\(cq umask(2) value (and not only loosen permissions as
-\fIgroup\fR
+will override users\*(Aq
+\fBumask\fR(2) value (and not only loosen permissions as
+\fBgroup\fR
 and
-\fIall\fR
-does)\&.
-\fI0640\fR
+\fBall\fR
+do)\&.
+\fB0640\fR
 will create a repository which is group\-readable, but not group\-writable or accessible to others\&.
-\fI0660\fR
+\fB0660\fR
 will create a repo that is readable and writable to the current user and group, but inaccessible to others (directories and executable files get their
 \fBx\fR
 bit from the
@@ -155,7 +198,7 @@ bit for corresponding classes of users)\&.
 .sp
 By default, the configuration flag \fBreceive\&.denyNonFastForwards\fR is enabled in shared repositories, so that you cannot force a non fast\-forwarding push into it\&.
 .sp
-If you provide a \fIdirectory\fR, the command is run inside it\&. If this directory does not exist, it will be created\&.
+If you provide a \fI<directory>\fR, the command is run inside it\&. If this directory does not exist, it will be created\&.
 .SH "TEMPLATE DIRECTORY"
 .sp
 Files and directories in the template directory whose name do not start with a dot will be copied to the \fB$GIT_DIR\fR after it is created\&.
@@ -215,7 +258,7 @@ the default template directory:
 .sp
 The default template directory includes some directory structure, suggested "exclude patterns" (see \fBgitignore\fR(5)), and sample hook files\&.
 .sp
-The sample hooks are all disabled by default\&. To enable one of the sample hooks rename it by removing its \fB\&.sample\fR suffix\&.
+The sample hooks are all disabled by default\&. To enable one of the sample hooks rename it by removing its \&.\fBsample\fR suffix\&.
 .sp
 See \fBgithooks\fR(5) for more general info on hook execution\&.
 .SH "EXAMPLES"
@@ -235,27 +278,54 @@ $ git commit    \fB(3)\fR
 .if n \{\
 .RE
 .\}
-.sp
-\fB1. \fRCreate a /path/to/my/codebase/\&.git directory\&.
-.br
-\fB2. \fRAdd all existing files to the index\&.
-.br
-\fB3. \fRRecord the pristine state as the first commit in the history\&.
-.br
+.TS
+tab(:);
+r lw(\n(.lu*75u/100u).
+\fB1.\fR\h'-2n':T{
+Create a
+\fB/path/to/my/codebase/\&.git\fR
+directory\&.
+T}
+\fB2.\fR\h'-2n':T{
+Add all existing files to the index\&.
+T}
+\fB3.\fR\h'-2n':T{
+Record the pristine state as the first commit in the history\&.
+T}
+.TE
 .RE
 .SH "CONFIGURATION"
 .sp
 Everything below this line in this section is selectively included from the \fBgit-config\fR(1) documentation\&. The content is the same as what\(cqs found there:
 .PP
-init\&.templateDir
+\fBinit\&.templateDir\fR
 .RS 4
-Specify the directory from which templates will be copied\&. (See the "TEMPLATE DIRECTORY" section of
-\fBgit-init\fR(1)\&.)
+Specify the directory from which templates will be copied\&.
 .RE
 .PP
-init\&.defaultBranch
+\fBinit\&.defaultBranch\fR
 .RS 4
 Allows overriding the default branch name e\&.g\&. when initializing a new repository\&.
+.RE
+.PP
+\fBinit\&.defaultObjectFormat\fR
+.RS 4
+Allows overriding the default object format for new repositories\&. See
+\fB\-\-object\-format=\fR
+in
+\fBgit-init\fR(1)\&. Both the command line option and the
+\fBGIT_DEFAULT_HASH\fR
+environment variable take precedence over this config\&.
+.RE
+.PP
+\fBinit\&.defaultRefFormat\fR
+.RS 4
+Allows overriding the default ref storage format for new repositories\&. See
+\fB\-\-ref\-format=\fR
+in
+\fBgit-init\fR(1)\&. Both the command line option and the
+\fBGIT_DEFAULT_REF_FORMAT\fR
+environment variable take precedence over this config\&.
 .RE
 .SH "GIT"
 .sp

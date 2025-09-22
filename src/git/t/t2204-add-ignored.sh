@@ -2,7 +2,6 @@
 
 test_description='giving ignored paths to git add'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -36,7 +35,7 @@ do
 	'
 
 	test_expect_success "complaints for ignored $i output" '
-		test_i18ngrep -e "Use -f if" err
+		test_grep -e "Use -f if" err
 	'
 
 	test_expect_success "complaints for ignored $i with unignored file" '
@@ -46,7 +45,7 @@ do
 		test_must_be_empty out
 	'
 	test_expect_success "complaints for ignored $i with unignored file output" '
-		test_i18ngrep -e "Use -f if" err
+		test_grep -e "Use -f if" err
 	'
 done
 
@@ -65,7 +64,7 @@ do
 	test_expect_success "complaints for ignored $i in dir output" '
 		(
 			cd dir &&
-			test_i18ngrep -e "Use -f if" err
+			test_grep -e "Use -f if" err
 		)
 	'
 done
@@ -85,7 +84,7 @@ do
 	test_expect_success "complaints for ignored $i in sub output" '
 		(
 			cd sub &&
-			test_i18ngrep -e "Use -f if" err
+			test_grep -e "Use -f if" err
 		)
 	'
 done

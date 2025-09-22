@@ -1,16 +1,17 @@
 #ifndef OBJECT_STORE_H
 #define OBJECT_STORE_H
 
-#include "cache.h"
-#include "oidmap.h"
+#include "hashmap.h"
+#include "object.h"
 #include "list.h"
-#include "oid-array.h"
-#include "strbuf.h"
-#include "thread-utils.h"
-#include "khash.h"
-#include "dir.h"
-#include "oidtree.h"
 #include "oidset.h"
+#include "oidmap.h"
+#include "thread-utils.h"
+
+struct oidmap;
+struct oidtree;
+struct strbuf;
+struct repository;
 
 struct object_directory {
 	struct object_directory *next;
@@ -26,6 +27,9 @@ struct object_directory {
 	 */
 	uint32_t loose_objects_subdir_seen[8]; /* 256 bits */
 	struct oidtree *loose_objects_cache;
+
+	/* Map between object IDs for loose objects. */
+	struct loose_object_map *loose_map;
 
 	/*
 	 * This is a temporary object store created by the tmp_objdir
@@ -46,16 +50,8 @@ struct object_directory {
 	char *path;
 };
 
-struct input_stream {
-	const void *(*read)(struct input_stream *, unsigned long *len);
-	void *data;
-	int is_finished;
-};
-
-KHASH_INIT(odb_path_map, const char * /* key: odb_path */,
-	struct object_directory *, 1, fspathhash, fspatheq)
-
 void prepare_alt_odb(struct repository *r);
+int has_alt_odb(struct repository *r);
 char *compute_alternate_path(const char *path, struct strbuf *err);
 struct object_directory *find_odb(struct repository *r, const char *obj_dir);
 typedef int alt_odb_fn(struct object_directory *, void *);
@@ -87,73 +83,9 @@ struct object_directory *set_temporary_primary_odb(const char *dir, int will_des
  */
 void restore_primary_odb(struct object_directory *restore_odb, const char *old_path);
 
-/*
- * Populate and return the loose object cache array corresponding to the
- * given object ID.
- */
-struct oidtree *odb_loose_cache(struct object_directory *odb,
-				  const struct object_id *oid);
-
-/* Empty the loose object cache for the specified object directory. */
-void odb_clear_loose_cache(struct object_directory *odb);
-
-/* Clear and free the specified object directory */
-void free_object_directory(struct object_directory *odb);
-
-struct packed_git {
-	struct hashmap_entry packmap_ent;
-	struct packed_git *next;
-	struct list_head mru;
-	struct pack_window *windows;
-	off_t pack_size;
-	const void *index_data;
-	size_t index_size;
-	uint32_t num_objects;
-	uint32_t crc_offset;
-	struct oidset bad_objects;
-	int index_version;
-	time_t mtime;
-	int pack_fd;
-	int index;              /* for builtin/pack-objects.c */
-	unsigned pack_local:1,
-		 pack_keep:1,
-		 pack_keep_in_core:1,
-		 freshened:1,
-		 do_not_close:1,
-		 pack_promisor:1,
-		 multi_pack_index:1,
-		 is_cruft:1;
-	unsigned char hash[GIT_MAX_RAWSZ];
-	struct revindex_entry *revindex;
-	const uint32_t *revindex_data;
-	const uint32_t *revindex_map;
-	size_t revindex_size;
-	/*
-	 * mtimes_map points at the beginning of the memory mapped region of
-	 * this pack's corresponding .mtimes file, and mtimes_size is the size
-	 * of that .mtimes file
-	 */
-	const uint32_t *mtimes_map;
-	size_t mtimes_size;
-	/* something like ".git/objects/pack/xxxxx.pack" */
-	char pack_name[FLEX_ARRAY]; /* more */
-};
-
+struct packed_git;
 struct multi_pack_index;
-
-static inline int pack_map_entry_cmp(const void *cmp_data UNUSED,
-				     const struct hashmap_entry *entry,
-				     const struct hashmap_entry *entry2,
-				     const void *keydata)
-{
-	const char *key = keydata;
-	const struct packed_git *pg1, *pg2;
-
-	pg1 = container_of(entry, const struct packed_git, packmap_ent);
-	pg2 = container_of(entry2, const struct packed_git, packmap_ent);
-
-	return strcmp(pg1->pack_name, key ? key : pg2->pack_name);
-}
+struct cached_object_entry;
 
 struct raw_object_store {
 	/*
@@ -163,7 +95,7 @@ struct raw_object_store {
 	 */
 	struct object_directory *odb;
 	struct object_directory **odb_tail;
-	kh_odb_path_map_t *odb_by_path;
+	struct kh_odb_path_map *odb_by_path;
 
 	int loaded_alternates;
 
@@ -178,7 +110,7 @@ struct raw_object_store {
 	 * Objects that should be substituted by other objects
 	 * (see git-replace(1)).
 	 */
-	struct oidmap *replace_map;
+	struct oidmap replace_map;
 	unsigned replace_map_initialized : 1;
 	pthread_mutex_t replace_mutex; /* protect object replace functions */
 
@@ -208,6 +140,15 @@ struct raw_object_store {
 	} kept_pack_cache;
 
 	/*
+	 * This is meant to hold a *small* number of objects that you would
+	 * want repo_read_object_file() to be able to return, but yet you do not want
+	 * to write them into the object store (e.g. a browse-only
+	 * application).
+	 */
+	struct cached_object_entry *cached_objects;
+	size_t cached_object_nr, cached_object_alloc;
+
+	/*
 	 * A map of packfiles to packed_git structs for tracking which
 	 * packs have been loaded already.
 	 */
@@ -216,7 +157,7 @@ struct raw_object_store {
 	/*
 	 * A fast, rough count of the number of objects in the repository.
 	 * These two fields are not meant for direct access. Use
-	 * approximate_object_count() instead.
+	 * repo_approximate_object_count() instead.
 	 */
 	unsigned long approximate_object_count;
 	unsigned approximate_object_count_valid : 1;
@@ -232,51 +173,20 @@ struct raw_object_store *raw_object_store_new(void);
 void raw_object_store_clear(struct raw_object_store *o);
 
 /*
- * Put in `buf` the name of the file in the local object database that
- * would be used to store a loose object with the specified oid.
+ * Create a temporary file rooted in the object database directory, or
+ * die on failure. The filename is taken from "pattern", which should have the
+ * usual "XXXXXX" trailer, and the resulting filename is written into the
+ * "template" buffer. Returns the open descriptor.
  */
-const char *loose_object_path(struct repository *r, struct strbuf *buf,
-			      const struct object_id *oid);
+int odb_mkstemp(struct strbuf *temp_filename, const char *pattern);
 
-void *map_loose_object(struct repository *r, const struct object_id *oid,
-		       unsigned long *size);
-
-void *read_object_file_extended(struct repository *r,
-				const struct object_id *oid,
-				enum object_type *type,
-				unsigned long *size, int lookup_replace);
-static inline void *repo_read_object_file(struct repository *r,
-					  const struct object_id *oid,
-					  enum object_type *type,
-					  unsigned long *size)
-{
-	return read_object_file_extended(r, oid, type, size, 1);
-}
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define read_object_file(oid, type, size) repo_read_object_file(the_repository, oid, type, size)
-#endif
+void *repo_read_object_file(struct repository *r,
+			    const struct object_id *oid,
+			    enum object_type *type,
+			    unsigned long *size);
 
 /* Read and unpack an object file into memory, write memory to an object file */
 int oid_object_info(struct repository *r, const struct object_id *, unsigned long *);
-
-void hash_object_file(const struct git_hash_algo *algo, const void *buf,
-		      unsigned long len, enum object_type type,
-		      struct object_id *oid);
-
-int write_object_file_flags(const void *buf, unsigned long len,
-			    enum object_type type, struct object_id *oid,
-			    unsigned flags);
-static inline int write_object_file(const void *buf, unsigned long len,
-				    enum object_type type, struct object_id *oid)
-{
-	return write_object_file_flags(buf, len, type, oid, 0);
-}
-
-int write_object_file_literally(const void *buf, unsigned long len,
-				const char *type, struct object_id *oid,
-				unsigned flags);
-int stream_loose_object(struct input_stream *in_stream, size_t len,
-			struct object_id *oid);
 
 /*
  * Add an object file to the in-memory object store, without writing it
@@ -286,108 +196,9 @@ int stream_loose_object(struct input_stream *in_stream, size_t len,
  * object in persistent storage before writing any other new objects
  * that reference it.
  */
-int pretend_object_file(void *, unsigned long, enum object_type,
+int pretend_object_file(struct repository *repo,
+			void *buf, unsigned long len, enum object_type type,
 			struct object_id *oid);
-
-int force_object_loose(const struct object_id *oid, time_t mtime);
-
-/*
- * Open the loose object at path, check its hash, and return the contents,
- * use the "oi" argument to assert things about the object, or e.g. populate its
- * type, and size. If the object is a blob, then "contents" may return NULL,
- * to allow streaming of large blobs.
- *
- * Returns 0 on success, negative on error (details may be written to stderr).
- */
-int read_loose_object(const char *path,
-		      const struct object_id *expected_oid,
-		      struct object_id *real_oid,
-		      void **contents,
-		      struct object_info *oi);
-
-/* Retry packed storage after checking packed and loose storage */
-#define HAS_OBJECT_RECHECK_PACKED 1
-
-/*
- * Returns 1 if the object exists. This function will not lazily fetch objects
- * in a partial clone.
- */
-int has_object(struct repository *r, const struct object_id *oid,
-	       unsigned flags);
-
-/*
- * These macros and functions are deprecated. If checking existence for an
- * object that is likely to be missing and/or whose absence is relatively
- * inconsequential (or is consequential but the caller is prepared to handle
- * it), use has_object(), which has better defaults (no lazy fetch in a partial
- * clone and no rechecking of packed storage). In the unlikely event that a
- * caller needs to assert existence of an object that it fully expects to
- * exist, and wants to trigger a lazy fetch in a partial clone, use
- * oid_object_info_extended() with a NULL struct object_info.
- *
- * These functions can be removed once all callers have migrated to
- * has_object() and/or oid_object_info_extended().
- */
-int repo_has_object_file(struct repository *r, const struct object_id *oid);
-int repo_has_object_file_with_flags(struct repository *r,
-				    const struct object_id *oid, int flags);
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define has_object_file(oid) repo_has_object_file(the_repository, oid)
-#define has_object_file_with_flags(oid, flags) repo_has_object_file_with_flags(the_repository, oid, flags)
-#endif
-
-/*
- * Return true iff an alternate object database has a loose object
- * with the specified name.  This function does not respect replace
- * references.
- */
-int has_loose_object_nonlocal(const struct object_id *);
-
-int has_loose_object(const struct object_id *);
-
-/**
- * format_object_header() is a thin wrapper around s xsnprintf() that
- * writes the initial "<type> <obj-len>" part of the loose object
- * header. It returns the size that snprintf() returns + 1.
- */
-int format_object_header(char *str, size_t size, enum object_type type,
-			 size_t objsize);
-
-void assert_oid_type(const struct object_id *oid, enum object_type expect);
-
-/*
- * Enabling the object read lock allows multiple threads to safely call the
- * following functions in parallel: repo_read_object_file(), read_object_file(),
- * read_object_file_extended(), read_object_with_reference(), read_object(),
- * oid_object_info() and oid_object_info_extended().
- *
- * obj_read_lock() and obj_read_unlock() may also be used to protect other
- * section which cannot execute in parallel with object reading. Since the used
- * lock is a recursive mutex, these sections can even contain calls to object
- * reading functions. However, beware that in these cases zlib inflation won't
- * be performed in parallel, losing performance.
- *
- * TODO: oid_object_info_extended()'s call stack has a recursive behavior. If
- * any of its callees end up calling it, this recursive call won't benefit from
- * parallel inflation.
- */
-void enable_obj_read_lock(void);
-void disable_obj_read_lock(void);
-
-extern int obj_read_use_lock;
-extern pthread_mutex_t obj_read_mutex;
-
-static inline void obj_read_lock(void)
-{
-	if(obj_read_use_lock)
-		pthread_mutex_lock(&obj_read_mutex);
-}
-
-static inline void obj_read_unlock(void)
-{
-	if(obj_read_use_lock)
-		pthread_mutex_unlock(&obj_read_mutex);
-}
 
 struct object_info {
 	/* Request */
@@ -395,7 +206,6 @@ struct object_info {
 	unsigned long *sizep;
 	off_t *disk_sizep;
 	struct object_id *delta_base_oid;
-	struct strbuf *type_name;
 	void **contentp;
 
 	/* Response */
@@ -430,76 +240,75 @@ struct object_info {
 
 /* Invoke lookup_replace_object() on the given hash */
 #define OBJECT_INFO_LOOKUP_REPLACE 1
-/* Allow reading from a loose object file of unknown/bogus type */
-#define OBJECT_INFO_ALLOW_UNKNOWN_TYPE 2
 /* Do not retry packed storage after checking packed and loose storage */
 #define OBJECT_INFO_QUICK 8
-/* Do not check loose object */
-#define OBJECT_INFO_IGNORE_LOOSE 16
 /*
  * Do not attempt to fetch the object if missing (even if fetch_is_missing is
  * nonzero).
  */
-#define OBJECT_INFO_SKIP_FETCH_OBJECT 32
+#define OBJECT_INFO_SKIP_FETCH_OBJECT 16
 /*
  * This is meant for bulk prefetching of missing blobs in a partial
  * clone. Implies OBJECT_INFO_SKIP_FETCH_OBJECT and OBJECT_INFO_QUICK
  */
 #define OBJECT_INFO_FOR_PREFETCH (OBJECT_INFO_SKIP_FETCH_OBJECT | OBJECT_INFO_QUICK)
 
+/* Die if object corruption (not just an object being missing) was detected. */
+#define OBJECT_INFO_DIE_IF_CORRUPT 32
+
 int oid_object_info_extended(struct repository *r,
 			     const struct object_id *,
 			     struct object_info *, unsigned flags);
 
-/*
- * Iterate over the files in the loose-object parts of the object
- * directory "path", triggering the following callbacks:
- *
- *  - loose_object is called for each loose object we find.
- *
- *  - loose_cruft is called for any files that do not appear to be
- *    loose objects. Note that we only look in the loose object
- *    directories "objects/[0-9a-f]{2}/", so we will not report
- *    "objects/foobar" as cruft.
- *
- *  - loose_subdir is called for each top-level hashed subdirectory
- *    of the object directory (e.g., "$OBJDIR/f0"). It is called
- *    after the objects in the directory are processed.
- *
- * Any callback that is NULL will be ignored. Callbacks returning non-zero
- * will end the iteration.
- *
- * In the "buf" variant, "path" is a strbuf which will also be used as a
- * scratch buffer, but restored to its original contents before
- * the function returns.
- */
-typedef int each_loose_object_fn(const struct object_id *oid,
-				 const char *path,
-				 void *data);
-typedef int each_loose_cruft_fn(const char *basename,
-				const char *path,
-				void *data);
-typedef int each_loose_subdir_fn(unsigned int nr,
-				 const char *path,
-				 void *data);
-int for_each_file_in_obj_subdir(unsigned int subdir_nr,
-				struct strbuf *path,
-				each_loose_object_fn obj_cb,
-				each_loose_cruft_fn cruft_cb,
-				each_loose_subdir_fn subdir_cb,
-				void *data);
-int for_each_loose_file_in_objdir(const char *path,
-				  each_loose_object_fn obj_cb,
-				  each_loose_cruft_fn cruft_cb,
-				  each_loose_subdir_fn subdir_cb,
-				  void *data);
-int for_each_loose_file_in_objdir_buf(struct strbuf *path,
-				      each_loose_object_fn obj_cb,
-				      each_loose_cruft_fn cruft_cb,
-				      each_loose_subdir_fn subdir_cb,
-				      void *data);
+enum {
+	/* Retry packed storage after checking packed and loose storage */
+	HAS_OBJECT_RECHECK_PACKED = (1 << 0),
+	/* Allow fetching the object in case the repository has a promisor remote. */
+	HAS_OBJECT_FETCH_PROMISOR = (1 << 1),
+};
 
-/* Flags for for_each_*_object() below. */
+/*
+ * Returns 1 if the object exists. This function will not lazily fetch objects
+ * in a partial clone by default.
+ */
+int has_object(struct repository *r, const struct object_id *oid,
+	       unsigned flags);
+
+void assert_oid_type(const struct object_id *oid, enum object_type expect);
+
+/*
+ * Enabling the object read lock allows multiple threads to safely call the
+ * following functions in parallel: repo_read_object_file(),
+ * read_object_with_reference(), oid_object_info() and oid_object_info_extended().
+ *
+ * obj_read_lock() and obj_read_unlock() may also be used to protect other
+ * section which cannot execute in parallel with object reading. Since the used
+ * lock is a recursive mutex, these sections can even contain calls to object
+ * reading functions. However, beware that in these cases zlib inflation won't
+ * be performed in parallel, losing performance.
+ *
+ * TODO: oid_object_info_extended()'s call stack has a recursive behavior. If
+ * any of its callees end up calling it, this recursive call won't benefit from
+ * parallel inflation.
+ */
+void enable_obj_read_lock(void);
+void disable_obj_read_lock(void);
+
+extern int obj_read_use_lock;
+extern pthread_mutex_t obj_read_mutex;
+
+static inline void obj_read_lock(void)
+{
+	if(obj_read_use_lock)
+		pthread_mutex_lock(&obj_read_mutex);
+}
+
+static inline void obj_read_unlock(void)
+{
+	if(obj_read_use_lock)
+		pthread_mutex_unlock(&obj_read_mutex);
+}
+/* Flags for for_each_*_object(). */
 enum for_each_object_flags {
 	/* Iterate only over local objects, not alternates. */
 	FOR_EACH_OBJECT_LOCAL_ONLY = (1<<0),
@@ -519,32 +328,11 @@ enum for_each_object_flags {
 	FOR_EACH_OBJECT_SKIP_ON_DISK_KEPT_PACKS = (1<<4),
 };
 
-/*
- * Iterate over all accessible loose objects without respect to
- * reachability. By default, this includes both local and alternate objects.
- * The order in which objects are visited is unspecified.
- *
- * Any flags specific to packs are ignored.
- */
-int for_each_loose_object(each_loose_object_fn, void *,
-			  enum for_each_object_flags flags);
 
-/*
- * Iterate over all accessible packed objects without respect to reachability.
- * By default, this includes both local and alternate packs.
- *
- * Note that some objects may appear twice if they are found in multiple packs.
- * Each pack is visited in an unspecified order. By default, objects within a
- * pack are visited in pack-idx order (i.e., sorted by oid).
- */
-typedef int each_packed_object_fn(const struct object_id *oid,
-				  struct packed_git *pack,
-				  uint32_t pos,
-				  void *data);
-int for_each_object_in_pack(struct packed_git *p,
-			    each_packed_object_fn, void *data,
-			    enum for_each_object_flags flags);
-int for_each_packed_object(each_packed_object_fn, void *,
-			   enum for_each_object_flags flags);
+void *read_object_with_reference(struct repository *r,
+				 const struct object_id *oid,
+				 enum object_type required_type,
+				 unsigned long *size,
+				 struct object_id *oid_ret);
 
 #endif /* OBJECT_STORE_H */

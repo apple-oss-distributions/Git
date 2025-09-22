@@ -2,7 +2,6 @@
 
 test_description='test git worktree move, remove, lock and unlock'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -202,7 +201,7 @@ test_expect_success 'proper error when worktree not found' '
 	for i in noodle noodle/bork
 	do
 		test_must_fail git worktree lock $i 2>err &&
-		test_i18ngrep "not a working tree" err || return 1
+		test_grep "not a working tree" err || return 1
 	done
 '
 
@@ -245,6 +244,31 @@ test_expect_success 'not remove a repo with initialized submodule' '
 		git -C to-remove submodule update &&
 		test_must_fail git worktree remove to-remove
 	)
+'
+
+test_expect_success 'move worktree with absolute path to relative path' '
+	test_config worktree.useRelativePaths false &&
+	git worktree add ./absolute &&
+	git worktree move --relative-paths absolute relative &&
+	echo "gitdir: ../.git/worktrees/absolute" >expect &&
+	test_cmp expect relative/.git &&
+	echo "../../../relative/.git" >expect &&
+	test_cmp expect .git/worktrees/absolute/gitdir &&
+	test_config worktree.useRelativePaths true &&
+	git worktree move relative relative2 &&
+	echo "gitdir: ../.git/worktrees/absolute" >expect &&
+	test_cmp expect relative2/.git &&
+	echo "../../../relative2/.git" >expect &&
+	test_cmp expect .git/worktrees/absolute/gitdir
+'
+
+test_expect_success 'move worktree with relative path to absolute path' '
+	test_config worktree.useRelativePaths true &&
+	git worktree move --no-relative-paths relative2 absolute &&
+	echo "gitdir: $(pwd)/.git/worktrees/absolute" >expect &&
+	test_cmp expect absolute/.git &&
+	echo "$(pwd)/absolute/.git" >expect &&
+	test_cmp expect .git/worktrees/absolute/gitdir
 '
 
 test_done

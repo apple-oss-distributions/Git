@@ -1,9 +1,15 @@
 /*
  * Copyright (c) 2011, Google Inc.
  */
-#include "cache.h"
+
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
+#include "convert.h"
+#include "environment.h"
 #include "streaming.h"
 #include "repository.h"
+#include "object-file.h"
 #include "object-store.h"
 #include "replace-object.h"
 #include "packfile.h"
@@ -38,7 +44,7 @@ struct git_istream {
 
 	union {
 		struct {
-			char *buf; /* from read_object() */
+			char *buf; /* from oid_object_info_extended() */
 			unsigned long read_ptr;
 		} incore;
 
@@ -232,7 +238,7 @@ static int open_istream_loose(struct git_istream *st, struct repository *r,
 		return -1;
 	switch (unpack_loose_header(&st->z, st->u.loose.mapped,
 				    st->u.loose.mapsize, st->u.loose.hdr,
-				    sizeof(st->u.loose.hdr), NULL)) {
+				    sizeof(st->u.loose.hdr))) {
 	case ULHR_OK:
 		break;
 	case ULHR_BAD:
@@ -388,12 +394,17 @@ static ssize_t read_istream_incore(struct git_istream *st, char *buf, size_t sz)
 static int open_istream_incore(struct git_istream *st, struct repository *r,
 			       const struct object_id *oid, enum object_type *type)
 {
-	st->u.incore.buf = read_object_file_extended(r, oid, type, &st->size, 0);
+	struct object_info oi = OBJECT_INFO_INIT;
+
 	st->u.incore.read_ptr = 0;
 	st->close = close_istream_incore;
 	st->read = read_istream_incore;
 
-	return st->u.incore.buf ? 0 : -1;
+	oi.typep = type;
+	oi.sizep = &st->size;
+	oi.contentp = (void **)&st->u.incore.buf;
+	return oid_object_info_extended(r, oid, &oi,
+					OBJECT_INFO_DIE_IF_CORRUPT);
 }
 
 /*****************************************************************************
@@ -420,7 +431,8 @@ static int istream_source(struct git_istream *st,
 		st->open = open_istream_loose;
 		return 0;
 	case OI_PACKED:
-		if (!oi.u.packed.is_delta && big_file_threshold < size) {
+		if (!oi.u.packed.is_delta &&
+		    repo_settings_get_big_file_threshold(the_repository) < size) {
 			st->u.in_pack.pack = oi.u.packed.pack;
 			st->u.in_pack.pos = oi.u.packed.offset;
 			st->open = open_istream_pack_non_delta;

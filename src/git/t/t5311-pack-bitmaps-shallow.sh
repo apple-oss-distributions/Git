@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='check bitmap operation with shallow repositories'
+
 . ./test-lib.sh
 
 # We want to create a situation where the shallow, grafted

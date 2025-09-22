@@ -203,7 +203,7 @@ test_expect_success 'push recurse-submodules last one wins on command line' '
 		cd work/gar/bage &&
 		>recurse-check-on-command-line-overriding-earlier-command-line &&
 		git add recurse-check-on-command-line-overriding-earlier-command-line &&
-		git commit -m "Recurse on command-line overridiing earlier command-line junk"
+		git commit -m "Recurse on command-line overriding earlier command-line junk"
 	) &&
 	(
 		cd work &&
@@ -311,7 +311,7 @@ test_expect_success 'submodule entry pointing at a tag is error' '
 	git -C work commit -m "bad commit" &&
 	test_when_finished "git -C work reset --hard HEAD^" &&
 	test_must_fail git -C work push --recurse-submodules=on-demand ../pub.git main 2>err &&
-	test_i18ngrep "is a tag, not a commit" err
+	test_grep "is a tag, not a commit" err
 '
 
 test_expect_success 'push fails if recurse submodules option passed as yes' '

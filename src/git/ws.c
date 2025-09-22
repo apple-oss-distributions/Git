@@ -3,8 +3,15 @@
  *
  * Copyright (c) 2007 Junio C Hamano
  */
-#include "cache.h"
+
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "attr.h"
+#include "strbuf.h"
+#include "ws.h"
+
+unsigned whitespace_rule_cfg = WS_DEFAULT_RULE;
 
 static struct whitespace_rule {
 	const char *rule_name;
@@ -29,6 +36,7 @@ unsigned parse_whitespace_rule(const char *string)
 		int i;
 		size_t len;
 		const char *ep;
+		const char *arg;
 		int negated = 0;
 
 		string = string + strspn(string, ", \t\n\r");
@@ -52,15 +60,15 @@ unsigned parse_whitespace_rule(const char *string)
 				rule |= whitespace_rule_names[i].rule_bits;
 			break;
 		}
-		if (strncmp(string, "tabwidth=", 9) == 0) {
-			unsigned tabwidth = atoi(string + 9);
+		if (skip_prefix(string, "tabwidth=", &arg)) {
+			unsigned tabwidth = atoi(arg);
 			if (0 < tabwidth && tabwidth < 0100) {
 				rule &= ~WS_TAB_WIDTH_MASK;
 				rule |= tabwidth;
 			}
 			else
 				warning("tabwidth %.*s out of range",
-					(int)(len - 9), string + 9);
+					(int)(ep - arg), arg);
 		}
 		string = ep;
 	}

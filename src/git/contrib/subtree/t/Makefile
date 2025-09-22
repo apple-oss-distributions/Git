@@ -3,6 +3,9 @@
 # Copyright (c) 2005 Junio C Hamano
 #
 
+# The default target of this Makefile is...
+all::
+
 -include ../../../config.mak.autogen
 -include ../../../config.mak
 
@@ -31,7 +34,7 @@ TSVN = $(sort $(wildcard t91[0-9][0-9]-*.sh))
 TGITWEB = $(sort $(wildcard t95[0-9][0-9]-*.sh))
 THELPERS = $(sort $(filter-out $(T),$(wildcard *.sh)))
 
-all: $(DEFAULT_TEST_TARGET)
+all:: $(DEFAULT_TEST_TARGET)
 
 test: pre-clean $(TEST_LINT)
 	$(MAKE) aggregate-results-and-cleanup
@@ -74,9 +77,7 @@ aggregate-results-and-cleanup: $(T)
 	$(MAKE) clean
 
 aggregate-results:
-	for f in '$(TEST_RESULTS_DIRECTORY_SQ)'/t*-*.counts; do \
-		echo "$$f"; \
-	done | '$(SHELL_PATH_SQ)' ../../../t/aggregate-results.sh
+	@'$(SHELL_PATH_SQ)' ../../../t/aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
 
 valgrind:
 	$(MAKE) GIT_TEST_OPTS="$(GIT_TEST_OPTS) --valgrind"

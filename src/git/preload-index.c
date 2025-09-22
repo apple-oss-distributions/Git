@@ -1,14 +1,24 @@
 /*
  * Copyright (C) 2008 Linus Torvalds
  */
-#include "cache.h"
+
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "pathspec.h"
 #include "dir.h"
+#include "environment.h"
 #include "fsmonitor.h"
-#include "config.h"
+#include "gettext.h"
+#include "parse.h"
+#include "preload-index.h"
 #include "progress.h"
+#include "read-cache.h"
 #include "thread-utils.h"
 #include "repository.h"
+#include "symlinks.h"
+#include "trace2.h"
 
 /*
  * Mostly randomly chosen maximum thread counts: we
@@ -122,7 +132,9 @@ void preload_index(struct index_state *index,
 
 	memset(&pd, 0, sizeof(pd));
 	if (refresh_flags & REFRESH_PROGRESS && isatty(2)) {
-		pd.progress = start_delayed_progress(_("Refreshing index"), index->cache_nr);
+		pd.progress = start_delayed_progress(the_repository,
+						     _("Refreshing index"),
+						     index->cache_nr);
 		pthread_mutex_init(&pd.mutex, NULL);
 	}
 

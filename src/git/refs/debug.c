@@ -1,5 +1,7 @@
-
+#include "git-compat-util.h"
+#include "hex.h"
 #include "refs-internal.h"
+#include "string-list.h"
 #include "trace.h"
 
 static struct trace_key trace_refs = TRACE_KEY_INIT(REFS);
@@ -31,11 +33,18 @@ struct ref_store *maybe_debug_wrap_ref_store(const char *gitdir, struct ref_stor
 	return (struct ref_store *)res;
 }
 
-static int debug_init_db(struct ref_store *refs, struct strbuf *err)
+static void debug_release(struct ref_store *refs)
 {
 	struct debug_ref_store *drefs = (struct debug_ref_store *)refs;
-	int res = drefs->refs->be->init_db(drefs->refs, err);
-	trace_printf_key(&trace_refs, "init_db: %d\n", res);
+	drefs->refs->be->release(drefs->refs);
+	trace_printf_key(&trace_refs, "release\n");
+}
+
+static int debug_create_on_disk(struct ref_store *refs, int flags, struct strbuf *err)
+{
+	struct debug_ref_store *drefs = (struct debug_ref_store *)refs;
+	int res = drefs->refs->be->create_on_disk(drefs->refs, flags, err);
+	trace_printf_key(&trace_refs, "create_on_disk: %d\n", res);
 	return res;
 }
 
@@ -74,9 +83,8 @@ static void print_update(int i, const char *refname,
 
 static void print_transaction(struct ref_transaction *transaction)
 {
-	int i;
 	trace_printf_key(&trace_refs, "transaction {\n");
-	for (i = 0; i < transaction->nr; i++) {
+	for (size_t i = 0; i < transaction->nr; i++) {
 		struct ref_update *u = transaction->updates[i];
 		print_update(i, u->refname, &u->old_oid, &u->new_oid, u->flags,
 			     u->type, u->msg);
@@ -109,49 +117,11 @@ static int debug_transaction_abort(struct ref_store *refs,
 	return res;
 }
 
-static int debug_initial_transaction_commit(struct ref_store *refs,
-					    struct ref_transaction *transaction,
-					    struct strbuf *err)
-{
-	struct debug_ref_store *drefs = (struct debug_ref_store *)refs;
-	int res;
-	transaction->ref_store = drefs->refs;
-	res = drefs->refs->be->initial_transaction_commit(drefs->refs,
-							  transaction, err);
-	return res;
-}
-
-static int debug_pack_refs(struct ref_store *ref_store, unsigned int flags)
+static int debug_pack_refs(struct ref_store *ref_store, struct pack_refs_opts *opts)
 {
 	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
-	int res = drefs->refs->be->pack_refs(drefs->refs, flags);
+	int res = drefs->refs->be->pack_refs(drefs->refs, opts);
 	trace_printf_key(&trace_refs, "pack_refs: %d\n", res);
-	return res;
-}
-
-static int debug_create_symref(struct ref_store *ref_store,
-			       const char *ref_name, const char *target,
-			       const char *logmsg)
-{
-	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
-	int res = drefs->refs->be->create_symref(drefs->refs, ref_name, target,
-						 logmsg);
-	trace_printf_key(&trace_refs, "create_symref: %s -> %s \"%s\": %d\n", ref_name,
-		target, logmsg, res);
-	return res;
-}
-
-static int debug_delete_refs(struct ref_store *ref_store, const char *msg,
-			     struct string_list *refnames, unsigned int flags)
-{
-	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
-	int res =
-		drefs->refs->be->delete_refs(drefs->refs, msg, refnames, flags);
-	int i;
-	trace_printf_key(&trace_refs, "delete_refs {\n");
-	for (i = 0; i < refnames->nr; i++)
-		trace_printf_key(&trace_refs, "%s\n", refnames->items[i].string);
-	trace_printf_key(&trace_refs, "}: %d\n", res);
 	return res;
 }
 
@@ -193,10 +163,19 @@ static int debug_ref_iterator_advance(struct ref_iterator *ref_iterator)
 		trace_printf_key(&trace_refs, "iterator_advance: %s (0)\n",
 			diter->iter->refname);
 
-	diter->base.ordered = diter->iter->ordered;
 	diter->base.refname = diter->iter->refname;
 	diter->base.oid = diter->iter->oid;
 	diter->base.flags = diter->iter->flags;
+	return res;
+}
+
+static int debug_ref_iterator_seek(struct ref_iterator *ref_iterator,
+				   const char *prefix)
+{
+	struct debug_ref_iterator *diter =
+		(struct debug_ref_iterator *)ref_iterator;
+	int res = diter->iter->vtable->seek(diter->iter, prefix);
+	trace_printf_key(&trace_refs, "iterator_seek: %s: %d\n", prefix ? prefix : "", res);
 	return res;
 }
 
@@ -210,30 +189,31 @@ static int debug_ref_iterator_peel(struct ref_iterator *ref_iterator,
 	return res;
 }
 
-static int debug_ref_iterator_abort(struct ref_iterator *ref_iterator)
+static void debug_ref_iterator_release(struct ref_iterator *ref_iterator)
 {
 	struct debug_ref_iterator *diter =
 		(struct debug_ref_iterator *)ref_iterator;
-	int res = diter->iter->vtable->abort(diter->iter);
-	trace_printf_key(&trace_refs, "iterator_abort: %d\n", res);
-	return res;
+	diter->iter->vtable->release(diter->iter);
+	trace_printf_key(&trace_refs, "iterator_abort\n");
 }
 
 static struct ref_iterator_vtable debug_ref_iterator_vtable = {
 	.advance = debug_ref_iterator_advance,
+	.seek = debug_ref_iterator_seek,
 	.peel = debug_ref_iterator_peel,
-	.abort = debug_ref_iterator_abort,
+	.release = debug_ref_iterator_release,
 };
 
 static struct ref_iterator *
 debug_ref_iterator_begin(struct ref_store *ref_store, const char *prefix,
-			 unsigned int flags)
+			 const char **exclude_patterns, unsigned int flags)
 {
 	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
 	struct ref_iterator *res =
-		drefs->refs->be->iterator_begin(drefs->refs, prefix, flags);
+		drefs->refs->be->iterator_begin(drefs->refs, prefix,
+						exclude_patterns, flags);
 	struct debug_ref_iterator *diter = xcalloc(1, sizeof(*diter));
-	base_ref_iterator_init(&diter->base, &debug_ref_iterator_vtable, 1);
+	base_ref_iterator_init(&diter->base, &debug_ref_iterator_vtable);
 	diter->iter = res;
 	trace_printf_key(&trace_refs, "ref_iterator_begin: \"%s\" (0x%x)\n",
 			 prefix, flags);
@@ -247,7 +227,7 @@ static int debug_read_raw_ref(struct ref_store *ref_store, const char *refname,
 	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
 	int res = 0;
 
-	oidcpy(oid, null_oid());
+	oidcpy(oid, null_oid(ref_store->repo->hash_algo));
 	res = drefs->refs->be->read_raw_ref(drefs->refs, refname, oid, referent,
 					    type, failure_errno);
 
@@ -436,11 +416,21 @@ static int debug_reflog_expire(struct ref_store *ref_store, const char *refname,
 	return res;
 }
 
+static int debug_fsck(struct ref_store *ref_store,
+		      struct fsck_options *o,
+		      struct worktree *wt)
+{
+	struct debug_ref_store *drefs = (struct debug_ref_store *)ref_store;
+	int res = drefs->refs->be->fsck(drefs->refs, o, wt);
+	trace_printf_key(&trace_refs, "fsck: %d\n", res);
+	return res;
+}
+
 struct ref_storage_be refs_be_debug = {
-	.next = NULL,
 	.name = "debug",
 	.init = NULL,
-	.init_db = debug_init_db,
+	.release = debug_release,
+	.create_on_disk = debug_create_on_disk,
 
 	/*
 	 * None of these should be NULL. If the "files" backend (in
@@ -451,11 +441,8 @@ struct ref_storage_be refs_be_debug = {
 	.transaction_prepare = debug_transaction_prepare,
 	.transaction_finish = debug_transaction_finish,
 	.transaction_abort = debug_transaction_abort,
-	.initial_transaction_commit = debug_initial_transaction_commit,
 
 	.pack_refs = debug_pack_refs,
-	.create_symref = debug_create_symref,
-	.delete_refs = debug_delete_refs,
 	.rename_ref = debug_rename_ref,
 	.copy_ref = debug_copy_ref,
 
@@ -470,4 +457,6 @@ struct ref_storage_be refs_be_debug = {
 	.create_reflog = debug_create_reflog,
 	.delete_reflog = debug_delete_reflog,
 	.reflog_expire = debug_reflog_expire,
+
+	.fsck = debug_fsck,
 };

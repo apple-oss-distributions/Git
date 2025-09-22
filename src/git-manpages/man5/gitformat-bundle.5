@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitformat-bundle
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITFORMAT\-BUNDLE" "5" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITFORMAT\-BUNDLE" "5" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,6 @@ gitformat-bundle \- The bundle file format
 *\&.bundle
 *\&.bdl
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 The Git bundle format is a format that represents both refs and Git objects\&. A bundle is a header in a format similar to \fBgit-show-ref\fR(1) followed by a pack in *\&.pack format\&.
@@ -64,7 +63,6 @@ pack         = \&.\&.\&. ; packfile
 .RE
 .\}
 .sp
-.sp
 A v3 bundle looks like this:
 .sp
 .if n \{\
@@ -86,7 +84,6 @@ pack         = \&.\&.\&. ; packfile
 .if n \{\
 .RE
 .\}
-.sp
 .SH "SEMANTICS"
 .sp
 A Git bundle consists of several parts\&.
@@ -110,7 +107,7 @@ A Git bundle consists of several parts\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-"Prerequisites" lists the objects that are NOT included in the bundle and the reader of the bundle MUST already have, in order to use the data in the bundle\&. The objects stored in the bundle may refer to prerequisite objects and anything reachable from them (e\&.g\&. a tree object in the bundle can reference a blob that is reachable from a prerequisite) and/or expressed as a delta against prerequisite objects\&.
+"Prerequisites" list the objects that are NOT included in the bundle and the reader of the bundle MUST already have, in order to use the data in the bundle\&. The objects stored in the bundle may refer to prerequisite objects and anything reachable from them (e\&.g\&. a tree object in the bundle can reference a blob that is reachable from a prerequisite) and/or expressed as a delta against prerequisite objects\&.
 .RE
 .sp
 .RS 4
@@ -136,9 +133,9 @@ A Git bundle consists of several parts\&.
 .RE
 .sp
 In the bundle format, there can be a comment following a prerequisite obj\-id\&. This is a comment and it has no specific meaning\&. The writer of the bundle MAY put any string here\&. The reader of the bundle MUST ignore the comment\&.
-.SS "Note on the shallow clone and a Git bundle"
+.SS "Note on shallow clones and Git bundles"
 .sp
-Note that the prerequisites does not represent a shallow\-clone boundary\&. The semantics of the prerequisites and the shallow\-clone boundaries are different, and the Git bundle v2 format cannot represent a shallow clone repository\&.
+Note that the prerequisites do not represent a shallow\-clone boundary\&. The semantics of the prerequisites and the shallow\-clone boundaries are different, and the Git bundle v2 format cannot represent a shallow clone repository\&.
 .SH "CAPABILITIES"
 .sp
 Because there is no opportunity for negotiation, unknown capabilities cause \fIgit bundle\fR to abort\&.
@@ -169,8 +166,7 @@ configuration value\&.
 specifies an object filter as in the
 \fB\-\-filter\fR
 option in
-\fBgit-rev-list\fR(1)\&. The resulting pack\-file must be marked as a
-\fB\&.promisor\fR
+\fBgit-rev-list\fR(1)\&. The resulting pack\-file must be marked as a \&.\fBpromisor\fR
 pack\-file after it is unbundled\&.
 .RE
 .SH "GIT"

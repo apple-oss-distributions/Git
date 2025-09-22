@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='basic rebase topology tests'
+
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-rebase.sh
 

@@ -8,8 +8,8 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
 
-TEST_ROOT="$PWD"
-PATH=$TEST_ROOT:$PATH
+PATH=$PWD:$PATH
+TEST_ROOT="$(pwd)"
 
 write_script <<\EOF "$TEST_ROOT/rot13.sh"
 tr \
@@ -20,8 +20,7 @@ EOF
 generate_random_characters () {
 	LEN=$1
 	NAME=$2
-	test-tool genrandom some-seed $LEN |
-		perl -pe "s/./chr((ord($&) % 26) + ord('a'))/sge" >"$TEST_ROOT/$NAME"
+	test-tool genrandom some-seed | tr -dc 'a-z' | test_copy_bytes "$LEN" >"$TEST_ROOT/$NAME"
 }
 
 filter_git () {
@@ -263,7 +262,7 @@ test_expect_success 'required filter with absent clean field' '
 
 	echo test >test.ac &&
 	test_must_fail git add test.ac 2>stderr &&
-	test_i18ngrep "fatal: test.ac: clean filter .absentclean. failed" stderr
+	test_grep "fatal: test.ac: clean filter .absentclean. failed" stderr
 '
 
 test_expect_success 'required filter with absent smudge field' '
@@ -276,7 +275,7 @@ test_expect_success 'required filter with absent smudge field' '
 	git add test.as &&
 	rm -f test.as &&
 	test_must_fail git checkout -- test.as 2>stderr &&
-	test_i18ngrep "fatal: test.as: smudge filter absentsmudge failed" stderr
+	test_grep "fatal: test.as: smudge filter absentsmudge failed" stderr
 '
 
 test_expect_success 'filtering large input to small output should use little memory' '
@@ -733,7 +732,7 @@ test_expect_success 'process filter should restart after unexpected write failur
 		git checkout --quiet --no-progress . 2>git-stderr.log &&
 
 		grep "smudge write error" git-stderr.log &&
-		test_i18ngrep "error: external filter" git-stderr.log &&
+		test_grep "error: external filter" git-stderr.log &&
 
 		cat >expected.log <<-EOF &&
 			START
@@ -841,7 +840,7 @@ test_expect_success 'process filter abort stops processing of all further files'
 	)
 '
 
-test_expect_success PERL 'invalid process filter must fail (and not hang!)' '
+test_expect_success 'invalid process filter must fail (and not hang!)' '
 	test_config_global filter.protocol.process cat &&
 	test_config_global filter.protocol.required true &&
 	rm -rf repo &&
@@ -1111,19 +1110,19 @@ do
 	branch) opt='-f HEAD' ;;
 	esac
 
-	test_expect_success PERL,TTY "delayed checkout shows progress by default on tty ($mode checkout)" '
+	test_expect_success TTY "delayed checkout shows progress by default on tty ($mode checkout)" '
 		test_delayed_checkout_progress test_terminal git checkout $opt
 	'
 
-	test_expect_success PERL "delayed checkout ommits progress on non-tty ($mode checkout)" '
+	test_expect_success "delayed checkout omits progress on non-tty ($mode checkout)" '
 		test_delayed_checkout_progress ! git checkout $opt
 	'
 
-	test_expect_success PERL,TTY "delayed checkout ommits progress with --quiet ($mode checkout)" '
+	test_expect_success TTY "delayed checkout omits progress with --quiet ($mode checkout)" '
 		test_delayed_checkout_progress ! test_terminal git checkout --quiet $opt
 	'
 
-	test_expect_success PERL,TTY "delayed checkout honors --[no]-progress ($mode checkout)" '
+	test_expect_success TTY "delayed checkout honors --[no]-progress ($mode checkout)" '
 		test_delayed_checkout_progress ! test_terminal git checkout --no-progress $opt &&
 		test_delayed_checkout_progress test_terminal git checkout --quiet --progress $opt
 	'

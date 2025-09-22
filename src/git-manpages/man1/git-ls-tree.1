@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-ls-tree
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-LS\-TREE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-LS\-TREE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,9 +34,8 @@ git-ls-tree \- List the contents of a tree object
 .nf
 \fIgit ls\-tree\fR [\-d] [\-r] [\-t] [\-l] [\-z]
             [\-\-name\-only] [\-\-name\-status] [\-\-object\-only] [\-\-full\-name] [\-\-full\-tree] [\-\-abbrev[=<n>]] [\-\-format=<format>]
-            <tree\-ish> [<path>\&...]
+            <tree\-ish> [<path>\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Lists the contents of a given tree object, like what "/bin/ls \-a" does in the current working directory\&. Note that:
@@ -74,7 +73,11 @@ to list the contents of the tree (that is
 \fBsub/dir\fR
 in
 \fBHEAD\fR)\&. You don\(cqt want to give a tree that is not at the root level (e\&.g\&.
-\fBgit ls\-tree \-r HEAD:sub dir\fR) in this case, as that would result in asking for
+\fBgit\fR
+\fBls\-tree\fR
+\fB\-r\fR
+\fBHEAD:sub\fR
+\fBdir\fR) in this case, as that would result in asking for
 \fBsub/sub/dir\fR
 in the
 \fBHEAD\fR
@@ -129,7 +132,7 @@ List only names of the objects, one per line\&. Cannot be combined with
 \fB\-\-name\-only\fR
 or
 \fB\-\-name\-status\fR\&. This is equivalent to specifying
-\fB\-\-format=\(aq%(objectname)\(aq\fR, but for both this option and that exact format the command takes a hand\-optimized codepath instead of going through the generic formatting mechanism\&.
+\fB\-\-format=\fR\*(Aq%(\fBobjectname\fR)\*(Aq, but for both this option and that exact format the command takes a hand\-optimized codepath instead of going through the generic formatting mechanism\&.
 .RE
 .PP
 \-\-abbrev[=<n>]
@@ -152,25 +155,24 @@ Do not limit the listing to the current working directory\&. Implies \-\-full\-n
 \-\-format=<format>
 .RS 4
 A string that interpolates
-\fB%(fieldname)\fR
-from the result being shown\&. It also interpolates
+\fB%\fR(\fBfieldname\fR) from the result being shown\&. It also interpolates
 \fB%%\fR
 to
 \fB%\fR, and
-\fB%xx\fR
+\fB%xNN\fR
 where
-\fBxx\fR
+\fBNN\fR
 are hex digits interpolates to character with hex code
-\fBxx\fR; for example
-\fB%00\fR
+\fBNN\fR; for example
+\fB%x00\fR
 interpolates to
 \fB\e0\fR
 (NUL),
-\fB%09\fR
+\fB%x09\fR
 to
 \fB\et\fR
 (TAB) and
-\fB%0a\fR
+\fB%x0a\fR
 to
 \fB\en\fR
 (LF)\&. When specified,
@@ -182,7 +184,7 @@ and
 \fB\-\-object\-only\fR\&.
 .RE
 .PP
-[<path>\&...]
+[<path>\&...\:]
 .RS 4
 When paths are given, show them (note that this isn\(cqt really raw pathnames, but rather a list of patterns to match)\&. Otherwise implicitly uses the root level of the tree as the sole path argument\&.
 .RE
@@ -204,7 +206,7 @@ In cases where the \fB\-\-format\fR would exactly map to an existing option \fBl
 .RE
 .\}
 .sp
-This output format is compatible with what \fB\-\-index\-info \-\-stdin\fR of \fIgit update\-index\fR expects\&.
+This output format is compatible with what \fB\-\-index\-info\fR \fB\-\-stdin\fR of \fIgit update\-index\fR expects\&.
 .sp
 When the \fB\-l\fR option is used, format changes to
 .sp
@@ -224,20 +226,20 @@ Without the \fB\-z\fR option, pathnames with "unusual" characters are quoted as 
 .sp
 Customized format:
 .sp
-It is possible to print in a custom format by using the \fB\-\-format\fR option, which is able to interpolate different fields using a \fB%(fieldname)\fR notation\&. For example, if you only care about the "objectname" and "path" fields, you can execute with a specific "\-\-format" like
+It is possible to print in a custom format by using the \fB\-\-format\fR option, which is able to interpolate different fields using a \fB%\fR(\fBfieldname\fR) notation\&. For example, if you only care about the "objectname" and "path" fields, you can execute with a specific "\-\-format" like
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-git ls\-tree \-\-format=\(aq%(objectname) %(path)\(aq <tree\-ish>
+git ls\-tree \-\-format=\*(Aq%(objectname) %(path)\*(Aq <tree\-ish>
 .fi
 .if n \{\
 .RE
 .\}
 .SH "FIELD NAMES"
 .sp
-Various values from structured fields can be used to interpolate into the resulting output\&. For each outputing line, the following names can be used:
+Various values from structured fields can be used to interpolate into the resulting output\&. For each outputting line, the following names can be used:
 .PP
 objectmode
 .RS 4

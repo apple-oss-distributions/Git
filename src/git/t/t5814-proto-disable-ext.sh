@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test disabling of remote-helper paths in clone/fetch'
+
 . ./test-lib.sh
 . "$TEST_DIRECTORY/lib-proto-disable.sh"
 

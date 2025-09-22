@@ -1,6 +1,12 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "lockfile.h"
 #include "bundle.h"
+#include "environment.h"
+#include "gettext.h"
+#include "hex.h"
 #include "object-store.h"
 #include "repository.h"
 #include "object.h"
@@ -12,6 +18,8 @@
 #include "refs.h"
 #include "strvec.h"
 #include "list-objects-filter-options.h"
+#include "connected.h"
+#include "write-or-die.h"
 
 static const char v2_bundle_signature[] = "# v2 git bundle\n";
 static const char v3_bundle_signature[] = "# v3 git bundle\n";
@@ -82,7 +90,12 @@ int read_bundle_header_fd(int fd, struct bundle_header *header,
 		goto abort;
 	}
 
-	header->hash_algo = the_hash_algo;
+	/*
+	 * The default hash format for bundles is SHA1, unless told otherwise
+	 * by an "object-format=" capability, which is being handled in
+	 * `parse_capability()`.
+	 */
+	header->hash_algo = &hash_algos[GIT_HASH_SHA1];
 
 	/* The bundle header ends with an empty line */
 	while (!strbuf_getwholeline_fd(&buf, fd, '\n') &&
@@ -187,6 +200,21 @@ static int list_refs(struct string_list *r, int argc, const char **argv)
 /* Remember to update object flag allocation in object.h */
 #define PREREQ_MARK (1u<<16)
 
+struct string_list_iterator {
+	struct string_list *list;
+	size_t cur;
+};
+
+static const struct object_id *iterate_ref_map(void *cb_data)
+{
+	struct string_list_iterator *iter = cb_data;
+
+	if (iter->cur >= iter->list->nr)
+		return NULL;
+
+	return iter->list->items[iter->cur++].util;
+}
+
 int verify_bundle(struct repository *r,
 		  struct bundle_header *header,
 		  enum verify_bundle_flags flags)
@@ -196,26 +224,25 @@ int verify_bundle(struct repository *r,
 	 * to be verbose about the errors
 	 */
 	struct string_list *p = &header->prerequisites;
-	struct rev_info revs = REV_INFO_INIT;
-	const char *argv[] = {NULL, "--all", NULL};
-	struct commit *commit;
-	int i, ret = 0, req_nr;
+	int i, ret = 0;
 	const char *message = _("Repository lacks these prerequisite commits:");
+	struct string_list_iterator iter = {
+		.list = p,
+	};
+	struct check_connected_options opts = {
+		.quiet = 1,
+	};
 
 	if (!r || !r->objects || !r->objects->odb)
 		return error(_("need a repository to verify a bundle"));
 
-	repo_init_revisions(r, &revs, NULL);
 	for (i = 0; i < p->nr; i++) {
 		struct string_list_item *e = p->items + i;
 		const char *name = e->string;
 		struct object_id *oid = e->util;
 		struct object *o = parse_object(r, oid);
-		if (o) {
-			o->flags |= PREREQ_MARK;
-			add_pending_object(&revs, o, name);
+		if (o)
 			continue;
-		}
 		ret++;
 		if (flags & VERIFY_BUNDLE_QUIET)
 			continue;
@@ -223,37 +250,14 @@ int verify_bundle(struct repository *r,
 			error("%s", message);
 		error("%s %s", oid_to_hex(oid), name);
 	}
-	if (revs.pending.nr != p->nr)
+	if (ret)
 		goto cleanup;
-	req_nr = revs.pending.nr;
-	setup_revisions(2, argv, &revs, NULL);
 
-	list_objects_filter_copy(&revs.filter, &header->filter);
+	if ((ret = check_connected(iterate_ref_map, &iter, &opts)))
+		error(_("some prerequisite commits exist in the object store, "
+			"but are not connected to the repository's history"));
 
-	if (prepare_revision_walk(&revs))
-		die(_("revision walk setup failed"));
-
-	i = req_nr;
-	while (i && (commit = get_revision(&revs)))
-		if (commit->object.flags & PREREQ_MARK)
-			i--;
-
-	for (i = 0; i < p->nr; i++) {
-		struct string_list_item *e = p->items + i;
-		const char *name = e->string;
-		const struct object_id *oid = e->util;
-		struct object *o = parse_object(r, oid);
-		assert(o); /* otherwise we'd have returned early */
-		if (o->flags & SHOWN)
-			continue;
-		ret++;
-		if (flags & VERIFY_BUNDLE_QUIET)
-			continue;
-		if (ret == 1)
-			error("%s", message);
-		error("%s %s", oid_to_hex(oid), name);
-	}
-
+	/* TODO: preserve this verbose language. */
 	if (flags & VERIFY_BUNDLE_VERBOSE) {
 		struct string_list *r;
 
@@ -275,22 +279,13 @@ int verify_bundle(struct repository *r,
 			list_refs(r, 0, NULL);
 		}
 
-		printf_ln("The bundle uses this hash algorithm: %s",
+		printf_ln(_("The bundle uses this hash algorithm: %s"),
 			  header->hash_algo->name);
 		if (header->filter.choice)
-			printf_ln("The bundle uses this filter: %s",
+			printf_ln(_("The bundle uses this filter: %s"),
 				  list_objects_filter_spec(&header->filter));
 	}
 cleanup:
-	/* Clean up objects used, as they will be reused. */
-	for (i = 0; i < p->nr; i++) {
-		struct string_list_item *e = p->items + i;
-		struct object_id *oid = e->util;
-		commit = lookup_commit_reference_gently(r, oid, 1);
-		if (commit)
-			clear_commit_marks(commit, ALL_REV_FLAGS | PREREQ_MARK);
-	}
-	release_revisions(&revs);
 	return ret;
 }
 
@@ -310,7 +305,7 @@ static int is_tag_in_date_range(struct object *tag, struct rev_info *revs)
 	if (revs->max_age == -1 && revs->min_age == -1)
 		goto out;
 
-	buf = read_object_file(&tag->oid, &type, &size);
+	buf = repo_read_object_file(the_repository, &tag->oid, &type, &size);
 	if (!buf)
 		goto out;
 	line = memmem(buf, size, "\ntagger ", 8);
@@ -389,6 +384,7 @@ static int write_bundle_refs(int bundle_fd, struct rev_info *revs)
 {
 	int i;
 	int ref_count = 0;
+	struct strset objects = STRSET_INIT;
 
 	for (i = 0; i < revs->pending.nr; i++) {
 		struct object_array_entry *e = revs->pending.objects + i;
@@ -399,11 +395,15 @@ static int write_bundle_refs(int bundle_fd, struct rev_info *revs)
 
 		if (e->item->flags & UNINTERESTING)
 			continue;
-		if (dwim_ref(e->name, strlen(e->name), &oid, &ref, 0) != 1)
+		if (repo_dwim_ref(the_repository, e->name, strlen(e->name),
+				  &oid, &ref, 0) != 1)
 			goto skip_write_ref;
-		if (read_ref_full(e->name, RESOLVE_REF_READING, &oid, &flag))
+		if (refs_read_ref_full(get_main_ref_store(the_repository), e->name, RESOLVE_REF_READING, &oid, &flag))
 			flag = 0;
 		display_ref = (flag & REF_ISSYMREF) ? e->name : ref;
+
+		if (strset_contains(&objects, display_ref))
+			goto skip_write_ref;
 
 		if (e->item->type == OBJ_TAG &&
 				!is_tag_in_date_range(e->item, revs)) {
@@ -425,38 +425,9 @@ static int write_bundle_refs(int bundle_fd, struct rev_info *revs)
 				e->name);
 			goto skip_write_ref;
 		}
-		/*
-		 * If you run "git bundle create bndl v1.0..v2.0", the
-		 * name of the positive ref is "v2.0" but that is the
-		 * commit that is referenced by the tag, and not the tag
-		 * itself.
-		 */
-		if (!oideq(&oid, &e->item->oid)) {
-			/*
-			 * Is this the positive end of a range expressed
-			 * in terms of a tag (e.g. v2.0 from the range
-			 * "v1.0..v2.0")?
-			 */
-			struct commit *one = lookup_commit_reference(revs->repo, &oid);
-			struct object *obj;
-
-			if (e->item == &(one->object)) {
-				/*
-				 * Need to include e->name as an
-				 * independent ref to the pack-objects
-				 * input, so that the tag is included
-				 * in the output; otherwise we would
-				 * end up triggering "empty bundle"
-				 * error.
-				 */
-				obj = parse_object_or_die(&oid, e->name);
-				obj->flags |= SHOWN;
-				add_pending_object(revs, obj, e->name);
-			}
-			goto skip_write_ref;
-		}
 
 		ref_count++;
+		strset_add(&objects, display_ref);
 		write_or_die(bundle_fd, oid_to_hex(&e->item->oid), the_hash_algo->hexsz);
 		write_or_die(bundle_fd, " ", 1);
 		write_or_die(bundle_fd, display_ref, strlen(display_ref));
@@ -464,6 +435,8 @@ static int write_bundle_refs(int bundle_fd, struct rev_info *revs)
  skip_write_ref:
 		free(ref);
 	}
+
+	strset_clear(&objects);
 
 	/* end header */
 	write_or_die(bundle_fd, "\n", 1);
@@ -512,6 +485,7 @@ int create_bundle(struct repository *r, const char *path,
 	struct rev_info revs, revs_copy;
 	int min_version = 2;
 	struct bundle_prerequisites_info bpi;
+	int ret;
 	int i;
 
 	/* init revs to list objects for pack-objects later */
@@ -537,8 +511,8 @@ int create_bundle(struct repository *r, const char *path,
 		min_version = 3;
 
 	if (argc > 1) {
-		error(_("unrecognized argument: %s"), argv[1]);
-		goto err;
+		ret = error(_("unrecognized argument: %s"), argv[1]);
+		goto out;
 	}
 
 	bundle_to_stdout = !strcmp(path, "-");
@@ -599,47 +573,64 @@ int create_bundle(struct repository *r, const char *path,
 	 */
 	revs.blob_objects = revs.tree_objects = 0;
 	traverse_commit_list(&revs, write_bundle_prerequisites, NULL, &bpi);
-	object_array_remove_duplicates(&revs_copy.pending);
 
 	/* write bundle refs */
 	ref_count = write_bundle_refs(bundle_fd, &revs_copy);
-	if (!ref_count)
+	if (!ref_count) {
 		die(_("Refusing to create empty bundle."));
-	else if (ref_count < 0)
-		goto err;
+	} else if (ref_count < 0) {
+		ret = -1;
+		goto out;
+	}
 
 	/* write pack */
-	if (write_pack_data(bundle_fd, &revs_copy, pack_options))
-		goto err;
+	if (write_pack_data(bundle_fd, &revs_copy, pack_options)) {
+		ret = -1;
+		goto out;
+	}
 
 	if (!bundle_to_stdout) {
 		if (commit_lock_file(&lock))
 			die_errno(_("cannot create '%s'"), path);
 	}
-	return 0;
-err:
+
+	ret = 0;
+
+out:
+	object_array_clear(&revs_copy.pending);
+	release_revisions(&revs);
 	rollback_lock_file(&lock);
-	return -1;
+	return ret;
 }
 
 int unbundle(struct repository *r, struct bundle_header *header,
 	     int bundle_fd, struct strvec *extra_index_pack_args,
-	     enum verify_bundle_flags flags)
+	     struct unbundle_opts *opts)
 {
 	struct child_process ip = CHILD_PROCESS_INIT;
+	struct unbundle_opts opts_fallback = { 0 };
+
+	if (!opts)
+		opts = &opts_fallback;
+
+	if (verify_bundle(r, header, opts->flags)) {
+		close(bundle_fd);
+		return -1;
+	}
+
 	strvec_pushl(&ip.args, "index-pack", "--fix-thin", "--stdin", NULL);
 
 	/* If there is a filter, then we need to create the promisor pack. */
 	if (header->filter.choice)
 		strvec_push(&ip.args, "--promisor=from-bundle");
 
-	if (extra_index_pack_args) {
-		strvec_pushv(&ip.args, extra_index_pack_args->v);
-		strvec_clear(extra_index_pack_args);
-	}
+	if (opts->flags & VERIFY_BUNDLE_FSCK)
+		strvec_pushf(&ip.args, "--fsck-objects%s",
+			     opts->fsck_msg_types ? opts->fsck_msg_types : "");
 
-	if (verify_bundle(r, header, flags))
-		return -1;
+	if (extra_index_pack_args)
+		strvec_pushv(&ip.args, extra_index_pack_args->v);
+
 	ip.in = bundle_fd;
 	ip.no_stdout = 1;
 	ip.git_cmd = 1;

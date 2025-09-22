@@ -27,7 +27,6 @@ test_description="limiting blob downloads when merging with partial clones"
 #                     files that might be renamed into each other's paths.)
 
 . ./test-lib.sh
-. "$TEST_DIRECTORY"/lib-merge.sh
 
 test_setup_repo () {
 	test -d server && return
@@ -155,7 +154,7 @@ test_setup_repo () {
 #   Commit A:
 #     (Rename leap->jump, rename basename/ -> basename/subdir/, rename dir/
 #      -> folder/, move e into newsubdir, add newfile.rs, remove f, modify
-#      both both Makefiles and jumps)
+#      both Makefiles and jumps)
 #              general/{jump1_A, jump2_A}
 #              basename/subdir/{numbers_A, sequence_A, values_A}
 #              folder/subdir/{a,b,c,d,Makefile_TOP_A}
@@ -207,7 +206,7 @@ test_setup_repo () {
 #
 #   Summary: 2 fetches (1 for 2 objects, 1 for 1 object)
 #
-test_expect_merge_algorithm failure success 'Objects downloaded for single relevant rename' '
+test_expect_success 'Objects downloaded for single relevant rename' '
 	test_setup_repo &&
 	git clone --sparse --filter=blob:none "file://$(pwd)/server" objects-single &&
 	(
@@ -230,8 +229,9 @@ test_expect_merge_algorithm failure success 'Objects downloaded for single relev
 		grep fetch_count trace.output | cut -d "|" -f 9 | tr -d " ." >actual &&
 		test_cmp expect actual &&
 
-		# Check the number of fetch commands exec-ed
-		grep d0.*fetch.negotiationAlgorithm trace.output >fetches &&
+		# Check the number of fetch commands exec-ed by filtering trace to
+		# child_start events by the top-level program (2nd field == d0)
+		grep " d0 .* child_start .*fetch.negotiationAlgorithm" trace.output >fetches &&
 		test_line_count = 2 fetches &&
 
 		git rev-list --objects --all --missing=print |
@@ -296,7 +296,7 @@ test_expect_merge_algorithm failure success 'Objects downloaded for single relev
 #      this are not all that common.)
 #   Summary: 1 fetches for 6 objects
 #
-test_expect_merge_algorithm failure success 'Objects downloaded when a directory rename triggered' '
+test_expect_success 'Objects downloaded when a directory rename triggered' '
 	test_setup_repo &&
 	git clone --sparse --filter=blob:none "file://$(pwd)/server" objects-dir &&
 	(
@@ -318,8 +318,9 @@ test_expect_merge_algorithm failure success 'Objects downloaded when a directory
 		grep fetch_count trace.output | cut -d "|" -f 9 | tr -d " ." >actual &&
 		test_cmp expect actual &&
 
-		# Check the number of fetch commands exec-ed
-		grep d0.*fetch.negotiationAlgorithm trace.output >fetches &&
+		# Check the number of fetch commands exec-ed by filtering trace to
+		# child_start events by the top-level program (2nd field == d0)
+		grep " d0 .* child_start .*fetch.negotiationAlgorithm" trace.output >fetches &&
 		test_line_count = 1 fetches &&
 
 		git rev-list --objects --all --missing=print |
@@ -343,7 +344,7 @@ test_expect_merge_algorithm failure success 'Objects downloaded when a directory
 #   Commit A:
 #     (Rename leap->jump, rename basename/ -> basename/subdir/, rename dir/
 #      -> folder/, move e into newsubdir, add newfile.rs, remove f, modify
-#      both both Makefiles and jumps)
+#      both Makefiles and jumps)
 #              general/{jump1_A, jump2_A}
 #              basename/subdir/{numbers_A, sequence_A, values_A}
 #              folder/subdir/{a,b,c,d,Makefile_TOP_A}
@@ -397,7 +398,7 @@ test_expect_merge_algorithm failure success 'Objects downloaded when a directory
 #
 #   Summary: 4 fetches (1 for 6 objects, 1 for 8, 1 for 3, 1 for 2)
 #
-test_expect_merge_algorithm failure success 'Objects downloaded with lots of renames and modifications' '
+test_expect_success 'Objects downloaded with lots of renames and modifications' '
 	test_setup_repo &&
 	git clone --sparse --filter=blob:none "file://$(pwd)/server" objects-many &&
 	(
@@ -422,8 +423,9 @@ test_expect_merge_algorithm failure success 'Objects downloaded with lots of ren
 		grep fetch_count trace.output | cut -d "|" -f 9 | tr -d " ." >actual &&
 		test_cmp expect actual &&
 
-		# Check the number of fetch commands exec-ed
-		grep d0.*fetch.negotiationAlgorithm trace.output >fetches &&
+		# Check the number of fetch commands exec-ed by filtering trace to
+		# child_start events by the top-level program (2nd field == d0)
+		grep " d0 .* child_start .*fetch.negotiationAlgorithm" trace.output >fetches &&
 		test_line_count = 4 fetches &&
 
 		git rev-list --objects --all --missing=print |

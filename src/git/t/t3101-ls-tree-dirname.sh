@@ -20,7 +20,6 @@ Test the handling of multiple directories which have matching file
 entries.  Also test odd filename and missing entries handling.
 '
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -151,6 +150,14 @@ test_expect_success 'ls-tree --full-name' '
 	cat >expected <<\EOF &&
 040000 tree X	path0/a
 EOF
+	test_output
+'
+
+test_expect_success 'ls-tree --no-full-name' '
+	git -C path0 ls-tree --no-full-name $tree a >current &&
+	cat >expected <<-EOF &&
+	040000 tree X	a
+	EOF
 	test_output
 '
 

@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='am --interactive tests'
+
 . ./test-lib.sh
 
 test_expect_success 'set up patches to apply' '

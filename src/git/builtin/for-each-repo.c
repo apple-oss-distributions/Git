@@ -1,7 +1,10 @@
-#include "cache.h"
-#include "config.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "builtin.h"
+#include "config.h"
+#include "gettext.h"
 #include "parse-options.h"
+#include "path.h"
 #include "run-command.h"
 #include "string-list.h"
 
@@ -27,15 +30,22 @@ static int run_command_on_repo(const char *path, int argc, const char ** argv)
 	return run_command(&child);
 }
 
-int cmd_for_each_repo(int argc, const char **argv, const char *prefix)
+int cmd_for_each_repo(int argc,
+		      const char **argv,
+		      const char *prefix,
+		      struct repository *repo UNUSED)
 {
 	static const char *config_key = NULL;
-	int i, result = 0;
+	int keep_going = 0;
+	int result = 0;
 	const struct string_list *values;
+	int err;
 
 	const struct option options[] = {
 		OPT_STRING(0, "config", &config_key, N_("config"),
 			   N_("config key storing a list of repository paths")),
+		OPT_BOOL(0, "keep-going", &keep_going,
+			 N_("keep going even if command fails in a repository")),
 		OPT_END()
 	};
 
@@ -45,18 +55,21 @@ int cmd_for_each_repo(int argc, const char **argv, const char *prefix)
 	if (!config_key)
 		die(_("missing --config=<config>"));
 
-	values = repo_config_get_value_multi(the_repository,
-					     config_key);
-
-	/*
-	 * Do nothing on an empty list, which is equivalent to the case
-	 * where the config variable does not exist at all.
-	 */
-	if (!values)
+	err = repo_config_get_string_multi(the_repository, config_key, &values);
+	if (err < 0)
+		usage_msg_optf(_("got bad config --config=%s"),
+			       for_each_repo_usage, options, config_key);
+	else if (err)
 		return 0;
 
-	for (i = 0; !result && i < values->nr; i++)
-		result = run_command_on_repo(values->items[i].string, argc, argv);
+	for (size_t i = 0; i < values->nr; i++) {
+		int ret = run_command_on_repo(values->items[i].string, argc, argv);
+		if (ret) {
+			if (!keep_going)
+					return ret;
+			result = 1;
+		}
+	}
 
 	return result;
 }

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-column
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-COLUMN" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-COLUMN" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,6 @@ git-column \- Display data in columns
 \fIgit column\fR [\-\-command=<name>] [\-\-[raw\-]mode=<mode>] [\-\-width=<width>]
              [\-\-indent=<string>] [\-\-nl=<string>] [\-\-padding=<n>]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 This command formats the lines of its standard input into a table with multiple columns\&. Each input line occupies one cell of the table\&. It is used internally by other git commands to format output into columns\&.
@@ -95,7 +94,6 @@ $ seq 1 24 | git column \-\-mode=column \-\-padding=5
 .RE
 .\}
 .sp
-.sp
 Format data by rows:
 .sp
 .if n \{\
@@ -111,14 +109,13 @@ $ seq 1 21 | git column \-\-mode=row \-\-padding=5
 .RE
 .\}
 .sp
-.sp
 List some tags in a table with unequal column widths:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-$ git tag \-\-list \(aqv2\&.4\&.*\(aq \-\-column=row,dense
+$ git tag \-\-list \*(Aqv2\&.4\&.*\*(Aq \-\-column=row,dense
 v2\&.4\&.0  v2\&.4\&.0\-rc0  v2\&.4\&.0\-rc1  v2\&.4\&.0\-rc2  v2\&.4\&.0\-rc3
 v2\&.4\&.1  v2\&.4\&.10     v2\&.4\&.11     v2\&.4\&.12     v2\&.4\&.2
 v2\&.4\&.3  v2\&.4\&.4      v2\&.4\&.5      v2\&.4\&.6      v2\&.4\&.7
@@ -127,7 +124,6 @@ v2\&.4\&.8  v2\&.4\&.9
 .if n \{\
 .RE
 .\}
-.sp
 .SH "CONFIGURATION"
 .sp
 Everything below this line in this section is selectively included from the \fBgit-config\fR(1) documentation\&. The content is the same as what\(cqs found there:
@@ -195,7 +191,8 @@ make equal size columns
 column\&.branch
 .RS 4
 Specify whether to output branch listing in
-\fBgit branch\fR
+\fBgit\fR
+\fBbranch\fR
 in columns\&. See
 \fBcolumn\&.ui\fR
 for details\&.
@@ -203,8 +200,10 @@ for details\&.
 .PP
 column\&.clean
 .RS 4
-Specify the layout when list items in
-\fBgit clean \-i\fR, which always shows files and directories in columns\&. See
+Specify the layout when listing items in
+\fBgit\fR
+\fBclean\fR
+\fB\-i\fR, which always shows files and directories in columns\&. See
 \fBcolumn\&.ui\fR
 for details\&.
 .RE
@@ -212,7 +211,8 @@ for details\&.
 column\&.status
 .RS 4
 Specify whether to output untracked files in
-\fBgit status\fR
+\fBgit\fR
+\fBstatus\fR
 in columns\&. See
 \fBcolumn\&.ui\fR
 for details\&.
@@ -220,8 +220,9 @@ for details\&.
 .PP
 column\&.tag
 .RS 4
-Specify whether to output tag listing in
-\fBgit tag\fR
+Specify whether to output tag listings in
+\fBgit\fR
+\fBtag\fR
 in columns\&. See
 \fBcolumn\&.ui\fR
 for details\&.

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-hook
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-HOOK" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-HOOK" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,18 +32,17 @@ git-hook \- Run git hooks
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit hook\fR run [\-\-ignore\-missing] <hook\-name> [\-\- <hook\-args>]
+\fIgit hook\fR run [\-\-ignore\-missing] [\-\-to\-stdin=<path>] <hook\-name> [\-\- <hook\-args>]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-A command interface to running git hooks (see \fBgithooks\fR(5)), for use by other scripted git commands\&.
+A command interface for running git hooks (see \fBgithooks\fR(5)), for use by other scripted git commands\&.
 .SH "SUBCOMMANDS"
 .PP
 run
 .RS 4
 Run the
-\fB<hook\-name>\fR
+\fI<hook\-name>\fR
 hook\&. See
 \fBgithooks\fR(5)
 for supported hook names\&.
@@ -57,6 +56,11 @@ Any positional arguments to the hook should be passed after a mandatory
 for arguments hooks might expect (if any)\&.
 .RE
 .SH "OPTIONS"
+.PP
+\-\-to\-stdin
+.RS 4
+For "run"; specify a file which will be streamed into the hook\(cqs stdin\&. The hook will receive the entire file from beginning to EOF\&.
+.RE
 .PP
 \-\-ignore\-missing
 .RS 4

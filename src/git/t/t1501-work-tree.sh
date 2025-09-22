@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test separate work tree'
+
 . ./test-lib.sh
 
 test_expect_success 'setup' '

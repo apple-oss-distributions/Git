@@ -24,7 +24,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, see <http://www.gnu.org/licenses/>.}]
+along with this program; if not, see <https://www.gnu.org/licenses/>.}]
 
 ######################################################################
 ##
@@ -43,6 +43,211 @@ if {[catch {package require Tcl 8.5} err]
 }
 
 catch {rename send {}} ; # What an evil concept...
+
+######################################################################
+##
+## Enabling platform-specific code paths
+
+proc is_MacOSX {} {
+	if {[tk windowingsystem] eq {aqua}} {
+		return 1
+	}
+	return 0
+}
+
+proc is_Windows {} {
+	if {$::tcl_platform(platform) eq {windows}} {
+		return 1
+	}
+	return 0
+}
+
+set _iscygwin {}
+proc is_Cygwin {} {
+	global _iscygwin
+	if {$_iscygwin eq {}} {
+		if {[string match "CYGWIN_*" $::tcl_platform(os)]} {
+			set _iscygwin 1
+		} else {
+			set _iscygwin 0
+		}
+	}
+	return $_iscygwin
+}
+
+######################################################################
+##
+## PATH lookup. Sanitize $PATH, assure exec/open use only that
+
+if {[is_Windows]} {
+	set _path_sep {;}
+	set _search_exe .exe
+} else {
+	set _path_sep {:}
+	set _search_exe {}
+}
+
+if {[is_Windows]} {
+	set gitguidir [file dirname [info script]]
+	regsub -all ";" $gitguidir "\\;" gitguidir
+	set env(PATH) "$gitguidir;$env(PATH)"
+}
+
+set _search_path {}
+set _path_seen [dict create]
+foreach p [split $env(PATH) $_path_sep] {
+	# Keep only absolute paths, getting rid of ., empty, etc.
+	if {[file pathtype $p] ne {absolute}} {
+		continue
+	}
+	# Keep only the first occurence of any duplicates.
+	set norm_p [file normalize $p]
+	if {[dict exists $_path_seen $norm_p]} {
+		continue
+	}
+	dict set _path_seen $norm_p 1
+	lappend _search_path $norm_p
+}
+unset _path_seen
+
+set env(PATH) [join $_search_path $_path_sep]
+
+if {[is_Windows]} {
+	proc _which {what args} {
+		global _search_exe _search_path
+
+		if {[lsearch -exact $args -script] >= 0} {
+			set suffix {}
+		} elseif {[string match *$_search_exe [string tolower $what]]} {
+			# The search string already has the file extension
+			set suffix {}
+		} else {
+			set suffix $_search_exe
+		}
+
+		foreach p $_search_path {
+			set p [file join $p $what$suffix]
+			if {[file exists $p]} {
+				return [file normalize $p]
+			}
+		}
+		return {}
+	}
+
+	proc sanitize_command_line {command_line from_index} {
+		set i $from_index
+		while {$i < [llength $command_line]} {
+			set cmd [lindex $command_line $i]
+			if {[llength [file split $cmd]] < 2} {
+				set fullpath [_which $cmd]
+				if {$fullpath eq ""} {
+					throw {NOT-FOUND} "$cmd not found in PATH"
+				}
+				lset command_line $i $fullpath
+			}
+
+			# handle piped commands, e.g. `exec A | B`
+			for {incr i} {$i < [llength $command_line]} {incr i} {
+				if {[lindex $command_line $i] eq "|"} {
+					incr i
+					break
+				}
+			}
+		}
+		return $command_line
+	}
+
+	# Override `exec` to avoid unsafe PATH lookup
+
+	rename exec real_exec
+
+	proc exec {args} {
+		# skip options
+		for {set i 0} {$i < [llength $args]} {incr i} {
+			set arg [lindex $args $i]
+			if {$arg eq "--"} {
+				incr i
+				break
+			}
+			if {[string range $arg 0 0] ne "-"} {
+				break
+			}
+		}
+		set args [sanitize_command_line $args $i]
+		uplevel 1 real_exec $args
+	}
+
+	# Override `open` to avoid unsafe PATH lookup
+
+	rename open real_open
+
+	proc open {args} {
+		set arg0 [lindex $args 0]
+		if {[string range $arg0 0 0] eq "|"} {
+			set command_line [string trim [string range $arg0 1 end]]
+			lset args 0 "| [sanitize_command_line $command_line 0]"
+		}
+		uplevel 1 real_open $args
+	}
+
+} else {
+	# On non-Windows platforms, auto_execok, exec, and open are safe, and will
+	# use the sanitized search path. But, we need _which for these.
+
+	proc _which {what args} {
+		return [lindex [auto_execok $what] 0]
+	}
+}
+
+# Wrap exec/open to sanitize arguments
+
+# unsafe arguments begin with redirections or the pipe or background operators
+proc is_arg_unsafe {arg} {
+	regexp {^([<|>&]|2>)} $arg
+}
+
+proc make_arg_safe {arg} {
+	if {[is_arg_unsafe $arg]} {
+		set arg [file join . $arg]
+	}
+	return $arg
+}
+
+proc make_arglist_safe {arglist} {
+	set res {}
+	foreach arg $arglist {
+		lappend res [make_arg_safe $arg]
+	}
+	return $res
+}
+
+# executes one command
+# no redirections or pipelines are possible
+# cmd is a list that specifies the command and its arguments
+# calls `exec` and returns its value
+proc safe_exec {cmd} {
+	eval exec [make_arglist_safe $cmd]
+}
+
+# executes one command in the background
+# no redirections or pipelines are possible
+# cmd is a list that specifies the command and its arguments
+# calls `exec` and returns its value
+proc safe_exec_bg {cmd} {
+	eval exec [make_arglist_safe $cmd] &
+}
+
+proc safe_open_file {filename flags} {
+	# a file name starting with "|" would attempt to run a process
+	# but such a file name must be treated as a relative path
+	# hide the "|" behind "./"
+	if {[string index $filename 0] eq "|"} {
+		set filename [file join . $filename]
+	}
+	open $filename $flags
+}
+
+# End exec/open wrappers
 
 ######################################################################
 ##
@@ -144,11 +349,11 @@ unset oguimsg
 
 if {[tk windowingsystem] eq "aqua"} {
 	catch {
-		exec osascript -e [format {
+		safe_exec [list osascript -e [format {
 			tell application "System Events"
 				set frontmost of processes whose unix id is %d to true
 			end tell
-		} [pid]]
+		} [pid]]]
 	}
 }
 
@@ -163,8 +368,6 @@ set _isbare {}
 set _gitexec {}
 set _githtmldir {}
 set _reponame {}
-set _iscygwin {}
-set _search_path {}
 set _shellpath {@@SHELL_PATH@@}
 
 set _trace [lsearch -exact $argv --trace]
@@ -180,15 +383,37 @@ if {$_trace >= 0} {
 # branches).
 set _last_merged_branch {}
 
-proc shellpath {} {
-	global _shellpath env
-	if {[string match @@* $_shellpath]} {
-		if {[info exists env(SHELL)]} {
-			return $env(SHELL)
-		} else {
-			return /bin/sh
-		}
+# for testing, allow unconfigured _shellpath
+if {[string match @@* $_shellpath]} {
+	if {[info exists env(SHELL)]} {
+		set _shellpath $env(SHELL)
+	} else {
+		set _shellpath /bin/sh
 	}
+}
+
+if {[is_Windows]} {
+	set _shellpath [safe_exec [list cygpath -m $_shellpath]]
+}
+
+if {![file executable $_shellpath] || \
+	!([file pathtype $_shellpath] eq {absolute})} {
+	set errmsg "The defined shell ('$_shellpath') is not usable, \
+		it must be an absolute path to an executable."
+	puts stderr $errmsg
+
+	catch {wm withdraw .}
+	tk_messageBox \
+		-icon error \
+		-type ok \
+		-title "git-gui: configuration error" \
+		-message $errmsg
+	exit 1
+}
+
+
+proc shellpath {} {
+	global _shellpath
 	return $_shellpath
 }
 
@@ -211,14 +436,7 @@ proc gitexec {args} {
 		if {[catch {set _gitexec [git --exec-path]} err]} {
 			error "Git not installed?\n\n$err"
 		}
-		if {[is_Cygwin]} {
-			set _gitexec [exec cygpath \
-				--windows \
-				--absolute \
-				$_gitexec]
-		} else {
-			set _gitexec [file normalize $_gitexec]
-		}
+		set _gitexec [file normalize $_gitexec]
 	}
 	if {$args eq {}} {
 		return $_gitexec
@@ -233,14 +451,7 @@ proc githtmldir {args} {
 			# Git not installed or option not yet supported
 			return {}
 		}
-		if {[is_Cygwin]} {
-			set _githtmldir [exec cygpath \
-				--windows \
-				--absolute \
-				$_githtmldir]
-		} else {
-			set _githtmldir [file normalize $_githtmldir]
-		}
+		set _githtmldir [file normalize $_githtmldir]
 	}
 	if {$args eq {}} {
 		return $_githtmldir
@@ -250,40 +461,6 @@ proc githtmldir {args} {
 
 proc reponame {} {
 	return $::_reponame
-}
-
-proc is_MacOSX {} {
-	if {[tk windowingsystem] eq {aqua}} {
-		return 1
-	}
-	return 0
-}
-
-proc is_Windows {} {
-	if {$::tcl_platform(platform) eq {windows}} {
-		return 1
-	}
-	return 0
-}
-
-proc is_Cygwin {} {
-	global _iscygwin
-	if {$_iscygwin eq {}} {
-		if {$::tcl_platform(platform) eq {windows}} {
-			if {[catch {set p [exec cygpath --windir]} err]} {
-				set _iscygwin 0
-			} else {
-				set _iscygwin 1
-				# Handle MSys2 which is only cygwin when MSYSTEM is MSYS.
-				if {[info exists ::env(MSYSTEM)] && $::env(MSYSTEM) ne "MSYS"} {
-					set _iscygwin 0
-				}
-			}
-		} else {
-			set _iscygwin 0
-		}
-	}
-	return $_iscygwin
 }
 
 proc is_enabled {option} {
@@ -418,7 +595,7 @@ proc _git_cmd {name} {
 			# Tcl on Windows doesn't know it.
 			#
 			set p [gitexec git-$name]
-			set f [open $p r]
+			set f [safe_open_file $p r]
 			set s [gets $f]
 			close $f
 
@@ -448,70 +625,14 @@ proc _git_cmd {name} {
 	return $v
 }
 
-proc _which {what args} {
-	global env _search_exe _search_path
-
-	if {$_search_path eq {}} {
-		if {[is_Cygwin] && [regexp {^(/|\.:)} $env(PATH)]} {
-			set _search_path [split [exec cygpath \
-				--windows \
-				--path \
-				--absolute \
-				$env(PATH)] {;}]
-			set _search_exe .exe
-		} elseif {[is_Windows]} {
-			set gitguidir [file dirname [info script]]
-			regsub -all ";" $gitguidir "\\;" gitguidir
-			set env(PATH) "$gitguidir;$env(PATH)"
-			set _search_path [split $env(PATH) {;}]
-			set _search_exe .exe
-		} else {
-			set _search_path [split $env(PATH) :]
-			set _search_exe {}
-		}
-	}
-
-	if {[is_Windows] && [lsearch -exact $args -script] >= 0} {
-		set suffix {}
-	} else {
-		set suffix $_search_exe
-	}
-
-	foreach p $_search_path {
-		set p [file join $p $what$suffix]
-		if {[file exists $p]} {
-			return [file normalize $p]
-		}
-	}
-	return {}
-}
-
-# Test a file for a hashbang to identify executable scripts on Windows.
-proc is_shellscript {filename} {
-	if {![file exists $filename]} {return 0}
-	set f [open $filename r]
-	fconfigure $f -encoding binary
-	set magic [read $f 2]
-	close $f
-	return [expr {$magic eq "#!"}]
-}
-
-# Run a command connected via pipes on stdout.
+# Run a shell command connected via pipes on stdout.
 # This is for use with textconv filters and uses sh -c "..." to allow it to
-# contain a command with arguments. On windows we must check for shell
-# scripts specifically otherwise just call the filter command.
+# contain a command with arguments. We presume this
+# to be a shellscript that the configured shell (/bin/sh by default) knows
+# how to run.
 proc open_cmd_pipe {cmd path} {
-	global env
-	if {![file executable [shellpath]]} {
-		set exe [auto_execok [lindex $cmd 0]]
-		if {[is_shellscript [lindex $exe 0]]} {
-			set run [linsert [auto_execok sh] end -c "$cmd \"\$0\"" $path]
-		} else {
-			set run [concat $exe [lrange $cmd 1 end] $path]
-		}
-	} else {
-		set run [list [shellpath] -c "$cmd \"\$0\"" $path]
-	}
+	set run [list [shellpath] -c "$cmd \"\$0\"" $path]
+	set run [make_arglist_safe $run]
 	return [open |$run r]
 }
 
@@ -521,7 +642,7 @@ proc _lappend_nice {cmd_var} {
 
 	if {![info exists _nice]} {
 		set _nice [_which nice]
-		if {[catch {exec $_nice git version}]} {
+		if {[catch {safe_exec [list $_nice git version]}]} {
 			set _nice {}
 		} elseif {[is_Windows] && [file dirname $_nice] ne [file dirname $::_git]} {
 			set _nice {}
@@ -533,7 +654,11 @@ proc _lappend_nice {cmd_var} {
 }
 
 proc git {args} {
-	set fd [eval [list git_read] $args]
+	git_redir $args {}
+}
+
+proc git_redir {cmd redir} {
+	set fd [git_read $cmd $redir]
 	fconfigure $fd -translation binary -encoding utf-8
 	set result [string trimright [read $fd] "\n"]
 	close $fd
@@ -543,111 +668,47 @@ proc git {args} {
 	return $result
 }
 
-proc _open_stdout_stderr {cmd} {
-	_trace_exec $cmd
+proc safe_open_command {cmd {redir {}}} {
+	set cmd [make_arglist_safe $cmd]
+	_trace_exec [concat $cmd $redir]
 	if {[catch {
-			set fd [open [concat [list | ] $cmd] r]
-		} err]} {
-		if {   [lindex $cmd end] eq {2>@1}
-		    && $err eq {can not find channel named "1"}
-			} {
-			# Older versions of Tcl 8.4 don't have this 2>@1 IO
-			# redirect operator.  Fallback to |& cat for those.
-			# The command was not actually started, so its safe
-			# to try to start it a second time.
-			#
-			set fd [open [concat \
-				[list | ] \
-				[lrange $cmd 0 end-1] \
-				[list |& cat] \
-				] r]
-		} else {
-			error $err
-		}
+		set fd [open [concat [list | ] $cmd $redir] r]
+	} err]} {
+		error $err
 	}
 	fconfigure $fd -eofchar {}
 	return $fd
 }
 
-proc git_read {args} {
-	set opt [list]
+proc git_read {cmd {redir {}}} {
+	set cmdp [_git_cmd [lindex $cmd 0]]
+	set cmd [lrange $cmd 1 end]
 
-	while {1} {
-		switch -- [lindex $args 0] {
-		--nice {
-			_lappend_nice opt
-		}
-
-		--stderr {
-			lappend args 2>@1
-		}
-
-		default {
-			break
-		}
-
-		}
-
-		set args [lrange $args 1 end]
-	}
-
-	set cmdp [_git_cmd [lindex $args 0]]
-	set args [lrange $args 1 end]
-
-	return [_open_stdout_stderr [concat $opt $cmdp $args]]
+	return [safe_open_command [concat $cmdp $cmd] $redir]
 }
 
-proc git_write {args} {
+proc git_read_nice {cmd} {
 	set opt [list]
 
-	while {1} {
-		switch -- [lindex $args 0] {
-		--nice {
-			_lappend_nice opt
-		}
+	_lappend_nice opt
 
-		default {
-			break
-		}
+	set cmdp [_git_cmd [lindex $cmd 0]]
+	set cmd [lrange $cmd 1 end]
 
-		}
+	return [safe_open_command [concat $opt $cmdp $cmd]]
+}
 
-		set args [lrange $args 1 end]
-	}
+proc git_write {cmd} {
+	set cmd [make_arglist_safe $cmd]
+	set cmdp [_git_cmd [lindex $cmd 0]]
+	set cmd [lrange $cmd 1 end]
 
-	set cmdp [_git_cmd [lindex $args 0]]
-	set args [lrange $args 1 end]
-
-	_trace_exec [concat $opt $cmdp $args]
-	return [open [concat [list | ] $opt $cmdp $args] w]
+	_trace_exec [concat $cmdp $cmd]
+	return [open [concat [list | ] $cmdp $cmd] w]
 }
 
 proc githook_read {hook_name args} {
-	set pchook [gitdir hooks $hook_name]
-	lappend args 2>@1
-
-	# On Windows [file executable] might lie so we need to ask
-	# the shell if the hook is executable.  Yes that's annoying.
-	#
-	if {[is_Windows]} {
-		upvar #0 _sh interp
-		if {![info exists interp]} {
-			set interp [_which sh]
-		}
-		if {$interp eq {}} {
-			error "hook execution requires sh (not in PATH)"
-		}
-
-		set scr {if test -x "$1";then exec "$@";fi}
-		set sh_c [list $interp -c $scr $interp $pchook]
-		return [_open_stdout_stderr [concat $sh_c $args]]
-	}
-
-	if {[file executable $pchook]} {
-		return [_open_stdout_stderr [concat [list $pchook] $args]]
-	}
-
-	return {}
+	git_read [concat [list hook run --ignore-missing $hook_name --] $args] [list 2>@1]
 }
 
 proc kill_file_process {fd} {
@@ -655,9 +716,9 @@ proc kill_file_process {fd} {
 
 	catch {
 		if {[is_Windows]} {
-			exec taskkill /pid $process
+			safe_exec [list taskkill /pid $process]
 		} else {
-			exec kill $process
+			safe_exec [list kill $process]
 		}
 	}
 }
@@ -683,7 +744,7 @@ proc sq {value} {
 proc load_current_branch {} {
 	global current_branch is_detached
 
-	set fd [open [gitdir HEAD] r]
+	set fd [safe_open_file [gitdir HEAD] r]
 	fconfigure $fd -translation binary -encoding utf-8
 	if {[gets $fd ref] < 1} {
 		set ref {}
@@ -865,6 +926,12 @@ proc apply_config {} {
 			color::sync_with_theme
 		}
 	}
+
+	global comment_string
+	set comment_string [get_config core.commentstring]
+	if {$comment_string eq {}} {
+		set comment_string [get_config core.commentchar]
+	}
 }
 
 set default_config(branch.autosetupmerge) true
@@ -875,6 +942,8 @@ set default_config(merge.summary) false
 set default_config(merge.verbosity) 2
 set default_config(user.name) {}
 set default_config(user.email) {}
+set default_config(core.commentchar) "#"
+set default_config(core.commentstring) {}
 
 set default_config(gui.encoding) [encoding system]
 set default_config(gui.matchtrackingbranch) false
@@ -1045,7 +1114,7 @@ You are using [git-version]:
 ## configure our library
 
 set idx [file join $oguilib tclIndex]
-if {[catch {set fd [open $idx r]} err]} {
+if {[catch {set fd [safe_open_file $idx r]} err]} {
 	catch {wm withdraw .}
 	tk_messageBox \
 		-icon error \
@@ -1083,53 +1152,30 @@ unset -nocomplain idx fd
 ##
 ## config file parsing
 
-git-version proc _parse_config {arr_name args} {
-	>= 1.5.3 {
-		upvar $arr_name arr
-		array unset arr
-		set buf {}
-		catch {
-			set fd_rc [eval \
-				[list git_read config] \
-				$args \
-				[list --null --list]]
-			fconfigure $fd_rc -translation binary -encoding utf-8
-			set buf [read $fd_rc]
-			close $fd_rc
-		}
-		foreach line [split $buf "\0"] {
-			if {[regexp {^([^\n]+)\n(.*)$} $line line name value]} {
-				if {[is_many_config $name]} {
-					lappend arr($name) $value
-				} else {
-					set arr($name) $value
-				}
-			} elseif {[regexp {^([^\n]+)$} $line line name]} {
-				# no value given, but interpreting them as
-				# boolean will be handled as true
-				set arr($name) {}
-			}
-		}
+proc _parse_config {arr_name args} {
+	upvar $arr_name arr
+	array unset arr
+	set buf {}
+	catch {
+		set fd_rc [git_read \
+			[concat config \
+			$args \
+			--null --list]]
+		fconfigure $fd_rc -translation binary -encoding utf-8
+		set buf [read $fd_rc]
+		close $fd_rc
 	}
-	default {
-		upvar $arr_name arr
-		array unset arr
-		catch {
-			set fd_rc [eval [list git_read config --list] $args]
-			while {[gets $fd_rc line] >= 0} {
-				if {[regexp {^([^=]+)=(.*)$} $line line name value]} {
-					if {[is_many_config $name]} {
-						lappend arr($name) $value
-					} else {
-						set arr($name) $value
-					}
-				} elseif {[regexp {^([^=]+)$} $line line name]} {
-					# no value given, but interpreting them as
-					# boolean will be handled as true
-					set arr($name) {}
-				}
+	foreach line [split $buf "\0"] {
+		if {[regexp {^([^\n]+)\n(.*)$} $line line name value]} {
+			if {[is_many_config $name]} {
+				lappend arr($name) $value
+			} else {
+				set arr($name) $value
 			}
-			close $fd_rc
+		} elseif {[regexp {^([^\n]+)$} $line line name]} {
+			# no value given, but interpreting them as
+			# boolean will be handled as true
+			set arr($name) {}
 		}
 	}
 }
@@ -1259,9 +1305,6 @@ if {$_gitdir eq "."} {
 	set _gitdir [pwd]
 }
 
-if {![file isdirectory $_gitdir] && [is_Cygwin]} {
-	catch {set _gitdir [exec cygpath --windows $_gitdir]}
-}
 if {![file isdirectory $_gitdir]} {
 	catch {wm withdraw .}
 	error_popup [strcat [mc "Git directory not found:"] "\n\n$_gitdir"]
@@ -1273,11 +1316,7 @@ apply_config
 
 # v1.7.0 introduced --show-toplevel to return the canonical work-tree
 if {[package vcompare $_git_version 1.7.0] >= 0} {
-	if { [is_Cygwin] } {
-		catch {set _gitworktree [exec cygpath --windows [git rev-parse --show-toplevel]]}
-	} else {
-		set _gitworktree [git rev-parse --show-toplevel]
-	}
+	set _gitworktree [git rev-parse --show-toplevel]
 } else {
 	# try to set work tree from environment, core.worktree or use
 	# cdup to obtain a relative path to the top of the worktree. If
@@ -1349,7 +1388,6 @@ set current_diff_path {}
 set is_3way_diff 0
 set is_submodule_diff 0
 set is_conflict_diff 0
-set diff_empty_count 0
 set last_revert {}
 set last_revert_enc {}
 
@@ -1412,7 +1450,7 @@ proc repository_state {ctvar hdvar mhvar} {
 	set merge_head [gitdir MERGE_HEAD]
 	if {[file exists $merge_head]} {
 		set ct merge
-		set fd_mh [open $merge_head r]
+		set fd_mh [safe_open_file $merge_head r]
 		while {[gets $fd_mh line] >= 0} {
 			lappend mh $line
 		}
@@ -1431,7 +1469,7 @@ proc PARENT {} {
 		return $p
 	}
 	if {$empty_tree eq {}} {
-		set empty_tree [git mktree << {}]
+		set empty_tree [git_redir [list mktree] [list << {}]]
 	}
 	return $empty_tree
 }
@@ -1490,36 +1528,20 @@ proc rescan {after {honor_trustmtime 1}} {
 	} else {
 		set rescan_active 1
 		ui_status [mc "Refreshing file status..."]
-		set fd_rf [git_read update-index \
+		set fd_rf [git_read [list update-index \
 			-q \
 			--unmerged \
 			--ignore-missing \
 			--refresh \
-			]
+			]]
 		fconfigure $fd_rf -blocking 0 -translation binary
 		fileevent $fd_rf readable \
 			[list rescan_stage2 $fd_rf $after]
 	}
 }
 
-if {[is_Cygwin]} {
-	set is_git_info_exclude {}
-	proc have_info_exclude {} {
-		global is_git_info_exclude
-
-		if {$is_git_info_exclude eq {}} {
-			if {[catch {exec test -f [gitdir info exclude]}]} {
-				set is_git_info_exclude 0
-			} else {
-				set is_git_info_exclude 1
-			}
-		}
-		return $is_git_info_exclude
-	}
-} else {
-	proc have_info_exclude {} {
-		return [file readable [gitdir info exclude]]
-	}
+proc have_info_exclude {} {
+	return [file readable [gitdir info exclude]]
 }
 
 proc rescan_stage2 {fd after} {
@@ -1551,11 +1573,11 @@ proc rescan_stage2 {fd after} {
 	set rescan_active 2
 	ui_status [mc "Scanning for modified files ..."]
 	if {[git-version >= "1.7.2"]} {
-		set fd_di [git_read diff-index --cached --ignore-submodules=dirty -z [PARENT]]
+		set fd_di [git_read [list diff-index --cached --ignore-submodules=dirty -z [PARENT]]]
 	} else {
-		set fd_di [git_read diff-index --cached -z [PARENT]]
+		set fd_di [git_read [list diff-index --cached -z [PARENT]]]
 	}
-	set fd_df [git_read diff-files -z]
+	set fd_df [git_read [list diff-files -z]]
 
 	fconfigure $fd_di -blocking 0 -translation binary -encoding binary
 	fconfigure $fd_df -blocking 0 -translation binary -encoding binary
@@ -1564,7 +1586,7 @@ proc rescan_stage2 {fd after} {
 	fileevent $fd_df readable [list read_diff_files $fd_df $after]
 
 	if {[is_config_true gui.displayuntracked]} {
-		set fd_lo [eval git_read ls-files --others -z $ls_others]
+		set fd_lo [git_read [concat ls-files --others -z $ls_others]]
 		fconfigure $fd_lo -blocking 0 -translation binary -encoding binary
 		fileevent $fd_lo readable [list read_ls_others $fd_lo $after]
 		incr rescan_active
@@ -1576,7 +1598,7 @@ proc load_message {file {encoding {}}} {
 
 	set f [gitdir $file]
 	if {[file isfile $f]} {
-		if {[catch {set fd [open $f r]}]} {
+		if {[catch {set fd [safe_open_file $f r]}]} {
 			return 0
 		}
 		fconfigure $fd -eofchar {}
@@ -1600,23 +1622,23 @@ proc run_prepare_commit_msg_hook {} {
 	# it will be .git/MERGE_MSG (merge), .git/SQUASH_MSG (squash), or an
 	# empty file but existent file.
 
-	set fd_pcm [open [gitdir PREPARE_COMMIT_MSG] a]
+	set fd_pcm [safe_open_file [gitdir PREPARE_COMMIT_MSG] a]
 
 	if {[file isfile [gitdir MERGE_MSG]]} {
 		set pcm_source "merge"
-		set fd_mm [open [gitdir MERGE_MSG] r]
+		set fd_mm [safe_open_file [gitdir MERGE_MSG] r]
 		fconfigure $fd_mm -encoding utf-8
 		puts -nonewline $fd_pcm [read $fd_mm]
 		close $fd_mm
 	} elseif {[file isfile [gitdir SQUASH_MSG]]} {
 		set pcm_source "squash"
-		set fd_sm [open [gitdir SQUASH_MSG] r]
+		set fd_sm [safe_open_file [gitdir SQUASH_MSG] r]
 		fconfigure $fd_sm -encoding utf-8
 		puts -nonewline $fd_pcm [read $fd_sm]
 		close $fd_sm
 	} elseif {[file isfile [get_config commit.template]]} {
 		set pcm_source "template"
-		set fd_sm [open [get_config commit.template] r]
+		set fd_sm [safe_open_file [get_config commit.template] r]
 		fconfigure $fd_sm -encoding utf-8
 		puts -nonewline $fd_pcm [read $fd_sm]
 		close $fd_sm
@@ -2206,7 +2228,7 @@ proc do_gitk {revs {is_submodule false}} {
 			unset env(GIT_DIR)
 			unset env(GIT_WORK_TREE)
 		}
-		eval exec $cmd $revs "--" "--" &
+		safe_exec_bg [concat $cmd $revs "--" "--"]
 
 		set env(GIT_DIR) $_gitdir
 		set env(GIT_WORK_TREE) $_gitworktree
@@ -2243,7 +2265,7 @@ proc do_git_gui {} {
 		set pwd [pwd]
 		cd $current_diff_path
 
-		eval exec $exe gui &
+		safe_exec_bg [concat $exe gui]
 
 		set env(GIT_DIR) $_gitdir
 		set env(GIT_WORK_TREE) $_gitworktree
@@ -2259,7 +2281,9 @@ proc do_git_gui {} {
 
 # Get the system-specific explorer app/command.
 proc get_explorer {} {
-	if {[is_Cygwin] || [is_Windows]} {
+	if {[is_Cygwin]} {
+		set explorer "/bin/cygstart.exe --explore"
+	} elseif {[is_Windows]} {
 		set explorer "explorer.exe"
 	} elseif {[is_MacOSX]} {
 		set explorer "open"
@@ -2272,16 +2296,18 @@ proc get_explorer {} {
 
 proc do_explore {} {
 	global _gitworktree
-	set explorer [get_explorer]
-	eval exec $explorer [list [file nativename $_gitworktree]] &
+	set cmd [get_explorer]
+	lappend cmd [file nativename $_gitworktree]
+	safe_exec_bg $cmd
 }
 
 # Open file relative to the working tree by the default associated app.
 proc do_file_open {file} {
 	global _gitworktree
-	set explorer [get_explorer]
+	set cmd [get_explorer]
 	set full_file_path [file join $_gitworktree $file]
-	exec $explorer [file nativename $full_file_path] &
+	lappend cmd [file nativename $full_file_path]
+	safe_exec_bg $cmd
 }
 
 set is_quitting 0
@@ -2307,7 +2333,7 @@ proc do_quit {{rc {1}}} {
 		#
 		set save [gitdir GITGUI_MSG]
 		if {$GITGUI_BCK_exists && ![$ui_comm edit modified]} {
-			file rename -force [gitdir GITGUI_BCK] $save
+			catch { file rename -force [gitdir GITGUI_BCK] $save }
 			set GITGUI_BCK_exists 0
 		} elseif {[$ui_comm edit modified]} {
 			set msg [string trim [$ui_comm get 0.0 end]]
@@ -2315,7 +2341,7 @@ proc do_quit {{rc {1}}} {
 			if {![string match amend* $commit_type]
 				&& $msg ne {}} {
 				catch {
-					set fd [open $save w]
+					set fd [safe_open_file $save w]
 					fconfigure $fd -encoding utf-8
 					puts -nonewline $fd $msg
 					close $fd
@@ -2373,7 +2399,7 @@ proc do_quit {{rc {1}}} {
 	set ret_code $rc
 
 	# Briefly enable send again, working around Tk bug
-	# http://sourceforge.net/tracker/?func=detail&atid=112997&aid=1821174&group_id=12997
+	# https://sourceforge.net/p/tktoolkit/bugs/2343/
 	tk appname [appname]
 
 	destroy .
@@ -2759,17 +2785,16 @@ if {![is_bare]} {
 
 if {[is_Windows]} {
 	# Use /git-bash.exe if available
-	set normalized [file normalize $::argv0]
-	regsub "/mingw../libexec/git-core/git-gui$" \
-		$normalized "/git-bash.exe" cmdLine
-	if {$cmdLine != $normalized && [file exists $cmdLine]} {
-		set cmdLine [list "Git Bash" $cmdLine &]
+	set _git_bash [safe_exec [list cygpath -m /git-bash.exe]]
+	if {[file executable $_git_bash]} {
+		set _bash_cmdline [list "Git Bash" $_git_bash]
 	} else {
-		set cmdLine [list "Git Bash" bash --login -l &]
+		set _bash_cmdline [list "Git Bash" bash --login -l]
 	}
 	.mbar.repository add command \
 		-label [mc "Git Bash"] \
-		-command {eval exec [auto_execok start] $cmdLine}
+		-command {safe_exec_bg [concat [list [_which cmd] /c start] $_bash_cmdline]}
+	unset _git_bash
 }
 
 if {[is_Windows] || ![is_bare]} {
@@ -3053,16 +3078,12 @@ if {[is_MacOSX]} {
 set doc_path [githtmldir]
 if {$doc_path ne {}} {
 	set doc_path [file join $doc_path index.html]
-
-	if {[is_Cygwin]} {
-		set doc_path [exec cygpath --mixed $doc_path]
-	}
 }
 
 if {[file isfile $doc_path]} {
 	set doc_url "file:$doc_path"
 } else {
-	set doc_url {http://www.kernel.org/pub/software/scm/git/docs/}
+	set doc_url {https://www.kernel.org/pub/software/scm/git/docs/}
 }
 
 proc start_browser {url} {
@@ -3604,6 +3625,8 @@ $ui_diff tag configure clr1 -font font_diffbold
 $ui_diff tag configure clr4 -underline 1
 
 $ui_diff tag conf d_info -foreground blue -font font_diffbold
+$ui_diff tag conf d_rescan -foreground blue -underline 1 -font font_diffbold
+$ui_diff tag bind d_rescan <Button-1> { clear_diff; rescan ui_ready 0 }
 
 $ui_diff tag conf d_cr -elide true
 $ui_diff tag conf d_@ -font font_diffbold
@@ -4028,60 +4051,6 @@ set file_lists($ui_workdir) [list]
 wm title . "[appname] ([reponame]) [file normalize $_gitworktree]"
 focus -force $ui_comm
 
-# -- Warn the user about environmental problems.  Cygwin's Tcl
-#    does *not* pass its env array onto any processes it spawns.
-#    This means that git processes get none of our environment.
-#
-if {[is_Cygwin]} {
-	set ignored_env 0
-	set suggest_user {}
-	set msg [mc "Possible environment issues exist.
-
-The following environment variables are probably
-going to be ignored by any Git subprocess run
-by %s:
-
-" [appname]]
-	foreach name [array names env] {
-		switch -regexp -- $name {
-		{^GIT_INDEX_FILE$} -
-		{^GIT_OBJECT_DIRECTORY$} -
-		{^GIT_ALTERNATE_OBJECT_DIRECTORIES$} -
-		{^GIT_DIFF_OPTS$} -
-		{^GIT_EXTERNAL_DIFF$} -
-		{^GIT_PAGER$} -
-		{^GIT_TRACE$} -
-		{^GIT_CONFIG$} -
-		{^GIT_(AUTHOR|COMMITTER)_DATE$} {
-			append msg " - $name\n"
-			incr ignored_env
-		}
-		{^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)$} {
-			append msg " - $name\n"
-			incr ignored_env
-			set suggest_user $name
-		}
-		}
-	}
-	if {$ignored_env > 0} {
-		append msg [mc "
-This is due to a known issue with the
-Tcl binary distributed by Cygwin."]
-
-		if {$suggest_user ne {}} {
-			append msg [mc "
-
-A good replacement for %s
-is placing values for the user.name and
-user.email settings into your personal
-~/.gitconfig file.
-" $suggest_user]
-		}
-		warn_popup $msg
-	}
-	unset ignored_env msg suggest_user name
-}
-
 # -- Only initialize complex UI if we are going to stay running.
 #
 if {[is_enabled transport]} {
@@ -4134,7 +4103,7 @@ if {[winfo exists $ui_comm]} {
 				}
 			} elseif {$m} {
 				catch {
-					set fd [open [gitdir GITGUI_BCK] w]
+					set fd [safe_open_file [gitdir GITGUI_BCK] w]
 					fconfigure $fd -encoding utf-8
 					puts -nonewline $fd $msg
 					close $fd

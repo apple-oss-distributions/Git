@@ -1,17 +1,22 @@
-#define USE_THE_INDEX_VARIABLE
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
-#include "cache.h"
 #include "config.h"
 #include "attr.h"
+#include "environment.h"
+#include "gettext.h"
+#include "object-name.h"
 #include "quote.h"
+#include "setup.h"
 #include "parse-options.h"
+#include "write-or-die.h"
 
 static int all_attrs;
 static int cached_attrs;
 static int stdin_paths;
+static char *source;
 static const char * const check_attr_usage[] = {
-N_("git check-attr [-a | --all | <attr>...] [--] <pathname>..."),
-N_("git check-attr --stdin [-z] [-a | --all | <attr>...]"),
+N_("git check-attr [--source <tree-ish>] [-a | --all | <attr>...] [--] <pathname>..."),
+N_("git check-attr --stdin [-z] [--source <tree-ish>] [-a | --all | <attr>...]"),
 NULL
 };
 
@@ -23,6 +28,7 @@ static const struct option check_attr_options[] = {
 	OPT_BOOL(0 , "stdin", &stdin_paths, N_("read file names from stdin")),
 	OPT_BOOL('z', NULL, &nul_term_line,
 		 N_("terminate input and output records by a NUL character")),
+	OPT_STRING(0, "source", &source, N_("<tree-ish>"), N_("which tree-ish to check attributes at")),
 	OPT_END()
 };
 
@@ -55,26 +61,25 @@ static void output_attr(struct attr_check *check, const char *file)
 	}
 }
 
-static void check_attr(const char *prefix,
-		       struct attr_check *check,
+static void check_attr(const char *prefix, struct attr_check *check,
 		       int collect_all,
 		       const char *file)
+
 {
 	char *full_path =
 		prefix_path(prefix, prefix ? strlen(prefix) : 0, file);
 
 	if (collect_all) {
-		git_all_attrs(&the_index, full_path, check);
+		git_all_attrs(the_repository->index, full_path, check);
 	} else {
-		git_check_attr(&the_index, full_path, check);
+		git_check_attr(the_repository->index, full_path, check);
 	}
 	output_attr(check, file);
 
 	free(full_path);
 }
 
-static void check_attr_stdin_paths(const char *prefix,
-				   struct attr_check *check,
+static void check_attr_stdin_paths(const char *prefix, struct attr_check *check,
 				   int collect_all)
 {
 	struct strbuf buf = STRBUF_INIT;
@@ -102,9 +107,13 @@ static NORETURN void error_with_usage(const char *msg)
 	usage_with_options(check_attr_usage, check_attr_options);
 }
 
-int cmd_check_attr(int argc, const char **argv, const char *prefix)
+int cmd_check_attr(int argc,
+		   const char **argv,
+		   const char *prefix,
+		   struct repository *repo UNUSED)
 {
 	struct attr_check *check;
+	struct object_id initialized_oid;
 	int cnt, i, doubledash, filei;
 
 	if (!is_bare_repository())
@@ -114,6 +123,9 @@ int cmd_check_attr(int argc, const char **argv, const char *prefix)
 
 	argc = parse_options(argc, argv, prefix, check_attr_options,
 			     check_attr_usage, PARSE_OPT_KEEP_DASHDASH);
+
+	prepare_repo_settings(the_repository);
+	the_repository->settings.command_requires_full_index = 0;
 
 	if (repo_read_index(the_repository) < 0) {
 		die("invalid cache");
@@ -174,6 +186,12 @@ int cmd_check_attr(int argc, const char **argv, const char *prefix)
 					     argv[i]);
 			attr_check_append(check, a);
 		}
+	}
+
+	if (source) {
+		if (repo_get_oid_tree(the_repository, source, &initialized_oid))
+			die("%s: not a valid tree-ish source", source);
+		set_git_attr_source(source);
 	}
 
 	if (stdin_paths)

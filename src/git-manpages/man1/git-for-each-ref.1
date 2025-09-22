@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-for-each-ref
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-FOR\-EACH\-REF" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-FOR\-EACH\-REF" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,26 +33,34 @@ git-for-each-ref \- Output information on each ref
 .sp
 .nf
 \fIgit for\-each\-ref\fR [\-\-count=<count>] [\-\-shell|\-\-perl|\-\-python|\-\-tcl]
-                   [(\-\-sort=<key>)\&...] [\-\-format=<format>] [<pattern>\&...]
+                   [(\-\-sort=<key>)\&...\:] [\-\-format=<format>]
+                   [\-\-include\-root\-refs] [ \-\-stdin | <pattern>\&...\: ]
                    [\-\-points\-at=<object>]
                    [\-\-merged[=<object>]] [\-\-no\-merged[=<object>]]
                    [\-\-contains[=<object>]] [\-\-no\-contains[=<object>]]
+                   [\-\-exclude=<pattern> \&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Iterate over all refs that match \fB<pattern>\fR and show them according to the given \fB<format>\fR, after sorting them according to the given set of \fB<key>\fR\&. If \fB<count>\fR is given, stop after showing that many refs\&. The interpolated values in \fB<format>\fR can optionally be quoted as string literals in the specified host language allowing their direct evaluation in that language\&.
+Iterate over all refs that match \fI<pattern>\fR and show them according to the given \fI<format>\fR, after sorting them according to the given set of \fI<key>\fR\&. If \fI<count>\fR is given, stop after showing that many refs\&. The interpolated values in \fI<format>\fR can optionally be quoted as string literals in the specified host language allowing their direct evaluation in that language\&.
 .SH "OPTIONS"
 .PP
-<pattern>\&...
+<pattern>\&...\:
 .RS 4
 If one or more patterns are given, only refs are shown that match against at least one pattern, either using fnmatch(3) or literally, in the latter case matching completely or from the beginning up to a slash\&.
+.RE
+.PP
+\-\-stdin
+.RS 4
+If
+\fB\-\-stdin\fR
+is supplied, then the list of patterns is read from standard input instead of from the argument list\&.
 .RE
 .PP
 \-\-count=<count>
 .RS 4
 By default the command shows all refs that match
-\fB<pattern>\fR\&. This option makes it stop after showing that many refs\&.
+\fI<pattern>\fR\&. This option makes it stop after showing that many refs\&.
 .RE
 .PP
 \-\-sort=<key>
@@ -67,21 +75,16 @@ is used\&. You may use the \-\-sort=<key> option multiple times, in which case t
 \-\-format=<format>
 .RS 4
 A string that interpolates
-\fB%(fieldname)\fR
-from a ref being shown and the object it points at\&. If
-\fBfieldname\fR
-is prefixed with an asterisk (\fB*\fR) and the ref points at a tag object, use the value for the field in the object which the tag object refers to (instead of the field in the tag object)\&. When unspecified,
-\fB<format>\fR
-defaults to
-\fB%(objectname) SPC %(objecttype) TAB %(refname)\fR\&. It also interpolates
+\fB%\fR(\fBfieldname\fR) from a ref being shown and the object it points at\&. In addition, the string literal
 \fB%%\fR
-to
-\fB%\fR, and
+renders as
+\fB%\fR
+and
 \fB%xx\fR
-where
+\- where
 \fBxx\fR
-are hex digits interpolates to character with hex code
-\fBxx\fR; for example
+are hex digits \- renders as the character with hex code
+\fBxx\fR\&. For example,
 \fB%00\fR
 interpolates to
 \fB\e0\fR
@@ -89,11 +92,20 @@ interpolates to
 \fB%09\fR
 to
 \fB\et\fR
-(TAB) and
+(TAB), and
 \fB%0a\fR
 to
 \fB\en\fR
 (LF)\&.
+.sp
+When unspecified,
+\fI<format>\fR
+defaults to
+\fB%\fR(\fBobjectname\fR)
+\fBSPC\fR
+\fB%\fR(\fBobjecttype\fR)
+\fBTAB\fR
+\fB%\fR(\fBrefname\fR)\&.
 .RE
 .PP
 \-\-color[=<when>]
@@ -101,13 +113,13 @@ to
 Respect any colors specified in the
 \fB\-\-format\fR
 option\&. The
-\fB<when>\fR
+\fI<when>\fR
 field must be one of
 \fBalways\fR,
 \fBnever\fR, or
 \fBauto\fR
 (if
-\fB<when>\fR
+\fI<when>\fR
 is absent, behave as if
 \fBalways\fR
 was given)\&.
@@ -116,8 +128,7 @@ was given)\&.
 \-\-shell, \-\-perl, \-\-python, \-\-tcl
 .RS 4
 If given, strings that substitute
-\fB%(fieldname)\fR
-placeholders are quoted as string literals suitable for the specified host language\&. This is meant to produce a scriptlet that can directly be `eval`ed\&.
+\fB%\fR(\fBfieldname\fR) placeholders are quoted as string literals suitable for the specified host language\&. This is meant to produce a scriptlet that can directly be `eval`ed\&.
 .RE
 .PP
 \-\-points\-at=<object>
@@ -149,6 +160,23 @@ Only list refs which don\(cqt contain the specified commit (HEAD if not specifie
 .RS 4
 Sorting and filtering refs are case insensitive\&.
 .RE
+.PP
+\-\-omit\-empty
+.RS 4
+Do not print a newline after formatted refs where the format expands to the empty string\&.
+.RE
+.PP
+\-\-exclude=<pattern>
+.RS 4
+If one or more patterns are given, only refs which do not match any excluded pattern(s) are shown\&. Matching is done using the same rules as
+\fI<pattern>\fR
+above\&.
+.RE
+.PP
+\-\-include\-root\-refs
+.RS 4
+List root refs (HEAD and pseudorefs) apart from regular refs\&.
+.RE
 .SH "FIELD NAMES"
 .sp
 Various values from structured fields in referenced objects can be used to interpolate into the resulting output, or as sort keys\&.
@@ -159,33 +187,29 @@ refname
 .RS 4
 The name of the ref (the part after $GIT_DIR/)\&. For a non\-ambiguous short name of the ref append
 \fB:short\fR\&. The option core\&.warnAmbiguousRefs is used to select the strict abbreviation mode\&. If
-\fBlstrip=<N>\fR
-(\fBrstrip=<N>\fR) is appended, strips
-\fB<N>\fR
+\fBlstrip=\fR\fI<N>\fR
+(\fBrstrip=\fR\fI<N>\fR) is appended, strips
+\fI<N>\fR
 slash\-separated path components from the front (back) of the refname (e\&.g\&.
-\fB%(refname:lstrip=2)\fR
-turns
+\fB%\fR(\fBrefname:lstrip=2\fR) turns
 \fBrefs/tags/foo\fR
 into
 \fBfoo\fR
 and
-\fB%(refname:rstrip=2)\fR
-turns
+\fB%\fR(\fBrefname:rstrip=2\fR) turns
 \fBrefs/tags/foo\fR
 into
 \fBrefs\fR)\&. If
-\fB<N>\fR
+\fI<N>\fR
 is a negative number, strip as many path components as necessary from the specified end to leave
-\fB\-<N>\fR
+\fB\-\fR\fI<N>\fR
 path components (e\&.g\&.
-\fB%(refname:lstrip=\-2)\fR
-turns
+\fB%\fR(\fBrefname:lstrip=\-2\fR) turns
 \fBrefs/tags/foo\fR
 into
 \fBtags/foo\fR
 and
-\fB%(refname:rstrip=\-1)\fR
-turns
+\fB%\fR(\fBrefname:rstrip=\-1\fR) turns
 \fBrefs/tags/foo\fR
 into
 \fBrefs\fR)\&. When the ref does not have enough components, the result becomes an empty string if stripping with positive <N>, or it becomes the full refname if stripping with negative <N>\&. Neither is an error\&.
@@ -218,7 +242,7 @@ objectname
 .RS 4
 The object name (aka SHA\-1)\&. For a non\-ambiguous abbreviation of the object name append
 \fB:short\fR\&. For an abbreviation of the object name with desired length append
-\fB:short=<length>\fR, where the minimum length is MINIMUM_ABBREV\&. The length may be exceeded to ensure unique object names\&.
+\fB:short=\fR\fI<length>\fR, where the minimum length is MINIMUM_ABBREV\&. The length may be exceeded to ensure unique object names\&.
 .RE
 .PP
 deltabase
@@ -228,7 +252,9 @@ This expands to the object name of the delta base for the given object, if it is
 .PP
 upstream
 .RS 4
-The name of a local ref which can be considered \(lqupstream\(rq from the displayed ref\&. Respects
+The name of a local ref which can be considered
+\(lqupstream\(rq
+from the displayed ref\&. Respects
 \fB:short\fR,
 \fB:lstrip\fR
 and
@@ -242,18 +268,14 @@ to show "[ahead N, behind M]" and
 to show the terse version: ">" (ahead), "<" (behind), "<>" (ahead and behind), or "=" (in sync)\&.
 \fB:track\fR
 also prints "[gone]" whenever unknown upstream ref is encountered\&. Append
-\fB:track,nobracket\fR
-to show tracking information without brackets (i\&.e "ahead N, behind M")\&.
+\fB:track\fR,nobracket to show tracking information without brackets (i\&.e "ahead N, behind M")\&.
 .sp
 For any remote\-tracking branch
-\fB%(upstream)\fR,
-\fB%(upstream:remotename)\fR
-and
-\fB%(upstream:remoteref)\fR
-refer to the name of the remote and the name of the tracked remote ref, respectively\&. In other words, the remote\-tracking branch can be updated explicitly and individually by using the refspec
-\fB%(upstream:remoteref):%(upstream)\fR
-to fetch from
-\fB%(upstream:remotename)\fR\&.
+\fB%\fR(\fBupstream\fR),
+\fB%\fR(\fBupstream:remotename\fR) and
+\fB%\fR(\fBupstream:remoteref\fR) refer to the name of the remote and the name of the tracked remote ref, respectively\&. In other words, the remote\-tracking branch can be updated explicitly and individually by using the refspec
+\fB%\fR(\fBupstream:remoteref\fR)\fB:%\fR(\fBupstream\fR) to fetch from
+\fB%\fR(\fBupstream:remotename\fR)\&.
 .sp
 Has no effect if the ref does not have tracking information associated with it\&. All the options apart from
 \fBnobracket\fR
@@ -263,8 +285,7 @@ are mutually exclusive, but if used together the last option is selected\&.
 push
 .RS 4
 The name of a local ref which represents the
-\fB@{push}\fR
-location for the displayed ref\&. Respects
+\fB@\fR{push} location for the displayed ref\&. Respects
 \fB:short\fR,
 \fB:lstrip\fR,
 \fB:rstrip\fR,
@@ -275,47 +296,47 @@ location for the displayed ref\&. Respects
 options as
 \fBupstream\fR
 does\&. Produces an empty string if no
-\fB@{push}\fR
-ref is configured\&.
+\fB@\fR{push} ref is configured\&.
 .RE
 .PP
 HEAD
 .RS 4
 \fI*\fR
-if HEAD matches current ref (the checked out branch), \(aq \(aq otherwise\&.
+if HEAD matches current ref (the checked out branch), \*(Aq \*(Aq otherwise\&.
 .RE
 .PP
 color
 .RS 4
 Change output color\&. Followed by
-\fB:<colorname>\fR, where color names are described under Values in the "CONFIGURATION FILE" section of
+\fB:\fR\fI<colorname>\fR, where color names are described under Values in the "CONFIGURATION FILE" section of
 \fBgit-config\fR(1)\&. For example,
-\fB%(color:bold red)\fR\&.
+\fB%\fR(\fBcolor:bold\fR
+\fBred\fR)\&.
 .RE
 .PP
 align
 .RS 4
-Left\-, middle\-, or right\-align the content between %(align:\&...) and %(end)\&. The "align:" is followed by
-\fBwidth=<width>\fR
+Left\-, middle\-, or right\-align the content between %(align:\&...\:) and %(end)\&. The "align:" is followed by
+\fBwidth=\fR\fI<width>\fR
 and
-\fBposition=<position>\fR
+\fBposition=\fR\fI<position>\fR
 in any order separated by a comma, where the
-\fB<position>\fR
+\fI<position>\fR
 is either left, right or middle, default being left and
-\fB<width>\fR
+\fI<width>\fR
 is the total length of the content with alignment\&. For brevity, the "width=" and/or "position=" prefixes may be omitted, and bare <width> and <position> used instead\&. For instance,
-\fB%(align:<width>,<position>)\fR\&. If the contents length is more than the width then no alignment is performed\&. If used with
+\fB%\fR(\fBalign:\fR\fI<width>\fR\fB,\fR\fI<position>\fR)\&. If the contents length is more than the width then no alignment is performed\&. If used with
 \fB\-\-quote\fR
-everything in between %(align:\&...) and %(end) is quoted, but if nested then only the topmost level performs quoting\&.
+everything in between %(align:\&...\:) and %(end) is quoted, but if nested then only the topmost level performs quoting\&.
 .RE
 .PP
 if
 .RS 4
-Used as %(if)\&...%(then)\&...%(end) or %(if)\&...%(then)\&...%(else)\&...%(end)\&. If there is an atom with value or string literal after the %(if) then everything after the %(then) is printed, else if the %(else) atom is used, then everything after %(else) is printed\&. We ignore space when evaluating the string before %(then), this is useful when we use the %(HEAD) atom which prints either "*" or " " and we want to apply the
+Used as %(if)\&...\:%(then)\&...\:%(end) or %(if)\&...\:%(then)\&...\:%(else)\&...\:%(end)\&. If there is an atom with value or string literal after the %(if) then everything after the %(then) is printed, else if the %(else) atom is used, then everything after %(else) is printed\&. We ignore space when evaluating the string before %(then), this is useful when we use the %(HEAD) atom which prints either "*" or " " and we want to apply the
 \fIif\fR
 condition only on the
 \fIHEAD\fR
-ref\&. Append ":equals=<string>" or ":notequals=<string>" to compare the value between the %(if:\&...) and %(then) atoms with the given string\&.
+ref\&. Append ":equals=<string>" or ":notequals=<string>" to compare the value between the %(if:\&...\:) and %(then) atoms with the given string\&.
 .RE
 .PP
 symref
@@ -330,16 +351,164 @@ options in the same way as
 above\&.
 .RE
 .PP
+signature
+.RS 4
+The GPG signature of a commit\&.
+.RE
+.PP
+signature:grade
+.RS 4
+Show "G" for a good (valid) signature, "B" for a bad signature, "U" for a good signature with unknown validity, "X" for a good signature that has expired, "Y" for a good signature made by an expired key, "R" for a good signature made by a revoked key, "E" if the signature cannot be checked (e\&.g\&. missing key) and "N" for no signature\&.
+.RE
+.PP
+signature:signer
+.RS 4
+The signer of the GPG signature of a commit\&.
+.RE
+.PP
+signature:key
+.RS 4
+The key of the GPG signature of a commit\&.
+.RE
+.PP
+signature:fingerprint
+.RS 4
+The fingerprint of the GPG signature of a commit\&.
+.RE
+.PP
+signature:primarykeyfingerprint
+.RS 4
+The primary key fingerprint of the GPG signature of a commit\&.
+.RE
+.PP
+signature:trustlevel
+.RS 4
+The trust level of the GPG signature of a commit\&. Possible outputs are
+\fBultimate\fR,
+\fBfully\fR,
+\fBmarginal\fR,
+\fBnever\fR
+and
+\fBundefined\fR\&.
+.RE
+.PP
 worktreepath
 .RS 4
 The absolute path to the worktree in which the ref is checked out, if it is checked out in any linked worktree\&. Empty string otherwise\&.
 .RE
+.PP
+ahead\-behind:<committish>
+.RS 4
+Two integers, separated by a space, demonstrating the number of commits ahead and behind, respectively, when comparing the output ref to the
+\fI<committish>\fR
+specified in the format\&.
+.RE
+.PP
+is\-base:<committish>
+.RS 4
+In at most one row, (\fI<committish>\fR) will appear to indicate the ref that is most likely the ref used as a starting point for the branch that produced
+\fI<committish>\fR\&. This choice is made using a heuristic: choose the ref that minimizes the number of commits in the first\-parent history of
+\fI<committish>\fR
+and not in the first\-parent history of the ref\&.
 .sp
-In addition to the above, for commit and tag objects, the header field names (\fBtree\fR, \fBparent\fR, \fBobject\fR, \fBtype\fR, and \fBtag\fR) can be used to specify the value in the header field\&. Fields \fBtree\fR and \fBparent\fR can also be used with modifier \fB:short\fR and \fB:short=<length>\fR just like \fBobjectname\fR\&.
+For example, consider the following figure of first\-parent histories of several refs:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+*\-\-*\-\-*\-\-*\-\-*\-\-* refs/heads/A
+\e
+ \e
+  *\-\-*\-\-*\-\-* refs/heads/B
+   \e     \e
+    \e     \e
+     *     * refs/heads/C
+      \e
+       \e
+        *\-\-* refs/heads/D
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Here, if
+\fBA\fR,
+\fBB\fR, and
+\fBC\fR
+are the filtered references, and the format string is
+\fB%\fR(\fBrefname\fR)\fB:%\fR(\fBis\-base:D\fR), then the output would be
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+refs/heads/A:
+refs/heads/B:(D)
+refs/heads/C:
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+This is because the first\-parent history of
+\fBD\fR
+has its earliest intersection with the first\-parent histories of the filtered refs at a common first\-parent ancestor of
+\fBB\fR
+and
+\fBC\fR
+and ties are broken by the earliest ref in the sorted order\&.
+.sp
+Note that this token will not appear if the first\-parent history of
+\fI<committish>\fR
+does not intersect the first\-parent histories of the filtered refs\&.
+.RE
+.PP
+describe[:options]
+.RS 4
+A human\-readable name, like
+\fBgit-describe\fR(1); empty string for undescribable commits\&. The
+\fBdescribe\fR
+string may be followed by a colon and one or more comma\-separated options\&.
+.PP
+tags=<bool\-value>
+.RS 4
+Instead of only considering annotated tags, consider lightweight tags as well; see the corresponding option in
+\fBgit-describe\fR(1)
+for details\&.
+.RE
+.PP
+abbrev=<number>
+.RS 4
+Use at least <number> hexadecimal digits; see the corresponding option in
+\fBgit-describe\fR(1)
+for details\&.
+.RE
+.PP
+match=<pattern>
+.RS 4
+Only consider tags matching the given
+\fBglob\fR(\fB7\fR) pattern, excluding the "refs/tags/" prefix; see the corresponding option in
+\fBgit-describe\fR(1)
+for details\&.
+.RE
+.PP
+exclude=<pattern>
+.RS 4
+Do not consider tags matching the given
+\fBglob\fR(\fB7\fR) pattern, excluding the "refs/tags/" prefix; see the corresponding option in
+\fBgit-describe\fR(1)
+for details\&.
+.RE
+.RE
+.sp
+In addition to the above, for commit and tag objects, the header field names (\fBtree\fR, \fBparent\fR, \fBobject\fR, \fBtype\fR, and \fBtag\fR) can be used to specify the value in the header field\&. Fields \fBtree\fR and \fBparent\fR can also be used with modifier \fB:short\fR and \fB:short=\fR\fI<length>\fR just like \fBobjectname\fR\&.
 .sp
 For commit and tag objects, the special \fBcreatordate\fR and \fBcreator\fR fields will correspond to the appropriate date or name\-email\-date tuple from the \fBcommitter\fR or \fBtagger\fR fields depending on the object type\&. These are intended for working on a mix of annotated and lightweight tags\&.
 .sp
-Fields that have name\-email\-date tuple as its value (\fBauthor\fR, \fBcommitter\fR, and \fBtagger\fR) can be suffixed with \fBname\fR, \fBemail\fR, and \fBdate\fR to extract the named component\&. For email fields (\fBauthoremail\fR, \fBcommitteremail\fR and \fBtaggeremail\fR), \fB:trim\fR can be appended to get the email without angle brackets, and \fB:localpart\fR to get the part before the \fB@\fR symbol out of the trimmed email\&.
+For tag objects, a \fBfieldname\fR prefixed with an asterisk (\fB*\fR) expands to the \fBfieldname\fR value of the peeled object, rather than that of the tag object itself\&.
+.sp
+Fields that have name\-email\-date tuple as its value (\fBauthor\fR, \fBcommitter\fR, and \fBtagger\fR) can be suffixed with \fBname\fR, \fBemail\fR, and \fBdate\fR to extract the named component\&. For email fields (\fBauthoremail\fR, \fBcommitteremail\fR and \fBtaggeremail\fR), \fB:trim\fR can be appended to get the email without angle brackets, and \fB:localpart\fR to get the part before the \fB@\fR symbol out of the trimmed email\&. In addition to these, the \fB:mailmap\fR option and the corresponding \fB:mailmap\fR,trim and \fB:mailmap\fR,localpart can be used (order does not matter) to get values of the name and email according to the \&.mailmap file or according to the file set in the mailmap\&.file or mailmap\&.blob configuration variable (see \fBgitmailmap\fR(5))\&.
 .sp
 The raw data in an object is \fBraw\fR\&.
 .PP
@@ -348,9 +517,9 @@ raw:size
 The raw data size of the object\&.
 .RE
 .sp
-Note that \fB\-\-format=%(raw)\fR can not be used with \fB\-\-python\fR, \fB\-\-shell\fR, \fB\-\-tcl\fR, because such language may not support arbitrary binary data in their string variable type\&.
+Note that \fB\-\-format=%\fR(\fBraw\fR) can not be used with \fB\-\-python\fR, \fB\-\-shell\fR, \fB\-\-tcl\fR, because such language may not support arbitrary binary data in their string variable type\&.
 .sp
-The message in a commit or a tag object is \fBcontents\fR, from which \fBcontents:<part>\fR can be used to extract various parts out of:
+The message in a commit or a tag object is \fBcontents\fR, from which \fBcontents:\fR\fI<part>\fR can be used to extract various parts out of:
 .PP
 contents:size
 .RS 4
@@ -386,7 +555,7 @@ The first
 lines of the message\&.
 .RE
 .sp
-Additionally, the trailers as interpreted by \fBgit-interpret-trailers\fR(1) are obtained as \fBtrailers[:options]\fR (or by using the historical alias \fBcontents:trailers[:options]\fR)\&. For valid [:option] values see \fBtrailers\fR section of \fBgit-log\fR(1)\&.
+Additionally, the trailers as interpreted by \fBgit-interpret-trailers\fR(1) are obtained as \fBtrailers\fR[\fB:options\fR] (or by using the historical alias \fBcontents:trailers\fR[\fB:options\fR])\&. For valid [:option] values see \fBtrailers\fR section of \fBgit-log\fR(1)\&.
 .sp
 For sorting purposes, fields with numeric values sort in numeric order (\fBobjectsize\fR, \fBauthordate\fR, \fBcommitterdate\fR, \fBcreatordate\fR, \fBtaggerdate\fR)\&. All other fields are used to sort in their byte\-value order\&.
 .sp
@@ -394,7 +563,7 @@ There is also an option to sort by versions, this can be done by using the field
 .sp
 In any case, a field name that refers to a field inapplicable to the object referred by the ref does not cause an error\&. It returns an empty string instead\&.
 .sp
-As a special case for the date\-type fields, you may specify a format for the date by adding \fB:\fR followed by date format name (see the values the \fB\-\-date\fR option to \fBgit-rev-list\fR(1) takes)\&.
+As a special case for the date\-type fields, you may specify a format for the date by adding \fB:\fR followed by date format name (see the values the \fB\-\-date\fR option to \fBgit-rev-list\fR(1) takes)\&. If this formatting is provided in a \fB\-\-sort\fR key, references will be sorted according to the byte\-value of the formatted string rather than the numeric value of the underlying timestamp\&.
 .sp
 Some atoms like %(align) and %(if) always require a matching %(end)\&. We call them "opening atoms" and sometimes denote them as %($open)\&.
 .sp
@@ -409,19 +578,18 @@ An example directly producing formatted text\&. Show the most recent 3 tagged co
 .nf
 #!/bin/sh
 
-git for\-each\-ref \-\-count=3 \-\-sort=\(aq\-*authordate\(aq \e
-\-\-format=\(aqFrom: %(*authorname) %(*authoremail)
+git for\-each\-ref \-\-count=3 \-\-sort=\*(Aq\-*authordate\*(Aq \e
+\-\-format=\*(AqFrom: %(*authorname) %(*authoremail)
 Subject: %(*subject)
 Date: %(*authordate)
 Ref: %(*refname)
 
 %(*body)
-\(aq \(aqrefs/tags\(aq
+\*(Aq \*(Aqrefs/tags\*(Aq
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 A simple example showing the use of shell eval on the output, demonstrating the use of \-\-shell\&. List the prefixes of all heads:
 .sp
@@ -442,7 +610,6 @@ done
 .RE
 .\}
 .sp
-.sp
 A bit more elaborate report on tags, demonstrating that the format may be an entire script:
 .sp
 .if n \{\
@@ -451,7 +618,7 @@ A bit more elaborate report on tags, demonstrating that the format may be an ent
 .nf
 #!/bin/sh
 
-fmt=\(aq
+fmt=\*(Aq
         r=%(refname)
         t=%(*objecttype)
         T=${r#refs/tags/}
@@ -489,10 +656,10 @@ Its message reads as:
                 echo "$b" | sed \-e "s/^/    /"
                 echo
         fi
-\(aq
+\*(Aq
 
 eval=`git for\-each\-ref \-\-shell \-\-format="$fmt" \e
-        \-\-sort=\(aq*objecttype\(aq \e
+        \-\-sort=\*(Aq*objecttype\*(Aq \e
         \-\-sort=\-taggerdate \e
         refs/tags`
 eval "$eval"
@@ -501,8 +668,7 @@ eval "$eval"
 .RE
 .\}
 .sp
-.sp
-An example to show the usage of %(if)\&...%(then)\&...%(else)\&...%(end)\&. This prefixes the current branch with a star\&.
+An example to show the usage of %(if)\&...\:%(then)\&...\:%(else)\&...\:%(end)\&. This prefixes the current branch with a star\&.
 .sp
 .if n \{\
 .RS 4
@@ -514,8 +680,7 @@ git for\-each\-ref \-\-format="%(if)%(HEAD)%(then)* %(else)  %(end)%(refname:sho
 .RE
 .\}
 .sp
-.sp
-An example to show the usage of %(if)\&...%(then)\&...%(end)\&. This prints the authorname, if present\&.
+An example to show the usage of %(if)\&...\:%(then)\&...\:%(end)\&. This prints the authorname, if present\&.
 .sp
 .if n \{\
 .RS 4
@@ -526,7 +691,6 @@ git for\-each\-ref \-\-format="%(refname)%(if)%(authorname)%(then) Authored by: 
 .if n \{\
 .RE
 .\}
-.sp
 .SH "CAVEATS"
 .sp
 Note that the sizes of objects on disk are reported accurately, but care should be taken in drawing conclusions about which refs or objects are responsible for disk usage\&. The size of a packed non\-delta object may be much larger than the size of objects which delta against it, but the choice of which object is the base and which is the delta is arbitrary and is subject to change during a repack\&.

@@ -4,9 +4,11 @@
 #ifndef DIFFCORE_H
 #define DIFFCORE_H
 
-#include "cache.h"
+#include "hash.h"
 
 struct diff_options;
+struct mem_pool;
+struct oid_array;
 struct repository;
 struct strintmap;
 struct strmap;
@@ -105,7 +107,7 @@ struct diff_filepair {
 	struct diff_filespec *one;
 	struct diff_filespec *two;
 	unsigned short int score;
-	char status; /* M C R A D U etc. (see Documentation/diff-format.txt or DIFF_STATUS_* in diff.h) */
+	char status; /* M C R A D U etc. (see Documentation/diff-format.adoc or DIFF_STATUS_* in diff.h) */
 	unsigned broken_pair : 1;
 	unsigned renamed_pair : 1;
 	unsigned is_unmerged : 1;
@@ -151,18 +153,16 @@ struct diff_queue_struct {
 	int nr;
 };
 
-#define DIFF_QUEUE_CLEAR(q) \
-	do { \
-		(q)->queue = NULL; \
-		(q)->nr = (q)->alloc = 0; \
-	} while (0)
+#define DIFF_QUEUE_INIT { 0 }
+
+void diff_queue_init(struct diff_queue_struct *q);
+void diff_queue_clear(struct diff_queue_struct *q);
 
 extern struct diff_queue_struct diff_queued_diff;
 struct diff_filepair *diff_queue(struct diff_queue_struct *,
 				 struct diff_filespec *,
 				 struct diff_filespec *);
 void diff_q(struct diff_queue_struct *, struct diff_filepair *);
-void diff_free_queue(struct diff_queue_struct *q);
 
 /* dir_rename_relevance: the reason we want rename information for a dir */
 enum dir_rename_relevance {

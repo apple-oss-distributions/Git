@@ -46,7 +46,7 @@ test_expect_success SANITY 'prune directories with unreadable gitdir' '
 	: >.git/worktrees/def/gitdir &&
 	chmod u-r .git/worktrees/def/gitdir &&
 	git worktree prune --verbose 2>actual &&
-	test_i18ngrep "Removing worktrees/def: unable to read gitdir file" actual &&
+	test_grep "Removing worktrees/def: unable to read gitdir file" actual &&
 	! test -d .git/worktrees/def &&
 	! test -d .git/worktrees
 '
@@ -56,7 +56,7 @@ test_expect_success 'prune directories with invalid gitdir' '
 	: >.git/worktrees/def/def &&
 	: >.git/worktrees/def/gitdir &&
 	git worktree prune --verbose 2>actual &&
-	test_i18ngrep "Removing worktrees/def: invalid gitdir file" actual &&
+	test_grep "Removing worktrees/def: invalid gitdir file" actual &&
 	! test -d .git/worktrees/def &&
 	! test -d .git/worktrees
 '
@@ -66,7 +66,7 @@ test_expect_success 'prune directories with gitdir pointing to nowhere' '
 	: >.git/worktrees/def/def &&
 	echo "$(pwd)"/nowhere >.git/worktrees/def/gitdir &&
 	git worktree prune --verbose 2>actual &&
-	test_i18ngrep "Removing worktrees/def: gitdir file points to non-existent location" actual &&
+	test_grep "Removing worktrees/def: gitdir file points to non-existent location" actual &&
 	! test -d .git/worktrees/def &&
 	! test -d .git/worktrees
 '
@@ -102,7 +102,7 @@ test_expect_success 'prune duplicate (linked/linked)' '
 	sed "s/w2/w1/" .git/worktrees/w2/gitdir >.git/worktrees/w2/gitdir.new &&
 	mv .git/worktrees/w2/gitdir.new .git/worktrees/w2/gitdir &&
 	git worktree prune --verbose 2>actual &&
-	test_i18ngrep "duplicate entry" actual &&
+	test_grep "duplicate entry" actual &&
 	test -d .git/worktrees/w1 &&
 	! test -d .git/worktrees/w2
 '
@@ -115,8 +115,28 @@ test_expect_success 'prune duplicate (main/linked)' '
 	rm -fr wt &&
 	mv repo wt &&
 	git -C wt worktree prune --verbose 2>actual &&
-	test_i18ngrep "duplicate entry" actual &&
+	test_grep "duplicate entry" actual &&
 	! test -d .git/worktrees/wt
+'
+
+test_expect_success 'not prune proper worktrees inside linked worktree with relative paths' '
+	test_when_finished rm -rf repo wt_ext &&
+	git init repo &&
+	(
+	    cd repo &&
+	    git config worktree.useRelativePaths true &&
+	    echo content >file &&
+	    git add file &&
+	    git commit -m msg &&
+	    git worktree add ../wt_ext &&
+	    git worktree add wt_int &&
+	    cd wt_int &&
+	    git worktree prune -v >out &&
+	    test_must_be_empty out &&
+	    cd ../../wt_ext &&
+	    git worktree prune -v >out &&
+	    test_must_be_empty out
+	)
 '
 
 test_done

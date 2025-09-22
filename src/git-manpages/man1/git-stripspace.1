@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-stripspace
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-STRIPSPACE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-STRIPSPACE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,6 @@ git-stripspace \- Remove unnecessary whitespace
 \fIgit stripspace\fR [\-s | \-\-strip\-comments]
 \fIgit stripspace\fR [\-c | \-\-comment\-lines]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Read text, such as commit messages, notes, tags and branch descriptions, from the standard input and clean it in the manner used by Git\&.
@@ -90,18 +89,17 @@ to the last line if necessary\&.
 .sp
 In the case where the input consists entirely of whitespace characters, no output will be produced\&.
 .sp
-\fBNOTE\fR: This is intended for cleaning metadata, prefer the \fB\-\-whitespace=fix\fR mode of \fBgit-apply\fR(1) for correcting whitespace of patches or files in the repository\&.
+\fBNOTE\fR: This is intended for cleaning metadata\&. Prefer the \fB\-\-whitespace=fix\fR mode of \fBgit-apply\fR(1) for correcting whitespace of patches or files in the repository\&.
 .SH "OPTIONS"
 .PP
 \-s, \-\-strip\-comments
 .RS 4
-Skip and remove all lines starting with comment character (default
-\fI#\fR)\&.
+Skip and remove all lines starting with a comment character (\fBcore\&.commentChar\fR, default #)\&.
 .RE
 .PP
 \-c, \-\-comment\-lines
 .RS 4
-Prepend comment character and blank to each line\&. Lines will automatically be terminated with a newline\&. On empty lines, only the comment character will be prepended\&.
+Prepend the comment character and a blank space to each line\&. Lines will automatically be terminated with a newline\&. On empty lines, only the comment character will be prepended\&.
 .RE
 .SH "EXAMPLES"
 .sp
@@ -127,7 +125,6 @@ Given the following noisy input with \fI$\fR indicating the end of a line:
 .RE
 .\}
 .sp
-.sp
 Use \fIgit stripspace\fR with no arguments to obtain:
 .sp
 .if n \{\
@@ -148,7 +145,6 @@ Use \fIgit stripspace\fR with no arguments to obtain:
 .RE
 .\}
 .sp
-.sp
 Use \fIgit stripspace \-\-strip\-comments\fR to obtain:
 .sp
 .if n \{\
@@ -165,7 +161,6 @@ Use \fIgit stripspace \-\-strip\-comments\fR to obtain:
 .if n \{\
 .RE
 .\}
-.sp
 .SH "GIT"
 .sp
 Part of the \fBgit\fR(1) suite

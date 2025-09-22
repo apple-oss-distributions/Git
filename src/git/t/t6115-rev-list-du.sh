@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='basic tests of rev-list --disk-usage'
+
 . ./test-lib.sh
 
 # we want a mix of reachable and unreachable, as well as
@@ -21,7 +22,7 @@ test_expect_success 'set up repository' '
 disk_usage_slow () {
 	git rev-list --no-object-names "$@" |
 	git cat-file --batch-check="%(objectsize:disk)" |
-	perl -lne '$total += $_; END { print $total}'
+	awk '{ i += $1 } END { print i }'
 }
 
 # check behavior with given rev-list options; note that
@@ -47,6 +48,13 @@ check_du () {
 check_du HEAD
 check_du --objects HEAD
 check_du --objects HEAD^..HEAD
+
+test_expect_success 'setup for --unpacked tests' '
+	git repack -adb &&
+	test_commit unpacked
+'
+
+check_du --all --objects --unpacked
 
 # As mentioned above, don't use hardcode sizes as actual size, but use the
 # output from git cat-file.

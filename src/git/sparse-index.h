@@ -1,6 +1,13 @@
 #ifndef SPARSE_INDEX_H__
 #define SPARSE_INDEX_H__
 
+/*
+ * If performing an operation where the index is supposed to expand to a
+ * full index, then disable the advice message by setting this global to
+ * zero.
+ */
+extern int give_advice_on_expansion;
+
 struct index_state;
 #define SPARSE_INDEX_MEMORY_ONLY (1 << 0)
 int is_sparse_index_allowed(struct index_state *istate, int flags);
@@ -36,5 +43,7 @@ struct pattern_list;
  * index is expanded to a full index.
  */
 void expand_index(struct index_state *istate, struct pattern_list *pl);
+
+void ensure_full_index(struct index_state *istate);
 
 #endif

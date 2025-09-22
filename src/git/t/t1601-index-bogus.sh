@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test handling of bogus index entries'
+
 . ./test-lib.sh
 
 test_expect_success 'create tree with null sha1' '

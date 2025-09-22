@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test custom script in place of pack-objects'
+
 . ./test-lib.sh
 
 test_expect_success 'create some history to fetch' '

@@ -8,10 +8,6 @@ test_description='Test repository version check'
 . ./test-lib.sh
 
 test_expect_success 'setup' '
-	test_oid_cache <<-\EOF &&
-	version sha1:0
-	version sha256:1
-	EOF
 	cat >test.patch <<-\EOF &&
 	diff --git a/test.txt b/test.txt
 	new file mode 100644
@@ -27,7 +23,12 @@ test_expect_success 'setup' '
 '
 
 test_expect_success 'gitdir selection on normal repos' '
-	echo $(test_oid version) >expect &&
+	if test_have_prereq DEFAULT_REPO_FORMAT
+	then
+		echo 0
+	else
+		echo 1
+	fi >expect &&
 	git config core.repositoryformatversion >actual &&
 	git -C test config core.repositoryformatversion >actual2 &&
 	test_cmp expect actual &&
@@ -36,7 +37,7 @@ test_expect_success 'gitdir selection on normal repos' '
 
 test_expect_success 'gitdir selection on unsupported repo' '
 	# Make sure it would stop at test2, not trash
-	test_expect_code 1 git -C test2 config core.repositoryformatversion >actual
+	test_expect_code 1 git -C test2 config core.repositoryformatversion
 '
 
 test_expect_success 'gitdir not required mode' '
@@ -78,8 +79,13 @@ mkconfig () {
 
 while read outcome version extensions; do
 	test_expect_success "$outcome version=$version $extensions" "
-		mkconfig $version $extensions >.git/config &&
-		check_${outcome}
+		test_when_finished 'rm -rf extensions' &&
+		git init extensions &&
+		(
+			cd extensions &&
+			mkconfig $version $extensions >.git/config &&
+			check_${outcome}
+		)
 	"
 done <<\EOF
 allow 0
@@ -93,7 +99,8 @@ allow 1 noop-v1
 EOF
 
 test_expect_success 'precious-objects allowed' '
-	mkconfig 1 preciousObjects >.git/config &&
+	git config core.repositoryFormatVersion 1 &&
+	git config extensions.preciousObjects 1 &&
 	check_allow
 '
 

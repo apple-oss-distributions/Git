@@ -5,7 +5,6 @@
 
 test_description='repack involving cyclic alternate'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -18,7 +17,7 @@ test_expect_success setup '
 	echo "$(pwd)"/.git/objects/../objects >.git/objects/info/alternates
 '
 
-test_expect_success 're-packing repository with itsself as alternate' '
+test_expect_success 're-packing repository with itself as alternate' '
 	git repack -adl &&
 	git fsck
 '

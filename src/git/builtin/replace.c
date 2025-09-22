@@ -7,16 +7,22 @@
  * and Carlos Rica <jasampler@gmail.com> that was itself based on
  * git-tag.sh and mktag.c by Linus Torvalds.
  */
-
-#include "cache.h"
-#include "config.h"
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
+#include "config.h"
+#include "editor.h"
+#include "gettext.h"
+#include "hex.h"
 #include "refs.h"
 #include "parse-options.h"
+#include "path.h"
 #include "run-command.h"
+#include "object-file.h"
+#include "object-name.h"
 #include "object-store.h"
-#include "repository.h"
+#include "replace-object.h"
 #include "tag.h"
+#include "wildmatch.h"
 
 static const char * const git_replace_usage[] = {
 	N_("git replace [-f] <object> <replacement>"),
@@ -35,13 +41,15 @@ enum replace_format {
 };
 
 struct show_data {
+	struct repository *repo;
 	const char *pattern;
 	enum replace_format format;
 };
 
-static int show_reference(struct repository *r, const char *refname,
+static int show_reference(const char *refname,
+			  const char *referent UNUSED,
 			  const struct object_id *oid,
-			  int flag, void *cb_data)
+			  int flag UNUSED, void *cb_data)
 {
 	struct show_data *data = cb_data;
 
@@ -54,11 +62,11 @@ static int show_reference(struct repository *r, const char *refname,
 			struct object_id object;
 			enum object_type obj_type, repl_type;
 
-			if (get_oid(refname, &object))
+			if (repo_get_oid(data->repo, refname, &object))
 				return error(_("failed to resolve '%s' as a valid ref"), refname);
 
-			obj_type = oid_object_info(r, &object, NULL);
-			repl_type = oid_object_info(r, oid, NULL);
+			obj_type = oid_object_info(data->repo, &object, NULL);
+			repl_type = oid_object_info(data->repo, oid, NULL);
 
 			printf("%s (%s) -> %s (%s)\n", refname, type_name(obj_type),
 			       oid_to_hex(oid), type_name(repl_type));
@@ -72,6 +80,7 @@ static int list_replace_refs(const char *pattern, const char *format)
 {
 	struct show_data data;
 
+	data.repo = the_repository;
 	if (!pattern)
 		pattern = "*";
 	data.pattern = pattern;
@@ -91,7 +100,8 @@ static int list_replace_refs(const char *pattern, const char *format)
 			       "valid formats are 'short', 'medium' and 'long'"),
 			     format);
 
-	for_each_replace_ref(the_repository, show_reference, (void *)&data);
+	refs_for_each_replace_ref(get_main_ref_store(the_repository),
+				  show_reference, (void *)&data);
 
 	return 0;
 }
@@ -112,7 +122,7 @@ static int for_each_replace_name(const char **argv, each_replace_name_fn fn)
 	base_len = ref.len;
 
 	for (p = argv; *p; p++) {
-		if (get_oid(*p, &oid)) {
+		if (repo_get_oid(the_repository, *p, &oid)) {
 			error("failed to resolve '%s' as a valid ref", *p);
 			had_error = 1;
 			continue;
@@ -122,7 +132,7 @@ static int for_each_replace_name(const char **argv, each_replace_name_fn fn)
 		strbuf_addstr(&ref, oid_to_hex(&oid));
 		full_hex = ref.buf + base_len;
 
-		if (read_ref(ref.buf, &oid)) {
+		if (refs_read_ref(get_main_ref_store(the_repository), ref.buf, &oid)) {
 			error(_("replace ref '%s' not found"), full_hex);
 			had_error = 1;
 			continue;
@@ -137,7 +147,7 @@ static int for_each_replace_name(const char **argv, each_replace_name_fn fn)
 static int delete_replace_ref(const char *name, const char *ref,
 			      const struct object_id *oid)
 {
-	if (delete_ref(NULL, ref, oid, 0))
+	if (refs_delete_ref(get_main_ref_store(the_repository), NULL, ref, oid, 0))
 		return 1;
 	printf_ln(_("Deleted replace ref '%s'"), name);
 	return 0;
@@ -155,8 +165,8 @@ static int check_ref_valid(struct object_id *object,
 	if (check_refname_format(ref->buf, 0))
 		return error(_("'%s' is not a valid ref name"), ref->buf);
 
-	if (read_ref(ref->buf, prev))
-		oidclr(prev);
+	if (refs_read_ref(get_main_ref_store(the_repository), ref->buf, prev))
+		oidclr(prev, the_repository->hash_algo);
 	else if (!force)
 		return error(_("replace ref '%s' already exists"), ref->buf);
 	return 0;
@@ -190,10 +200,11 @@ static int replace_object_oid(const char *object_ref,
 		return -1;
 	}
 
-	transaction = ref_transaction_begin(&err);
+	transaction = ref_store_transaction_begin(get_main_ref_store(the_repository),
+						  0, &err);
 	if (!transaction ||
 	    ref_transaction_update(transaction, ref.buf, repl, &prev,
-				   0, NULL, &err) ||
+				   NULL, NULL, 0, NULL, &err) ||
 	    ref_transaction_commit(transaction, &err))
 		res = error("%s", err.buf);
 
@@ -206,10 +217,10 @@ static int replace_object(const char *object_ref, const char *replace_ref, int f
 {
 	struct object_id object, repl;
 
-	if (get_oid(object_ref, &object))
+	if (repo_get_oid(the_repository, object_ref, &object))
 		return error(_("failed to resolve '%s' as a valid ref"),
 			     object_ref);
-	if (get_oid(replace_ref, &repl))
+	if (repo_get_oid(the_repository, replace_ref, &repl))
 		return error(_("failed to resolve '%s' as a valid ref"),
 			     replace_ref);
 
@@ -294,7 +305,7 @@ static int import_object(struct object_id *oid, enum object_type type,
 		strbuf_release(&result);
 	} else {
 		struct stat st;
-		int flags = HASH_FORMAT_CHECK | HASH_WRITE_OBJECT;
+		int flags = INDEX_FORMAT_CHECK | INDEX_WRITE_OBJECT;
 
 		if (fstat(fd, &st) < 0) {
 			error_errno(_("unable to fstat %s"), filename);
@@ -320,7 +331,7 @@ static int edit_and_replace(const char *object_ref, int force, int raw)
 	struct object_id old_oid, new_oid, prev;
 	struct strbuf ref = STRBUF_INIT;
 
-	if (get_oid(object_ref, &old_oid) < 0)
+	if (repo_get_oid(the_repository, object_ref, &old_oid) < 0)
 		return error(_("not a valid object name: '%s'"), object_ref);
 
 	type = oid_object_info(the_repository, &old_oid, NULL);
@@ -334,7 +345,7 @@ static int edit_and_replace(const char *object_ref, int force, int raw)
 	}
 	strbuf_release(&ref);
 
-	tmpfile = git_pathdup("REPLACE_EDITOBJ");
+	tmpfile = repo_git_path(the_repository, "REPLACE_EDITOBJ");
 	if (export_object(&old_oid, type, raw, tmpfile)) {
 		free(tmpfile);
 		return -1;
@@ -375,7 +386,7 @@ static int replace_parents(struct strbuf *buf, int argc, const char **argv)
 		struct object_id oid;
 		struct commit *commit;
 
-		if (get_oid(argv[i], &oid) < 0) {
+		if (repo_get_oid(the_repository, argv[i], &oid) < 0) {
 			strbuf_release(&new_parents);
 			return error(_("not a valid object name: '%s'"),
 				     argv[i]);
@@ -401,7 +412,7 @@ struct check_mergetag_data {
 	const char **argv;
 };
 
-static int check_one_mergetag(struct commit *commit,
+static int check_one_mergetag(struct commit *commit UNUSED,
 			       struct commit_extra_header *extra,
 			       void *data)
 {
@@ -422,7 +433,7 @@ static int check_one_mergetag(struct commit *commit,
 	/* iterate over new parents */
 	for (i = 1; i < mergetag_data->argc; i++) {
 		struct object_id oid;
-		if (get_oid(mergetag_data->argv[i], &oid) < 0)
+		if (repo_get_oid(the_repository, mergetag_data->argv[i], &oid) < 0)
 			return error(_("not a valid object name: '%s'"),
 				     mergetag_data->argv[i]);
 		if (oideq(get_tagged_oid(tag), &oid))
@@ -452,15 +463,15 @@ static int create_graft(int argc, const char **argv, int force, int gentle)
 	const char *buffer;
 	unsigned long size;
 
-	if (get_oid(old_ref, &old_oid) < 0)
+	if (repo_get_oid(the_repository, old_ref, &old_oid) < 0)
 		return error(_("not a valid object name: '%s'"), old_ref);
 	commit = lookup_commit_reference(the_repository, &old_oid);
 	if (!commit)
 		return error(_("could not parse %s"), old_ref);
 
-	buffer = get_commit_buffer(commit, &size);
+	buffer = repo_get_commit_buffer(the_repository, commit, &size);
 	strbuf_add(&buf, buffer, size);
-	unuse_commit_buffer(commit, buffer);
+	repo_unuse_commit_buffer(the_repository, commit, buffer);
 
 	if (replace_parents(&buf, argc - 1, &argv[1]) < 0) {
 		strbuf_release(&buf);
@@ -501,7 +512,7 @@ static int create_graft(int argc, const char **argv, int force, int gentle)
 
 static int convert_graft_file(int force)
 {
-	const char *graft_file = get_graft_file(the_repository);
+	const char *graft_file = repo_get_graft_file(the_repository);
 	FILE *fp = fopen_or_warn(graft_file, "r");
 	struct strbuf buf = STRBUF_INIT, err = STRBUF_INIT;
 	struct strvec args = STRVEC_INIT;
@@ -532,7 +543,10 @@ static int convert_graft_file(int force)
 	return -1;
 }
 
-int cmd_replace(int argc, const char **argv, const char *prefix)
+int cmd_replace(int argc,
+		const char **argv,
+		const char *prefix,
+		struct repository *repo UNUSED)
 {
 	int force = 0;
 	int raw = 0;
@@ -559,7 +573,7 @@ int cmd_replace(int argc, const char **argv, const char *prefix)
 		OPT_END()
 	};
 
-	read_replace_refs = 0;
+	disable_replace_refs();
 	git_config(git_default_config, NULL);
 
 	argc = parse_options(argc, argv, prefix, options, git_replace_usage, 0);

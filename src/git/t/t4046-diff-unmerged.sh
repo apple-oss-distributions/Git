@@ -2,7 +2,6 @@
 
 test_description='diff with unmerged index entries'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -20,13 +19,15 @@ test_expect_success setup '
 			for t in o x
 			do
 				path="$b$o$t" &&
-				case "$path" in ooo) continue ;; esac &&
-				paths="$paths$path " &&
-				p="	$path" &&
-				case "$b" in x) echo "$m1$p" ;; esac &&
-				case "$o" in x) echo "$m2$p" ;; esac &&
-				case "$t" in x) echo "$m3$p" ;; esac ||
-				return 1
+				if test "$path" != ooo
+				then
+					paths="$paths$path " &&
+					p="	$path" &&
+					case "$b" in x) echo "$m1$p" ;; esac &&
+					case "$o" in x) echo "$m2$p" ;; esac &&
+					case "$t" in x) echo "$m3$p" ;; esac ||
+					return 1
+				fi
 			done
 		done
 	done >ls-files-s.expect &&
@@ -84,6 +85,24 @@ test_expect_success 'diff-files -3' '
 	done >diff-files-3.expect &&
 	git diff-files -3 >diff-files-3.actual &&
 	test_cmp diff-files-3.expect diff-files-3.actual
+'
+
+test_expect_success 'diff --stat' '
+	for path in $paths
+	do
+		echo " $path | Unmerged" || return 1
+	done >diff-stat.expect &&
+	echo " 0 files changed" >>diff-stat.expect &&
+	git diff --cached --stat >diff-stat.actual &&
+	test_cmp diff-stat.expect diff-stat.actual
+'
+
+test_expect_success 'diff --quiet' '
+	test_expect_code 1 git diff --cached --quiet
+'
+
+test_expect_success 'diff --quiet --ignore-all-space' '
+	test_expect_code 1 git diff --cached --quiet --ignore-all-space
 '
 
 test_done

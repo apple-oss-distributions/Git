@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-replace
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-REPLACE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-REPLACE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,12 +34,11 @@ git-replace \- Create, list, delete refs to replace objects
 .nf
 \fIgit replace\fR [\-f] <object> <replacement>
 \fIgit replace\fR [\-f] \-\-edit <object>
-\fIgit replace\fR [\-f] \-\-graft <commit> [<parent>\&...]
+\fIgit replace\fR [\-f] \-\-graft <commit> [<parent>\&...\:]
 \fIgit replace\fR [\-f] \-\-convert\-graft\-file
-\fIgit replace\fR \-d <object>\&...
+\fIgit replace\fR \-d <object>\&...\:
 \fIgit replace\fR [\-\-format=<format>] [\-l [<pattern>]]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Adds a \fIreplace\fR reference in \fBrefs/replace/\fR namespace\&.
@@ -54,7 +53,7 @@ There is no other restriction on the replaced and replacement objects\&. Merge c
 .sp
 Replacement references will be used by default by all Git commands except those doing reachability traversal (prune, pack transfer and fsck)\&.
 .sp
-It is possible to disable use of replacement references for any command using the \fB\-\-no\-replace\-objects\fR option just after \fIgit\fR\&.
+It is possible to disable the use of replacement references for any command using the \fB\-\-no\-replace\-objects\fR option just after \fIgit\fR\&.
 .sp
 For example if commit \fIfoo\fR has been replaced by commit \fIbar\fR:
 .sp
@@ -68,7 +67,6 @@ $ git \-\-no\-replace\-objects cat\-file commit foo
 .RE
 .\}
 .sp
-.sp
 shows information about commit \fIfoo\fR, while:
 .sp
 .if n \{\
@@ -80,7 +78,6 @@ $ git cat\-file commit foo
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 shows information about commit \fIbar\fR\&.
 .sp
@@ -109,9 +106,9 @@ for details about how the editor will be chosen\&.
 When editing, provide the raw object contents rather than pretty\-printed ones\&. Currently this only affects trees, which will be shown in their binary form\&. This is harder to work with, but can help when repairing a tree that is so corrupted it cannot be pretty\-printed\&. Note that you may need to configure your editor to cleanly read and write binary data\&.
 .RE
 .PP
-\-\-graft <commit> [<parent>\&...]
+\-\-graft <commit> [<parent>\&...\:]
 .RS 4
-Create a graft commit\&. A new commit is created with the same content as <commit> except that its parents will be [<parent>\&...] instead of <commit>\(aqs parents\&. A replacement ref is then created to replace <commit> with the newly created commit\&. Use
+Create a graft commit\&. A new commit is created with the same content as <commit> except that its parents will be [<parent>\&...\:] instead of <commit>\*(Aqs parents\&. A replacement ref is then created to replace <commit> with the newly created commit\&. Use
 \fB\-\-convert\-graft\-file\fR
 to convert a
 \fB$GIT_DIR/info/grafts\fR
@@ -141,7 +138,7 @@ and
 .RE
 .SH "FORMATS"
 .sp
-The following format are available:
+The following formats are available:
 .sp
 .RS 4
 .ie n \{\
@@ -151,7 +148,7 @@ The following format are available:
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIshort\fR: <replaced sha1>
+\fIshort\fR: <replaced\-sha1>
 .RE
 .sp
 .RS 4
@@ -162,7 +159,7 @@ The following format are available:
 .sp -1
 .IP \(bu 2.3
 .\}
-\fImedium\fR: <replaced sha1> \(-> <replacement sha1>
+\fImedium\fR: <replaced\-sha1> \(-> <replacement\-sha1>
 .RE
 .sp
 .RS 4
@@ -173,7 +170,7 @@ The following format are available:
 .sp -1
 .IP \(bu 2.3
 .\}
-\fIlong\fR: <replaced sha1> (<replaced type>) \(-> <replacement sha1> (<replacement type>)
+\fIlong\fR: <replaced\-sha1> (<replaced\-type>) \(-> <replacement\-sha1> (<replacement\-type>)
 .RE
 .SH "CREATING REPLACEMENT OBJECTS"
 .sp
@@ -182,7 +179,7 @@ The following format are available:
 If you want to replace many blobs, trees or commits that are part of a string of commits, you may just want to create a replacement string of commits and then only replace the commit at the tip of the target string of commits with the commit at the tip of the replacement string of commits\&.
 .SH "BUGS"
 .sp
-Comparing blobs or trees that have been replaced with those that replace them will not work properly\&. And using \fBgit reset \-\-hard\fR to go back to a replaced commit will move the branch to the replacement commit instead of the replaced commit\&.
+Comparing blobs or trees that have been replaced with those that replace them will not work properly\&. And using \fBgit\fR \fBreset\fR \fB\-\-hard\fR to go back to a replaced commit will move the branch to the replacement commit instead of the replaced commit\&.
 .sp
 There may be other problems when using \fIgit rev\-list\fR related to pending objects\&.
 .SH "SEE ALSO"

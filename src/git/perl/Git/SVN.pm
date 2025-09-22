@@ -763,7 +763,7 @@ sub prop_walk {
 		# this needs to be updated.
 		++$interesting_props if /^svn:(?:ignore|keywords|executable
 		                                 |eol-style|mime-type
-						 |externals|needs-lock)$/x;
+						 |externals|needs-lock|global-ignores)$/x;
 	}
 	&$sub($self, $p, $props) if $interesting_props;
 
@@ -1752,7 +1752,7 @@ sub tie_for_persistent_memoization {
 END {
 	# Force cache writeout explicitly instead of waiting for
 	# global destruction to avoid segfault in Storable:
-	# http://rt.cpan.org/Public/Bug/Display.html?id=36087
+	# https://rt.cpan.org/Public/Bug/Display.html?id=36087
 	unmemoize_svn_mergeinfo_functions();
 }
 

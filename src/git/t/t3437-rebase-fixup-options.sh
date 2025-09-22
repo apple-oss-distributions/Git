@@ -20,21 +20,6 @@ to the "fixup" command that works with "fixup!", "fixup -C" works with
 
 EMPTY=""
 
-# test_commit_message <rev> -m <msg>
-# test_commit_message <rev> <path>
-# Verify that the commit message of <rev> matches
-# <msg> or the content of <path>.
-test_commit_message () {
-	git show --no-patch --pretty=format:%B "$1" >actual &&
-	case "$2" in
-	-m)
-		echo "$3" >expect &&
-		test_cmp expect actual ;;
-	*)
-		test_cmp "$2" actual ;;
-	esac
-}
-
 get_author () {
 	rev="$1" &&
 	git log -1 --pretty=format:"%an %ae %at" "$rev"
@@ -50,6 +35,7 @@ test_expect_success 'setup' '
 	body
 	EOF
 
+	test_commit initial &&
 	test_commit A A &&
 	test_commit B B &&
 	get_author HEAD >expected-author &&
@@ -140,6 +126,21 @@ test_expect_success 'fixup -C with conflicts gives correct message' '
 	test_cmp expected-author actual-author
 '
 
+test_expect_success 'conflicting fixup -C after fixup with custom comment string' '
+	test_config core.commentString COMMENT &&
+	test_when_finished "test_might_fail git rebase --abort" &&
+	git checkout --detach A3 &&
+	test_must_fail env FAKE_LINES="1 fixup 2 fixup_-C 4" git rebase -i A &&
+	echo resolved >A &&
+	git add A &&
+	FAKE_COMMIT_AMEND=edited git rebase --continue &&
+	test_commit_message HEAD <<-\EOF
+	A3
+
+	edited
+	EOF
+'
+
 test_expect_success 'skipping fixup -C after fixup gives correct message' '
 	test_when_finished "test_might_fail git rebase --abort" &&
 	git checkout --detach A3 &&
@@ -206,6 +207,31 @@ test_expect_success 'fixup -C works upon --autosquash with amend!' '
 	test_cmp_rev HEAD^ A &&
 	test_cmp "$TEST_DIRECTORY/t3437/expected-squash-message" \
 		actual-squash-message
+'
+
+test_expect_success 'fixup -[Cc]<commit> works' '
+	test_when_finished "test_might_fail git rebase --abort" &&
+	cat >todo <<-\EOF &&
+	pick A
+	fixup -CA1
+	pick B
+	fixup -cA2
+	EOF
+	(
+		set_replace_editor todo &&
+		FAKE_COMMIT_MESSAGE="edited and fixed up" \
+			git rebase -i initial initial
+	) &&
+	git log --pretty=format:%B initial.. >actual &&
+	cat >expect <<-EOF &&
+	edited and fixed up
+	$EMPTY
+	new subject
+	$EMPTY
+	new
+	body
+	EOF
+	test_cmp expect actual
 '
 
 test_done

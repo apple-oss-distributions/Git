@@ -72,7 +72,6 @@ gen_cmd_aux () {
 	nested=0
 	nested_min=100
 
-
 	# Step 1:
 	#
 	# Increase/decrease "start"/"end" indices respectively to get rid of
@@ -87,7 +86,7 @@ gen_cmd_aux () {
 	IFS=#
 	for c in $(echo "$LAYOUT" | sed 's:.:&#:g')
 	do
-		if test "$c" = " "
+		if test -z "$c" || test "$c" = " "
 		then
 			continue
 		fi
@@ -306,6 +305,9 @@ gen_cmd () {
 	elif echo "$LAYOUT" | grep @BASE >/dev/null
 	then
 		FINAL_TARGET="BASE"
+	elif echo "$LAYOUT" | grep @REMOTE >/dev/null
+	then
+		FINAL_TARGET="REMOTE"
 	else
 		FINAL_TARGET="MERGED"
 	fi
@@ -326,7 +328,7 @@ gen_cmd () {
 		fi
 
 		# If this is a single window diff with all the buffers
-		if ! echo "$tab" | grep ",\|/" >/dev/null
+		if ! echo "$tab" | grep -E ",|/" >/dev/null
 		then
 			CMD="$CMD | silent execute 'bufdo diffthis'"
 		fi
@@ -371,9 +373,17 @@ diff_cmd_help () {
 
 
 merge_cmd () {
-	layout=$(git config mergetool.vimdiff.layout)
+	TOOL=$1
 
-	case "$1" in
+	layout=$(git config "mergetool.$TOOL.layout")
+
+	# backward compatibility:
+	if test -z "$layout"
+	then
+		layout=$(git config mergetool.vimdiff.layout)
+	fi
+
+	case "$TOOL" in
 	*vimdiff)
 		if test -z "$layout"
 		then
@@ -404,7 +414,7 @@ merge_cmd () {
 			-f "$FINAL_CMD" '"$LOCAL"' '"$BASE"' '"$REMOTE"' '"$MERGED"'
 	else
 		# If there is no BASE (example: a merge conflict in a new file
-		# with the same name created in both braches which didn't exist
+		# with the same name created in both branches which didn't exist
 		# before), close all BASE windows using vim's "quit" command
 
 		FINAL_CMD=$(echo "$FINAL_CMD" | \
@@ -522,7 +532,7 @@ run_unit_tests () {
 	# Function to make sure that we don't break anything when modifying this
 	# script.
 
-	NUMBER_OF_TEST_CASES=16
+	NUMBER_OF_TEST_CASES=19
 
 	TEST_CASE_01="(LOCAL,BASE,REMOTE)/MERGED"   # default behaviour
 	TEST_CASE_02="@LOCAL,REMOTE"                # when using vimdiff1
@@ -540,6 +550,9 @@ run_unit_tests () {
 	TEST_CASE_14="BASE,REMOTE+BASE,LOCAL"
 	TEST_CASE_15="  ((  (LOCAL , BASE , REMOTE) / MERGED))   +(BASE)   , LOCAL+ BASE , REMOTE+ (((LOCAL / BASE / REMOTE)) ,    MERGED   )  "
 	TEST_CASE_16="LOCAL,BASE,REMOTE / MERGED + BASE,LOCAL + BASE,REMOTE + (LOCAL / BASE / REMOTE),MERGED"
+	TEST_CASE_17="(LOCAL,@BASE,REMOTE)/MERGED"
+	TEST_CASE_18="LOCAL,@REMOTE"
+	TEST_CASE_19="@REMOTE"
 
 	EXPECTED_CMD_01="-c \"set hidden diffopt-=hiddenoff | echo | leftabove split | leftabove vertical split | 1b | wincmd l | leftabove vertical split | 2b | wincmd l | 3b | wincmd j | 4b | execute 'tabdo windo diffthis' | tabfirst\""
 	EXPECTED_CMD_02="-c \"set hidden diffopt-=hiddenoff | echo | leftabove vertical split | 1b | wincmd l | 3b | execute 'tabdo windo diffthis' | tabfirst\""
@@ -557,6 +570,9 @@ run_unit_tests () {
 	EXPECTED_CMD_14="-c \"set hidden diffopt-=hiddenoff | echo | leftabove vertical split | 2b | wincmd l | 3b | tabnew | leftabove vertical split | 2b | wincmd l | 1b | execute 'tabdo windo diffthis' | tabfirst\""
 	EXPECTED_CMD_15="-c \"set hidden diffopt-=hiddenoff | echo | leftabove split | leftabove vertical split | 1b | wincmd l | leftabove vertical split | 2b | wincmd l | 3b | wincmd j | 4b | tabnew | leftabove vertical split | 2b | wincmd l | 1b | tabnew | leftabove vertical split | 2b | wincmd l | 3b | tabnew | leftabove vertical split | leftabove split | 1b | wincmd j | leftabove split | 2b | wincmd j | 3b | wincmd l | 4b | execute 'tabdo windo diffthis' | tabfirst\""
 	EXPECTED_CMD_16="-c \"set hidden diffopt-=hiddenoff | echo | leftabove split | leftabove vertical split | 1b | wincmd l | leftabove vertical split | 2b | wincmd l | 3b | wincmd j | 4b | tabnew | leftabove vertical split | 2b | wincmd l | 1b | tabnew | leftabove vertical split | 2b | wincmd l | 3b | tabnew | leftabove vertical split | leftabove split | 1b | wincmd j | leftabove split | 2b | wincmd j | 3b | wincmd l | 4b | execute 'tabdo windo diffthis' | tabfirst\""
+	EXPECTED_CMD_17="-c \"set hidden diffopt-=hiddenoff | echo | leftabove split | leftabove vertical split | 1b | wincmd l | leftabove vertical split | 2b | wincmd l | 3b | wincmd j | 4b | execute 'tabdo windo diffthis' | tabfirst\""
+	EXPECTED_CMD_18="-c \"set hidden diffopt-=hiddenoff | echo | leftabove vertical split | 1b | wincmd l | 3b | execute 'tabdo windo diffthis' | tabfirst\""
+	EXPECTED_CMD_19="-c \"set hidden diffopt-=hiddenoff | echo | silent execute 'bufdo diffthis' | 3b | execute 'tabdo windo diffthis' | tabfirst\""
 
 	EXPECTED_TARGET_01="MERGED"
 	EXPECTED_TARGET_02="LOCAL"
@@ -574,6 +590,9 @@ run_unit_tests () {
 	EXPECTED_TARGET_14="MERGED"
 	EXPECTED_TARGET_15="MERGED"
 	EXPECTED_TARGET_16="MERGED"
+	EXPECTED_TARGET_17="BASE"
+	EXPECTED_TARGET_18="REMOTE"
+	EXPECTED_TARGET_19="REMOTE"
 
 	at_least_one_ko="false"
 

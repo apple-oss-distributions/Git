@@ -4,6 +4,7 @@
  * Based on Adam Langley's adaptation of Dan Bernstein's public domain code
  * git clone https://github.com/agl/critbit.git
  */
+#include "git-compat-util.h"
 #include "cbtree.h"
 
 static struct cb_node *cb_node_of(const void *p)
@@ -11,7 +12,7 @@ static struct cb_node *cb_node_of(const void *p)
 	return (struct cb_node *)((uintptr_t)p - 1);
 }
 
-/* locate the best match, does not do a final comparision */
+/* locate the best match, does not do a final comparison */
 static struct cb_node *cb_internal_best_match(struct cb_node *p,
 					const uint8_t *k, size_t klen)
 {

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-check-ref-format
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-CHECK\-REF\-FOR" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-CHECK\-REF\-FORMAT" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -37,12 +37,11 @@ git-check-ref-format \- Ensures that a reference name is well formed
        <refname>
 \fIgit check\-ref\-format\fR \-\-branch <branchname\-shorthand>
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Checks if a given \fIrefname\fR is acceptable, and exits with a non\-zero status if it is not\&.
 .sp
-A reference is used in Git to specify branches and tags\&. A branch head is stored in the \fBrefs/heads\fR hierarchy, while a tag is stored in the \fBrefs/tags\fR hierarchy of the ref namespace (typically in \fB$GIT_DIR/refs/heads\fR and \fB$GIT_DIR/refs/tags\fR directories or, as entries in file \fB$GIT_DIR/packed\-refs\fR if refs are packed by \fBgit gc\fR)\&.
+A reference is used in Git to specify branches and tags\&. A branch head is stored in the \fBrefs/heads\fR hierarchy, while a tag is stored in the \fBrefs/tags\fR hierarchy of the ref namespace (typically in \fB$GIT_DIR/refs/heads\fR and \fB$GIT_DIR/refs/tags\fR directories or, as entries in file \fB$GIT_DIR/packed\-refs\fR if refs are packed by \fBgit\fR \fBgc\fR)\&.
 .sp
 Git imposes the following rules on how references are named:
 .sp
@@ -56,10 +55,7 @@ Git imposes the following rules on how references are named:
 .\}
 They can include slash
 \fB/\fR
-for hierarchical (directory) grouping, but no slash\-separated component can begin with a dot
-\fB\&.\fR
-or end with the sequence
-\fB\&.lock\fR\&.
+for hierarchical (directory) grouping, but no slash\-separated component can begin with a dot \&. or end with the sequence \&.\fBlock\fR\&.
 .RE
 .sp
 .RS 4
@@ -116,11 +112,8 @@ anywhere\&.
 .sp -1
 .IP "  5." 4.2
 .\}
-They cannot have question\-mark
-\fB?\fR, asterisk
-\fB*\fR, or open bracket
-\fB[\fR
-anywhere\&. See the
+They cannot have question\-mark ?, asterisk
+\fB*\fR, or open bracket [ anywhere\&. See the
 \fB\-\-refspec\-pattern\fR
 option below for an exception to this rule\&.
 .RE
@@ -137,7 +130,7 @@ They cannot begin or end with a slash
 \fB/\fR
 or contain multiple consecutive slashes (see the
 \fB\-\-normalize\fR
-option below for an exception to this rule)
+option below for an exception to this rule)\&.
 .RE
 .sp
 .RS 4
@@ -148,8 +141,7 @@ option below for an exception to this rule)
 .sp -1
 .IP "  7." 4.2
 .\}
-They cannot end with a dot
-\fB\&.\fR\&.
+They cannot end with a dot \&.\&.
 .RE
 .sp
 .RS 4
@@ -161,7 +153,7 @@ They cannot end with a dot
 .IP "  8." 4.2
 .\}
 They cannot contain a sequence
-\fB@{\fR\&.
+\fB@\fR{\&.
 .RE
 .sp
 .RS 4
@@ -201,8 +193,9 @@ These rules make it easy for shell script based tools to parse reference names, 
 A double\-dot
 \fB\&.\&.\fR
 is often used as in
-\fBref1\&.\&.ref2\fR, and in some contexts this notation means
-\fB^ref1 ref2\fR
+\fBref1\fR\fB\&.\&.\fR\fBref2\fR, and in some contexts this notation means
+\fB^ref1\fR
+\fBref2\fR
 (i\&.e\&. not in
 \fBref1\fR
 and in
@@ -240,8 +233,7 @@ A colon
 \fB:\fR
 is used as in
 \fBsrcref:dstref\fR
-to mean "use srcref\(cqs value and store it in dstref" in fetch and push operations\&. It may also be used to select a specific object such as with
-\fIgit cat\-file\fR: "git cat\-file blob v1\&.3\&.3:refs\&.c"\&.
+to mean "use srcref\(cqs value and store it in dstref" in fetch and push operations\&. It may also be used to select a specific object such as with \*(Aqgit cat\-file\*(Aq: "git cat\-file blob v1\&.3\&.3:refs\&.c"\&.
 .RE
 .sp
 .RS 4
@@ -253,11 +245,10 @@ to mean "use srcref\(cqs value and store it in dstref" in fetch and push operati
 .IP "  4." 4.2
 .\}
 at\-open\-brace
-\fB@{\fR
-is used as a notation to access a reflog entry\&.
+\fB@\fR{ is used as a notation to access a reflog entry\&.
 .RE
 .sp
-With the \fB\-\-branch\fR option, the command takes a name and checks if it can be used as a valid branch name (e\&.g\&. when creating a new branch)\&. But be cautious when using the previous checkout syntax that may refer to a detached HEAD state\&. The rule \fBgit check\-ref\-format \-\-branch $name\fR implements may be stricter than what \fBgit check\-ref\-format refs/heads/$name\fR says (e\&.g\&. a dash may appear at the beginning of a ref component, but it is explicitly forbidden at the beginning of a branch name)\&. When run with \fB\-\-branch\fR option in a repository, the input is first expanded for the \(lqprevious checkout syntax\(rq \fB@{\-n}\fR\&. For example, \fB@{\-1}\fR is a way to refer the last thing that was checked out using "git switch" or "git checkout" operation\&. This option should be used by porcelains to accept this syntax anywhere a branch name is expected, so they can act as if you typed the branch name\&. As an exception note that, the \(lqprevious checkout operation\(rq might result in a commit object name when the N\-th last thing checked out was not a branch\&.
+With the \fB\-\-branch\fR option, the command takes a name and checks if it can be used as a valid branch name (e\&.g\&. when creating a new branch)\&. But be cautious when using the previous checkout syntax that may refer to a detached HEAD state\&. The rule \fBgit\fR \fBcheck\-ref\-format\fR \fB\-\-branch\fR \fB$name\fR implements may be stricter than what \fBgit\fR \fBcheck\-ref\-format\fR \fBrefs/heads/$name\fR says (e\&.g\&. a dash may appear at the beginning of a ref component, but it is explicitly forbidden at the beginning of a branch name)\&. When run with the \fB\-\-branch\fR option in a repository, the input is first expanded for the \(lqprevious checkout syntax\(rq \fB@\fR{\-n}\&. For example, \fB@\fR{\-1} is a way to refer the last thing that was checked out using "git switch" or "git checkout" operation\&. This option should be used by porcelains to accept this syntax anywhere a branch name is expected, so they can act as if you typed the branch name\&. As an exception note that, the \(lqprevious checkout operation\(rq might result in a commit object name when the N\-th last thing checked out was not a branch\&.
 .SH "OPTIONS"
 .PP
 \-\-[no\-]allow\-onelevel
@@ -308,7 +299,6 @@ $ git check\-ref\-format \-\-branch @{\-1}
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .sp
 .RS 4
@@ -326,12 +316,11 @@ Determine the reference name to use for a new branch:
 .\}
 .nf
 $ ref=$(git check\-ref\-format \-\-normalize "refs/heads/$newbranch")||
-{ echo "we do not like \(aq$newbranch\(aq as a branch name\&." >&2 ; exit 1 ; }
+{ echo "we do not like \*(Aq$newbranch\*(Aq as a branch name\&." >&2 ; exit 1 ; }
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .SH "GIT"
 .sp

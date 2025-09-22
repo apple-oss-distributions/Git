@@ -7,6 +7,13 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 . "$TEST_DIRECTORY/lib-gpg.sh"
 
+test_expect_success GPG 'verify-tag does not crash with -h' '
+	test_expect_code 129 git verify-tag -h >usage &&
+	test_grep "[Uu]sage: git verify-tag " usage &&
+	test_expect_code 129 nongit git verify-tag -h >usage &&
+	test_grep "[Uu]sage: git verify-tag " usage
+'
+
 test_expect_success GPG 'create signed tags' '
 	echo 1 >file && git add file &&
 	test_tick && git commit -m initial &&
@@ -115,7 +122,7 @@ test_expect_success GPGSM 'verify and show signatures x509 with high minTrustLev
 
 test_expect_success GPG 'detect fudged signature' '
 	git cat-file tag seventh-signed >raw &&
-	sed -e "/^tag / s/seventh/7th forged/" raw >forged1 &&
+	sed -e "/^tag / s/seventh/7th-forged/" raw >forged1 &&
 	git hash-object -w -t tag forged1 >forged1.tag &&
 	test_must_fail git verify-tag $(cat forged1.tag) 2>actual1 &&
 	grep "BAD signature from" actual1 &&

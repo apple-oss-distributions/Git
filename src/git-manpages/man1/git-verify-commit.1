@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-verify-commit
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-VERIFY\-COMMIT" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-VERIFY\-COMMIT" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,27 +32,21 @@ git-verify-commit \- Check the GPG signature of commits
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit verify\-commit\fR [\-v | \-\-verbose] [\-\-raw] <commit>\&...
+\fBgit\fR \fBverify\-commit\fR [\fB\-v\fR | \fB\-\-verbose\fR] [\fB\-\-raw\fR] \fI<commit>\fR\&...\:
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Validates the GPG signature created by \fIgit commit \-S\fR\&.
+Validates the GPG signature created by \fBgit\fR \fBcommit\fR \fB\-S\fR on the commit objects given on the command line\&.
 .SH "OPTIONS"
 .PP
-\-\-raw
+\fB\-\-raw\fR
 .RS 4
 Print the raw gpg status output to standard error instead of the normal human\-readable output\&.
 .RE
 .PP
-\-v, \-\-verbose
+\fB\-v\fR, \fB\-\-verbose\fR
 .RS 4
 Print the contents of the commit object before validating it\&.
-.RE
-.PP
-<commit>\&...
-.RS 4
-SHA\-1 identifiers of Git commit objects\&.
 .RE
 .SH "GIT"
 .sp

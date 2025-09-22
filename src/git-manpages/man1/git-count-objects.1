@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-count-objects
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-COUNT\-OBJECTS" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-COUNT\-OBJECTS" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,15 +34,14 @@ git-count-objects \- Count unpacked number of objects and their disk consumption
 .nf
 \fIgit count\-objects\fR [\-v] [\-H | \-\-human\-readable]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-This counts the number of unpacked object files and disk space consumed by them, to help you decide when it is a good time to repack\&.
+Counts the number of unpacked object files and disk space consumed by them, to help you decide when it is a good time to repack\&.
 .SH "OPTIONS"
 .PP
 \-v, \-\-verbose
 .RS 4
-Report in more detail:
+Provide more detailed reports:
 .sp
 count: the number of loose objects
 .sp
@@ -53,9 +52,10 @@ in\-pack: the number of in\-pack objects
 size\-pack: disk space consumed by the packs, in KiB (unless \-H is specified)
 .sp
 prune\-packable: the number of loose objects that are also present in the packs\&. These objects could be pruned using
-\fBgit prune\-packed\fR\&.
+\fBgit\fR
+\fBprune\-packed\fR\&.
 .sp
-garbage: the number of files in object database that are neither valid loose objects nor valid packs
+garbage: the number of files in the object database that are neither valid loose objects nor valid packs
 .sp
 size\-garbage: disk space consumed by garbage files, in KiB (unless \-H is specified)
 .sp

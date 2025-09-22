@@ -23,11 +23,15 @@
 #endif
 #endif
 
-#include "cache.h"
-#include "fsmonitor.h"
+#include "git-compat-util.h"
+#include "fsmonitor-ll.h"
 #include "fsm-listen.h"
 #include "fsmonitor--daemon.h"
 #include "fsmonitor-path-utils.h"
+#include "gettext.h"
+#include "simple-ipc.h"
+#include "string-list.h"
+#include "trace.h"
 
 struct fsm_listen_data
 {
@@ -188,12 +192,12 @@ static void my_add_path(struct fsmonitor_batch *batch, const char *path)
 }
 
 
-static void fsevent_callback(ConstFSEventStreamRef streamRef,
+static void fsevent_callback(ConstFSEventStreamRef streamRef UNUSED,
 			     void *ctx,
 			     size_t num_of_events,
 			     void *event_paths,
 			     const FSEventStreamEventFlags event_flags[],
-			     const FSEventStreamEventId event_ids[])
+			     const FSEventStreamEventId event_ids[] UNUSED)
 {
 	struct fsmonitor_daemon_state *state = ctx;
 	struct fsm_listen_data *data = state->listen_data;
@@ -204,13 +208,12 @@ static void fsevent_callback(ConstFSEventStreamRef streamRef,
 	const char *slash;
 	char *resolved = NULL;
 	struct strbuf tmp = STRBUF_INIT;
-	int k;
 
 	/*
 	 * Build a list of all filesystem changes into a private/local
 	 * list and without holding any locks.
 	 */
-	for (k = 0; k < num_of_events; k++) {
+	for (size_t k = 0; k < num_of_events; k++) {
 		/*
 		 * On Mac, we receive an array of absolute paths.
 		 */
@@ -511,6 +514,12 @@ void fsm_listen__loop(struct fsmonitor_daemon_state *state)
 		goto force_error_stop_without_loop;
 	}
 	data->stream_started = 1;
+
+	/*
+	 * Our fs event listener is now running, so it's safe to start
+	 * serving client requests.
+	 */
+	ipc_server_start_async(state->ipc_server_data);
 
 	pthread_mutex_lock(&data->dq_lock);
 	pthread_cond_wait(&data->dq_finished, &data->dq_lock);

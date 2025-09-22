@@ -39,4 +39,39 @@ test_expect_success 'do nothing on empty config' '
 	git for-each-repo --config=bogus.config -- help --no-such-option
 '
 
+test_expect_success 'error on bad config keys' '
+	test_expect_code 129 git for-each-repo --config=a &&
+	test_expect_code 129 git for-each-repo --config=a.b. &&
+	test_expect_code 129 git for-each-repo --config="'\''.b"
+'
+
+test_expect_success 'error on NULL value for config keys' '
+	cat >>.git/config <<-\EOF &&
+	[empty]
+		key
+	EOF
+	cat >expect <<-\EOF &&
+	error: missing value for '\''empty.key'\''
+	EOF
+	test_expect_code 129 git for-each-repo --config=empty.key 2>actual.raw &&
+	grep ^error actual.raw >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '--keep-going' '
+	git config keep.going non-existing &&
+	git config --add keep.going . &&
+
+	test_must_fail git for-each-repo --config=keep.going \
+		-- branch >out 2>err &&
+	test_grep "cannot change to .*non-existing" err &&
+	test_must_be_empty out &&
+
+	test_must_fail git for-each-repo --config=keep.going --keep-going \
+		-- branch >out 2>err &&
+	test_grep "cannot change to .*non-existing" err &&
+	git branch >expect &&
+	test_cmp expect out
+'
+
 test_done

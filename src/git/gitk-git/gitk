@@ -9,6 +9,195 @@ exec wish "$0" -- "$@"
 
 package require Tk
 
+######################################################################
+##
+## Enabling platform-specific code paths
+
+proc is_Windows {} {
+    if {$::tcl_platform(platform) eq {windows}} {
+        return 1
+    }
+    return 0
+}
+
+######################################################################
+##
+## PATH lookup
+
+if {[is_Windows]} {
+    set _search_path {}
+    proc _which {what args} {
+        global env _search_path
+
+        if {$_search_path eq {}} {
+            set gitguidir [file dirname [info script]]
+            regsub -all ";" $gitguidir "\\;" gitguidir
+            set env(PATH) "$gitguidir;$env(PATH)"
+            set _search_path [split $env(PATH) {;}]
+            # Skip empty `PATH` elements
+            set _search_path [lsearch -all -inline -not -exact \
+                $_search_path ""]
+        }
+
+        if {[lsearch -exact $args -script] >= 0} {
+            set suffix {}
+        } else {
+            set suffix .exe
+        }
+
+        foreach p $_search_path {
+            set p [file join $p $what$suffix]
+            if {[file exists $p]} {
+                return [file normalize $p]
+            }
+        }
+        return {}
+    }
+
+    proc sanitize_command_line {command_line from_index} {
+        set i $from_index
+        while {$i < [llength $command_line]} {
+            set cmd [lindex $command_line $i]
+            if {[llength [file split $cmd]] < 2} {
+                set fullpath [_which $cmd]
+                if {$fullpath eq ""} {
+                    throw {NOT-FOUND} "$cmd not found in PATH"
+                }
+                lset command_line $i $fullpath
+            }
+
+            # handle piped commands, e.g. `exec A | B`
+            for {incr i} {$i < [llength $command_line]} {incr i} {
+                if {[lindex $command_line $i] eq "|"} {
+                    incr i
+                    break
+                }
+            }
+        }
+        return $command_line
+    }
+
+    # Override `exec` to avoid unsafe PATH lookup
+
+    rename exec real_exec
+
+    proc exec {args} {
+        # skip options
+        for {set i 0} {$i < [llength $args]} {incr i} {
+            set arg [lindex $args $i]
+            if {$arg eq "--"} {
+                incr i
+                break
+            }
+            if {[string range $arg 0 0] ne "-"} {
+                break
+            }
+        }
+        set args [sanitize_command_line $args $i]
+        uplevel 1 real_exec $args
+    }
+
+    # Override `open` to avoid unsafe PATH lookup
+
+    rename open real_open
+
+    proc open {args} {
+        set arg0 [lindex $args 0]
+        if {[string range $arg0 0 0] eq "|"} {
+            set command_line [string trim [string range $arg0 1 end]]
+            lset args 0 "| [sanitize_command_line $command_line 0]"
+        }
+        uplevel 1 real_open $args
+    }
+}
+
+# End of safe PATH lookup stuff
+
+# Wrap exec/open to sanitize arguments
+
+# unsafe arguments begin with redirections or the pipe or background operators
+proc is_arg_unsafe {arg} {
+    regexp {^([<|>&]|2>)} $arg
+}
+
+proc make_arg_safe {arg} {
+    if {[is_arg_unsafe $arg]} {
+        set arg [file join . $arg]
+    }
+    return $arg
+}
+
+proc make_arglist_safe {arglist} {
+    set res {}
+    foreach arg $arglist {
+        lappend res [make_arg_safe $arg]
+    }
+    return $res
+}
+
+# executes one command
+# no redirections or pipelines are possible
+# cmd is a list that specifies the command and its arguments
+# calls `exec` and returns its value
+proc safe_exec {cmd} {
+    eval exec [make_arglist_safe $cmd]
+}
+
+# executes one command with redirections
+# no pipelines are possible
+# cmd is a list that specifies the command and its arguments
+# redir is a list that specifies redirections (output, background, constant(!) commands)
+# calls `exec` and returns its value
+proc safe_exec_redirect {cmd redir} {
+    eval exec [make_arglist_safe $cmd] $redir
+}
+
+proc safe_open_file {filename flags} {
+    # a file name starting with "|" would attempt to run a process
+    # but such a file name must be treated as a relative path
+    # hide the "|" behind "./"
+    if {[string index $filename 0] eq "|"} {
+        set filename [file join . $filename]
+    }
+    open $filename $flags
+}
+
+# opens a command pipeline for reading
+# cmd is a list that specifies the command and its arguments
+# calls `open` and returns the file id
+proc safe_open_command {cmd} {
+    open |[make_arglist_safe $cmd] r
+}
+
+# opens a command pipeline for reading and writing
+# cmd is a list that specifies the command and its arguments
+# calls `open` and returns the file id
+proc safe_open_command_rw {cmd} {
+    open |[make_arglist_safe $cmd] r+
+}
+
+# opens a command pipeline for reading with redirections
+# cmd is a list that specifies the command and its arguments
+# redir is a list that specifies redirections
+# calls `open` and returns the file id
+proc safe_open_command_redirect {cmd redir} {
+    set cmd [make_arglist_safe $cmd]
+    open |[concat $cmd $redir] r
+}
+
+# opens a pipeline with several commands for reading
+# cmds is a list of lists, each of which specifies a command and its arguments
+# calls `open` and returns the file id
+proc safe_open_pipeline {cmds} {
+    set cmd {}
+    foreach subcmd $cmds {
+        set cmd [concat $cmd | [make_arglist_safe $subcmd]]
+    }
+    open $cmd r
+}
+
+# End exec/open wrappers
+
 proc hasworktree {} {
     return [expr {[exec git rev-parse --is-bare-repository] == "false" &&
                   [exec git rev-parse --is-inside-git-dir] == "false"}]
@@ -134,7 +323,7 @@ proc unmerged_files {files} {
     set mlist {}
     set nr_unmerged 0
     if {[catch {
-        set fd [open "| git ls-files -u" r]
+        set fd [safe_open_command {git ls-files -u}]
     } err]} {
         show_error {} . "[mc "Couldn't get list of unmerged files:"] $err"
         exit 1
@@ -296,7 +485,7 @@ proc parseviewrevs {view revs} {
     } elseif {[lsearch -exact $revs --all] >= 0} {
         lappend revs HEAD
     }
-    if {[catch {set ids [eval exec git rev-parse $revs]} err]} {
+    if {[catch {set ids [safe_exec [concat git rev-parse $revs]]} err]} {
         # we get stdout followed by stderr in $err
         # for an unknown rev, git rev-parse echoes it and then errors out
         set errlines [split $err "\n"]
@@ -374,7 +563,7 @@ proc start_rev_list {view} {
     set args $viewargs($view)
     if {$viewargscmd($view) ne {}} {
         if {[catch {
-            set str [exec sh -c $viewargscmd($view)]
+            set str [safe_exec [list sh -c $viewargscmd($view)]]
         } err]} {
             error_popup "[mc "Error executing --argscmd command:"] $err"
             return 0
@@ -405,14 +594,16 @@ proc start_rev_list {view} {
         if {$revs eq {}} {
             return 0
         }
-        set args [concat $vflags($view) $revs]
+        set args $vflags($view)
     } else {
+        set revs {}
         set args $vorigargs($view)
     }
 
     if {[catch {
-        set fd [open [concat | git log --no-color -z --pretty=raw $show_notes \
-                        --parents --boundary $args "--" $files] r]
+        set fd [safe_open_command_redirect [concat git log --no-color -z --pretty=raw $show_notes \
+                        --parents --boundary $args --stdin] \
+                        [list "<<[join [concat $revs "--" $files] "\n"]"]]
     } err]} {
         error_popup "[mc "Error executing git log:"] $err"
         return 0
@@ -446,9 +637,9 @@ proc stop_instance {inst} {
         set pid [pid $fd]
 
         if {$::tcl_platform(platform) eq {windows}} {
-            exec taskkill /pid $pid
+            safe_exec [list taskkill /pid $pid]
         } else {
-            exec kill $pid
+            safe_exec [list kill $pid]
         }
     }
     catch {close $fd}
@@ -554,13 +745,18 @@ proc updatecommits {} {
             set revs $newrevs
             set vposids($view) [lsort -unique [concat $oldpos $vposids($view)]]
         }
-        set args [concat $vflags($view) $revs --not $oldpos]
+        set args $vflags($view)
+        foreach r $oldpos {
+                lappend revs "^$r"
+        }
     } else {
+        set revs {}
         set args $vorigargs($view)
     }
     if {[catch {
-        set fd [open [concat | git log --no-color -z --pretty=raw $show_notes \
-                        --parents --boundary $args "--" $vfilelimit($view)] r]
+        set fd [safe_open_command_redirect [concat git log --no-color -z --pretty=raw $show_notes \
+                        --parents --boundary $args --stdin] \
+                        [list "<<[join [concat $revs "--" $vfilelimit($view)] "\n"]"]]
     } err]} {
         error_popup "[mc "Error executing git log:"] $err"
         return
@@ -1527,8 +1723,8 @@ proc getcommitlines {fd inst view updating}  {
             # and if we already know about it, using the rewritten
             # parent as a substitute parent for $id's children.
             if {![catch {
-                set rwid [exec git rev-list --first-parent --max-count=1 \
-                              $id -- $vfilelimit($view)]
+                set rwid [safe_exec [list git rev-list --first-parent --max-count=1 \
+                              $id -- $vfilelimit($view)]]
             }]} {
                 if {$rwid ne {} && [info exists varcid($view,$rwid)]} {
                     # use $rwid in place of $id
@@ -1648,7 +1844,7 @@ proc do_readcommit {id} {
     global tclencoding
 
     # Invoke git-log to handle automatic encoding conversion
-    set fd [open [concat | git log --no-color --pretty=raw -1 $id] r]
+    set fd [safe_open_command [concat git log --no-color --pretty=raw -1 $id]]
     # Read the results using i18n.logoutputencoding
     fconfigure $fd -translation lf -eofchar {}
     if {$tclencoding != {}} {
@@ -1784,7 +1980,7 @@ proc readrefs {} {
     foreach v {tagids idtags headids idheads otherrefids idotherrefs} {
         unset -nocomplain $v
     }
-    set refd [open [list | git show-ref -d] r]
+    set refd [safe_open_command [list git show-ref -d]]
     if {$tclencoding != {}} {
         fconfigure $refd -encoding $tclencoding
     }
@@ -1832,7 +2028,7 @@ proc readrefs {} {
     set selectheadid {}
     if {$selecthead ne {}} {
         catch {
-            set selectheadid [exec git rev-parse --verify $selecthead]
+            set selectheadid [safe_exec [list git rev-parse --verify $selecthead]]
         }
     }
 }
@@ -1947,6 +2143,10 @@ proc confirm_popup {msg {owner .}} {
     tk::PlaceWindow $w widget $owner
     tkwait window $w
     return $confirm_ok
+}
+
+proc haveselectionclipboard {} {
+    return [expr {[tk windowingsystem] eq "x11"}]
 }
 
 proc setoptions {} {
@@ -2069,7 +2269,7 @@ proc makewindow {} {
     global diffcontextstring diffcontext
     global ignorespace
     global maincursor textcursor curtextcursor
-    global rowctxmenu fakerowmenu mergemax wrapcomment
+    global rowctxmenu fakerowmenu mergemax wrapcomment wrapdefault
     global highlight_files gdttype
     global searchstring sstring
     global bgcolor fgcolor bglist fglist diffcolors diffbgcolors selectbgcolor
@@ -2079,7 +2279,7 @@ proc makewindow {} {
     global headctxmenu progresscanv progressitem progresscoords statusw
     global fprogitem fprogcoord lastprogupdate progupdatepending
     global rprogitem rprogcoord rownumsel numcommits
-    global have_tk85 use_ttk NS
+    global have_tk85 have_tk86 use_ttk NS
     global git_version
     global worddiff
 
@@ -2092,7 +2292,7 @@ proc makewindow {} {
             {mc "Reread re&ferences" command rereadrefs}
             {mc "&List references" command showrefs -accelerator F2}
             {xx "" separator}
-            {mc "Start git &gui" command {exec git gui &}}
+            {mc "Start git &gui" command {safe_exec_redirect [list git gui] [list &]}}
             {xx "" separator}
             {mc "&Quit" command doquit -accelerator Meta1-Q}
         }}
@@ -2203,7 +2403,7 @@ proc makewindow {} {
     set sha1entry .tf.bar.sha1
     set entries $sha1entry
     set sha1but .tf.bar.sha1label
-    button $sha1but -text "[mc "SHA1 ID:"] " -state disabled -relief flat \
+    button $sha1but -text "[mc "Commit ID:"] " -state disabled -relief flat \
         -command gotocommit -width 8
     $sha1but conf -disabledforeground [$sha1but cget -foreground]
     pack .tf.bar.sha1label -side left
@@ -2411,7 +2611,7 @@ proc makewindow {} {
     set ctext .bleft.bottom.ctext
     text $ctext -background $bgcolor -foreground $fgcolor \
         -state disabled -undo 0 -font textfont \
-        -yscrollcommand scrolltext -wrap none \
+        -yscrollcommand scrolltext -wrap $wrapdefault \
         -xscrollcommand ".bleft.bottom.sbhorizontal set"
     if {$have_tk85} {
         $ctext conf -tabstyle wordprocessor
@@ -2577,8 +2777,13 @@ proc makewindow {} {
     bind . <Key-Down> "selnextline 1"
     bind . <Shift-Key-Up> "dofind -1 0"
     bind . <Shift-Key-Down> "dofind 1 0"
-    bindkey <Key-Right> "goforw"
-    bindkey <Key-Left> "goback"
+    if {$have_tk86} {
+        bindkey <<NextChar>> "goforw"
+        bindkey <<PrevChar>> "goback"
+    } else {
+        bindkey <Key-Right> "goforw"
+        bindkey <Key-Left> "goback"
+    }
     bind . <Key-Prior> "selnextpage -1"
     bind . <Key-Next> "selnextpage 1"
     bind . <$M1B-Home> "allcanvs yview moveto 0.0"
@@ -2874,7 +3079,7 @@ proc savestuff {w} {
     set remove_tmp 0
     if {[catch {
         set try_count 0
-        while {[catch {set f [open $config_file_tmp {WRONLY CREAT EXCL}]}]} {
+        while {[catch {set f [safe_open_file $config_file_tmp {WRONLY CREAT EXCL}]}]} {
             if {[incr try_count] > 50} {
                 error "Unable to write config file: $config_file_tmp exists"
             }
@@ -3590,7 +3795,7 @@ proc gitknewtmpdir {} {
             set tmpdir $gitdir
         }
         set gitktmpformat [file join $tmpdir ".gitk-tmp.XXXXXX"]
-        if {[catch {set gitktmpdir [exec mktemp -d $gitktmpformat]}]} {
+        if {[catch {set gitktmpdir [safe_exec [list mktemp -d $gitktmpformat]]}]} {
             set gitktmpdir [file join $gitdir [format ".gitk-tmp.%s" [pid]]]
         }
         if {[catch {file mkdir $gitktmpdir} err]} {
@@ -3612,7 +3817,7 @@ proc gitknewtmpdir {} {
 proc save_file_from_commit {filename output what} {
     global nullfile
 
-    if {[catch {exec git show $filename -- > $output} err]} {
+    if {[catch {safe_exec_redirect [list git show $filename --] [list > $output]} err]} {
         if {[string match "fatal: bad revision *" $err]} {
             return $nullfile
         }
@@ -3677,7 +3882,7 @@ proc external_diff {} {
 
     if {$difffromfile ne {} && $difftofile ne {}} {
         set cmd [list [shellsplit $extdifftool] $difffromfile $difftofile]
-        if {[catch {set fl [open |$cmd r]} err]} {
+        if {[catch {set fl [safe_open_command $cmd]} err]} {
             file delete -force $diffdir
             error_popup "$extdifftool: [mc "command failed:"] $err"
         } else {
@@ -3781,7 +3986,7 @@ proc external_blame_diff {} {
 # Find the SHA1 ID of the blob for file $fname in the index
 # at stage 0 or 2
 proc index_sha1 {fname} {
-    set f [open [list | git ls-files -s $fname] r]
+    set f [safe_open_command [list git ls-files -s $fname]]
     while {[gets $f line] >= 0} {
         set info [lindex [split $line "\t"] 0]
         set stage [lindex $info 2]
@@ -3841,7 +4046,7 @@ proc external_blame {parent_idx {line {}}} {
     # being given an absolute path...
     set f [make_relative $f]
     lappend cmdline $base_commit $f
-    if {[catch {eval exec $cmdline &} err]} {
+    if {[catch {safe_exec_redirect $cmdline [list &]} err]} {
         error_popup "[mc "git gui blame: command failed:"] $err"
     }
 }
@@ -3869,7 +4074,7 @@ proc show_line_source {} {
                 # must be a merge in progress...
                 if {[catch {
                     # get the last line from .git/MERGE_HEAD
-                    set f [open [file join $gitdir MERGE_HEAD] r]
+                    set f [safe_open_file [file join $gitdir MERGE_HEAD] r]
                     set id [lindex [split [read $f] "\n"] end-1]
                     close $f
                 } err]} {
@@ -3892,19 +4097,17 @@ proc show_line_source {} {
         }
         set line [lindex $h 1]
     }
-    set blameargs {}
+    set blamefile [file join $cdup $flist_menu_file]
     if {$from_index ne {}} {
-        lappend blameargs | git cat-file blob $from_index
-    }
-    lappend blameargs | git blame -p -L$line,+1
-    if {$from_index ne {}} {
-        lappend blameargs --contents -
+        set blameargs [list \
+            [list git cat-file blob $from_index] \
+            [list git blame -p -L$line,+1 --contents - -- $blamefile]]
     } else {
-        lappend blameargs $id
+        set blameargs [list \
+            [list git blame -p -L$line,+1 $id -- $blamefile]]
     }
-    lappend blameargs -- [file join $cdup $flist_menu_file]
     if {[catch {
-        set f [open $blameargs r]
+        set f [safe_open_pipeline $blameargs]
     } err]} {
         error_popup [mc "Couldn't start git blame: %s" $err]
         return
@@ -4468,7 +4671,7 @@ proc addviewmenu {n} {
     .bar.view add radiobutton -label $viewname($n) \
         -command [list showview $n] -variable selectedview -value $n
     #$viewhlmenu add radiobutton -label $viewname($n) \
-    #	-command [list addvhighlight $n] -variable selectedhlview
+    #   -command [list addvhighlight $n] -variable selectedhlview
 }
 
 proc showview {n} {
@@ -4829,8 +5032,8 @@ proc do_file_hl {serial} {
         # must be "containing:", i.e. we're searching commit info
         return
     }
-    set cmd [concat | git diff-tree -r -s --stdin $gdtargs]
-    set filehighlight [open $cmd r+]
+    set cmd [concat git diff-tree -r -s --stdin $gdtargs]
+    set filehighlight [safe_open_command_rw $cmd]
     fconfigure $filehighlight -blocking 0
     filerun $filehighlight readfhighlight
     set fhl_list {}
@@ -5259,8 +5462,8 @@ proc get_viewmainhead {view} {
     global viewmainheadid vfilelimit viewinstances mainheadid
 
     catch {
-        set rfd [open [concat | git rev-list -1 $mainheadid \
-                           -- $vfilelimit($view)] r]
+        set rfd [safe_open_command [concat git rev-list -1 $mainheadid \
+                           -- $vfilelimit($view)]]
         set j [reg_instance $rfd]
         lappend viewinstances($view) $j
         fconfigure $rfd -blocking 0
@@ -5325,14 +5528,14 @@ proc dodiffindex {} {
     if {!$showlocalchanges || !$hasworktree} return
     incr lserial
     if {[package vcompare $git_version "1.7.2"] >= 0} {
-        set cmd "|git diff-index --cached --ignore-submodules=dirty HEAD"
+        set cmd "git diff-index --cached --ignore-submodules=dirty HEAD"
     } else {
-        set cmd "|git diff-index --cached HEAD"
+        set cmd "git diff-index --cached HEAD"
     }
     if {$vfilelimit($curview) ne {}} {
         set cmd [concat $cmd -- $vfilelimit($curview)]
     }
-    set fd [open $cmd r]
+    set fd [safe_open_command $cmd]
     fconfigure $fd -blocking 0
     set i [reg_instance $fd]
     filerun $fd [list readdiffindex $fd $lserial $i]
@@ -5357,11 +5560,11 @@ proc readdiffindex {fd serial inst} {
     }
 
     # now see if there are any local changes not checked in to the index
-    set cmd "|git diff-files"
+    set cmd "git diff-files"
     if {$vfilelimit($curview) ne {}} {
         set cmd [concat $cmd -- $vfilelimit($curview)]
     }
-    set fd [open $cmd r]
+    set fd [safe_open_command $cmd]
     fconfigure $fd -blocking 0
     set i [reg_instance $fd]
     filerun $fd [list readdifffiles $fd $serial $i]
@@ -6975,7 +7178,7 @@ proc findselectline {l} {
 
 # mark the bits of a headline or author that match a find string
 proc markmatches {canv l str tag matches font row} {
-    global selectedline
+    global selectedline foundbgcolor
 
     set bbox [$canv bbox $tag]
     set x0 [lindex $bbox 0]
@@ -6989,7 +7192,7 @@ proc markmatches {canv l str tag matches font row} {
         set xlen [font measure $font [string range $str 0 [expr {$end}]]]
         set t [$canv create rect [expr {$x0+$xoff}] $y0 \
                    [expr {$x0+$xlen+2}] $y1 \
-                   -outline {} -tags [list match$l matches] -fill yellow]
+                   -outline {} -tags [list match$l matches] -fill $foundbgcolor]
         $canv lower $t
         if {$row == $selectedline} {
             $canv raise $t secsel
@@ -7150,8 +7353,8 @@ proc browseweb {url} {
     global web_browser
 
     if {$web_browser eq {}} return
-    # Use eval here in case $web_browser is a command plus some arguments
-    if {[catch {eval exec $web_browser [list $url] &} err]} {
+    # Use concat here in case $web_browser is a command plus some arguments
+    if {[catch {safe_exec_redirect [concat $web_browser [list $url]] [list &]} err]} {
         error_popup "[mc "Error starting web browser:"] $err"
     }
 }
@@ -7324,7 +7527,7 @@ proc selectline {l isnew {desired_loc {}} {switch_to_patch 0}} {
     global mergemax numcommits pending_select
     global cmitmode showneartags allcommits
     global targetrow targetid lastscrollrows
-    global autoselect autosellen jump_to_here
+    global autocopy autoselect autosellen jump_to_here
     global vinlinediff
 
     unset -nocomplain pending_select
@@ -7390,8 +7593,12 @@ proc selectline {l isnew {desired_loc {}} {switch_to_patch 0}} {
 
     $sha1entry delete 0 end
     $sha1entry insert 0 $id
-    if {$autoselect} {
+    if {$autoselect && [haveselectionclipboard]} {
         $sha1entry selection range 0 $autosellen
+    }
+    if {$autocopy} {
+        clipboard clear
+        clipboard append [string range $id 0 [expr $autosellen - 1]]
     }
     rhighlight_sel $id
 
@@ -7653,13 +7860,13 @@ proc gettree {id} {
     if {![info exists treefilelist($id)]} {
         if {![info exists treepending]} {
             if {$id eq $nullid} {
-                set cmd [list | git ls-files]
+                set cmd [list git ls-files]
             } elseif {$id eq $nullid2} {
-                set cmd [list | git ls-files --stage -t]
+                set cmd [list git ls-files --stage -t]
             } else {
-                set cmd [list | git ls-tree -r $id]
+                set cmd [list git ls-tree -r $id]
             }
-            if {[catch {set gtf [open $cmd r]}]} {
+            if {[catch {set gtf [safe_open_command $cmd]}]} {
                 return
             }
             set treepending $id
@@ -7692,7 +7899,7 @@ proc gettreeline {gtf id} {
         if {[string index $fname 0] eq "\""} {
             set fname [lindex $fname 0]
         }
-        set fname [encoding convertfrom $fname]
+        set fname [encoding convertfrom utf-8 $fname]
         lappend treefilelist($id) $fname
     }
     if {![eof $gtf]} {
@@ -7723,13 +7930,13 @@ proc showfile {f} {
         return
     }
     if {$diffids eq $nullid} {
-        if {[catch {set bf [open $f r]} err]} {
+        if {[catch {set bf [safe_open_file $f r]} err]} {
             puts "oops, can't read $f: $err"
             return
         }
     } else {
         set blob [lindex $treeidlist($diffids) $i]
-        if {[catch {set bf [open [concat | git cat-file blob $blob] r]} err]} {
+        if {[catch {set bf [safe_open_command [concat git cat-file blob $blob]]} err]} {
             puts "oops, error reading blob $blob: $err"
             return
         }
@@ -7879,7 +8086,7 @@ proc diffcmd {ids flags} {
     if {$i >= 0} {
         if {[llength $ids] > 1 && $j < 0} {
             # comparing working directory with some specific revision
-            set cmd [concat | git diff-index $flags]
+            set cmd [concat git diff-index $flags]
             if {$i == 0} {
                 lappend cmd -R [lindex $ids 1]
             } else {
@@ -7887,7 +8094,7 @@ proc diffcmd {ids flags} {
             }
         } else {
             # comparing working directory with index
-            set cmd [concat | git diff-files $flags]
+            set cmd [concat git diff-files $flags]
             if {$j == 1} {
                 lappend cmd -R
             }
@@ -7896,7 +8103,7 @@ proc diffcmd {ids flags} {
         if {[package vcompare $git_version "1.7.2"] >= 0} {
             set flags "$flags --ignore-submodules=dirty"
         }
-        set cmd [concat | git diff-index --cached $flags]
+        set cmd [concat git diff-index --cached $flags]
         if {[llength $ids] > 1} {
             # comparing index with specific revision
             if {$j == 0} {
@@ -7912,7 +8119,7 @@ proc diffcmd {ids flags} {
         if {$log_showroot} {
             lappend flags --root
         }
-        set cmd [concat | git diff-tree -r $flags $ids]
+        set cmd [concat git diff-tree -r $flags $ids]
     }
     return $cmd
 }
@@ -7924,7 +8131,7 @@ proc gettreediffs {ids} {
     if {$limitdiffs && $vfilelimit($curview) ne {}} {
             set cmd [concat $cmd -- $vfilelimit($curview)]
     }
-    if {[catch {set gdtf [open $cmd r]}]} return
+    if {[catch {set gdtf [safe_open_command $cmd]}]} return
 
     set treepending $ids
     set treediff {}
@@ -7954,7 +8161,7 @@ proc gettreediffline {gdtf ids} {
             if {[string index $file 0] eq "\""} {
                 set file [lindex $file 0]
             }
-            set file [encoding convertfrom $file]
+            set file [encoding convertfrom utf-8 $file]
             if {$file ne [lindex $treediff end]} {
                 lappend treediff $file
                 lappend sublist $file
@@ -8044,7 +8251,7 @@ proc getblobdiffs {ids} {
     if {$limitdiffs && $vfilelimit($curview) ne {}} {
         set cmd [concat $cmd -- $vfilelimit($curview)]
     }
-    if {[catch {set bdf [open $cmd r]} err]} {
+    if {[catch {set bdf [safe_open_command $cmd]} err]} {
         error_popup [mc "Error getting diffs: %s" $err]
         return
     }
@@ -8099,7 +8306,7 @@ proc makediffhdr {fname ids} {
     global ctext curdiffstart treediffs diffencoding
     global ctext_file_names jump_to_here targetline diffline
 
-    set fname [encoding convertfrom $fname]
+    set fname [encoding convertfrom utf-8 $fname]
     set diffencoding [get_path_encoding $fname]
     set i [lsearch -exact $treediffs($ids) $fname]
     if {$i >= 0} {
@@ -8161,7 +8368,7 @@ proc parseblobdiffline {ids line} {
 
     if {![string compare -length 5 "diff " $line]} {
         if {![regexp {^diff (--cc|--git) } $line m type]} {
-            set line [encoding convertfrom $line]
+            set line [encoding convertfrom utf-8 $line]
             $ctext insert end "$line\n" hunksep
             continue
         }
@@ -8210,7 +8417,7 @@ proc parseblobdiffline {ids line} {
         makediffhdr $fname $ids
 
     } elseif {![string compare -length 16 "* Unmerged path " $line]} {
-        set fname [encoding convertfrom [string range $line 16 end]]
+        set fname [encoding convertfrom utf-8 [string range $line 16 end]]
         $ctext insert end "\n"
         set curdiffstart [$ctext index "end - 1c"]
         lappend ctext_file_names $fname
@@ -8263,7 +8470,7 @@ proc parseblobdiffline {ids line} {
             if {[string index $fname 0] eq "\""} {
                 set fname [lindex $fname 0]
             }
-            set fname [encoding convertfrom $fname]
+            set fname [encoding convertfrom utf-8 $fname]
             set i [lsearch -exact $treediffs($ids) $fname]
             if {$i >= 0} {
                 setinlist difffilestart $i $curdiffstart
@@ -8282,6 +8489,7 @@ proc parseblobdiffline {ids line} {
             set diffinhdr 0
             return
         }
+        set line [encoding convertfrom utf-8 $line]
         $ctext insert end "$line\n" filesep
 
     } else {
@@ -8736,7 +8944,7 @@ proc sha1change {n1 n2 op} {
     if {$state == "normal"} {
         $sha1but conf -state normal -relief raised -text "[mc "Goto:"] "
     } else {
-        $sha1but conf -state disabled -relief flat -text "[mc "SHA1 ID:"] "
+        $sha1but conf -state disabled -relief flat -text "[mc "Commit ID:"] "
     }
 }
 
@@ -8755,13 +8963,13 @@ proc gotocommit {} {
             set matches [longid $id]
             if {$matches ne {}} {
                 if {[llength $matches] > 1} {
-                    error_popup [mc "Short SHA1 id %s is ambiguous" $id]
+                    error_popup [mc "Short commit ID %s is ambiguous" $id]
                     return
                 }
                 set id [lindex $matches 0]
             }
         } else {
-            if {[catch {set id [exec git rev-parse --verify $sha1string]}]} {
+            if {[catch {set id [safe_exec [list git rev-parse --verify $sha1string]]}]} {
                 error_popup [mc "Revision %s is not known" $sha1string]
                 return
             }
@@ -8772,7 +8980,7 @@ proc gotocommit {} {
         return
     }
     if {[regexp {^[0-9a-fA-F]{4,}$} $sha1string]} {
-        set msg [mc "SHA1 id %s is not known" $sha1string]
+        set msg [mc "Commit ID %s is not known" $sha1string]
     } else {
         set msg [mc "Revision %s is not in the current view" $sha1string]
     }
@@ -9067,10 +9275,8 @@ proc getpatchid {id} {
 
     if {![info exists patchids($id)]} {
         set cmd [diffcmd [list $id] {-p --root}]
-        # trim off the initial "|"
-        set cmd [lrange $cmd 1 end]
         if {[catch {
-            set x [eval exec $cmd | git patch-id]
+            set x [safe_exec_redirect $cmd [list | git patch-id]]
             set patchids($id) [lindex $x 0]
         }]} {
             set patchids($id) "error"
@@ -9166,14 +9372,14 @@ proc diffcommits {a b} {
     set fna [file join $tmpdir "commit-[string range $a 0 7]"]
     set fnb [file join $tmpdir "commit-[string range $b 0 7]"]
     if {[catch {
-        exec git diff-tree -p --pretty $a >$fna
-        exec git diff-tree -p --pretty $b >$fnb
+        safe_exec_redirect [list git diff-tree -p --pretty $a] [list >$fna]
+        safe_exec_redirect [list git diff-tree -p --pretty $b] [list >$fnb]
     } err]} {
         error_popup [mc "Error writing commit to file: %s" $err]
         return
     }
     if {[catch {
-        set fd [open "| diff -U$diffcontext $fna $fnb" r]
+        set fd [safe_open_command "diff -U$diffcontext $fna $fnb"]
     } err]} {
         error_popup [mc "Error diffing commits: %s" $err]
         return
@@ -9313,10 +9519,7 @@ proc mkpatchgo {} {
     set newid [$patchtop.tosha1 get]
     set fname [$patchtop.fname get]
     set cmd [diffcmd [list $oldid $newid] -p]
-    # trim off the initial "|"
-    set cmd [lrange $cmd 1 end]
-    lappend cmd >$fname &
-    if {[catch {eval exec $cmd} err]} {
+    if {[catch {safe_exec_redirect $cmd [list >$fname &]} err]} {
         error_popup "[mc "Error creating patch:"] $err" $patchtop
     }
     catch {destroy $patchtop}
@@ -9385,9 +9588,9 @@ proc domktag {} {
     }
     if {[catch {
         if {$msg != {}} {
-            exec git tag -a -m $msg $tag $id
+            safe_exec [list git tag -a -m $msg $tag $id]
         } else {
-            exec git tag $tag $id
+            safe_exec [list git tag $tag $id]
         }
     } err]} {
         error_popup "[mc "Error creating tag:"] $err" $mktagtop
@@ -9455,7 +9658,7 @@ proc copyreference {} {
     if {$autosellen < 40} {
         lappend cmd --abbrev=$autosellen
     }
-    set reference [eval exec $cmd $rowmenuid]
+    set reference [safe_exec [concat $cmd $rowmenuid]]
 
     clipboard clear
     clipboard append $reference
@@ -9505,7 +9708,7 @@ proc wrcomgo {} {
     set id [$wrcomtop.sha1 get]
     set cmd "echo $id | [$wrcomtop.cmd get]"
     set fname [$wrcomtop.fname get]
-    if {[catch {exec sh -c $cmd >$fname &} err]} {
+    if {[catch {safe_exec_redirect [list sh -c $cmd] [list >$fname &]} err]} {
         error_popup "[mc "Error writing commit:"] $err" $wrcomtop
     }
     catch {destroy $wrcomtop}
@@ -9609,7 +9812,7 @@ proc mkbrgo {top} {
     nowbusy newbranch
     update
     if {[catch {
-        eval exec git branch $cmdargs
+        safe_exec [concat git branch $cmdargs]
     } err]} {
         notbusy newbranch
         error_popup $err
@@ -9650,7 +9853,7 @@ proc mvbrgo {top prevname} {
     nowbusy renamebranch
     update
     if {[catch {
-        eval exec git branch $cmdargs
+        safe_exec [concat git branch $cmdargs]
     } err]} {
         notbusy renamebranch
         error_popup $err
@@ -9691,7 +9894,7 @@ proc exec_citool {tool_args {baseid {}}} {
         }
     }
 
-    eval exec git citool $tool_args &
+    safe_exec_redirect [concat git citool $tool_args] [list &]
 
     array unset env GIT_AUTHOR_*
     array set env $save_env
@@ -9714,7 +9917,7 @@ proc cherrypick {} {
     update
     # Unfortunately git-cherry-pick writes stuff to stderr even when
     # no error occurs, and exec takes that as an indication of error...
-    if {[catch {exec sh -c "git cherry-pick -r $rowmenuid 2>&1"} err]} {
+    if {[catch {safe_exec [list sh -c "git cherry-pick -r $rowmenuid 2>&1"]} err]} {
         notbusy cherrypick
         if {[regexp -line \
                  {Entry '(.*)' (would be overwritten by merge|not uptodate)} \
@@ -9776,7 +9979,7 @@ proc revert {} {
     nowbusy revert [mc "Reverting"]
     update
 
-    if [catch {exec git revert --no-edit $rowmenuid} err] {
+    if [catch {safe_exec [list git revert --no-edit $rowmenuid]} err] {
         notbusy revert
         if [regexp {files would be overwritten by merge:(\n(( |\t)+[^\n]+\n)+)}\
                 $err match files] {
@@ -9852,8 +10055,8 @@ proc resethead {} {
     bind $w <Visibility> "grab $w; focus $w"
     tkwait window $w
     if {!$confirm_ok} return
-    if {[catch {set fd [open \
-            [list | git reset --$resettype $rowmenuid 2>@1] r]} err]} {
+    if {[catch {set fd [safe_open_command_redirect \
+            [list git reset --$resettype $rowmenuid] [list 2>@1]]} err]} {
         error_popup $err
     } else {
         dohidelocalchanges
@@ -9924,7 +10127,7 @@ proc cobranch {} {
 
     # check the tree is clean first??
     set newhead $headmenuhead
-    set command [list | git checkout]
+    set command [list git checkout]
     if {[string match "remotes/*" $newhead]} {
         set remote $newhead
         set newhead [string range $newhead [expr [string last / $newhead] + 1] end]
@@ -9938,12 +10141,11 @@ proc cobranch {} {
     } else {
         lappend command $newhead
     }
-    lappend command 2>@1
     nowbusy checkout [mc "Checking out"]
     update
     dohidelocalchanges
     if {[catch {
-        set fd [open $command r]
+        set fd [safe_open_command_redirect $command [list 2>@1]]
     } err]} {
         notbusy checkout
         error_popup $err
@@ -10009,7 +10211,7 @@ proc rmbranch {} {
     }
     nowbusy rmbranch
     update
-    if {[catch {exec git branch -D $head} err]} {
+    if {[catch {safe_exec [list git branch -D $head]} err]} {
         notbusy rmbranch
         error_popup $err
         return
@@ -10040,7 +10242,7 @@ proc showrefs {} {
     text $top.list -background $bgcolor -foreground $fgcolor \
         -selectbackground $selectbgcolor -font mainfont \
         -xscrollcommand "$top.xsb set" -yscrollcommand "$top.ysb set" \
-        -width 30 -height 20 -cursor $maincursor \
+        -width 60 -height 20 -cursor $maincursor \
         -spacing1 1 -spacing3 1 -state disabled
     $top.list tag configure highlight -background $selectbgcolor
     if {![lsearch -exact $bglist $top.list]} {
@@ -10200,7 +10402,7 @@ proc getallcommits {} {
         set cachedarcs 0
         set allccache [file join $gitdir "gitk.cache"]
         if {![catch {
-            set f [open $allccache r]
+            set f [safe_open_file $allccache r]
             set allcwait 1
             getcache $f
         }]} return
@@ -10209,7 +10411,7 @@ proc getallcommits {} {
     if {$allcwait} {
         return
     }
-    set cmd [list | git rev-list --parents]
+    set cmd [list git rev-list --parents]
     set allcupdate [expr {$seeds ne {}}]
     if {!$allcupdate} {
         set ids "--all"
@@ -10231,10 +10433,17 @@ proc getallcommits {} {
             foreach id $seeds {
                 lappend ids "^$id"
             }
+            lappend ids "--"
         }
     }
     if {$ids ne {}} {
-        set fd [open [concat $cmd $ids] r]
+        if {$ids eq "--all"} {
+            set cmd [concat $cmd "--all"]
+            set fd [safe_open_command $cmd]
+        } else {
+            set cmd [concat $cmd --stdin]
+            set fd [safe_open_command_redirect $cmd [list "<<[join $ids "\n"]"]]
+        }
         fconfigure $fd -blocking 0
         incr allcommits
         nowbusy allcommits
@@ -10624,7 +10833,7 @@ proc savecache {} {
     set cachearc 0
     set cachedarcs $nextarc
     catch {
-        set f [open $allccache w]
+        set f [safe_open_file $allccache w]
         puts $f [list 1 $cachedarcs]
         run writecache $f
     }
@@ -11327,7 +11536,7 @@ proc add_tag_ctext {tag} {
 
     if {![info exists cached_tagcontent($tag)]} {
         catch {
-            set cached_tagcontent($tag) [exec git cat-file -p $tag]
+            set cached_tagcontent($tag) [safe_exec [list git cat-file -p $tag]]
         }
     }
     $ctext insert end "[mc "Tag"]: $tag\n" bold
@@ -11550,12 +11759,13 @@ proc create_prefs_page {w} {
 
 proc prefspage_general {notebook} {
     global NS maxwidth maxgraphpct showneartags showlocalchanges
-    global tabstop limitdiffs autoselect autosellen extdifftool perfile_attrs
+    global tabstop wrapcomment wrapdefault limitdiffs
+    global autocopy autoselect autosellen extdifftool perfile_attrs
     global hideremotes want_ttk have_ttk maxrefs web_browser
 
     set page [create_prefs_page $notebook.general]
 
-    ${NS}::label $page.ldisp -text [mc "Commit list display options"]
+    ${NS}::label $page.ldisp -text [mc "Commit list display options"] -font mainfontbold
     grid $page.ldisp - -sticky w -pady 10
     ${NS}::label $page.spacer -text " "
     ${NS}::label $page.maxwidthl -text [mc "Maximum graph width (lines)"]
@@ -11568,19 +11778,36 @@ proc prefspage_general {notebook} {
     ${NS}::checkbutton $page.showlocal -text [mc "Show local changes"] \
         -variable showlocalchanges
     grid x $page.showlocal -sticky w
-    ${NS}::checkbutton $page.autoselect -text [mc "Auto-select SHA1 (length)"] \
-        -variable autoselect
-    spinbox $page.autosellen -from 1 -to 40 -width 4 -textvariable autosellen
-    grid x $page.autoselect $page.autosellen -sticky w
     ${NS}::checkbutton $page.hideremotes -text [mc "Hide remote refs"] \
         -variable hideremotes
     grid x $page.hideremotes -sticky w
 
-    ${NS}::label $page.ddisp -text [mc "Diff display options"]
+    ${NS}::checkbutton $page.autocopy -text [mc "Copy commit ID to clipboard"] \
+        -variable autocopy
+    grid x $page.autocopy -sticky w
+    if {[haveselectionclipboard]} {
+        ${NS}::checkbutton $page.autoselect -text [mc "Copy commit ID to X11 selection"] \
+            -variable autoselect
+        grid x $page.autoselect -sticky w
+    }
+    spinbox $page.autosellen -from 1 -to 40 -width 4 -textvariable autosellen
+    ${NS}::label $page.autosellenl -text [mc "Length of commit ID to copy"]
+    grid x $page.autosellenl $page.autosellen -sticky w
+
+    ${NS}::label $page.ddisp -text [mc "Diff display options"] -font mainfontbold
     grid $page.ddisp - -sticky w -pady 10
     ${NS}::label $page.tabstopl -text [mc "Tab spacing"]
     spinbox $page.tabstop -from 1 -to 20 -width 4 -textvariable tabstop
     grid x $page.tabstopl $page.tabstop -sticky w
+
+    ${NS}::label $page.wrapcommentl -text [mc "Wrap comment text"]
+    makedroplist $page.wrapcomment wrapcomment none char word
+    grid x $page.wrapcommentl $page.wrapcomment -sticky w
+
+    ${NS}::label $page.wrapdefaultl -text [mc "Wrap other text"]
+    makedroplist $page.wrapdefault wrapdefault none char word
+    grid x $page.wrapdefaultl $page.wrapdefault -sticky w
+
     ${NS}::checkbutton $page.ntag -text [mc "Display nearby tags/heads"] \
         -variable showneartags
     grid x $page.ntag -sticky w
@@ -11609,7 +11836,7 @@ proc prefspage_general {notebook} {
     pack configure $page.webbrowserf.l -padx 10
     grid x $page.webbrowserf $page.webbrowser -sticky ew
 
-    ${NS}::label $page.lgen -text [mc "General options"]
+    ${NS}::label $page.lgen -text [mc "General options"] -font mainfontbold
     grid $page.lgen - -sticky w -pady 10
     ${NS}::checkbutton $page.want_ttk -variable want_ttk \
         -text [mc "Use themed widgets"]
@@ -11628,7 +11855,7 @@ proc prefspage_colors {notebook} {
 
     set page [create_prefs_page $notebook.colors]
 
-    ${NS}::label $page.cdisp -text [mc "Colors: press to choose"]
+    ${NS}::label $page.cdisp -text [mc "Colors: press to choose"] -font mainfontbold
     grid $page.cdisp - -sticky w -pady 10
     label $page.ui -padx 40 -relief sunk -background $uicolor
     ${NS}::button $page.uibut -text [mc "Interface"] \
@@ -11686,7 +11913,7 @@ proc prefspage_colors {notebook} {
 proc prefspage_fonts {notebook} {
     global NS
     set page [create_prefs_page $notebook.fonts]
-    ${NS}::label $page.cfont -text [mc "Fonts: press to choose"]
+    ${NS}::label $page.cfont -text [mc "Fonts: press to choose"] -font mainfontbold
     grid $page.cfont - -sticky w -pady 10
     mkfontdisp mainfont $page [mc "Main font"]
     mkfontdisp textfont $page [mc "Diff display font"]
@@ -11699,7 +11926,7 @@ proc doprefs {} {
     global oldprefs prefstop showneartags showlocalchanges
     global uicolor bgcolor fgcolor ctext diffcolors selectbgcolor markbgcolor
     global tabstop limitdiffs autoselect autosellen extdifftool perfile_attrs
-    global hideremotes want_ttk have_ttk
+    global hideremotes want_ttk have_ttk wrapcomment wrapdefault
 
     set top .gitkprefs
     set prefstop $top
@@ -11708,7 +11935,7 @@ proc doprefs {} {
         return
     }
     foreach v {maxwidth maxgraphpct showneartags showlocalchanges \
-                   limitdiffs tabstop perfile_attrs hideremotes want_ttk} {
+                   limitdiffs tabstop perfile_attrs hideremotes want_ttk wrapcomment wrapdefault} {
         set oldprefs($v) [set $v]
     }
     ttk_toplevel $top
@@ -11834,7 +12061,7 @@ proc prefscan {} {
     global oldprefs prefstop
 
     foreach v {maxwidth maxgraphpct showneartags showlocalchanges \
-                   limitdiffs tabstop perfile_attrs hideremotes want_ttk} {
+                   limitdiffs tabstop perfile_attrs hideremotes want_ttk wrapcomment wrapdefault} {
         global $v
         set $v $oldprefs($v)
     }
@@ -11848,7 +12075,8 @@ proc prefsok {} {
     global oldprefs prefstop showneartags showlocalchanges
     global fontpref mainfont textfont uifont
     global limitdiffs treediffs perfile_attrs
-    global hideremotes
+    global hideremotes wrapcomment wrapdefault
+    global ctext
 
     catch {destroy $prefstop}
     unset prefstop
@@ -11897,6 +12125,12 @@ proc prefsok {} {
     if {$hideremotes != $oldprefs(hideremotes)} {
         rereadrefs
     }
+    if {$wrapcomment != $oldprefs(wrapcomment)} {
+        $ctext tag conf comment -wrap $wrapcomment
+    }
+    if {$wrapdefault != $oldprefs(wrapdefault)} {
+        $ctext configure -wrap $wrapdefault
+    }
 }
 
 proc formatdate {d} {
@@ -11930,7 +12164,7 @@ proc formatdate {d} {
 }
 
 # This list of encoding names and aliases is distilled from
-# http://www.iana.org/assignments/character-sets.
+# https://www.iana.org/assignments/character-sets.
 # Not all of them are supported by Tcl.
 set encoding_aliases {
     { ANSI_X3.4-1968 iso-ir-6 ANSI_X3.4-1986 ISO_646.irv:1991 ASCII
@@ -12213,7 +12447,7 @@ proc gitattr {path attr default} {
         set r $path_attr_cache($attr,$path)
     } else {
         set r "unspecified"
-        if {![catch {set line [exec git check-attr $attr -- $path]}]} {
+        if {![catch {set line [safe_exec [list git check-attr $attr -- $path]]}]} {
             regexp "(.*): $attr: (.*)" $line m f r
         }
         set path_attr_cache($attr,$path) $r
@@ -12240,11 +12474,11 @@ proc cache_gitattr {attr pathlist} {
     while {$newlist ne {}} {
         set head [lrange $newlist 0 [expr {$lim - 1}]]
         set newlist [lrange $newlist $lim end]
-        if {![catch {set rlist [eval exec git check-attr $attr -- $head]}]} {
+        if {![catch {set rlist [safe_exec [concat git check-attr $attr -- $head]]}]} {
             foreach row [split $rlist "\n"] {
                 if {[regexp "(.*): $attr: (.*)" $row m path value]} {
                     if {[string index $path 0] eq "\""} {
-                        set path [encoding convertfrom [lindex $path 0]]
+                        set path [encoding convertfrom utf-8 [lindex $path 0]]
                     }
                     set path_attr_cache($attr,$path) $value
                 }
@@ -12274,7 +12508,6 @@ if { [info exists ::env(GITK_MSGSDIR)] } {
     set gitk_prefix [file dirname [file dirname [file normalize $argv0]]]
     set gitk_libdir [file join $gitk_prefix share gitk lib]
     set gitk_msgsdir [file join $gitk_libdir msgs]
-    unset gitk_prefix
 }
 
 ## Internationalization (i18n) through msgcat and gettext. See
@@ -12293,11 +12526,11 @@ if {[catch {package require Tk 8.4} err]} {
 
 # on OSX bring the current Wish process window to front
 if {[tk windowingsystem] eq "aqua"} {
-    exec osascript -e [format {
+    safe_exec [list osascript -e [format {
         tell application "System Events"
             set frontmost of processes whose unix id is %d to true
         end tell
-    } [pid] ]
+    } [pid] ]]
 }
 
 # Unset GIT_TRACE var if set
@@ -12366,6 +12599,7 @@ set downarrowlen 5
 set mingaplen 100
 set cmitmode "patch"
 set wrapcomment "none"
+set wrapdefault "none"
 set showneartags 1
 set hideremotes 0
 set maxrefs 20
@@ -12374,6 +12608,7 @@ set maxlinelen 200
 set showlocalchanges 1
 set limitdiffs 1
 set datetimeformat "%Y-%m-%d %H:%M:%S"
+set autocopy 0
 set autoselect 1
 set autosellen 40
 set perfile_attrs 0
@@ -12446,7 +12681,7 @@ if {[tk windowingsystem] eq "aqua"} {
 
 catch {
     # follow the XDG base directory specification by default. See
-    # http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
+    # https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
     if {[info exists env(XDG_CONFIG_HOME)] && $env(XDG_CONFIG_HOME) ne ""} {
         # XDG_CONFIG_HOME environment variable is set
         set config_file [file join $env(XDG_CONFIG_HOME) git gitk]
@@ -12471,7 +12706,8 @@ config_check_tmp_exists 50
 
 set config_variables {
     mainfont textfont uifont tabstop findmergefiles maxgraphpct maxwidth
-    cmitmode wrapcomment autoselect autosellen showneartags maxrefs visiblerefs
+    cmitmode wrapcomment wrapdefault autocopy autoselect autosellen
+    showneartags maxrefs visiblerefs
     hideremotes showlocalchanges datetimeformat limitdiffs uicolor want_ttk
     bgcolor fgcolor uifgcolor uifgdisabledcolor colors diffcolors mergecolors
     markbgcolor diffcontext selectbgcolor foundbgcolor currentsearchhitbgcolor
@@ -12542,7 +12778,7 @@ if {$selecthead eq "HEAD"} {
 if {$i >= [llength $argv] && $revtreeargs ne {}} {
     # no -- on command line, but some arguments (other than --argscmd)
     if {[catch {
-        set f [eval exec git rev-parse --no-revs --no-flags $revtreeargs]
+        set f [safe_exec [concat git rev-parse --no-revs --no-flags $revtreeargs]]
         set cmdline_files [split $f "\n"]
         set n [llength $cmdline_files]
         set revtreeargs [lrange $revtreeargs 0 end-$n]
@@ -12573,6 +12809,7 @@ set nullid2 "0000000000000000000000000000000000000001"
 set nullfile "/dev/null"
 
 set have_tk85 [expr {[package vcompare $tk_version "8.5"] >= 0}]
+set have_tk86 [expr {[package vcompare $tk_version "8.6"] >= 0}]
 if {![info exists have_ttk]} {
     set have_ttk [llength [info commands ::ttk::style]]
 }
@@ -12637,31 +12874,35 @@ if {[expr {[exec git rev-parse --is-inside-work-tree] == "true"}]} {
 set worktree [gitworktree]
 setcoords
 makewindow
-catch {
-    image create photo gitlogo      -width 16 -height 16
+if {$::tcl_platform(platform) eq {windows} && [file exists $gitk_prefix/etc/git.ico]} {
+    wm iconbitmap . -default $gitk_prefix/etc/git.ico
+} else {
+    catch {
+        image create photo gitlogo      -width 16 -height 16
 
-    image create photo gitlogominus -width  4 -height  2
-    gitlogominus put #C00000 -to 0 0 4 2
-    gitlogo copy gitlogominus -to  1 5
-    gitlogo copy gitlogominus -to  6 5
-    gitlogo copy gitlogominus -to 11 5
-    image delete gitlogominus
+        image create photo gitlogominus -width  4 -height  2
+        gitlogominus put #C00000 -to 0 0 4 2
+        gitlogo copy gitlogominus -to  1 5
+        gitlogo copy gitlogominus -to  6 5
+        gitlogo copy gitlogominus -to 11 5
+        image delete gitlogominus
 
-    image create photo gitlogoplus  -width  4 -height  4
-    gitlogoplus  put #008000 -to 1 0 3 4
-    gitlogoplus  put #008000 -to 0 1 4 3
-    gitlogo copy gitlogoplus  -to  1 9
-    gitlogo copy gitlogoplus  -to  6 9
-    gitlogo copy gitlogoplus  -to 11 9
-    image delete gitlogoplus
+        image create photo gitlogoplus  -width  4 -height  4
+        gitlogoplus  put #008000 -to 1 0 3 4
+        gitlogoplus  put #008000 -to 0 1 4 3
+        gitlogo copy gitlogoplus  -to  1 9
+        gitlogo copy gitlogoplus  -to  6 9
+        gitlogo copy gitlogoplus  -to 11 9
+        image delete gitlogoplus
 
-    image create photo gitlogo32    -width 32 -height 32
-    gitlogo32 copy gitlogo -zoom 2 2
+        image create photo gitlogo32    -width 32 -height 32
+        gitlogo32 copy gitlogo -zoom 2 2
 
-    wm iconphoto . -default gitlogo gitlogo32
+        wm iconphoto . -default gitlogo gitlogo32
+    }
 }
 # wait for the window to become visible
-tkwait visibility .
+if {![winfo viewable .]} {tkwait visibility .}
 set_window_title
 update
 readrefs

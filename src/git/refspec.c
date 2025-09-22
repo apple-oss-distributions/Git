@@ -1,20 +1,16 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
+#include "gettext.h"
+#include "hash.h"
+#include "hex.h"
+#include "string-list.h"
 #include "strvec.h"
 #include "refs.h"
 #include "refspec.h"
-
-static struct refspec_item s_tag_refspec = {
-	.force = 0,
-	.pattern = 1,
-	.matching = 0,
-	.exact_sha1 = 0,
-	.negative = 0,
-	.src = "refs/tags/*",
-	.dst = "refs/tags/*",
-};
-
-/* See TAG_REFSPEC for the string version */
-const struct refspec_item *tag_refspec = &s_tag_refspec;
+#include "remote.h"
+#include "strbuf.h"
 
 /*
  * Parses the provided refspec 'refspec' and populates the refspec_item 'item'.
@@ -157,60 +153,76 @@ static int parse_refspec(struct refspec_item *item, const char *refspec, int fet
 	return 1;
 }
 
-int refspec_item_init(struct refspec_item *item, const char *refspec, int fetch)
+static int refspec_item_init(struct refspec_item *item, const char *refspec,
+			     int fetch)
 {
 	memset(item, 0, sizeof(*item));
+	item->raw = xstrdup(refspec);
 	return parse_refspec(item, refspec, fetch);
 }
 
-void refspec_item_init_or_die(struct refspec_item *item, const char *refspec,
-			      int fetch)
+int refspec_item_init_fetch(struct refspec_item *item, const char *refspec)
 {
-	if (!refspec_item_init(item, refspec, fetch))
-		die(_("invalid refspec '%s'"), refspec);
+	return refspec_item_init(item, refspec, 1);
+}
+
+int refspec_item_init_push(struct refspec_item *item, const char *refspec)
+{
+	return refspec_item_init(item, refspec, 0);
 }
 
 void refspec_item_clear(struct refspec_item *item)
 {
 	FREE_AND_NULL(item->src);
 	FREE_AND_NULL(item->dst);
+	FREE_AND_NULL(item->raw);
 	item->force = 0;
 	item->pattern = 0;
 	item->matching = 0;
 	item->exact_sha1 = 0;
 }
 
-void refspec_init(struct refspec *rs, int fetch)
+void refspec_init_fetch(struct refspec *rs)
 {
-	memset(rs, 0, sizeof(*rs));
-	rs->fetch = fetch;
+	struct refspec blank = REFSPEC_INIT_FETCH;
+	memcpy(rs, &blank, sizeof(*rs));
 }
 
-static void refspec_append_nodup(struct refspec *rs, char *refspec)
+void refspec_init_push(struct refspec *rs)
 {
-	struct refspec_item item;
-
-	refspec_item_init_or_die(&item, refspec, rs->fetch);
-
-	ALLOC_GROW(rs->items, rs->nr + 1, rs->alloc);
-	rs->items[rs->nr++] = item;
-
-	ALLOC_GROW(rs->raw, rs->raw_nr + 1, rs->raw_alloc);
-	rs->raw[rs->raw_nr++] = refspec;
+	struct refspec blank = REFSPEC_INIT_PUSH;
+	memcpy(rs, &blank, sizeof(*rs));
 }
 
 void refspec_append(struct refspec *rs, const char *refspec)
 {
-	refspec_append_nodup(rs, xstrdup(refspec));
+	struct refspec_item item;
+	int ret;
+
+	if (rs->fetch)
+		ret = refspec_item_init_fetch(&item, refspec);
+	else
+		ret = refspec_item_init_push(&item, refspec);
+	if (!ret)
+		die(_("invalid refspec '%s'"), refspec);
+
+	ALLOC_GROW(rs->items, rs->nr + 1, rs->alloc);
+	rs->items[rs->nr] = item;
+
+	rs->nr++;
 }
 
 void refspec_appendf(struct refspec *rs, const char *fmt, ...)
 {
 	va_list ap;
+	char *buf;
 
 	va_start(ap, fmt);
-	refspec_append_nodup(rs, xstrvfmt(fmt, ap));
+	buf = xstrvfmt(fmt, ap);
 	va_end(ap);
+
+	refspec_append(rs, buf);
+	free(buf);
 }
 
 void refspec_appendn(struct refspec *rs, const char **refspecs, int nr)
@@ -231,31 +243,15 @@ void refspec_clear(struct refspec *rs)
 	rs->alloc = 0;
 	rs->nr = 0;
 
-	for (i = 0; i < rs->raw_nr; i++)
-		free((char *)rs->raw[i]);
-	FREE_AND_NULL(rs->raw);
-	rs->raw_alloc = 0;
-	rs->raw_nr = 0;
-
 	rs->fetch = 0;
 }
 
 int valid_fetch_refspec(const char *fetch_refspec_str)
 {
 	struct refspec_item refspec;
-	int ret = refspec_item_init(&refspec, fetch_refspec_str, REFSPEC_FETCH);
+	int ret = refspec_item_init_fetch(&refspec, fetch_refspec_str);
 	refspec_item_clear(&refspec);
 	return ret;
-}
-
-int valid_remote_name(const char *name)
-{
-	int result;
-	struct strbuf refspec = STRBUF_INIT;
-	strbuf_addf(&refspec, "refs/heads/test:refs/remotes/%s/test", name);
-	result = valid_fetch_refspec(refspec.buf);
-	strbuf_release(&refspec);
-	return result;
 }
 
 void refspec_ref_prefixes(const struct refspec *rs,
@@ -266,14 +262,24 @@ void refspec_ref_prefixes(const struct refspec *rs,
 		const struct refspec_item *item = &rs->items[i];
 		const char *prefix = NULL;
 
-		if (item->exact_sha1 || item->negative)
+		if (item->negative)
 			continue;
-		if (rs->fetch == REFSPEC_FETCH)
+
+		if (rs->fetch) {
+			if (item->exact_sha1)
+				continue;
 			prefix = item->src;
-		else if (item->dst)
-			prefix = item->dst;
-		else if (item->src && !item->exact_sha1)
-			prefix = item->src;
+		} else {
+			/*
+			 * Pushes can have an explicit destination like
+			 * "foo:bar", or can implicitly use the src for both
+			 * ("foo" is the same as "foo:foo").
+			 */
+			if (item->dst)
+				prefix = item->dst;
+			else if (item->src && !item->exact_sha1)
+				prefix = item->src;
+		}
 
 		if (!prefix)
 			continue;
@@ -287,4 +293,205 @@ void refspec_ref_prefixes(const struct refspec *rs,
 			expand_ref_prefix(ref_prefixes, prefix);
 		}
 	}
+}
+
+int match_refname_with_pattern(const char *pattern, const char *refname,
+				   const char *replacement, char **result)
+{
+	const char *kstar = strchr(pattern, '*');
+	size_t klen;
+	size_t ksuffixlen;
+	size_t namelen;
+	int ret;
+	if (!kstar)
+		die(_("pattern '%s' has no '*'"), pattern);
+	klen = kstar - pattern;
+	ksuffixlen = strlen(kstar + 1);
+	namelen = strlen(refname);
+	ret = !strncmp(refname, pattern, klen) && namelen >= klen + ksuffixlen &&
+		!memcmp(refname + namelen - ksuffixlen, kstar + 1, ksuffixlen);
+	if (ret && replacement) {
+		struct strbuf sb = STRBUF_INIT;
+		const char *vstar = strchr(replacement, '*');
+		if (!vstar)
+			die(_("replacement '%s' has no '*'"), replacement);
+		strbuf_add(&sb, replacement, vstar - replacement);
+		strbuf_add(&sb, refname + klen, namelen - klen - ksuffixlen);
+		strbuf_addstr(&sb, vstar + 1);
+		*result = strbuf_detach(&sb, NULL);
+	}
+	return ret;
+}
+
+static int refspec_match(const struct refspec_item *refspec,
+			 const char *name)
+{
+	if (refspec->pattern)
+		return match_refname_with_pattern(refspec->src, name, NULL, NULL);
+
+	return !strcmp(refspec->src, name);
+}
+
+int refname_matches_negative_refspec_item(const char *refname, struct refspec *rs)
+{
+	int i;
+
+	for (i = 0; i < rs->nr; i++) {
+		if (rs->items[i].negative && refspec_match(&rs->items[i], refname))
+			return 1;
+	}
+	return 0;
+}
+
+static int refspec_find_negative_match(struct refspec *rs, struct refspec_item *query)
+{
+	int i, matched_negative = 0;
+	int find_src = !query->src;
+	struct string_list reversed = STRING_LIST_INIT_DUP;
+	const char *needle = find_src ? query->dst : query->src;
+
+	/*
+	 * Check whether the queried ref matches any negative refpsec. If so,
+	 * then we should ultimately treat this as not matching the query at
+	 * all.
+	 *
+	 * Note that negative refspecs always match the source, but the query
+	 * item uses the destination. To handle this, we apply pattern
+	 * refspecs in reverse to figure out if the query source matches any
+	 * of the negative refspecs.
+	 *
+	 * The first loop finds and expands all positive refspecs
+	 * matched by the queried ref.
+	 *
+	 * The second loop checks if any of the results of the first loop
+	 * match any negative refspec.
+	 */
+	for (i = 0; i < rs->nr; i++) {
+		struct refspec_item *refspec = &rs->items[i];
+		char *expn_name;
+
+		if (refspec->negative)
+			continue;
+
+		/* Note the reversal of src and dst */
+		if (refspec->pattern) {
+			const char *key = refspec->dst ? refspec->dst : refspec->src;
+			const char *value = refspec->src;
+
+			if (match_refname_with_pattern(key, needle, value, &expn_name))
+				string_list_append_nodup(&reversed, expn_name);
+		} else if (refspec->matching) {
+			/* For the special matching refspec, any query should match */
+			string_list_append(&reversed, needle);
+		} else if (!refspec->src) {
+			BUG("refspec->src should not be null here");
+		} else if (!strcmp(needle, refspec->src)) {
+			string_list_append(&reversed, refspec->src);
+		}
+	}
+
+	for (i = 0; !matched_negative && i < reversed.nr; i++) {
+		if (refname_matches_negative_refspec_item(reversed.items[i].string, rs))
+			matched_negative = 1;
+	}
+
+	string_list_clear(&reversed, 0);
+
+	return matched_negative;
+}
+
+void refspec_find_all_matches(struct refspec *rs,
+				    struct refspec_item *query,
+				    struct string_list *results)
+{
+	int i;
+	int find_src = !query->src;
+
+	if (find_src && !query->dst)
+		BUG("refspec_find_all_matches: need either src or dst");
+
+	if (refspec_find_negative_match(rs, query))
+		return;
+
+	for (i = 0; i < rs->nr; i++) {
+		struct refspec_item *refspec = &rs->items[i];
+		const char *key = find_src ? refspec->dst : refspec->src;
+		const char *value = find_src ? refspec->src : refspec->dst;
+		const char *needle = find_src ? query->dst : query->src;
+		char **result = find_src ? &query->src : &query->dst;
+
+		if (!refspec->dst || refspec->negative)
+			continue;
+		if (refspec->pattern) {
+			if (match_refname_with_pattern(key, needle, value, result))
+				string_list_append_nodup(results, *result);
+		} else if (!strcmp(needle, key)) {
+			string_list_append(results, value);
+		}
+	}
+}
+
+int refspec_find_match(struct refspec *rs, struct refspec_item *query)
+{
+	int i;
+	int find_src = !query->src;
+	const char *needle = find_src ? query->dst : query->src;
+	char **result = find_src ? &query->src : &query->dst;
+
+	if (find_src && !query->dst)
+		BUG("refspec_find_match: need either src or dst");
+
+	if (refspec_find_negative_match(rs, query))
+		return -1;
+
+	for (i = 0; i < rs->nr; i++) {
+		struct refspec_item *refspec = &rs->items[i];
+		const char *key = find_src ? refspec->dst : refspec->src;
+		const char *value = find_src ? refspec->src : refspec->dst;
+
+		if (!refspec->dst || refspec->negative)
+			continue;
+		if (refspec->pattern) {
+			if (match_refname_with_pattern(key, needle, value, result)) {
+				query->force = refspec->force;
+				return 0;
+			}
+		} else if (!strcmp(needle, key)) {
+			*result = xstrdup(value);
+			query->force = refspec->force;
+			return 0;
+		}
+	}
+	return -1;
+}
+
+struct ref *apply_negative_refspecs(struct ref *ref_map, struct refspec *rs)
+{
+	struct ref **tail;
+
+	for (tail = &ref_map; *tail; ) {
+		struct ref *ref = *tail;
+
+		if (refname_matches_negative_refspec_item(ref->name, rs)) {
+			*tail = ref->next;
+			free(ref->peer_ref);
+			free(ref);
+		} else
+			tail = &ref->next;
+	}
+
+	return ref_map;
+}
+
+char *apply_refspecs(struct refspec *rs, const char *name)
+{
+	struct refspec_item query;
+
+	memset(&query, 0, sizeof(struct refspec_item));
+	query.src = (char *)name;
+
+	if (refspec_find_match(rs, &query))
+		return NULL;
+
+	return query.dst;
 }

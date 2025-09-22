@@ -1,9 +1,15 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "color.h"
 #include "config.h"
+#include "editor.h"
+#include "gettext.h"
 #include "sideband.h"
 #include "help.h"
 #include "pkt-line.h"
+#include "write-or-die.h"
 
 struct keyword_entry {
 	/*
@@ -27,28 +33,27 @@ static int use_sideband_colors(void)
 
 	const char *key = "color.remote";
 	struct strbuf sb = STRBUF_INIT;
-	char *value;
+	const char *value;
 	int i;
 
 	if (use_sideband_colors_cached >= 0)
 		return use_sideband_colors_cached;
 
-	if (!git_config_get_string(key, &value)) {
+	if (!git_config_get_string_tmp(key, &value))
 		use_sideband_colors_cached = git_config_colorbool(key, value);
-	} else if (!git_config_get_string("color.ui", &value)) {
+	else if (!git_config_get_string_tmp("color.ui", &value))
 		use_sideband_colors_cached = git_config_colorbool("color.ui", value);
-	} else {
+	else
 		use_sideband_colors_cached = GIT_COLOR_AUTO;
-	}
 
 	for (i = 0; i < ARRAY_SIZE(keywords); i++) {
 		strbuf_reset(&sb);
 		strbuf_addf(&sb, "%s.%s", key, keywords[i].keyword);
-		if (git_config_get_string(sb.buf, &value))
+		if (git_config_get_string_tmp(sb.buf, &value))
 			continue;
-		if (color_parse(value, keywords[i].color))
-			continue;
+		color_parse(value, keywords[i].color);
 	}
+
 	strbuf_release(&sb);
 	return use_sideband_colors_cached;
 }
@@ -66,7 +71,10 @@ void list_config_color_sideband_slots(struct string_list *list, const char *pref
  * of the line. This should be called for a single line only, which is
  * passed as the first N characters of the SRC array.
  *
- * NEEDSWORK: use "size_t n" instead for clarity.
+ * It is fine to use "int n" here instead of "size_t n" as all calls to this
+ * function pass an 'int' parameter. Additionally, the buffer involved in
+ * storing these 'int' values takes input from a packet via the pkt-line
+ * interface, which is capable of transferring only 64kB at a time.
  */
 static void maybe_colorize_sideband(struct strbuf *dest, const char *src, int n)
 {
@@ -184,7 +192,7 @@ int demultiplex_sideband(const char *me, int status,
 			int linelen = brk - b;
 
 			/*
-			 * For message accross packet boundary, there would have
+			 * For message across packet boundary, there would have
 			 * a nonempty "scratch" buffer from last call of this
 			 * function, and there may have a leading CR/LF in "buf".
 			 * For this case we should add a clear-to-eol suffix to
@@ -214,7 +222,7 @@ int demultiplex_sideband(const char *me, int status,
 			}
 
 			strbuf_addch(scratch, *brk);
-			xwrite(2, scratch->buf, scratch->len);
+			write_in_full(2, scratch->buf, scratch->len);
 			strbuf_reset(scratch);
 
 			b = brk + 1;
@@ -241,7 +249,7 @@ cleanup:
 		die("%s", scratch->buf);
 	if (scratch->len) {
 		strbuf_addch(scratch, '\n');
-		xwrite(2, scratch->buf, scratch->len);
+		write_in_full(2, scratch->buf, scratch->len);
 	}
 	strbuf_release(scratch);
 	return 1;

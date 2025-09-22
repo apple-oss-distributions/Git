@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitremote-helpers
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITREMOTE\-HELPERS" "7" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITREMOTE\-HELPERS" "7" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,6 @@ gitremote-helpers \- Helper programs to interact with remote repositories
 .nf
 \fIgit remote\-<transport>\fR <repository> [<URL>]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Remote helper programs are normally not used directly by end users, but they are invoked by Git when it needs to interact with remote repositories Git does not support natively\&. A given helper will implement a subset of the capabilities documented here\&. When Git needs to interact with a repository using a remote helper, it spawns the helper as an independent process, sends commands to the helper\(cqs standard input, and expects results from the helper\(cqs standard output\&. Because a remote helper runs as an independent process from Git, there is no need to re\-link Git to add a new helper, nor any need to link the helper with the implementation of Git\&.
@@ -50,7 +49,7 @@ When Git encounters a URL of the form \fI<transport>://<address>\fR, where \fI<t
 .sp
 A URL of the form \fI<transport>::<address>\fR explicitly instructs Git to invoke \fIgit remote\-<transport>\fR with \fI<address>\fR as the second argument\&. If such a URL is encountered directly on the command line, the first argument is \fI<address>\fR, and if it is encountered in a configured remote, the first argument is the name of that remote\&.
 .sp
-Additionally, when a configured remote has \fBremote\&.<name>\&.vcs\fR set to \fI<transport>\fR, Git explicitly invokes \fIgit remote\-<transport>\fR with \fI<name>\fR as the first argument\&. If set, the second argument is \fBremote\&.<name>\&.url\fR; otherwise, the second argument is omitted\&.
+Additionally, when a configured remote has \fBremote\&.\fR\fI<name>\fR\fB\&.vcs\fR set to \fI<transport>\fR, Git explicitly invokes \fIgit remote\-<transport>\fR with \fI<name>\fR as the first argument\&. If set, the second argument is \fBremote\&.\fR\fI<name>\fR\fB\&.url\fR; otherwise, the second argument is omitted\&.
 .SH "INPUT FORMAT"
 .sp
 Git sends the remote helper a list of commands on standard input, one per line\&. The first command is always the \fIcapabilities\fR command, in response to which the remote helper must print a list of the capabilities it supports (see below) followed by a blank line\&. The response to the capabilities command determines what commands Git uses in the remainder of the command stream\&.
@@ -206,16 +205,19 @@ capability use this\&. It\(cqs mandatory for
 \fIexport\fR\&.
 .sp
 A helper advertising the capability
-\fBrefspec refs/heads/*:refs/svn/origin/branches/*\fR
+\fBrefspec\fR
+\fBrefs/heads/*:refs/svn/origin/branches/*\fR
 is saying that, when it is asked to
-\fBimport refs/heads/topic\fR, the stream it outputs will update the
+\fBimport\fR
+\fBrefs/heads/topic\fR, the stream it outputs will update the
 \fBrefs/svn/origin/branches/topic\fR
 ref\&.
 .sp
 This capability can be advertised multiple times\&. The first applicable refspec takes precedence\&. The left\-hand of refspecs advertised with this capability must cover all refs reported by the list command\&. If no
 \fIrefspec\fR
 capability is advertised, there is an implied
-\fBrefspec *:*\fR\&.
+\fBrefspec\fR
+\fB*:*\fR\&.
 .sp
 When writing remote\-helpers for decentralized version control systems, it is advised to keep a local copy of the repository to interact with, and to let the private namespace refs point to this local repository, while the refs/remotes namespace is used to track the remote repository\&.
 .RE
@@ -240,7 +242,7 @@ commands of a batch before sending data to fast\-import\&. This is to prevent mi
 This modifies the
 \fIexport\fR
 capability, instructing Git to dump the internal marks table to <file> when complete\&. For details, read up on
-\fB\-\-export\-marks=<file>\fR
+\fB\-\-export\-marks=\fR\fI<file>\fR
 in
 \fBgit-fast-export\fR(1)\&.
 .RE
@@ -250,7 +252,7 @@ in
 This modifies the
 \fIexport\fR
 capability, instructing Git to load the marks specified in <file> before processing any input\&. For details, read up on
-\fB\-\-import\-marks=<file>\fR
+\fB\-\-import\-marks=\fR\fI<file>\fR
 in
 \fBgit-fast-export\fR(1)\&.
 .RE
@@ -285,7 +287,7 @@ Support for this command is mandatory\&.
 .PP
 \fIlist\fR
 .RS 4
-Lists the refs, one per line, in the format "<value> <name> [<attr> \&...]"\&. The value may be a hex sha1 hash, "@<dest>" for a symref, ":<keyword> <value>" for a key\-value pair, or "?" to indicate that the helper could not get the value of the ref\&. A space\-separated list of attributes follows the name; unrecognized attributes are ignored\&. The list ends with a blank line\&.
+Lists the refs, one per line, in the format "<value> <name> [<attr> \&...\:]"\&. The value may be a hex sha1 hash, "@<dest>" for a symref, ":<keyword> <value>" for a key\-value pair, or "?" to indicate that the helper could not get the value of the ref\&. A space\-separated list of attributes follows the name; unrecognized attributes are ignored\&. The list ends with a blank line\&.
 .sp
 See REF LIST ATTRIBUTES for a list of currently defined attributes\&. See REF LIST KEYWORDS for a list of currently defined keywords\&.
 .sp
@@ -327,9 +329,7 @@ Optionally may output a
 \fIlock <file>\fR
 line indicating the full path of a file under
 \fB$GIT_DIR/objects/pack\fR
-which is keeping a pack until refs can be suitably updated\&. The path must end with
-\fB\&.keep\fR\&. This is a mechanism to name a <pack,idx,keep> tuple by giving only the keep component\&. The kept pack will not be deleted by a concurrent repack, even though its objects may not be referenced until the fetch completes\&. The
-\fB\&.keep\fR
+which is keeping a pack until refs can be suitably updated\&. The path must end with \&.\fBkeep\fR\&. This is a mechanism to name a <pack,idx,keep> tuple by giving only the keep component\&. The kept pack will not be deleted by a concurrent repack, even though its objects may not be referenced until the fetch completes\&. The \&.\fBkeep\fR
 file will be deleted at the conclusion of the fetch\&.
 .sp
 If option
@@ -450,12 +450,11 @@ Supported if the helper has the "stateless\-connect" capability\&.
 \fIget\fR <uri> <path>
 .RS 4
 Downloads the file from the given
-\fB<uri>\fR
+\fI<uri>\fR
 to the given
-\fB<path>\fR\&. If
-\fB<path>\&.temp\fR
-exists, then Git assumes that the
-\fB\&.temp\fR
+\fI<path>\fR\&. If
+\fI<path>\fR\fB\&.temp\fR
+exists, then Git assumes that the \&.\fBtemp\fR
 file is a partial download from a previous attempt and will resume the download from that position\&.
 .RE
 .sp
@@ -497,17 +496,17 @@ Enables (or disables) progress messages displayed by the transport helper during
 Deepens the history of a shallow repository\&.
 .RE
 .PP
-\(aqoption deepen\-since <timestamp>
+\fIoption deepen\-since\fR <timestamp>
 .RS 4
 Deepens the history of a shallow repository based on time\&.
 .RE
 .PP
-\(aqoption deepen\-not <ref>
+\fIoption deepen\-not\fR <ref>
 .RS 4
 Deepens the history of a shallow repository excluding ref\&. Multiple options add up\&.
 .RE
 .PP
-\fIoption deepen\-relative {\(aqtrue\fR|\fIfalse\fR}
+\fIoption deepen\-relative\fR {\fItrue\fR|\fIfalse\fR}
 .RS 4
 Deepens the history of a shallow repository relative to current boundary\&. Only valid when used with "option depth"\&.
 .RE
@@ -516,8 +515,12 @@ Deepens the history of a shallow repository relative to current boundary\&. Only
 .RS 4
 If enabled the helper should automatically fetch annotated tag objects if the object the tag points at was transferred during the fetch command\&. If the tag is not fetched by the helper a second fetch command will usually be sent to ask for the tag specifically\&. Some helpers may be able to use this option to avoid a second network connection\&.
 .RE
-.sp
-\fIoption dry\-run\fR {\fItrue\fR|\fIfalse\fR}: If true, pretend the operation completed successfully, but don\(cqt actually change any repository data\&. For most helpers this only applies to the \fIpush\fR, if supported\&.
+.PP
+\fIoption dry\-run\fR {\fItrue\fR|\fIfalse\fR}
+.RS 4
+If true, pretend the operation completed successfully, but don\(cqt actually change any repository data\&. For most helpers this only applies to the
+\fIpush\fR, if supported\&.
+.RE
 .PP
 \fIoption servpath <c\-style\-quoted\-path>\fR
 .RS 4
@@ -550,7 +553,7 @@ Allow to extend \&.git/shallow if the new refs require it\&.
 GPG sign pushes\&.
 .RE
 .PP
-\(aqoption push\-option <string>
+\fIoption push\-option\fR <string>
 .RS 4
 Transmit <string> as a push option\&. As the push option must not contain LF or NUL characters, the string is not encoded\&.
 .RE
@@ -570,12 +573,9 @@ Indicate that only the objects wanted need to be fetched, not their dependents\&
 When pushing, request the remote server to update refs in a single atomic transaction\&. If successful, all refs will be updated, or none will\&. If the remote side does not support this capability, the push will fail\&.
 .RE
 .PP
-\fIoption object\-format\fR {\fItrue\fR|algorithm}
+\fIoption object\-format true\fR
 .RS 4
-If
-\fItrue\fR, indicate that the caller wants hash algorithm information to be passed back from the remote\&. This mode is used when fetching refs\&.
-.sp
-If set to an algorithm, indicate that the caller wants to interact with the remote side using that algorithm\&.
+Indicate that the caller wants hash algorithm information to be passed back from the remote\&. This mode is used when fetching refs\&.
 .RE
 .SH "SEE ALSO"
 .sp

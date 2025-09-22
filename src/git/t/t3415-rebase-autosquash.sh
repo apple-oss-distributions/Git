@@ -43,7 +43,7 @@ test_auto_fixup () {
 
 	git tag $1 &&
 	test_tick &&
-	git rebase $2 -i HEAD^^^ &&
+	git rebase $2 HEAD^^^ &&
 	git log --oneline >actual &&
 	if test -n "$no_squash"
 	then
@@ -61,15 +61,24 @@ test_auto_fixup () {
 }
 
 test_expect_success 'auto fixup (option)' '
-	test_auto_fixup final-fixup-option --autosquash
+	test_auto_fixup fixup-option --autosquash &&
+	test_auto_fixup fixup-option-i "--autosquash -i"
 '
 
-test_expect_success 'auto fixup (config)' '
+test_expect_success 'auto fixup (config true)' '
 	git config rebase.autosquash true &&
-	test_auto_fixup final-fixup-config-true &&
+	test_auto_fixup ! fixup-config-true &&
+	test_auto_fixup fixup-config-true-i -i &&
 	test_auto_fixup ! fixup-config-true-no --no-autosquash &&
+	test_auto_fixup ! fixup-config-true-i-no "-i --no-autosquash"
+'
+
+test_expect_success 'auto fixup (config false)' '
 	git config rebase.autosquash false &&
-	test_auto_fixup ! final-fixup-config-false
+	test_auto_fixup ! fixup-config-false &&
+	test_auto_fixup ! fixup-config-false-i -i &&
+	test_auto_fixup fixup-config-false-yes --autosquash &&
+	test_auto_fixup fixup-config-false-i-yes "-i --autosquash"
 '
 
 test_auto_squash () {
@@ -87,7 +96,7 @@ test_auto_squash () {
 	git commit -m "squash! first" -m "extra para for first" &&
 	git tag $1 &&
 	test_tick &&
-	git rebase $2 -i HEAD^^^ &&
+	git rebase $2 HEAD^^^ &&
 	git log --oneline >actual &&
 	if test -n "$no_squash"
 	then
@@ -105,15 +114,24 @@ test_auto_squash () {
 }
 
 test_expect_success 'auto squash (option)' '
-	test_auto_squash final-squash --autosquash
+	test_auto_squash squash-option --autosquash &&
+	test_auto_squash squash-option-i "--autosquash -i"
 '
 
-test_expect_success 'auto squash (config)' '
+test_expect_success 'auto squash (config true)' '
 	git config rebase.autosquash true &&
-	test_auto_squash final-squash-config-true &&
+	test_auto_squash ! squash-config-true &&
+	test_auto_squash squash-config-true-i -i &&
 	test_auto_squash ! squash-config-true-no --no-autosquash &&
+	test_auto_squash ! squash-config-true-i-no "-i --no-autosquash"
+'
+
+test_expect_success 'auto squash (config false)' '
 	git config rebase.autosquash false &&
-	test_auto_squash ! final-squash-config-false
+	test_auto_squash ! squash-config-false &&
+	test_auto_squash ! squash-config-false-i -i &&
+	test_auto_squash squash-config-false-yes --autosquash &&
+	test_auto_squash squash-config-false-i-yes "-i --autosquash"
 '
 
 test_expect_success 'misspelled auto squash' '
@@ -239,8 +257,8 @@ test_expect_success 'auto squash of fixup commit that matches branch name which 
 	GIT_SEQUENCE_EDITOR="cat >tmp" git rebase --autosquash -i HEAD^^ &&
 	sed -ne "/^[^#]/{s/[0-9a-f]\{7,\}/HASH/g;p;}" tmp >actual &&
 	cat <<-EOF >expect &&
-	pick HASH second commit
-	pick HASH fixup! self-cycle # empty
+	pick HASH # second commit
+	pick HASH # fixup! self-cycle # empty
 	EOF
 	test_cmp expect actual
 '
@@ -293,10 +311,10 @@ test_auto_fixup_fixup () {
 		parent2=$(git rev-parse --short HEAD^^) &&
 		parent3=$(git rev-parse --short HEAD^^^) &&
 		cat >expected <<-EOF &&
-		pick $parent3 first commit
-		$1 $parent1 $1! first
-		$1 $head $1! $2! first
-		pick $parent2 second commit
+		pick $parent3 # first commit
+		$1 $parent1 # $1! first
+		$1 $head # $1! $2! first
+		pick $parent2 # second commit
 		EOF
 		test_cmp expected actual
 	) &&
@@ -371,7 +389,7 @@ test_expect_success 'autosquash with empty custom instructionFormat' '
 		set_cat_todo_editor &&
 		test_must_fail git -c rebase.instructionFormat= \
 			rebase --autosquash  --force-rebase -i HEAD^ >actual &&
-		git log -1 --format="pick %h %s" >expect &&
+		git log -1 --format="pick %h # %s" >expect &&
 		test_cmp expect actual
 	)
 '

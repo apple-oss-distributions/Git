@@ -1,4 +1,7 @@
-#include "cache.h"
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
+#include "strbuf.h"
 #include "unix-socket.h"
 
 #define DEFAULT_UNIX_STREAM_LISTEN_BACKLOG (5)
@@ -62,8 +65,10 @@ static int unix_sockaddr_init(struct sockaddr_un *sa, const char *path,
 		if (strbuf_getcwd(&cwd))
 			return -1;
 		ctx->orig_dir = strbuf_detach(&cwd, NULL);
-		if (chdir_len(dir, slash - dir) < 0)
+		if (chdir_len(dir, slash - dir) < 0) {
+			FREE_AND_NULL(ctx->orig_dir);
 			return -1;
+		}
 	}
 
 	memset(sa, 0, sizeof(*sa));

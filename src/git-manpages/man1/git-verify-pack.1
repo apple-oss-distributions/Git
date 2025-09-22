@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-verify-pack
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-VERIFY\-PACK" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-VERIFY\-PACK" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,43 +32,37 @@ git-verify-pack \- Validate packed Git archive files
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit verify\-pack\fR [\-v | \-\-verbose] [\-s | \-\-stat\-only] [\-\-] <pack>\&.idx\&...
+\fBgit\fR \fBverify\-pack\fR [\fB\-v\fR | \fB\-\-verbose\fR] [\fB\-s\fR | \fB\-\-stat\-only\fR] [\fB\-\-\fR] \fI<pack>\fR\&.idx\&...\:
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Reads given idx file for packed Git archive created with the \fIgit pack\-objects\fR command and verifies idx file and the corresponding pack file\&.
+Read each idx file for packed Git archive given on the command line, and verify the idx file and the corresponding pack file\&.
 .SH "OPTIONS"
 .PP
-<pack>\&.idx \&...
+\fB\-v\fR, \fB\-\-verbose\fR
 .RS 4
-The idx files to verify\&.
+After verifying the pack, show the list of objects contained in the pack and a histogram of delta chain length\&.
 .RE
 .PP
-\-v, \-\-verbose
-.RS 4
-After verifying the pack, show list of objects contained in the pack and a histogram of delta chain length\&.
-.RE
-.PP
-\-s, \-\-stat\-only
+\fB\-s\fR, \fB\-\-stat\-only\fR
 .RS 4
 Do not verify the pack contents; only show the histogram of delta chain length\&. With
-\fB\-\-verbose\fR, list of objects is also shown\&.
+\fB\-\-verbose\fR, the list of objects is also shown\&.
 .RE
 .PP
-\-\-
+\fB\-\-\fR
 .RS 4
 Do not interpret any more arguments as options\&.
 .RE
 .SH "OUTPUT FORMAT"
 .sp
-When specifying the \-v option the format used is:
+When specifying the \fB\-v\fR option the format used is:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-SHA\-1 type size size\-in\-packfile offset\-in\-packfile
+object\-name type size size\-in\-packfile offset\-in\-packfile
 .fi
 .if n \{\
 .RE
@@ -80,7 +74,7 @@ for objects that are not deltified in the pack, and
 .RS 4
 .\}
 .nf
-SHA\-1 type size size\-in\-packfile offset\-in\-packfile depth base\-SHA\-1
+object\-name type size size\-in\-packfile offset\-in\-packfile depth base\-object\-name
 .fi
 .if n \{\
 .RE

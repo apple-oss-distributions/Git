@@ -27,7 +27,12 @@ check_mailinfo () {
 
 for mail in 00*
 do
-	test_expect_success "mailinfo $mail" '
+	case "$mail" in
+	0004)
+		prereq=ICONV;;
+	esac
+
+	test_expect_success $prereq "mailinfo $mail" '
 		check_mailinfo "$mail" "" &&
 		if test -f "$DATA/msg$mail--scissors"
 		then
@@ -55,7 +60,12 @@ test_expect_success 'split box with rfc2047 samples' \
 
 for mail in rfc2047/00*
 do
-	test_expect_success "mailinfo $mail" '
+	case "$mail" in
+	rfc2047/0001)
+		prereq=ICONV;;
+	esac
+
+	test_expect_success $prereq "mailinfo $mail" '
 		git mailinfo -u "$mail-msg" "$mail-patch" <"$mail" >"$mail-info" &&
 		echo msg &&
 		test_cmp "$DATA/empty" "$mail-msg" &&
@@ -70,7 +80,7 @@ test_expect_success 'respect NULs' '
 
 	git mailsplit -d3 -o. "$DATA/nul-plain" &&
 	test_cmp "$DATA/nul-plain" 001 &&
-	(cat 001 | git mailinfo msg patch) &&
+	git mailinfo msg patch <001 &&
 	test_line_count = 4 patch
 
 '
@@ -266,6 +276,28 @@ test_expect_success 'mailinfo warn CR in base64 encoded email' '
 	test_must_be_empty quoted-cr/0001.err &&
 	check_quoted_cr_mail quoted-cr/0002 --quoted-cr=strip &&
 	test_must_be_empty quoted-cr/0002.err
+'
+
+test_expect_success 'from line with unterminated quoted string' '
+	echo "From: bob \"unterminated string smith <bob@example.com>" >in &&
+	git mailinfo /dev/null /dev/null <in >actual &&
+	cat >expect <<-\EOF &&
+	Author: bob unterminated string smith
+	Email: bob@example.com
+
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'from line with unterminated comment' '
+	echo "From: bob (unterminated comment smith <bob@example.com>" >in &&
+	git mailinfo /dev/null /dev/null <in >actual &&
+	cat >expect <<-\EOF &&
+	Author: bob (unterminated comment smith
+	Email: bob@example.com
+
+	EOF
+	test_cmp expect actual
 '
 
 test_done

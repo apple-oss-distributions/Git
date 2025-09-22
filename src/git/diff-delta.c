@@ -11,6 +11,8 @@
  * published by the Free Software Foundation.
  */
 
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "git-compat-util.h"
 #include "delta.h"
 
@@ -436,19 +438,31 @@ create_delta(const struct delta_index *index,
 			op = out + outpos++;
 			i = 0x80;
 
-			if (moff & 0x000000ff)
-				out[outpos++] = moff >> 0,  i |= 0x01;
-			if (moff & 0x0000ff00)
-				out[outpos++] = moff >> 8,  i |= 0x02;
-			if (moff & 0x00ff0000)
-				out[outpos++] = moff >> 16, i |= 0x04;
-			if (moff & 0xff000000)
-				out[outpos++] = moff >> 24, i |= 0x08;
+			if (moff & 0x000000ff) {
+				out[outpos++] = moff >> 0;
+				i |= 0x01;
+			}
+			if (moff & 0x0000ff00) {
+				out[outpos++] = moff >> 8;
+				i |= 0x02;
+			}
+			if (moff & 0x00ff0000) {
+				out[outpos++] = moff >> 16;
+				i |= 0x04;
+			}
+			if (moff & 0xff000000) {
+				out[outpos++] = moff >> 24;
+				i |= 0x08;
+			}
 
-			if (msize & 0x00ff)
-				out[outpos++] = msize >> 0, i |= 0x10;
-			if (msize & 0xff00)
-				out[outpos++] = msize >> 8, i |= 0x20;
+			if (msize & 0x00ff) {
+				out[outpos++] = msize >> 0;
+				i |= 0x10;
+			}
+			if (msize & 0xff00) {
+				out[outpos++] = msize >> 8;
+				i |= 0x20;
+			}
 
 			*op = i;
 

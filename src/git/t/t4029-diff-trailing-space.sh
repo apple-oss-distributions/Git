@@ -4,7 +4,6 @@
 #
 test_description='diff honors config option, diff.suppressBlankEmpty'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 cat <<\EOF >expected ||
@@ -32,7 +31,8 @@ test_expect_success "$test_description" '
 	git config --bool diff.suppressBlankEmpty true &&
 	git diff f > actual &&
 	test_cmp exp actual &&
-	perl -i.bak -p -e "s/^\$/ /" exp &&
+	sed "s/^\$/ /" exp >exp.munged &&
+	mv exp.munged exp &&
 	git config --bool diff.suppressBlankEmpty false &&
 	git diff f > actual &&
 	test_cmp exp actual &&

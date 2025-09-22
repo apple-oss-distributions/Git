@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-quiltimport
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-QUILTIMPORT" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-QUILTIMPORT" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,6 @@ git-quiltimport \- Applies a quilt patchset onto the current branch
 \fIgit quiltimport\fR [\-\-dry\-run | \-n] [\-\-author <author>] [\-\-patches <dir>]
                 [\-\-series <file>] [\-\-keep\-non\-patch]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Applies a quilt patchset onto the current Git branch, preserving the patch boundaries, patch order, and patch descriptions present in the quilt patchset\&.
@@ -50,7 +49,7 @@ If a subject is not found in the patch description the patch name is preserved a
 Walk through the patches in the series and warn if we cannot find all of the necessary information to commit a patch\&. At the time of this writing only missing author information is warned about\&.
 .RE
 .PP
-\-\-author Author Name <Author Email>
+\-\-author \fIAuthor Name <Author Email>\fR
 .RS 4
 The author name and email address to use when no author information can be found in the patch description\&.
 .RE
@@ -59,7 +58,9 @@ The author name and email address to use when no author information can be found
 .RS 4
 The directory to find the quilt patches\&.
 .sp
-The default for the patch directory is patches or the value of the
+The default for the patch directory is
+\fIpatches\fR
+or the value of the
 \fB$QUILT_PATCHES\fR
 environment variable\&.
 .RE

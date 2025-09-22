@@ -21,12 +21,11 @@ In the test, these paths are used:
 	yomin   - not in H or M
 '
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-read-tree.sh
 
 read_tree_twoway () {
-    git read-tree -m "$1" "$2" && git ls-files --stage
+	git read-tree -m "$1" "$2" && git ls-files --stage
 }
 
 compare_change () {
@@ -363,14 +362,14 @@ test_expect_success 'a/b (untracked) vs a case setup.' '
 test_expect_success 'a/b (untracked) vs a, plus c/d case test.' '
 	read_tree_u_must_fail -u -m "$treeH" "$treeM" &&
 	git ls-files --stage &&
-	test -f a/b
+	test_path_is_file a/b
 '
 
 test_expect_success 'read-tree supports the super-prefix' '
 	cat <<-EOF >expect &&
 		error: Updating '\''fictional/a'\'' would lose untracked files in it
 	EOF
-	test_must_fail git --super-prefix fictional/ read-tree -u -m "$treeH" "$treeM" 2>actual &&
+	test_must_fail git read-tree --super-prefix fictional/ -u -m "$treeH" "$treeM" 2>actual &&
 	test_cmp expect actual
 '
 
@@ -397,7 +396,7 @@ test_expect_success 'a/b vs a, plus c/d case setup.' '
 
 test_expect_success 'a/b vs a, plus c/d case test.' '
 	read_tree_u_must_succeed -u -m "$treeH" "$treeM" &&
-	git ls-files --stage | tee >treeMcheck.out &&
+	git ls-files --stage >treeMcheck.out &&
 	test_cmp treeM.out treeMcheck.out
 '
 

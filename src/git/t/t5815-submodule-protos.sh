@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test protocol filtering with submodules'
+
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-proto-disable.sh
 

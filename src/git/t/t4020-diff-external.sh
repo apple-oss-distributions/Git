@@ -2,7 +2,6 @@
 
 test_description='external diff interface test'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -102,7 +101,7 @@ test_expect_success 'diff attribute' '
 	test_cmp expect actual
 '
 
-test_expect_success !SANITIZE_LEAK 'diff attribute should apply only to diff' '
+test_expect_success 'diff attribute should apply only to diff' '
 	git log -p -1 HEAD >out &&
 	grep "^diff --git a/file b/file" out
 
@@ -129,7 +128,7 @@ test_expect_success 'diff attribute' '
 	test_cmp expect actual
 '
 
-test_expect_success !SANITIZE_LEAK 'diff attribute should apply only to diff' '
+test_expect_success 'diff attribute should apply only to diff' '
 	git log -p -1 HEAD >out &&
 	grep "^diff --git a/file b/file" out
 
@@ -172,7 +171,73 @@ test_expect_success 'no diff with -diff' '
 	grep Binary out
 '
 
-echo NULZbetweenZwords | perl -pe 'y/Z/\000/' > file
+check_external_diff () {
+	expect_code=$1
+	expect_out=$2
+	expect_err=$3
+	command_code=$4
+	trust_exit_code=$5
+	shift 5
+	options="$@"
+
+	command="echo output; exit $command_code;"
+	desc="external diff '$command' with trustExitCode=$trust_exit_code"
+	with_options="${options:+ with }$options"
+
+	test_expect_success "$desc via attribute$with_options" "
+		test_config diff.foo.command \"$command\" &&
+		test_config diff.foo.trustExitCode $trust_exit_code &&
+		echo \"file diff=foo\" >.gitattributes &&
+		test_expect_code $expect_code git diff $options >out 2>err &&
+		test_cmp $expect_out out &&
+		test_cmp $expect_err err
+	"
+
+	test_expect_success "$desc via diff.external$with_options" "
+		test_config diff.external \"$command\" &&
+		test_config diff.trustExitCode $trust_exit_code &&
+		>.gitattributes &&
+		test_expect_code $expect_code git diff $options >out 2>err &&
+		test_cmp $expect_out out &&
+		test_cmp $expect_err err
+	"
+
+	test_expect_success "$desc via GIT_EXTERNAL_DIFF$with_options" "
+		>.gitattributes &&
+		test_expect_code $expect_code env \
+			GIT_EXTERNAL_DIFF=\"$command\" \
+			GIT_EXTERNAL_DIFF_TRUST_EXIT_CODE=$trust_exit_code \
+			git diff $options >out 2>err &&
+		test_cmp $expect_out out &&
+		test_cmp $expect_err err
+	"
+}
+
+test_expect_success 'setup output files' '
+	: >empty &&
+	echo output >output &&
+	echo "fatal: external diff died, stopping at file" >error
+'
+
+check_external_diff   0 output empty 0 off
+check_external_diff 128 output error 1 off
+check_external_diff   0 output empty 0 on
+check_external_diff   0 output empty 1 on
+check_external_diff 128 output error 2 on
+
+check_external_diff   1 output empty 0 off --exit-code
+check_external_diff 128 output error 1 off --exit-code
+check_external_diff   0 output empty 0 on  --exit-code
+check_external_diff   1 output empty 1 on  --exit-code
+check_external_diff 128 output error 2 on  --exit-code
+
+check_external_diff   1 empty  empty 0 off --quiet
+check_external_diff   1 empty  empty 1 off --quiet # we don't even call the program
+check_external_diff   0 empty  empty 0 on  --quiet
+check_external_diff   1 empty  empty 1 on  --quiet
+check_external_diff 128 empty  error 2 on  --quiet
+
+echo NULZbetweenZwords | tr "Z" "\000" > file
 
 test_expect_success 'force diff with "diff"' '
 	after=$(git hash-object file) &&
@@ -232,7 +297,7 @@ keep_only_cr () {
 test_expect_success 'external diff with autocrlf = true' '
 	test_config core.autocrlf true &&
 	GIT_EXTERNAL_DIFF=./fake-diff.sh git diff &&
-	test $(wc -l < crlfed.txt) = $(cat crlfed.txt | keep_only_cr | wc -c)
+	test $(wc -l <crlfed.txt) = $(keep_only_cr <crlfed.txt | wc -c)
 '
 
 test_expect_success 'diff --cached' '

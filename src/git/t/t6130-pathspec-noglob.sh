@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test globbing (and noglob) of pathspec limiting'
+
 . ./test-lib.sh
 
 test_expect_success 'create commits with glob characters' '

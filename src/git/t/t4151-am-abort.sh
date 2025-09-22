@@ -46,7 +46,7 @@ do
 
 	test_expect_success "am$with3 --skip continue after failed am$with3" '
 		test_must_fail git am$with3 --skip >output &&
-		test_i18ngrep "^Applying: 6$" output &&
+		test_grep "^Applying: 6$" output &&
 		test_cmp file-2-expect file-2 &&
 		test ! -f .git/MERGE_RR
 	'
@@ -112,7 +112,7 @@ test_expect_success 'am --abort will keep dirty index intact' '
 test_expect_success 'am -3 stops on conflict on unborn branch' '
 	git checkout -f --orphan orphan &&
 	git reset &&
-	rm -f otherfile-4 &&
+	rm -f file-1 otherfile-4 &&
 	test_must_fail git am -3 0003-*.patch &&
 	test 2 -eq $(git ls-files -u | wc -l) &&
 	test 4 = "$(cat otherfile-4)"

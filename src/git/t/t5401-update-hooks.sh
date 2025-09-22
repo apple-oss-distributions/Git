@@ -4,6 +4,7 @@
 #
 
 test_description='Test the update hook infrastructure.'
+
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -63,14 +64,14 @@ test_expect_success 'updated as expected' '
 '
 
 test_expect_success 'hooks ran' '
-	test -f victim.git/pre-receive.args &&
-	test -f victim.git/pre-receive.stdin &&
-	test -f victim.git/update.args &&
-	test -f victim.git/update.stdin &&
-	test -f victim.git/post-receive.args &&
-	test -f victim.git/post-receive.stdin &&
-	test -f victim.git/post-update.args &&
-	test -f victim.git/post-update.stdin
+	test_path_is_file victim.git/pre-receive.args &&
+	test_path_is_file victim.git/pre-receive.stdin &&
+	test_path_is_file victim.git/update.args &&
+	test_path_is_file victim.git/update.stdin &&
+	test_path_is_file victim.git/post-receive.args &&
+	test_path_is_file victim.git/post-receive.stdin &&
+	test_path_is_file victim.git/post-update.args &&
+	test_path_is_file victim.git/post-update.stdin
 '
 
 test_expect_success 'pre-receive hook input' '
@@ -123,7 +124,7 @@ remote: STDOUT post-update
 remote: STDERR post-update
 EOF
 test_expect_success 'send-pack stderr contains hook messages' '
-	grep ^remote: send.err | sed "s/ *\$//" >actual &&
+	sed -n "/^remote:/s/ *\$//p" send.err >actual &&
 	test_cmp expect actual
 '
 
@@ -133,10 +134,8 @@ test_expect_success 'pre-receive hook that forgets to read its input' '
 	EOF
 	rm -f victim.git/hooks/update victim.git/hooks/post-update &&
 
-	for v in $(test_seq 100 999)
-	do
-		git branch branch_$v main || return
-	done &&
+	printf "create refs/heads/branch_%d main\n" $(test_seq 100 999) >input &&
+	git update-ref --stdin <input &&
 	git push ./victim.git "+refs/heads/*:refs/heads/*"
 '
 

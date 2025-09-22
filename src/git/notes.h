@@ -4,6 +4,7 @@
 #include "string-list.h"
 
 struct object_id;
+struct repository;
 struct strbuf;
 
 /*
@@ -70,7 +71,7 @@ extern struct notes_tree {
  * 3. The value of the core.notesRef config variable, if set
  * 4. GIT_NOTES_DEFAULT_REF (i.e. "refs/notes/commits")
  */
-const char *default_notes_ref(void);
+char *default_notes_ref(struct repository *repo);
 
 /*
  * Flags controlling behaviour of notes tree initialization
@@ -256,7 +257,17 @@ void free_notes(struct notes_tree *t);
 struct string_list;
 
 struct display_notes_opt {
+	/*
+	 * Less than `0` is "unset", which means that the default notes
+	 * are shown iff no other notes are given. Otherwise,
+	 * treat it like a boolean.
+	 */
 	int use_default_notes;
+
+	/*
+	 * A list of globs (in the same style as notes.displayRef) where
+	 * notes should be loaded from.
+	 */
 	struct string_list extra_notes_refs;
 };
 
@@ -264,6 +275,11 @@ struct display_notes_opt {
  * Initialize a display_notes_opt to its default value.
  */
 void init_display_notes(struct display_notes_opt *opt);
+
+/*
+ * Release resources acquired by the display_notes_opt.
+ */
+void release_display_notes(struct display_notes_opt *opt);
 
 /*
  * This family of functions enables or disables the display of notes. In
@@ -283,14 +299,7 @@ void disable_display_notes(struct display_notes_opt *opt, int *show_notes);
 /*
  * Load the notes machinery for displaying several notes trees.
  *
- * If 'opt' is not NULL, then it specifies additional settings for the
- * displaying:
- *
- * - suppress_default_notes indicates that the notes from
- *   core.notesRef and notes.displayRef should not be loaded.
- *
- * - extra_notes_refs may contain a list of globs (in the same style
- *   as notes.displayRef) where notes should be loaded from.
+ * 'opt' may be NULL.
  */
 void load_display_notes(struct display_notes_opt *opt);
 

@@ -1,9 +1,13 @@
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "git-compat-util.h"
 #include "cache-tree.h"
+#include "gettext.h"
+#include "hex.h"
 #include "lockfile.h"
+#include "object-name.h"
 #include "refs.h"
 #include "reset.h"
-#include "run-command.h"
 #include "tree-walk.h"
 #include "tree.h"
 #include "unpack-trees.h"
@@ -38,18 +42,20 @@ static int update_refs(const struct reset_head_opts *opts,
 	prefix_len = msg.len;
 
 	if (update_orig_head) {
-		if (!get_oid("ORIG_HEAD", &oid_old_orig))
+		if (!repo_get_oid(the_repository, "ORIG_HEAD", &oid_old_orig))
 			old_orig = &oid_old_orig;
 		if (head) {
 			if (!reflog_orig_head) {
 				strbuf_addstr(&msg, "updating ORIG_HEAD");
 				reflog_orig_head = msg.buf;
 			}
-			update_ref(reflog_orig_head, "ORIG_HEAD",
-				   orig_head ? orig_head : head,
-				   old_orig, 0, UPDATE_REFS_MSG_ON_ERR);
+			refs_update_ref(get_main_ref_store(the_repository),
+					reflog_orig_head, "ORIG_HEAD",
+					orig_head ? orig_head : head,
+					old_orig, 0, UPDATE_REFS_MSG_ON_ERR);
 		} else if (old_orig)
-			delete_ref(NULL, "ORIG_HEAD", old_orig, 0);
+			refs_delete_ref(get_main_ref_store(the_repository),
+					NULL, "ORIG_HEAD", old_orig, 0);
 	}
 
 	if (!reflog_head) {
@@ -58,20 +64,23 @@ static int update_refs(const struct reset_head_opts *opts,
 		reflog_head = msg.buf;
 	}
 	if (!switch_to_branch)
-		ret = update_ref(reflog_head, "HEAD", oid, head,
-				 detach_head ? REF_NO_DEREF : 0,
-				 UPDATE_REFS_MSG_ON_ERR);
+		ret = refs_update_ref(get_main_ref_store(the_repository),
+				      reflog_head, "HEAD", oid, head,
+				      detach_head ? REF_NO_DEREF : 0,
+				      UPDATE_REFS_MSG_ON_ERR);
 	else {
-		ret = update_ref(reflog_branch ? reflog_branch : reflog_head,
-				 switch_to_branch, oid, NULL, 0,
-				 UPDATE_REFS_MSG_ON_ERR);
+		ret = refs_update_ref(get_main_ref_store(the_repository),
+				      reflog_branch ? reflog_branch : reflog_head,
+				      switch_to_branch, oid, NULL, 0,
+				      UPDATE_REFS_MSG_ON_ERR);
 		if (!ret)
-			ret = create_symref("HEAD", switch_to_branch,
-					    reflog_head);
+			ret = refs_update_symref(get_main_ref_store(the_repository),
+						 "HEAD", switch_to_branch,
+						 reflog_head);
 	}
 	if (!ret && run_hook)
-		run_hooks_l("post-checkout",
-			    oid_to_hex(head ? head : null_oid()),
+		run_hooks_l(the_repository, "post-checkout",
+			    oid_to_hex(head ? head : null_oid(the_hash_algo)),
 			    oid_to_hex(oid), "1", NULL);
 	strbuf_release(&msg);
 	return ret;
@@ -106,7 +115,7 @@ int reset_head(struct repository *r, const struct reset_head_opts *opts)
 		goto leave_reset_head;
 	}
 
-	if (!get_oid("HEAD", &head_oid)) {
+	if (!repo_get_oid(r, "HEAD", &head_oid)) {
 		head = &head_oid;
 	} else if (!oid || !reset_hard) {
 		ret = error(_("could not determine HEAD revision"));
@@ -155,6 +164,11 @@ int reset_head(struct repository *r, const struct reset_head_opts *opts)
 	}
 
 	tree = parse_tree_indirect(oid);
+	if (!tree) {
+		ret = error(_("unable to read tree (%s)"), oid_to_hex(oid));
+		goto leave_reset_head;
+	}
+
 	prime_cache_tree(r, r->index, tree);
 
 	if (write_locked_index(r->index, &lock, COMMIT_LOCK) < 0) {

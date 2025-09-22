@@ -1,6 +1,7 @@
 #!/bin/sh
 
-test_description='blaming trough history with topic branches'
+test_description='blaming through history with topic branches'
+
 . ./test-lib.sh
 
 # Creates the history shown below. '*'s mark the first parent in the merges.

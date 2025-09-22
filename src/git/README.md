@@ -17,15 +17,15 @@ Please read the file [INSTALL][] for installation instructions.
 Many Git online resources are accessible from <https://git-scm.com/>
 including full documentation and Git related tools.
 
-See [Documentation/gittutorial.txt][] to get started, then see
-[Documentation/giteveryday.txt][] for a useful minimum set of commands, and
-`Documentation/git-<commandname>.txt` for documentation of each command.
+See [Documentation/gittutorial.adoc][] to get started, then see
+[Documentation/giteveryday.adoc][] for a useful minimum set of commands, and
+`Documentation/git-<commandname>.adoc` for documentation of each command.
 If git has been correctly installed, then the tutorial can also be
 read with `man gittutorial` or `git help tutorial`, and the
 documentation of each command with `man git-<commandname>` or `git help
 <commandname>`.
 
-CVS users may also want to read [Documentation/gitcvs-migration.txt][]
+CVS users may also want to read [Documentation/gitcvs-migration.adoc][]
 (`man gitcvs-migration` or `git help cvs-migration` if git is
 installed).
 
@@ -39,10 +39,10 @@ Those wishing to help with error message, usage and informational message
 string translations (localization l10) should see [po/README.md][]
 (a `po` file is a Portable Object file that holds the translations).
 
-To subscribe to the list, send an email with just "subscribe git" in
-the body to majordomo@vger.kernel.org (not the Git list). The mailing
+To subscribe to the list, send an email to <git+subscribe@vger.kernel.org>
+(see https://subspace.kernel.org/subscribing.html for details). The mailing
 list archives are available at <https://lore.kernel.org/git/>,
-<http://marc.info/?l=git> and other archival sites.
+<https://marc.info/?l=git> and other archival sites.
 
 Issues which are security relevant should be disclosed privately to
 the Git Security mailing list <git-security@googlegroups.com>.
@@ -66,9 +66,9 @@ and the name as (depending on your mood):
  - "goddamn idiotic truckload of sh*t": when it breaks
 
 [INSTALL]: INSTALL
-[Documentation/gittutorial.txt]: Documentation/gittutorial.txt
-[Documentation/giteveryday.txt]: Documentation/giteveryday.txt
-[Documentation/gitcvs-migration.txt]: Documentation/gitcvs-migration.txt
+[Documentation/gittutorial.adoc]: Documentation/gittutorial.adoc
+[Documentation/giteveryday.adoc]: Documentation/giteveryday.adoc
+[Documentation/gitcvs-migration.adoc]: Documentation/gitcvs-migration.adoc
 [Documentation/SubmittingPatches]: Documentation/SubmittingPatches
 [Documentation/CodingGuidelines]: Documentation/CodingGuidelines
 [po/README.md]: po/README.md

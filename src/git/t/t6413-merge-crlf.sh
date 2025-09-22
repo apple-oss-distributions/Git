@@ -11,7 +11,6 @@ test_description='merge conflict in crlf repo
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -34,14 +33,14 @@ test_expect_success setup '
 test_expect_success 'Check "ours" is CRLF' '
 	git reset --hard initial &&
 	git merge side -s ours &&
-	cat file | remove_cr | append_cr >file.temp &&
+	remove_cr <file | append_cr >file.temp &&
 	test_cmp file file.temp
 '
 
 test_expect_success 'Check that conflict file is CRLF' '
 	git reset --hard a &&
 	test_must_fail git merge side &&
-	cat file | remove_cr | append_cr >file.temp &&
+	remove_cr <file | append_cr >file.temp &&
 	test_cmp file file.temp
 '
 

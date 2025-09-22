@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-clean
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-CLEAN" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-CLEAN" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,16 +32,15 @@ git-clean \- Remove untracked files from the working tree
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit clean\fR [\-d] [\-f] [\-i] [\-n] [\-q] [\-e <pattern>] [\-x | \-X] [\-\-] [<pathspec>\&...]
+\fIgit clean\fR [\-d] [\-f] [\-i] [\-n] [\-q] [\-e <pattern>] [\-x | \-X] [\-\-] [<pathspec>\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Cleans the working tree by recursively removing files that are not under version control, starting from the current directory\&.
 .sp
 Normally, only files unknown to Git are removed, but if the \fB\-x\fR option is specified, ignored files are also removed\&. This can, for example, be useful to remove all build products\&.
 .sp
-If any optional \fB<pathspec>\&.\&.\&.\fR arguments are given, only those paths that match the pathspec are affected\&.
+If any optional \fI<pathspec>\fR\&.\&.\&. arguments are given, only those paths that match the pathspec are affected\&.
 .SH "OPTIONS"
 .PP
 \-d
@@ -54,17 +53,23 @@ Normally, when no <pathspec> is specified, git clean will not recurse into untra
 .RS 4
 If the Git configuration variable clean\&.requireForce is not set to false,
 \fIgit clean\fR
-will refuse to delete files or directories unless given \-f or \-i\&. Git will refuse to modify untracked nested git repositories (directories with a \&.git subdirectory) unless a second \-f is given\&.
+will refuse to delete files or directories unless given \-f\&. Git will refuse to modify untracked nested git repositories (directories with a \&.git subdirectory) unless a second \-f is given\&.
 .RE
 .PP
 \-i, \-\-interactive
 .RS 4
-Show what would be done and clean files interactively\&. See \(lqInteractive mode\(rq for details\&.
+Show what would be done and clean files interactively\&. See
+\(lqInteractive mode\(rq
+for details\&. Configuration variable
+\fBclean\&.requireForce\fR
+is ignored, as this mode gives its own safety protection by going interactive\&.
 .RE
 .PP
 \-n, \-\-dry\-run
 .RS 4
-Don\(cqt actually remove anything, just show what would be done\&.
+Don\(cqt actually remove anything, just show what would be done\&. Configuration variable
+\fBclean\&.requireForce\fR
+is ignored, as nothing will be deleted anyway\&.
 .RE
 .PP
 \-q, \-\-quiet
@@ -112,7 +117,6 @@ The command loop shows the list of subcommands available, and gives a prompt "Wh
 .RE
 .\}
 .sp
-.sp
 You also could say \fBc\fR or \fBclean\fR above as long as the choice is unique\&.
 .sp
 The main command loop has 6 subcommands\&.
@@ -124,7 +128,7 @@ Start cleaning files and directories, and then quit\&.
 .PP
 filter by pattern
 .RS 4
-This shows the files and directories to be deleted and issues an "Input ignore patterns>>" prompt\&. You can input space\-separated patterns to exclude files and directories from deletion\&. E\&.g\&. "*\&.c *\&.h" will excludes files end with "\&.c" and "\&.h" from deletion\&. When you are satisfied with the filtered result, press ENTER (empty) back to the main menu\&.
+This shows the files and directories to be deleted and issues an "Input ignore patterns>>" prompt\&. You can input space\-separated patterns to exclude files and directories from deletion\&. E\&.g\&. "*\&.c *\&.h" will exclude files ending with "\&.c" and "\&.h" from deletion\&. When you are satisfied with the filtered result, press ENTER (empty) back to the main menu\&.
 .RE
 .PP
 select by numbers
@@ -143,7 +147,7 @@ This will start to clean, and you must confirm one by one in order to delete ite
 .PP
 quit
 .RS 4
-This lets you quit without do cleaning\&.
+This lets you quit without doing any cleaning\&.
 .RE
 .PP
 help
@@ -156,7 +160,7 @@ Everything below this line in this section is selectively included from the \fBg
 .PP
 clean\&.requireForce
 .RS 4
-A boolean to make git\-clean do nothing unless given \-f, \-i or \-n\&. Defaults to true\&.
+A boolean to make git\-clean refuse to delete files unless \-f is given\&. Defaults to true\&.
 .RE
 .SH "SEE ALSO"
 .sp

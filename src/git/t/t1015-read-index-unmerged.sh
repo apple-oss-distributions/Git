@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='Test various callers of read_index_unmerged'
+
 . ./test-lib.sh
 
 test_expect_success 'setup modify/delete + directory/file conflict' '

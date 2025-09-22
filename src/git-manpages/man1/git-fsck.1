@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-fsck
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-FSCK" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-FSCK" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,9 +35,8 @@ git-fsck \- Verifies the connectivity and validity of the objects in the databas
 \fIgit fsck\fR [\-\-tags] [\-\-root] [\-\-unreachable] [\-\-cache] [\-\-no\-reflogs]
          [\-\-[no\-]full] [\-\-strict] [\-\-verbose] [\-\-lost\-found]
          [\-\-[no\-]dangling] [\-\-[no\-]progress] [\-\-connectivity\-only]
-         [\-\-[no\-]name\-objects] [<object>\&...]
+         [\-\-[no\-]name\-objects] [\-\-[no\-]references] [<object>\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Verifies the connectivity and validity of the objects in the database\&.
@@ -49,7 +48,7 @@ An object to treat as the head of an unreachability trace\&.
 .sp
 If no objects are given,
 \fIgit fsck\fR
-defaults to using the index file, all SHA\-1 references in
+defaults to using the index file, all SHA\-1 references in the
 \fBrefs\fR
 namespace, and all reflogs (unless \-\-no\-reflogs is given) as heads\&.
 .RE
@@ -95,7 +94,7 @@ Check not just objects in GIT_OBJECT_DIRECTORY ($GIT_DIR/objects), but also the 
 .PP
 \-\-connectivity\-only
 .RS 4
-Check only the connectivity of reachable objects, making sure that any objects referenced by a reachable tag, commit, or tree is present\&. This speeds up the operation by avoiding reading blobs entirely (though it does still check that referenced blobs exist)\&. This will detect corruption in commits and trees, but not do any semantic checks (e\&.g\&., for format errors)\&. Corruption in blob objects will not be detected at all\&.
+Check only the connectivity of reachable objects, making sure that any objects referenced by a reachable tag, commit, or tree are present\&. This speeds up the operation by avoiding reading blobs entirely (though it does still check that referenced blobs exist)\&. This will detect corruption in commits and trees, but not do any semantic checks (e\&.g\&., for format errors)\&. Corruption in blob objects will not be detected at all\&.
 .sp
 Unreachable tags, commits, and trees will also be accessed to find the tips of dangling segments of history\&. Use
 \fB\-\-no\-dangling\fR
@@ -104,7 +103,7 @@ if you don\(cqt care about this output and want to speed it up further\&.
 .PP
 \-\-strict
 .RS 4
-Enable more strict checking, namely to catch a file mode recorded with g+w bit set, which was created by older versions of Git\&. Existing repositories, including the Linux kernel, Git itself, and sparse repository have old objects that triggers this check, but it is recommended to check new projects with this flag\&.
+Enable more strict checking, namely to catch a file mode recorded with g+w bit set, which was created by older versions of Git\&. Existing repositories, including the Linux kernel, Git itself, and sparse repository have old objects that trigger this check, but it is recommended to check new projects with this flag\&.
 .RE
 .PP
 \-\-verbose
@@ -123,12 +122,20 @@ When displaying names of reachable objects, in addition to the SHA\-1 also displ
 \fBhow\fR
 they are reachable, compatible with
 \fBgit-rev-parse\fR(1), e\&.g\&.
-\fBHEAD@{1234567890}~25^2:src/\fR\&.
+\fBHEAD@\fR{1234567890}~25^2:src/\&.
 .RE
 .PP
 \-\-[no\-]progress
 .RS 4
 Progress status is reported on the standard error stream by default when it is attached to a terminal, unless \-\-no\-progress or \-\-verbose is specified\&. \-\-progress forces progress status even if the standard error stream is not directed to a terminal\&.
+.RE
+.PP
+\-\-[no\-]references
+.RS 4
+Control whether to check the references database consistency via
+\fIgit refs verify\fR\&. See
+\fBgit-refs\fR(1)
+for details\&. The default is to check the references database\&.
 .RE
 .SH "CONFIGURATION"
 .sp
@@ -141,73 +148,75 @@ During fsck git may find issues with legacy data which wouldn\(cqt be generated 
 was set\&. This feature is intended to support working with legacy repositories containing such data\&.
 .sp
 Setting
-\fBfsck\&.<msg\-id>\fR
+\fBfsck\&.\fR\fI<msg\-id>\fR
 will be picked up by
 \fBgit-fsck\fR(1), but to accept pushes of such data set
-\fBreceive\&.fsck\&.<msg\-id>\fR
+\fBreceive\&.fsck\&.\fR\fI<msg\-id>\fR
 instead, or to clone or fetch it set
-\fBfetch\&.fsck\&.<msg\-id>\fR\&.
+\fBfetch\&.fsck\&.\fR\fI<msg\-id>\fR\&.
 .sp
 The rest of the documentation discusses
 \fBfsck\&.*\fR
 for brevity, but the same applies for the corresponding
 \fBreceive\&.fsck\&.*\fR
 and
-\fBfetch\&.<msg\-id>\&.*\fR\&. variables\&.
+\fBfetch\&.fsck\&.*\fR\&. variables\&.
 .sp
 Unlike variables like
 \fBcolor\&.ui\fR
 and
-\fBcore\&.editor\fR
-the
-\fBreceive\&.fsck\&.<msg\-id>\fR
+\fBcore\&.editor\fR, the
+\fBreceive\&.fsck\&.\fR\fI<msg\-id>\fR
 and
-\fBfetch\&.fsck\&.<msg\-id>\fR
+\fBfetch\&.fsck\&.\fR\fI<msg\-id>\fR
 variables will not fall back on the
-\fBfsck\&.<msg\-id>\fR
-configuration if they aren\(cqt set\&. To uniformly configure the same fsck settings in different circumstances all three of them they must all set to the same values\&.
+\fBfsck\&.\fR\fI<msg\-id>\fR
+configuration if they aren\(cqt set\&. To uniformly configure the same fsck settings in different circumstances, all three of them must be set to the same values\&.
 .sp
 When
-\fBfsck\&.<msg\-id>\fR
+\fBfsck\&.\fR\fI<msg\-id>\fR
 is set, errors can be switched to warnings and vice versa by configuring the
-\fBfsck\&.<msg\-id>\fR
+\fBfsck\&.\fR\fI<msg\-id>\fR
 setting where the
-\fB<msg\-id>\fR
+\fI<msg\-id>\fR
 is the fsck message ID and the value is one of
 \fBerror\fR,
 \fBwarn\fR
 or
 \fBignore\fR\&. For convenience, fsck prefixes the error/warning with the message ID, e\&.g\&. "missingEmail: invalid author/committer line \- missing email" means that setting
-\fBfsck\&.missingEmail = ignore\fR
+\fBfsck\&.missingEmail\fR
+\fB=\fR
+\fBignore\fR
 will hide that issue\&.
 .sp
 In general, it is better to enumerate existing objects with problems with
 \fBfsck\&.skipList\fR, instead of listing the kind of breakages these problematic objects share to be ignored, as doing the latter will allow new instances of the same breakages go unnoticed\&.
 .sp
 Setting an unknown
-\fBfsck\&.<msg\-id>\fR
+\fBfsck\&.\fR\fI<msg\-id>\fR
 value will cause fsck to die, but doing the same for
-\fBreceive\&.fsck\&.<msg\-id>\fR
+\fBreceive\&.fsck\&.\fR\fI<msg\-id>\fR
 and
-\fBfetch\&.fsck\&.<msg\-id>\fR
+\fBfetch\&.fsck\&.\fR\fI<msg\-id>\fR
 will only cause git to warn\&.
 .sp
-See
-\fBFsck Messages\fR
+See the
+\fBFsck\fR
+\fBMessages\fR
 section of
 \fBgit-fsck\fR(1)
 for supported values of
-\fB<msg\-id>\fR\&.
+\fI<msg\-id>\fR\&.
 .RE
 .PP
 fsck\&.skipList
 .RS 4
-The path to a list of object names (i\&.e\&. one unabbreviated SHA\-1 per line) that are known to be broken in a non\-fatal way and should be ignored\&. On versions of Git 2\&.20 and later comments (\fI#\fR), empty lines, and any leading and trailing whitespace is ignored\&. Everything but a SHA\-1 per line will error out on older versions\&.
+The path to a list of object names (i\&.e\&. one unabbreviated SHA\-1 per line) that are known to be broken in a non\-fatal way and should be ignored\&. On versions of Git 2\&.20 and later, comments (\fI#\fR), empty lines, and any leading and trailing whitespace are ignored\&. Everything but a SHA\-1 per line will error out on older versions\&.
 .sp
-This feature is useful when an established project should be accepted despite early commits containing errors that can be safely ignored such as invalid committer email addresses\&. Note: corrupt objects cannot be skipped with this setting\&.
+This feature is useful when an established project should be accepted despite early commits containing errors that can be safely ignored, such as invalid committer email addresses\&. Note: corrupt objects cannot be skipped with this setting\&.
 .sp
 Like
-\fBfsck\&.<msg\-id>\fR
+\fBfsck\&.\fR\fI<msg\-id>\fR
 this variable has corresponding
 \fBreceive\&.fsck\&.skipList\fR
 and
@@ -224,9 +233,9 @@ and
 \fBfetch\&.fsck\&.skipList\fR
 variables will not fall back on the
 \fBfsck\&.skipList\fR
-configuration if they aren\(cqt set\&. To uniformly configure the same fsck settings in different circumstances all three of them they must all set to the same values\&.
+configuration if they aren\(cqt set\&. To uniformly configure the same fsck settings in different circumstances, all three of them must be set to the same values\&.
 .sp
-Older versions of Git (before 2\&.20) documented that the object names list should be sorted\&. This was never a requirement, the object names could appear in any order, but when reading the list we tracked whether the list was sorted for the purposes of an internal binary search implementation, which could save itself some work with an already sorted list\&. Unless you had a humongous list there was no reason to go out of your way to pre\-sort the list\&. After Git version 2\&.20 a hash implementation is used instead, so there\(cqs now no reason to pre\-sort the list\&.
+Older versions of Git (before 2\&.20) documented that the object names list should be sorted\&. This was never a requirement; the object names could appear in any order, but when reading the list we tracked whether the list was sorted for the purposes of an internal binary search implementation, which could save itself some work with an already sorted list\&. Unless you had a humongous list there was no reason to go out of your way to pre\-sort the list\&. After Git version 2\&.20 a hash implementation is used instead, so there\(cqs now no reason to pre\-sort the list\&.
 .RE
 .SH "DISCUSSION"
 .sp
@@ -260,7 +269,7 @@ The database has an object whose hash doesn\(cqt match the object database value
 .RE
 .SH "FSCK MESSAGES"
 .sp
-The following lists the types of errors \fBgit fsck\fR detects and what each error means, with their default severity\&. The severity of the error, other than those that are marked as "(FATAL)", can be tweaked by setting the corresponding \fBfsck\&.<msg\-id>\fR configuration variable\&.
+The following lists the types of errors \fBgit\fR \fBfsck\fR detects and what each error means, with their default severity\&. The severity of the error, other than those that are marked as "(FATAL)", can be tweaked by setting the corresponding \fBfsck\&.\fR\fI<msg\-id>\fR configuration variable\&.
 .PP
 \fBbadDate\fR
 .RS 4
@@ -292,9 +301,39 @@ The following lists the types of errors \fBgit fsck\fR detects and what each err
 (ERROR) An object has a bad sha1\&.
 .RE
 .PP
+\fBbadPackedRefEntry\fR
+.RS 4
+(ERROR) The "packed\-refs" file contains an invalid entry\&.
+.RE
+.PP
+\fBbadPackedRefHeader\fR
+.RS 4
+(ERROR) The "packed\-refs" file contains an invalid header\&.
+.RE
+.PP
 \fBbadParentSha1\fR
 .RS 4
 (ERROR) A commit object has a bad parent sha1\&.
+.RE
+.PP
+\fBbadRefContent\fR
+.RS 4
+(ERROR) A ref has bad content\&.
+.RE
+.PP
+\fBbadRefFiletype\fR
+.RS 4
+(ERROR) A ref has a bad file type\&.
+.RE
+.PP
+\fBbadRefName\fR
+.RS 4
+(ERROR) A ref has an invalid format\&.
+.RE
+.PP
+\fBbadReferentName\fR
+.RS 4
+(ERROR) The referent name of a symref is invalid\&.
 .RE
 .PP
 \fBbadTagName\fR
@@ -332,6 +371,13 @@ The following lists the types of errors \fBgit fsck\fR detects and what each err
 (WARN) A path contains an empty name\&.
 .RE
 .PP
+\fBemptyPackedRefsFile\fR
+.RS 4
+(INFO) "packed\-refs" file is empty\&. Report to the
+\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[1]\d\s+2
+mailing list if you see this error\&. As only very early versions of Git would create such an empty "packed_refs" file, we might tighten this rule in the future\&.
+.RE
+.PP
 \fBextraHeaderEntry\fR
 .RS 4
 (IGNORE) Extra headers found after
@@ -343,37 +389,55 @@ The following lists the types of errors \fBgit fsck\fR detects and what each err
 (WARN) A path contains the full path starting with "/"\&.
 .RE
 .PP
+\fBgitattributesBlob\fR
+.RS 4
+(ERROR) A non\-blob found at \&.\fBgitattributes\fR\&.
+.RE
+.PP
+\fBgitattributesLarge\fR
+.RS 4
+(ERROR) The \&.\fBgitattributes\fR
+blob is too large\&.
+.RE
+.PP
+\fBgitattributesLineLength\fR
+.RS 4
+(ERROR) The \&.\fBgitattributes\fR
+blob contains too long lines\&.
+.RE
+.PP
+\fBgitattributesMissing\fR
+.RS 4
+(ERROR) Unable to read \&.\fBgitattributes\fR
+blob\&.
+.RE
+.PP
 \fBgitattributesSymlink\fR
 .RS 4
-(INFO)
-\fB\&.gitattributes\fR
+(INFO) \&.\fBgitattributes\fR
 is a symlink\&.
 .RE
 .PP
 \fBgitignoreSymlink\fR
 .RS 4
-(INFO)
-\fB\&.gitignore\fR
+(INFO) \&.\fBgitignore\fR
 is a symlink\&.
 .RE
 .PP
 \fBgitmodulesBlob\fR
 .RS 4
-(ERROR) A non\-blob found at
-\fB\&.gitmodules\fR\&.
+(ERROR) A non\-blob found at \&.\fBgitmodules\fR\&.
 .RE
 .PP
 \fBgitmodulesLarge\fR
 .RS 4
-(ERROR) The
-\fB\&.gitmodules\fR
+(ERROR) The \&.\fBgitmodules\fR
 file is too large to parse\&.
 .RE
 .PP
 \fBgitmodulesMissing\fR
 .RS 4
-(ERROR) Unable to read
-\fB\&.gitmodules\fR
+(ERROR) Unable to read \&.\fBgitmodules\fR
 blob\&.
 .RE
 .PP
@@ -384,24 +448,21 @@ blob\&.
 .PP
 \fBgitmodulesParse\fR
 .RS 4
-(INFO) Could not parse
-\fB\&.gitmodules\fR
+(INFO) Could not parse \&.\fBgitmodules\fR
 blob\&.
 .RE
 .sp
-\fBgitmodulesLarge\fR; (ERROR) \fB\&.gitmodules\fR blob is too large to parse\&.
+\fBgitmodulesLarge\fR; (ERROR) \&.\fBgitmodules\fR blob is too large to parse\&.
 .PP
 \fBgitmodulesPath\fR
 .RS 4
-(ERROR)
-\fB\&.gitmodules\fR
+(ERROR) \&.\fBgitmodules\fR
 path is invalid\&.
 .RE
 .PP
 \fBgitmodulesSymlink\fR
 .RS 4
-(ERROR)
-\fB\&.gitmodules\fR
+(ERROR) \&.\fBgitmodules\fR
 is a symlink\&.
 .RE
 .PP
@@ -417,8 +478,7 @@ is a symlink\&.
 .PP
 \fBhasDot\fR
 .RS 4
-(WARN) A tree contains an entry named
-\fB\&.\fR\&.
+(WARN) A tree contains an entry named \&.\&.
 .RE
 .PP
 \fBhasDotdot\fR
@@ -429,14 +489,19 @@ is a symlink\&.
 .PP
 \fBhasDotgit\fR
 .RS 4
-(WARN) A tree contains an entry named
-\fB\&.git\fR\&.
+(WARN) A tree contains an entry named \&.\fBgit\fR\&.
+.RE
+.PP
+\fBlargePathname\fR
+.RS 4
+(WARN) A tree contains an entry with a very long path name\&. If the value of
+\fBfsck\&.largePathname\fR
+contains a colon, that value is used as the maximum allowable length (e\&.g\&., "warn:10" would complain about any path component of 11 or more bytes)\&. The default value is 4096\&.
 .RE
 .PP
 \fBmailmapSymlink\fR
 .RS 4
-(INFO)
-\fB\&.mailmap\fR
+(INFO) \&.\fBmailmap\fR
 is a symlink\&.
 .RE
 .PP
@@ -474,7 +539,7 @@ line in tag object\&.
 .PP
 \fBmissingSpaceBeforeEmail\fR
 .RS 4
-(ERROR) Missing space before the email in author/committer line\&.
+(ERROR) Missing space before the email in an author/committer line\&.
 .RE
 .PP
 \fBmissingTag\fR
@@ -539,6 +604,46 @@ line in a tag object\&.
 (WARN) Tree contains entries pointing to a null sha1\&.
 .RE
 .PP
+\fBpackedRefEntryNotTerminated\fR
+.RS 4
+(ERROR) The "packed\-refs" file contains an entry that is not terminated by a newline\&.
+.RE
+.PP
+\fBpackedRefUnsorted\fR
+.RS 4
+(ERROR) The "packed\-refs" file is not sorted\&.
+.RE
+.PP
+\fBrefMissingNewline\fR
+.RS 4
+(INFO) A loose ref that does not end with newline(LF)\&. As valid implementations of Git never created such a loose ref file, it may become an error in the future\&. Report to the
+\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[1]\d\s+2
+mailing list if you see this error, as we need to know what tools created such a file\&.
+.RE
+.PP
+\fBsymlinkRef\fR
+.RS 4
+(INFO) A symbolic link is used as a symref\&. Report to the
+\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[1]\d\s+2
+mailing list if you see this error, as we are assessing the feasibility of dropping the support to drop creating symbolic links as symrefs\&.
+.RE
+.PP
+\fBsymrefTargetIsNotARef\fR
+.RS 4
+(INFO) The target of a symbolic reference points neither to a root reference nor to a reference starting with "refs/"\&. Although we allow create a symref pointing to the referent which is outside the "ref" by using
+\fBgit\fR
+\fBsymbolic\-ref\fR, we may tighten the rule in the future\&. Report to the
+\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[1]\d\s+2
+mailing list if you see this error, as we need to know what tools created such a file\&.
+.RE
+.PP
+\fBtrailingRefContent\fR
+.RS 4
+(INFO) A loose ref has trailing content\&. As valid implementations of Git never created such a loose ref file, it may become an error in the future\&. Report to the
+\m[blue]\fBgit@vger\&.kernel\&.org\fR\m[]\&\s-2\u[1]\d\s+2
+mailing list if you see this error, as we need to know what tools created such a file\&.
+.RE
+.PP
 \fBtreeNotSorted\fR
 .RS 4
 (ERROR) A tree is not properly sorted\&.
@@ -556,7 +661,7 @@ line in a tag object\&.
 .PP
 \fBzeroPaddedDate\fR
 .RS 4
-(ERROR) Found a zero padded date in an author/commiter line\&.
+(ERROR) Found a zero padded date in an author/committer line\&.
 .RE
 .PP
 \fBzeroPaddedFilemode\fR
@@ -582,3 +687,9 @@ used to specify additional object database roots (usually unset)
 .SH "GIT"
 .sp
 Part of the \fBgit\fR(1) suite
+.SH "NOTES"
+.IP " 1." 4
+git@vger.kernel.org
+.RS 4
+\%mailto:git@vger.kernel.org
+.RE

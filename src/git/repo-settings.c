@@ -1,8 +1,10 @@
-#include "cache.h"
+#include "git-compat-util.h"
 #include "config.h"
+#include "repo-settings.h"
 #include "repository.h"
 #include "midx.h"
-#include "compat/fsmonitor/fsm-listen.h"
+#include "pack-objects.h"
+#include "setup.h"
 
 static void repo_cfg_bool(struct repository *r, const char *key, int *dest,
 			  int def)
@@ -18,23 +20,30 @@ static void repo_cfg_int(struct repository *r, const char *key, int *dest,
 		*dest = def;
 }
 
+static void repo_cfg_ulong(struct repository *r, const char *key, unsigned long *dest,
+			   unsigned long def)
+{
+	if (repo_config_get_ulong(r, key, dest))
+		*dest = def;
+}
+
 void prepare_repo_settings(struct repository *r)
 {
 	int experimental;
 	int value;
 	const char *strval;
 	int manyfiles;
+	int read_changed_paths;
+	unsigned long ulongval;
 
 	if (!r->gitdir)
 		BUG("Cannot add settings for uninitialized repository");
 
-	if (r->settings.initialized++)
+	if (r->settings.initialized)
 		return;
 
-	/* Defaults */
-	r->settings.index_version = -1;
-	r->settings.core_untracked_cache = UNTRACKED_CACHE_KEEP;
-	r->settings.fetch_negotiation_algorithm = FETCH_NEGOTIATION_CONSECUTIVE;
+	repo_settings_clear(r);
+	r->settings.initialized++;
 
 	/* Booleans config or default, cascades to other settings */
 	repo_cfg_bool(r, "feature.manyfiles", &manyfiles, 0);
@@ -43,17 +52,22 @@ void prepare_repo_settings(struct repository *r)
 	/* Defaults modified by feature.* */
 	if (experimental) {
 		r->settings.fetch_negotiation_algorithm = FETCH_NEGOTIATION_SKIPPING;
-		r->settings.gc_cruft_packs = 1;
+		r->settings.pack_use_bitmap_boundary_traversal = 1;
+		r->settings.pack_use_multi_pack_reuse = 1;
 	}
 	if (manyfiles) {
 		r->settings.index_version = 4;
+		r->settings.index_skip_hash = 1;
 		r->settings.core_untracked_cache = UNTRACKED_CACHE_WRITE;
 	}
 
 	/* Commit graph config or default, does not cascade (simple) */
 	repo_cfg_bool(r, "core.commitgraph", &r->settings.core_commit_graph, 1);
 	repo_cfg_int(r, "commitgraph.generationversion", &r->settings.commit_graph_generation_version, 2);
-	repo_cfg_bool(r, "commitgraph.readchangedpaths", &r->settings.commit_graph_read_changed_paths, 1);
+	repo_cfg_bool(r, "commitgraph.readchangedpaths", &read_changed_paths, 1);
+	repo_cfg_int(r, "commitgraph.changedpathsversion",
+		     &r->settings.commit_graph_changed_paths_version,
+		     read_changed_paths ? -1 : 0);
 	repo_cfg_bool(r, "gc.writecommitgraph", &r->settings.gc_write_commit_graph, 1);
 	repo_cfg_bool(r, "fetch.writecommitgraph", &r->settings.fetch_write_commit_graph, 0);
 
@@ -61,6 +75,12 @@ void prepare_repo_settings(struct repository *r)
 	repo_cfg_bool(r, "pack.usesparse", &r->settings.pack_use_sparse, 1);
 	repo_cfg_bool(r, "core.multipackindex", &r->settings.core_multi_pack_index, 1);
 	repo_cfg_bool(r, "index.sparse", &r->settings.sparse_index, 0);
+	repo_cfg_bool(r, "index.skiphash", &r->settings.index_skip_hash, r->settings.index_skip_hash);
+	repo_cfg_bool(r, "pack.readreverseindex", &r->settings.pack_read_reverse_index, 1);
+	repo_cfg_bool(r, "pack.usebitmapboundarytraversal",
+		      &r->settings.pack_use_bitmap_boundary_traversal,
+		      r->settings.pack_use_bitmap_boundary_traversal);
+	repo_cfg_bool(r, "core.usereplacerefs", &r->settings.read_replace_refs, 1);
 
 	/*
 	 * The GIT_TEST_MULTI_PACK_INDEX variable is special in that
@@ -112,4 +132,98 @@ void prepare_repo_settings(struct repository *r)
 	 * removed.
 	 */
 	r->settings.command_requires_full_index = 1;
+
+	if (!repo_config_get_ulong(r, "core.deltabasecachelimit", &ulongval))
+		r->settings.delta_base_cache_limit = ulongval;
+
+	if (!repo_config_get_ulong(r, "core.packedgitwindowsize", &ulongval)) {
+		int pgsz_x2 = getpagesize() * 2;
+
+		/* This value must be multiple of (pagesize * 2) */
+		ulongval /= pgsz_x2;
+		if (ulongval < 1)
+			ulongval = 1;
+		r->settings.packed_git_window_size = ulongval * pgsz_x2;
+	}
+
+	if (!repo_config_get_ulong(r, "core.packedgitlimit", &ulongval))
+		r->settings.packed_git_limit = ulongval;
+}
+
+void repo_settings_clear(struct repository *r)
+{
+	struct repo_settings empty = REPO_SETTINGS_INIT;
+	FREE_AND_NULL(r->settings.fsmonitor);
+	FREE_AND_NULL(r->settings.hooks_path);
+	r->settings = empty;
+}
+
+unsigned long repo_settings_get_big_file_threshold(struct repository *repo)
+{
+	if (!repo->settings.big_file_threshold)
+		repo_cfg_ulong(repo, "core.bigfilethreshold",
+			       &repo->settings.big_file_threshold, 512 * 1024 * 1024);
+	return repo->settings.big_file_threshold;
+}
+
+void repo_settings_set_big_file_threshold(struct repository *repo, unsigned long value)
+{
+	repo->settings.big_file_threshold = value;
+}
+
+enum log_refs_config repo_settings_get_log_all_ref_updates(struct repository *repo)
+{
+	const char *value;
+
+	if (!repo_config_get_string_tmp(repo, "core.logallrefupdates", &value)) {
+		if (value && !strcasecmp(value, "always"))
+			return LOG_REFS_ALWAYS;
+		else if (git_config_bool("core.logallrefupdates", value))
+			return LOG_REFS_NORMAL;
+		else
+			return LOG_REFS_NONE;
+	}
+
+	return LOG_REFS_UNSET;
+}
+
+int repo_settings_get_warn_ambiguous_refs(struct repository *repo)
+{
+	prepare_repo_settings(repo);
+	if (repo->settings.warn_ambiguous_refs < 0)
+		repo_cfg_bool(repo, "core.warnambiguousrefs",
+			      &repo->settings.warn_ambiguous_refs, 1);
+	return repo->settings.warn_ambiguous_refs;
+}
+
+const char *repo_settings_get_hooks_path(struct repository *repo)
+{
+	if (!repo->settings.hooks_path)
+		repo_config_get_pathname(repo, "core.hookspath", &repo->settings.hooks_path);
+	return repo->settings.hooks_path;
+}
+
+int repo_settings_get_shared_repository(struct repository *repo)
+{
+	if (!repo->settings.shared_repository_initialized) {
+		const char *var = "core.sharedrepository";
+		const char *value;
+		if (!repo_config_get_value(repo, var, &value))
+			repo->settings.shared_repository = git_config_perm(var, value);
+		else
+			repo->settings.shared_repository = PERM_UMASK;
+		repo->settings.shared_repository_initialized = 1;
+	}
+	return repo->settings.shared_repository;
+}
+
+void repo_settings_set_shared_repository(struct repository *repo, int value)
+{
+	repo->settings.shared_repository = value;
+	repo->settings.shared_repository_initialized = 1;
+}
+
+void repo_settings_reset_shared_repository(struct repository *repo)
+{
+	repo->settings.shared_repository_initialized = 0;
 }

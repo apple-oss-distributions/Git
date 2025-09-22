@@ -1,6 +1,11 @@
-#define USE_THE_INDEX_VARIABLE
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "builtin.h"
+#include "hex.h"
+#include "read-cache-ll.h"
 #include "run-command.h"
+#include "sparse-index.h"
 
 static const char *pgm;
 static int one_shot, quiet;
@@ -14,11 +19,11 @@ static int merge_entry(int pos, const char *path)
 	char ownbuf[4][60];
 	struct child_process cmd = CHILD_PROCESS_INIT;
 
-	if (pos >= the_index.cache_nr)
+	if (pos >= the_repository->index->cache_nr)
 		die("git merge-index: %s not in the cache", path);
 	found = 0;
 	do {
-		const struct cache_entry *ce = the_index.cache[pos];
+		const struct cache_entry *ce = the_repository->index->cache[pos];
 		int stage = ce_stage(ce);
 
 		if (strcmp(ce->name, path))
@@ -28,7 +33,7 @@ static int merge_entry(int pos, const char *path)
 		xsnprintf(ownbuf[stage], sizeof(ownbuf[stage]), "%o", ce->ce_mode);
 		arguments[stage] = hexbuf[stage];
 		arguments[stage + 4] = ownbuf[stage];
-	} while (++pos < the_index.cache_nr);
+	} while (++pos < the_repository->index->cache_nr);
 	if (!found)
 		die("git merge-index: %s not in the cache", path);
 
@@ -47,7 +52,7 @@ static int merge_entry(int pos, const char *path)
 
 static void merge_one_path(const char *path)
 {
-	int pos = index_name_pos(&the_index, path, strlen(path));
+	int pos = index_name_pos(the_repository->index, path, strlen(path));
 
 	/*
 	 * If it already exists in the cache as stage0, it's
@@ -61,16 +66,22 @@ static void merge_all(void)
 {
 	int i;
 	/* TODO: audit for interaction with sparse-index. */
-	ensure_full_index(&the_index);
-	for (i = 0; i < the_index.cache_nr; i++) {
-		const struct cache_entry *ce = the_index.cache[i];
+	ensure_full_index(the_repository->index);
+	for (i = 0; i < the_repository->index->cache_nr; i++) {
+		const struct cache_entry *ce = the_repository->index->cache[i];
 		if (!ce_stage(ce))
 			continue;
 		i += merge_entry(i, ce->name)-1;
 	}
 }
 
-int cmd_merge_index(int argc, const char **argv, const char *prefix)
+static const char usage_string[] =
+"git merge-index [-o] [-q] <merge-program> (-a | [--] [<filename>...])";
+
+int cmd_merge_index(int argc,
+		    const char **argv,
+		    const char *prefix UNUSED,
+		    struct repository *repo UNUSED)
 {
 	int i, force_file = 0;
 
@@ -79,13 +90,15 @@ int cmd_merge_index(int argc, const char **argv, const char *prefix)
 	 */
 	signal(SIGCHLD, SIG_DFL);
 
+	show_usage_if_asked(argc, argv, usage_string);
+
 	if (argc < 3)
-		usage("git merge-index [-o] [-q] <merge-program> (-a | [--] [<filename>...])");
+		usage(usage_string);
 
 	repo_read_index(the_repository);
 
 	/* TODO: audit for interaction with sparse-index. */
-	ensure_full_index(&the_index);
+	ensure_full_index(the_repository->index);
 
 	i = 1;
 	if (!strcmp(argv[i], "-o")) {

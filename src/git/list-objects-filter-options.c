@@ -1,14 +1,13 @@
-#include "cache.h"
-#include "commit.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
 #include "config.h"
-#include "revision.h"
-#include "strvec.h"
-#include "list-objects.h"
-#include "list-objects-filter.h"
+#include "gettext.h"
 #include "list-objects-filter-options.h"
 #include "promisor-remote.h"
 #include "trace.h"
 #include "url.h"
+#include "parse-options.h"
 
 static int parse_combine_filter(
 	struct list_objects_filter_options *filter_options,
@@ -253,16 +252,14 @@ void parse_list_objects_filter(
 	const char *arg)
 {
 	struct strbuf errbuf = STRBUF_INIT;
-	int parse_error;
 
 	if (!filter_options->filter_spec.buf)
 		BUG("filter_options not properly initialized");
 
 	if (!filter_options->choice) {
+		if (gently_parse_list_objects_filter(filter_options, arg, &errbuf))
+			die("%s", errbuf.buf);
 		strbuf_addstr(&filter_options->filter_spec, arg);
-
-		parse_error = gently_parse_list_objects_filter(
-			filter_options, arg, &errbuf);
 	} else {
 		struct list_objects_filter_options *sub;
 
@@ -272,28 +269,23 @@ void parse_list_objects_filter(
 		 */
 		transform_to_combine_type(filter_options);
 
-		strbuf_addch(&filter_options->filter_spec, '+');
-		filter_spec_append_urlencode(filter_options, arg);
 		ALLOC_GROW_BY(filter_options->sub, filter_options->sub_nr, 1,
 			      filter_options->sub_alloc);
 		sub = &filter_options->sub[filter_options->sub_nr - 1];
 
 		list_objects_filter_init(sub);
-		parse_error = gently_parse_list_objects_filter(sub, arg,
-							       &errbuf);
+		if (gently_parse_list_objects_filter(sub, arg, &errbuf))
+			die("%s", errbuf.buf);
+
+		strbuf_addch(&filter_options->filter_spec, '+');
+		filter_spec_append_urlencode(filter_options, arg);
 	}
-	if (parse_error)
-		die("%s", errbuf.buf);
 }
 
 int opt_parse_list_objects_filter(const struct option *opt,
 				  const char *arg, int unset)
 {
 	struct list_objects_filter_options *filter_options = opt->value;
-	opt_lof_init init = (opt_lof_init)opt->defval;
-
-	if (init)
-		filter_options = init(opt->value);
 
 	if (unset || !arg)
 		list_objects_filter_set_no_filter(filter_options);
@@ -345,7 +337,7 @@ void partial_clone_register(
 	char *filter_name;
 
 	/* Check if it is already registered */
-	if ((promisor_remote = promisor_remote_find(remote))) {
+	if ((promisor_remote = repo_promisor_remote_find(the_repository, remote))) {
 		if (promisor_remote->partial_clone_filter)
 			/*
 			 * Remote is already registered and a filter is already
@@ -373,14 +365,15 @@ void partial_clone_register(
 	free(filter_name);
 
 	/* Make sure the config info are reset */
-	promisor_remote_reinit();
+	repo_promisor_remote_reinit(the_repository);
 }
 
 void partial_clone_get_default_filter_spec(
 	struct list_objects_filter_options *filter_options,
 	const char *remote)
 {
-	struct promisor_remote *promisor = promisor_remote_find(remote);
+	struct promisor_remote *promisor = repo_promisor_remote_find(the_repository,
+								     remote);
 	struct strbuf errbuf = STRBUF_INIT;
 
 	/*
@@ -401,8 +394,6 @@ void list_objects_filter_copy(
 	struct list_objects_filter_options *dest,
 	const struct list_objects_filter_options *src)
 {
-	int i;
-
 	/* Copy everything. We will overwrite the pointers shortly. */
 	memcpy(dest, src, sizeof(struct list_objects_filter_options));
 
@@ -411,7 +402,7 @@ void list_objects_filter_copy(
 	dest->sparse_oid_name = xstrdup_or_null(src->sparse_oid_name);
 
 	ALLOC_ARRAY(dest->sub, dest->sub_alloc);
-	for (i = 0; i < src->sub_nr; i++)
+	for (size_t i = 0; i < src->sub_nr; i++)
 		list_objects_filter_copy(&dest->sub[i], &src->sub[i]);
 }
 

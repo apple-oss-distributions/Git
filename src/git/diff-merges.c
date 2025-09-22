@@ -1,5 +1,7 @@
+#include "git-compat-util.h"
 #include "diff-merges.h"
 
+#include "gettext.h"
 #include "revision.h"
 
 typedef void (*diff_merges_setup_func_t)(struct rev_info *);
@@ -128,6 +130,9 @@ int diff_merges_parse_opts(struct rev_info *revs, const char **argv)
 		revs->merges_imply_patch = 1;
 	} else if (!strcmp(arg, "--cc")) {
 		set_dense_combined(revs);
+		revs->merges_imply_patch = 1;
+	} else if (!strcmp(arg, "--dd")) {
+		set_first_parent(revs);
 		revs->merges_imply_patch = 1;
 	} else if (!strcmp(arg, "--remerge-diff")) {
 		set_remerge_diff(revs);

@@ -1,8 +1,11 @@
 #include "test-tool.h"
 #include "parse-options.h"
 #include "bundle-uri.h"
+#include "gettext.h"
 #include "strbuf.h"
 #include "string-list.h"
+#include "transport.h"
+#include "remote.h"
 
 enum input_mode {
 	KEY_VALUE_PAIRS,
@@ -36,6 +39,8 @@ static int cmd__bundle_uri_parse(int argc, const char **argv, enum input_mode mo
 
 	init_bundle_list(&list);
 
+	list.baseURI = xstrdup("<uri>");
+
 	switch (mode) {
 	case KEY_VALUE_PAIRS:
 		if (argc != 1)
@@ -68,6 +73,37 @@ usage:
 	usage_with_options(usage, options);
 }
 
+static int cmd_ls_remote(int argc, const char **argv)
+{
+	const char *dest;
+	struct remote *remote;
+	struct transport *transport;
+	int status = 0;
+
+	dest = argc > 1 ? argv[1] : NULL;
+
+	remote = remote_get(dest);
+	if (!remote) {
+		if (dest)
+			die(_("bad repository '%s'"), dest);
+		die(_("no remote configured to get bundle URIs from"));
+	}
+
+	transport = transport_get(remote, NULL);
+	if (transport_get_remote_bundle_uri(transport) < 0) {
+		error(_("could not get the bundle-uri list"));
+		status = 1;
+		goto cleanup;
+	}
+
+	print_bundle_list(stdout, transport->bundles);
+
+cleanup:
+	if (transport_disconnect(transport))
+		return 1;
+	return status;
+}
+
 int cmd__bundle_uri(int argc, const char **argv)
 {
 	const char *usage[] = {
@@ -88,6 +124,8 @@ int cmd__bundle_uri(int argc, const char **argv)
 		return cmd__bundle_uri_parse(argc - 1, argv + 1, KEY_VALUE_PAIRS);
 	if (!strcmp(argv[1], "parse-config"))
 		return cmd__bundle_uri_parse(argc - 1, argv + 1, CONFIG_FILE);
+	if (!strcmp(argv[1], "ls-remote"))
+		return cmd_ls_remote(argc - 1, argv + 1);
 	error("there is no test-tool bundle-uri tool '%s'", argv[1]);
 
 usage:

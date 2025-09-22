@@ -1,8 +1,10 @@
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
-#include "cache.h"
 #include "config.h"
+#include "gettext.h"
 #include "run-command.h"
 #include "parse-options.h"
+#include "strbuf.h"
 
 #define VERIFY_PACK_VERBOSE 01
 #define VERIFY_PACK_STAT_ONLY 02
@@ -60,7 +62,10 @@ static const char * const verify_pack_usage[] = {
 	NULL
 };
 
-int cmd_verify_pack(int argc, const char **argv, const char *prefix)
+int cmd_verify_pack(int argc,
+		    const char **argv,
+		    const char *prefix,
+		    struct repository *repo UNUSED)
 {
 	int err = 0;
 	unsigned int flags = 0;

@@ -1,14 +1,15 @@
 /*
-Copyright 2020 Google LLC
-
-Use of this source code is governed by a BSD-style
-license that can be found in the LICENSE file or at
-https://developers.google.com/open-source/licenses/bsd
-*/
+ * Copyright 2020 Google LLC
+ *
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file or at
+ * https://developers.google.com/open-source/licenses/bsd
+ */
 
 #ifndef REFTABLE_RECORD_H
 #define REFTABLE_RECORD_H
 
+#include "reftable-basics.h"
 #include <stdint.h>
 
 /*
@@ -21,6 +22,7 @@ https://developers.google.com/open-source/licenses/bsd
 /* reftable_ref_record holds a ref database entry target_value */
 struct reftable_ref_record {
 	char *refname; /* Name of the ref, malloced. */
+	size_t refname_cap;
 	uint64_t update_index; /* Logical timestamp at which this value is
 				* written */
 
@@ -38,10 +40,10 @@ struct reftable_ref_record {
 #define REFTABLE_NR_REF_VALUETYPES 4
 	} value_type;
 	union {
-		uint8_t *val1; /* malloced hash. */
+		unsigned char val1[REFTABLE_HASH_SIZE_MAX];
 		struct {
-			uint8_t *value; /* first value, malloced hash  */
-			uint8_t *target_value; /* second value, malloced hash */
+			unsigned char value[REFTABLE_HASH_SIZE_MAX]; /* first hash  */
+			unsigned char target_value[REFTABLE_HASH_SIZE_MAX]; /* second hash */
 		} val2;
 		char *symref; /* referent, malloced 0-terminated string */
 	} value;
@@ -49,29 +51,26 @@ struct reftable_ref_record {
 
 /* Returns the first hash, or NULL if `rec` is not of type
  * REFTABLE_REF_VAL1 or REFTABLE_REF_VAL2. */
-uint8_t *reftable_ref_record_val1(const struct reftable_ref_record *rec);
+const unsigned char *reftable_ref_record_val1(const struct reftable_ref_record *rec);
 
 /* Returns the second hash, or NULL if `rec` is not of type
  * REFTABLE_REF_VAL2. */
-uint8_t *reftable_ref_record_val2(const struct reftable_ref_record *rec);
+const unsigned char *reftable_ref_record_val2(const struct reftable_ref_record *rec);
 
 /* returns whether 'ref' represents a deletion */
 int reftable_ref_record_is_deletion(const struct reftable_ref_record *ref);
-
-/* prints a reftable_ref_record onto stdout. Useful for debugging. */
-void reftable_ref_record_print(const struct reftable_ref_record *ref,
-			       uint32_t hash_id);
 
 /* frees and nulls all pointer values inside `ref`. */
 void reftable_ref_record_release(struct reftable_ref_record *ref);
 
 /* returns whether two reftable_ref_records are the same. Useful for testing. */
 int reftable_ref_record_equal(const struct reftable_ref_record *a,
-			      const struct reftable_ref_record *b, int hash_size);
+			      const struct reftable_ref_record *b, uint32_t hash_size);
 
 /* reftable_log_record holds a reflog entry */
 struct reftable_log_record {
 	char *refname;
+	size_t refname_cap;
 	uint64_t update_index; /* logical timestamp of a transactional update.
 				*/
 
@@ -86,13 +85,14 @@ struct reftable_log_record {
 
 	union {
 		struct {
-			uint8_t *new_hash;
-			uint8_t *old_hash;
+			unsigned char new_hash[REFTABLE_HASH_SIZE_MAX];
+			unsigned char old_hash[REFTABLE_HASH_SIZE_MAX];
 			char *name;
 			char *email;
 			uint64_t time;
 			int16_t tz_offset;
 			char *message;
+			size_t message_cap;
 		} update;
 	} value;
 };
@@ -105,10 +105,6 @@ void reftable_log_record_release(struct reftable_log_record *log);
 
 /* returns whether two records are equal. Useful for testing. */
 int reftable_log_record_equal(const struct reftable_log_record *a,
-			      const struct reftable_log_record *b, int hash_size);
-
-/* dumps a reftable_log_record on stdout, for debugging/testing. */
-void reftable_log_record_print(struct reftable_log_record *log,
-			       uint32_t hash_id);
+			      const struct reftable_log_record *b, uint32_t hash_size);
 
 #endif

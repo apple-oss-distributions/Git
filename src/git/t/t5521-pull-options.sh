@@ -93,7 +93,7 @@ test_expect_success 'git pull --no-write-fetch-head fails' '
 	(cd clonedwfh && git init &&
 	test_expect_code 129 git pull --no-write-fetch-head "../parent" >out 2>err &&
 	test_must_be_empty out &&
-	test_i18ngrep "no-write-fetch-head" err)
+	test_grep "no-write-fetch-head" err)
 '
 
 test_expect_success 'git pull --force' '
@@ -142,7 +142,7 @@ test_expect_success 'git pull --dry-run' '
 		cd clonedry &&
 		git pull --dry-run ../parent &&
 		test_path_is_missing .git/FETCH_HEAD &&
-		test_path_is_missing .git/refs/heads/main &&
+		test_ref_missing refs/heads/main &&
 		test_path_is_missing .git/index &&
 		test_path_is_missing file
 	)
@@ -156,7 +156,7 @@ test_expect_success 'git pull --all --dry-run' '
 		git remote add origin ../parent &&
 		git pull --all --dry-run &&
 		test_path_is_missing .git/FETCH_HEAD &&
-		test_path_is_missing .git/refs/remotes/origin/main &&
+		test_ref_missing refs/remotes/origin/main &&
 		test_path_is_missing .git/index &&
 		test_path_is_missing file
 	)

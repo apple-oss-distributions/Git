@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-annotate
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-ANNOTATE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-ANNOTATE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,6 @@ git-annotate \- Annotate file lines with commit information
 .nf
 \fIgit annotate\fR [<options>] [<rev\-opts>] [<rev>] [\-\-] <file>
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Annotates each line in the given file with information from the commit which introduced the line\&. Optionally annotates from a given revision\&.
@@ -71,13 +70,16 @@ Annotate only the line range given by
 and
 \fI<end>\fR
 are optional\&.
-\fB\-L <start>\fR
+\fB\-L\fR
+\fI<start>\fR
 or
-\fB\-L <start>,\fR
+\fB\-L\fR
+\fI<start>\fR\fB,\fR
 spans from
 \fI<start>\fR
 to end of file\&.
-\fB\-L ,<end>\fR
+\fB\-L\fR
+\fB,\fR\fI<end>\fR
 spans from start of file to
 \fI<end>\fR\&.
 .sp
@@ -94,7 +96,7 @@ can take one of these forms:
 .sp -1
 .IP \(bu 2.3
 .\}
-number
+\fI<number>\fR
 .sp
 If
 \fI<start>\fR
@@ -111,16 +113,17 @@ is a number, it specifies an absolute line number (lines count from 1)\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fB/regex/\fR
+\fB/\fR\fI<regex>\fR\fB/\fR
 .sp
-This form will use the first line matching the given POSIX regex\&. If
+This form will use the first line matching the given POSIX
+\fI<regex>\fR\&. If
 \fI<start>\fR
 is a regex, it will search from the end of the previous
 \fB\-L\fR
 range, if any, otherwise from the start of file\&. If
 \fI<start>\fR
 is
-\fB^/regex/\fR, it will search from the start of file\&. If
+\fB^/\fR\fI<regex>\fR\fB/\fR, it will search from the start of file\&. If
 \fI<end>\fR
 is a regex, it will search starting at the line given by
 \fI<start>\fR\&.
@@ -134,7 +137,9 @@ is a regex, it will search starting at the line given by
 .sp -1
 .IP \(bu 2.3
 .\}
-+offset or \-offset
+\fB+\fR\fI<offset>\fR
+or
+\fB\-\fR\fI<offset>\fR
 .sp
 This is only valid for
 \fI<end>\fR
@@ -143,19 +148,20 @@ and will specify a number of lines before or after the line given by
 .RE
 .sp
 If
-\fB:<funcname>\fR
+\fB:\fR\fI<funcname>\fR
 is given in place of
 \fI<start>\fR
 and
 \fI<end>\fR, it is a regular expression that denotes the range from the first funcname line that matches
 \fI<funcname>\fR, up to the next funcname line\&.
-\fB:<funcname>\fR
+\fB:\fR\fI<funcname>\fR
 searches from the end of the previous
 \fB\-L\fR
 range, if any, otherwise from the start of file\&.
-\fB^:<funcname>\fR
+\fB^:\fR\fI<funcname>\fR
 searches from the start of file\&. The function names are determined in the same way as
-\fBgit diff\fR
+\fBgit\fR
+\fBdiff\fR
 works out patch hunk headers (see
 \fIDefining a custom hunk\-header\fR
 in
@@ -181,9 +187,15 @@ Use revisions from revs\-file instead of calling
 \-\-reverse <rev>\&.\&.<rev>
 .RS 4
 Walk history forward instead of backward\&. Instead of showing the revision in which a line appeared, this shows the last revision in which a line has existed\&. This requires a range of revision like START\&.\&.END where the path to blame exists in START\&.
-\fBgit blame \-\-reverse START\fR
+\fBgit\fR
+\fBblame\fR
+\fB\-\-reverse\fR
+\fBSTART\fR
 is taken as
-\fBgit blame \-\-reverse START\&.\&.HEAD\fR
+\fBgit\fR
+\fBblame\fR
+\fB\-\-reverse\fR
+\fBSTART\fR\fB\&.\&.\fR\fBHEAD\fR
 for convenience\&.
 .RE
 .PP
@@ -218,9 +230,9 @@ manual page\&.
 .PP
 \-\-contents <file>
 .RS 4
-When <rev> is not specified, the command annotates the changes starting backwards from the working tree copy\&. This flag makes the command pretend as if the working tree copy has the contents of the named file (specify
-\fB\-\fR
-to make the command read from the standard input)\&.
+Annotate using the contents from the named file, starting from <rev> if it is specified, and HEAD otherwise\&. You may specify
+\fI\-\fR
+to make the command read from the standard input for the file contents\&.
 .RE
 .PP
 \-\-date <format>
@@ -264,12 +276,14 @@ will take effect\&.
 .RS 4
 Ignore changes made by the revision when assigning blame, as if the change never happened\&. Lines that were changed or added by an ignored commit will be blamed on the previous commit that changed that line or nearby lines\&. This option may be specified multiple times to ignore more than one revision\&. If the
 \fBblame\&.markIgnoredLines\fR
-config option is set, then lines that were changed by an ignored commit and attributed to another commit will be marked with a
-\fB?\fR
-in the blame output\&. If the
+config option is set, then lines that were changed by an ignored commit and attributed to another commit will be marked with a ? in the blame output\&. If the
 \fBblame\&.markUnblamableLines\fR
 config option is set, then those lines touched by an ignored commit that we could not attribute to another revision are marked with a
-\fI*\fR\&.
+\fI*\fR\&. In the porcelain modes, we print
+\fIignored\fR
+and
+\fIunblamable\fR
+on a newline respectively\&.
 .RE
 .PP
 \-\-ignore\-revs\-file <file>
@@ -278,8 +292,7 @@ Ignore revisions listed in
 \fBfile\fR, which must be in the same format as an
 \fBfsck\&.skipList\fR\&. This option may be repeated, and these files will be processed after any files specified with the
 \fBblame\&.ignoreRevsFile\fR
-config option\&. An empty file name,
-\fB""\fR, will clear the list of revs from previously processed files\&.
+config option\&. An empty file name, "", will clear the list of revs from previously processed files\&.
 .RE
 .PP
 \-\-color\-lines

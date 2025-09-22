@@ -1,6 +1,12 @@
-#include "cache.h"
+#include "git-compat-util.h"
+#include "copy.h"
 #include "pkt-line.h"
+#include "gettext.h"
+#include "hex.h"
 #include "run-command.h"
+#include "sideband.h"
+#include "trace.h"
+#include "write-or-die.h"
 
 char packet_buffer[LARGE_PACKET_MAX];
 static const char *packet_trace_prefix = "git";
@@ -33,7 +39,6 @@ static int packet_trace_pack(const char *buf, unsigned int len, int sideband)
 
 static void packet_trace(const char *buf, unsigned int len, int write)
 {
-	int i;
 	struct strbuf out;
 	static int in_pack, sideband;
 
@@ -66,7 +71,7 @@ static void packet_trace(const char *buf, unsigned int len, int write)
 		    get_trace_prefix(), write ? '>' : '<');
 
 	/* XXX we should really handle printable utf8 */
-	for (i = 0; i < len; i++) {
+	for (unsigned int i = 0; i < len; i++) {
 		/* suppress newlines */
 		if (buf[i] == '\n')
 			continue;
@@ -332,30 +337,32 @@ int write_packetized_from_buf_no_flush_count(const char *src_in, size_t len,
 }
 
 static int get_packet_data(int fd, char **src_buf, size_t *src_size,
-			   void *dst, unsigned size, int options)
+			   void *dst, size_t size, int options)
 {
-	ssize_t ret;
+	size_t bytes_read;
 
 	if (fd >= 0 && src_buf && *src_buf)
 		BUG("multiple sources given to packet_read");
 
 	/* Read up to "size" bytes from our source, whatever it is. */
 	if (src_buf && *src_buf) {
-		ret = size < *src_size ? size : *src_size;
-		memcpy(dst, *src_buf, ret);
-		*src_buf += ret;
-		*src_size -= ret;
+		bytes_read = size < *src_size ? size : *src_size;
+		memcpy(dst, *src_buf, bytes_read);
+		*src_buf += bytes_read;
+		*src_size -= bytes_read;
 	} else {
-		ret = read_in_full(fd, dst, size);
+		ssize_t ret = read_in_full(fd, dst, size);
 		if (ret < 0) {
 			if (options & PACKET_READ_GENTLE_ON_READ_ERROR)
 				return error_errno(_("read error"));
 			die_errno(_("read error"));
 		}
+
+		bytes_read = (size_t) ret;
 	}
 
 	/* And complain if we didn't get enough bytes to satisfy the read. */
-	if (ret != size) {
+	if (bytes_read != size) {
 		if (options & PACKET_READ_GENTLE_ON_EOF)
 			return -1;
 
@@ -364,13 +371,17 @@ static int get_packet_data(int fd, char **src_buf, size_t *src_size,
 		die(_("the remote end hung up unexpectedly"));
 	}
 
-	return ret;
+	return 0;
 }
 
-int packet_length(const char lenbuf_hex[4])
+int packet_length(const char lenbuf_hex[4], size_t size)
 {
-	int val = hex2chr(lenbuf_hex);
-	return (val < 0) ? val : (val << 8) | hex2chr(lenbuf_hex + 2);
+	if (size < 4)
+		BUG("buffer too small");
+	return	hexval(lenbuf_hex[0]) << 12 |
+		hexval(lenbuf_hex[1]) <<  8 |
+		hexval(lenbuf_hex[2]) <<  4 |
+		hexval(lenbuf_hex[3]);
 }
 
 static char *find_packfile_uri_path(const char *buffer)
@@ -413,7 +424,7 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 		return PACKET_READ_EOF;
 	}
 
-	len = packet_length(linelen);
+	len = packet_length(linelen, sizeof(linelen));
 
 	if (len < 0) {
 		if (options & PACKET_READ_GENTLE_ON_READ_ERROR)
@@ -453,8 +464,32 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
 	}
 
 	if ((options & PACKET_READ_CHOMP_NEWLINE) &&
-	    len && buffer[len-1] == '\n')
-		len--;
+	    len && buffer[len-1] == '\n') {
+		if (options & PACKET_READ_USE_SIDEBAND) {
+			int band = *buffer & 0xff;
+			switch (band) {
+			case 1:
+				/* Chomp newline for payload */
+				len--;
+				break;
+			case 2:
+			case 3:
+				/*
+				 * Do not chomp newline for progress and error
+				 * message.
+				 */
+				break;
+			default:
+				/*
+				 * Bad sideband, let's leave it to
+				 * demultiplex_sideband() to catch this error.
+				 */
+				break;
+			}
+		} else {
+			len--;
+		}
+	}
 
 	buffer[len] = 0;
 	if (options & PACKET_READ_REDACT_URI_PATH &&
@@ -583,16 +618,18 @@ void packet_reader_init(struct packet_reader *reader, int fd,
 	reader->options = options;
 	reader->me = "git";
 	reader->hash_algo = &hash_algos[GIT_HASH_SHA1];
+	strbuf_init(&reader->scratch, 0);
 }
 
 enum packet_read_status packet_reader_read(struct packet_reader *reader)
 {
-	struct strbuf scratch = STRBUF_INIT;
-
 	if (reader->line_peeked) {
 		reader->line_peeked = 0;
 		return reader->status;
 	}
+
+	if (reader->use_sideband)
+		reader->options |= PACKET_READ_USE_SIDEBAND;
 
 	/*
 	 * Consume all progress packets until a primary payload packet is
@@ -611,7 +648,7 @@ enum packet_read_status packet_reader_read(struct packet_reader *reader)
 			break;
 		if (demultiplex_sideband(reader->me, reader->status,
 					 reader->buffer, reader->pktlen, 1,
-					 &scratch, &sideband_type))
+					 &reader->scratch, &sideband_type))
 			break;
 	}
 

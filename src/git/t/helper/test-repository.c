@@ -1,11 +1,13 @@
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "test-tool.h"
-#include "cache.h"
 #include "commit-graph.h"
 #include "commit.h"
-#include "config.h"
-#include "object-store.h"
+#include "environment.h"
+#include "hex.h"
 #include "object.h"
 #include "repository.h"
+#include "setup.h"
 #include "tree.h"
 
 static void test_parse_commit_in_graph(const char *gitdir, const char *worktree,
@@ -17,7 +19,7 @@ static void test_parse_commit_in_graph(const char *gitdir, const char *worktree,
 
 	setup_git_env(gitdir);
 
-	memset(the_repository, 0, sizeof(*the_repository));
+	repo_clear(the_repository);
 
 	if (repo_init(&r, gitdir, worktree))
 		die("Couldn't init repo");
@@ -47,7 +49,7 @@ static void test_get_commit_tree_in_graph(const char *gitdir,
 
 	setup_git_env(gitdir);
 
-	memset(the_repository, 0, sizeof(*the_repository));
+	repo_clear(the_repository);
 
 	if (repo_init(&r, gitdir, worktree))
 		die("Couldn't init repo");

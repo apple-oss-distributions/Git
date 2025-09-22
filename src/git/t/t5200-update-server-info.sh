@@ -2,7 +2,6 @@
 
 test_description='Test git update-server-info'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' 'test_commit file'
@@ -37,6 +36,14 @@ test_expect_success 'info/refs updates when changes are made' '
 	git update-server-info &&
 	test-tool chmtime --get .git/info/refs >b &&
 	! test_cmp a b
+'
+
+test_expect_success 'midx does not create duplicate pack entries' '
+	git repack -d --write-midx &&
+	git repack -d &&
+	grep ^P .git/objects/info/packs >packs &&
+	uniq -d <packs >dups &&
+	test_must_be_empty dups
 '
 
 test_done

@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='ext::cmd remote "connect" helper'
+
 . ./test-lib.sh
 
 test_expect_success setup '

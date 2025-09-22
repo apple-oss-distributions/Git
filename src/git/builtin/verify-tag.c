@@ -5,11 +5,11 @@
  *
  * Based on git-verify-tag.sh
  */
-#include "cache.h"
-#include "config.h"
 #include "builtin.h"
+#include "config.h"
+#include "gettext.h"
 #include "tag.h"
-#include "run-command.h"
+#include "object-name.h"
 #include "parse-options.h"
 #include "gpg-interface.h"
 #include "ref-filter.h"
@@ -19,15 +19,10 @@ static const char * const verify_tag_usage[] = {
 		NULL
 };
 
-static int git_verify_tag_config(const char *var, const char *value, void *cb)
-{
-	int status = git_gpg_config(var, value, cb);
-	if (status)
-		return status;
-	return git_default_config(var, value, cb);
-}
-
-int cmd_verify_tag(int argc, const char **argv, const char *prefix)
+int cmd_verify_tag(int argc,
+		   const char **argv,
+		   const char *prefix,
+		   struct repository *repo)
 {
 	int i = 1, verbose = 0, had_error = 0;
 	unsigned flags = 0;
@@ -39,7 +34,7 @@ int cmd_verify_tag(int argc, const char **argv, const char *prefix)
 		OPT_END()
 	};
 
-	git_config(git_verify_tag_config, NULL);
+	repo_config(repo, git_default_config, NULL);
 
 	argc = parse_options(argc, argv, prefix, verify_tag_options,
 			     verify_tag_usage, PARSE_OPT_KEEP_ARGV0);
@@ -60,7 +55,7 @@ int cmd_verify_tag(int argc, const char **argv, const char *prefix)
 		struct object_id oid;
 		const char *name = argv[i++];
 
-		if (get_oid(name, &oid)) {
+		if (repo_get_oid(repo, name, &oid)) {
 			had_error = !!error("tag '%s' not found.", name);
 			continue;
 		}

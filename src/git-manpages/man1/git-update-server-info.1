@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-update-server-info
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-UPDATE\-SERVER\" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-UPDATE\-SERVER\-INFO" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,6 @@ git-update-server-info \- Update auxiliary info file to help dumb servers
 .nf
 \fIgit update\-server\-info\fR [\-f | \-\-force]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 A dumb server that does not do on\-the\-fly pack generations must have some auxiliary information files in $GIT_DIR/info and $GIT_OBJECT_DIRECTORY/info directories to help clients discover what references and packs the server has\&. This command generates such auxiliary files\&.
@@ -42,11 +41,11 @@ A dumb server that does not do on\-the\-fly pack generations must have some auxi
 .PP
 \-f, \-\-force
 .RS 4
-update the info files from scratch\&.
+Update the info files from scratch\&.
 .RE
 .SH "OUTPUT"
 .sp
-Currently the command updates the following files\&. Please see \fBgitrepository-layout\fR(5) for description of what they are for:
+Currently the command updates the following files\&. Please see \fBgitrepository-layout\fR(5) for a description of what they are for:
 .sp
 .RS 4
 .ie n \{\

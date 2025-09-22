@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='check quarantine of objects during push'
+
 . ./test-lib.sh
 
 test_expect_success 'create picky dest repo' '

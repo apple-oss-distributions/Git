@@ -7,12 +7,37 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 
 . "$TEST_DIRECTORY"/lib-git-daemon.sh
+
+test_expect_success 'daemon rejects invalid --init-timeout values' '
+	for arg in "3a" "-3"
+	do
+		test_must_fail git daemon --init-timeout="$arg" 2>err &&
+		test_grep "fatal: invalid init-timeout ${SQ}$arg${SQ}, expecting a non-negative integer" err ||
+		return 1
+	done
+'
+
+test_expect_success 'daemon rejects invalid --timeout values' '
+	for arg in "3a" "-3"
+	do
+		test_must_fail git daemon --timeout="$arg" 2>err &&
+		test_grep "fatal: invalid timeout ${SQ}$arg${SQ}, expecting a non-negative integer" err ||
+		return 1
+	done
+'
+
+test_expect_success 'daemon rejects invalid --max-connections values' '
+	arg='3a' &&
+	test_must_fail git daemon --max-connections=3a 2>err &&
+	test_grep "fatal: invalid max-connections ${SQ}$arg${SQ}, expecting an integer" err
+'
+
 start_git_daemon
 
 check_verbose_connect () {
-	test_i18ngrep -F "Looking up 127.0.0.1 ..." stderr &&
-	test_i18ngrep -F "Connecting to 127.0.0.1 (port " stderr &&
-	test_i18ngrep -F "done." stderr
+	test_grep -F "Looking up 127.0.0.1 ..." stderr &&
+	test_grep -F "Connecting to 127.0.0.1 (port " stderr &&
+	test_grep -F "done." stderr
 }
 
 test_expect_success 'setup repository' '
@@ -108,7 +133,7 @@ test_expect_success 'fetch notices corrupt idx' '
 
 test_expect_success 'client refuses to ask for repo with newline' '
 	test_must_fail git clone "$GIT_DAEMON_URL/repo$LF.git" dst 2>stderr &&
-	test_i18ngrep newline.is.forbidden stderr
+	test_grep newline.is.forbidden stderr
 '
 
 test_remote_error()
@@ -148,7 +173,7 @@ test_remote_error()
 	fi
 
 	test_must_fail git "$cmd" "$GIT_DAEMON_URL/$repo" "$@" 2>output &&
-	test_i18ngrep "fatal: remote error: $msg: /$repo" output &&
+	test_grep "fatal: remote error: $msg: /$repo" output &&
 	ret=$?
 	chmod +x "$GIT_DAEMON_DOCUMENT_ROOT_PATH/repo.git"
 	(exit $ret)

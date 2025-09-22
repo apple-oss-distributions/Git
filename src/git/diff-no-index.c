@@ -4,16 +4,16 @@
  * Copyright (c) 2008 by Junio C Hamano
  */
 
-#include "cache.h"
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
+#include "abspath.h"
 #include "color.h"
 #include "commit.h"
-#include "blob.h"
-#include "tag.h"
 #include "diff.h"
 #include "diffcore.h"
+#include "gettext.h"
 #include "revision.h"
-#include "log-tree.h"
-#include "builtin.h"
 #include "parse-options.h"
 #include "string-list.h"
 #include "dir.h"
@@ -40,60 +40,105 @@ static int read_directory_contents(const char *path, struct string_list *list)
  */
 static const char file_from_standard_input[] = "-";
 
-static int get_mode(const char *path, int *mode)
+/*
+ * For paths given on the command-line we treat "-" as stdin and named
+ * pipes and symbolic links to named pipes specially.
+ */
+enum special {
+	SPECIAL_NONE,
+	SPECIAL_STDIN,
+	SPECIAL_PIPE,
+};
+
+static int get_mode(const char *path, int *mode, enum special *special)
 {
 	struct stat st;
 
-	if (!path || !strcmp(path, "/dev/null"))
+	if (!path || !strcmp(path, "/dev/null")) {
 		*mode = 0;
 #ifdef GIT_WINDOWS_NATIVE
-	else if (!strcasecmp(path, "nul"))
+	} else if (!strcasecmp(path, "nul")) {
 		*mode = 0;
 #endif
-	else if (path == file_from_standard_input)
+	} else if (path == file_from_standard_input) {
 		*mode = create_ce_mode(0666);
-	else if (lstat(path, &st))
+		*special = SPECIAL_STDIN;
+	} else if (lstat(path, &st)) {
 		return error("Could not access '%s'", path);
-	else
+	} else {
 		*mode = st.st_mode;
+	}
+	/*
+	 * For paths on the command-line treat named pipes and symbolic
+	 * links that resolve to a named pipe specially.
+	 */
+	if (special &&
+	    (S_ISFIFO(*mode) ||
+	     (S_ISLNK(*mode) && !stat(path, &st) && S_ISFIFO(st.st_mode)))) {
+		*mode = create_ce_mode(0666);
+		*special = SPECIAL_PIPE;
+	}
+
 	return 0;
 }
 
-static int populate_from_stdin(struct diff_filespec *s)
+static void populate_common(struct diff_filespec *s, struct strbuf *buf)
 {
-	struct strbuf buf = STRBUF_INIT;
 	size_t size = 0;
 
-	if (strbuf_read(&buf, 0, 0) < 0)
-		return error_errno("error while reading from stdin");
-
 	s->should_munmap = 0;
-	s->data = strbuf_detach(&buf, &size);
+	s->data = strbuf_detach(buf, &size);
 	s->size = size;
 	s->should_free = 1;
 	s->is_stdin = 1;
-	return 0;
 }
 
-static struct diff_filespec *noindex_filespec(const char *name, int mode)
+static void populate_from_pipe(struct diff_filespec *s)
+{
+	struct strbuf buf = STRBUF_INIT;
+	int fd = xopen(s->path, O_RDONLY);
+
+	if (strbuf_read(&buf, fd, 0) < 0)
+		die_errno("error while reading from '%s'", s->path);
+	close(fd);
+	populate_common(s, &buf);
+}
+
+static void populate_from_stdin(struct diff_filespec *s)
+{
+	struct strbuf buf = STRBUF_INIT;
+
+	if (strbuf_read(&buf, 0, 0) < 0)
+		die_errno("error while reading from stdin");
+	populate_common(s, &buf);
+}
+
+static struct diff_filespec *noindex_filespec(const struct git_hash_algo *algop,
+					      const char *name, int mode,
+					      enum special special)
 {
 	struct diff_filespec *s;
 
 	if (!name)
 		name = "/dev/null";
 	s = alloc_filespec(name);
-	fill_filespec(s, null_oid(), 0, mode);
-	if (name == file_from_standard_input)
+	fill_filespec(s, null_oid(algop), 0, mode);
+	if (special == SPECIAL_STDIN)
 		populate_from_stdin(s);
+	else if (special == SPECIAL_PIPE)
+		populate_from_pipe(s);
 	return s;
 }
 
-static int queue_diff(struct diff_options *o,
-		      const char *name1, const char *name2)
+static int queue_diff(struct diff_options *o, const struct git_hash_algo *algop,
+		      const char *name1, const char *name2, int recursing)
 {
 	int mode1 = 0, mode2 = 0;
+	enum special special1 = SPECIAL_NONE, special2 = SPECIAL_NONE;
 
-	if (get_mode(name1, &mode1) || get_mode(name2, &mode2))
+	/* Paths can only be special if we're not recursing. */
+	if (get_mode(name1, &mode1, recursing ? NULL : &special1) ||
+	    get_mode(name2, &mode2, recursing ? NULL : &special2))
 		return -1;
 
 	if (mode1 && mode2 && S_ISDIR(mode1) != S_ISDIR(mode2)) {
@@ -101,14 +146,14 @@ static int queue_diff(struct diff_options *o,
 
 		if (S_ISDIR(mode1)) {
 			/* 2 is file that is created */
-			d1 = noindex_filespec(NULL, 0);
-			d2 = noindex_filespec(name2, mode2);
+			d1 = noindex_filespec(algop, NULL, 0, SPECIAL_NONE);
+			d2 = noindex_filespec(algop, name2, mode2, special2);
 			name2 = NULL;
 			mode2 = 0;
 		} else {
 			/* 1 is file that is deleted */
-			d1 = noindex_filespec(name1, mode1);
-			d2 = noindex_filespec(NULL, 0);
+			d1 = noindex_filespec(algop, name1, mode1, special1);
+			d2 = noindex_filespec(algop, NULL, 0, SPECIAL_NONE);
 			name1 = NULL;
 			mode1 = 0;
 		}
@@ -173,7 +218,7 @@ static int queue_diff(struct diff_options *o,
 				n2 = buffer2.buf;
 			}
 
-			ret = queue_diff(o, n1, n2);
+			ret = queue_diff(o, algop, n1, n2, 1);
 		}
 		string_list_clear(&p1, 0);
 		string_list_clear(&p2, 0);
@@ -187,10 +232,11 @@ static int queue_diff(struct diff_options *o,
 		if (o->flags.reverse_diff) {
 			SWAP(mode1, mode2);
 			SWAP(name1, name2);
+			SWAP(special1, special2);
 		}
 
-		d1 = noindex_filespec(name1, mode1);
-		d2 = noindex_filespec(name2, mode2);
+		d1 = noindex_filespec(algop, name1, mode1, special1);
+		d2 = noindex_filespec(algop, name2, mode2, special2);
 		diff_queue(&diff_queued_diff, d1, d2);
 		return 0;
 	}
@@ -215,13 +261,27 @@ static void append_basename(struct strbuf *path, const char *dir, const char *fi
  */
 static void fixup_paths(const char **path, struct strbuf *replacement)
 {
-	unsigned int isdir0, isdir1;
+	struct stat st;
+	unsigned int isdir0 = 0, isdir1 = 0;
+	unsigned int ispipe0 = 0, ispipe1 = 0;
 
-	if (path[0] == file_from_standard_input ||
-	    path[1] == file_from_standard_input)
-		return;
-	isdir0 = is_directory(path[0]);
-	isdir1 = is_directory(path[1]);
+	if (path[0] != file_from_standard_input && !stat(path[0], &st)) {
+		isdir0 = S_ISDIR(st.st_mode);
+		ispipe0 = S_ISFIFO(st.st_mode);
+	}
+
+	if (path[1] != file_from_standard_input && !stat(path[1], &st)) {
+		isdir1 = S_ISDIR(st.st_mode);
+		ispipe1 = S_ISFIFO(st.st_mode);
+	}
+
+	if ((path[0] == file_from_standard_input && isdir1) ||
+	    (isdir0 && path[1] == file_from_standard_input))
+		die(_("cannot compare stdin to a directory"));
+
+	if ((isdir0 && ispipe1) || (ispipe0 && isdir1))
+		die(_("cannot compare a named pipe to a directory"));
+
 	if (isdir0 == isdir1)
 		return;
 	if (isdir0) {
@@ -238,9 +298,8 @@ static const char * const diff_no_index_usage[] = {
 	NULL
 };
 
-int diff_no_index(struct rev_info *revs,
-		  int implicit_no_index,
-		  int argc, const char **argv)
+int diff_no_index(struct rev_info *revs, const struct git_hash_algo *algop,
+		  int implicit_no_index, int argc, const char **argv)
 {
 	int i, no_index;
 	int ret = 1;
@@ -255,8 +314,7 @@ int diff_no_index(struct rev_info *revs,
 	};
 	struct option *options;
 
-	options = parse_options_concat(no_index_options,
-				       revs->diffopt.parseopts);
+	options = add_diff_options(no_index_options, &revs->diffopt);
 	argc = parse_options(argc, argv, revs->prefix, options,
 			     diff_no_index_usage, 0);
 	if (argc != 2) {
@@ -296,7 +354,7 @@ int diff_no_index(struct rev_info *revs,
 	setup_diff_pager(&revs->diffopt);
 	revs->diffopt.flags.exit_with_status = 1;
 
-	if (queue_diff(&revs->diffopt, paths[0], paths[1]))
+	if (queue_diff(&revs->diffopt, algop, paths[0], paths[1], 0))
 		goto out;
 	diff_set_mnemonic_prefix(&revs->diffopt, "1/", "2/");
 	diffcore_std(&revs->diffopt);
@@ -306,7 +364,7 @@ int diff_no_index(struct rev_info *revs,
 	 * The return code for --no-index imitates diff(1):
 	 * 0 = no changes, 1 = changes, else error
 	 */
-	ret = diff_result_code(&revs->diffopt, 0);
+	ret = diff_result_code(revs);
 
 out:
 	for (i = 0; i < ARRAY_SIZE(to_free); i++)

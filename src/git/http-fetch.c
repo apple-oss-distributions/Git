@@ -1,10 +1,16 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
 #include "config.h"
-#include "exec-cmd.h"
+#include "gettext.h"
+#include "hex.h"
 #include "http.h"
 #include "walker.h"
+#include "setup.h"
 #include "strvec.h"
+#include "url.h"
 #include "urlmatch.h"
+#include "trace2.h"
 
 static const char http_fetch_usage[] = "git http-fetch "
 "[-c] [-t] [-a] [-v] [--recover] [-w ref] [--stdin | --packfile=hash | commit-id] url";
@@ -100,6 +106,7 @@ int cmd_main(int argc, const char **argv)
 	int nongit;
 	struct object_id packfile_hash;
 	struct strvec index_pack_args = STRVEC_INIT;
+	int ret;
 
 	setup_git_directory_gently(&nongit);
 
@@ -123,8 +130,12 @@ int cmd_main(int argc, const char **argv)
 		} else if (skip_prefix(argv[arg], "--packfile=", &p)) {
 			const char *end;
 
+			if (nongit)
+				die(_("not a git repository"));
+
 			packfile = 1;
-			if (parse_oid_hex(p, &packfile_hash, &end) || *end)
+			if (parse_oid_hex_algop(p, &packfile_hash, &end,
+						the_repository->hash_algo) || *end)
 				die(_("argument to --packfile must be a valid hash (got '%s')"), p);
 		} else if (skip_prefix(argv[arg], "--index-pack-arg=", &p)) {
 			strvec_push(&index_pack_args, p);
@@ -137,6 +148,8 @@ int cmd_main(int argc, const char **argv)
 	if (nongit)
 		die(_("not a git repository"));
 
+	trace2_cmd_name("http-fetch");
+
 	git_config(git_default_config, NULL);
 
 	if (packfile) {
@@ -145,8 +158,8 @@ int cmd_main(int argc, const char **argv)
 
 		fetch_single_packfile(&packfile_hash, argv[arg],
 				      index_pack_args.v);
-
-		return 0;
+		ret = 0;
+		goto out;
 	}
 
 	if (index_pack_args.nr)
@@ -158,7 +171,12 @@ int cmd_main(int argc, const char **argv)
 		commit_id = (char **) &argv[arg++];
 		commits = 1;
 	}
-	return fetch_using_walker(argv[arg], get_verbosely, get_recover,
-				  commits, commit_id, write_ref,
-				  commits_on_stdin);
+
+	ret = fetch_using_walker(argv[arg], get_verbosely, get_recover,
+				 commits, commit_id, write_ref,
+				 commits_on_stdin);
+
+out:
+	strvec_clear(&index_pack_args);
+	return ret;
 }

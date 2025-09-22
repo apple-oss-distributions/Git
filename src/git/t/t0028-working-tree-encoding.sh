@@ -5,12 +5,17 @@ test_description='working-tree-encoding conversion via gitattributes'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 TEST_CREATE_REPO_NO_TEMPLATE=1
 . ./test-lib.sh
 . "$TEST_DIRECTORY/lib-encoding.sh"
 
 GIT_TRACE_WORKING_TREE_ENCODING=1 && export GIT_TRACE_WORKING_TREE_ENCODING
+
+if ! test_have_prereq ICONV
+then
+	skip_all='skipping working tree encoding tests; iconv not available'
+	test_done
+fi
 
 test_expect_success 'setup test files' '
 	git config core.eol lf &&
@@ -92,23 +97,23 @@ do
 		# In these cases the BOM is prohibited.
 		cp bebom.utf${i}be.raw bebom.utf${i}be &&
 		test_must_fail git add bebom.utf${i}be 2>err.out &&
-		test_i18ngrep "fatal: BOM is prohibited .* utf-${i}be" err.out &&
-		test_i18ngrep "use UTF-${i} as working-tree-encoding" err.out &&
+		test_grep "fatal: BOM is prohibited .* utf-${i}be" err.out &&
+		test_grep "use UTF-${i} as working-tree-encoding" err.out &&
 
 		cp lebom.utf${i}le.raw lebom.utf${i}be &&
 		test_must_fail git add lebom.utf${i}be 2>err.out &&
-		test_i18ngrep "fatal: BOM is prohibited .* utf-${i}be" err.out &&
-		test_i18ngrep "use UTF-${i} as working-tree-encoding" err.out &&
+		test_grep "fatal: BOM is prohibited .* utf-${i}be" err.out &&
+		test_grep "use UTF-${i} as working-tree-encoding" err.out &&
 
 		cp bebom.utf${i}be.raw bebom.utf${i}le &&
 		test_must_fail git add bebom.utf${i}le 2>err.out &&
-		test_i18ngrep "fatal: BOM is prohibited .* utf-${i}LE" err.out &&
-		test_i18ngrep "use UTF-${i} as working-tree-encoding" err.out &&
+		test_grep "fatal: BOM is prohibited .* utf-${i}LE" err.out &&
+		test_grep "use UTF-${i} as working-tree-encoding" err.out &&
 
 		cp lebom.utf${i}le.raw lebom.utf${i}le &&
 		test_must_fail git add lebom.utf${i}le 2>err.out &&
-		test_i18ngrep "fatal: BOM is prohibited .* utf-${i}LE" err.out &&
-		test_i18ngrep "use UTF-${i} as working-tree-encoding" err.out
+		test_grep "fatal: BOM is prohibited .* utf-${i}LE" err.out &&
+		test_grep "use UTF-${i} as working-tree-encoding" err.out
 	'
 
 	test_expect_success "check required UTF-${i} BOM" '
@@ -118,21 +123,21 @@ do
 
 		cp nobom.utf${i}be.raw nobom.utf${i} &&
 		test_must_fail git add nobom.utf${i} 2>err.out &&
-		test_i18ngrep "fatal: BOM is required .* utf-${i}" err.out &&
-		test_i18ngrep "use UTF-${i}BE or UTF-${i}LE" err.out &&
+		test_grep "fatal: BOM is required .* utf-${i}" err.out &&
+		test_grep "use UTF-${i}BE or UTF-${i}LE" err.out &&
 
 		cp nobom.utf${i}le.raw nobom.utf${i} &&
 		test_must_fail git add nobom.utf${i} 2>err.out &&
-		test_i18ngrep "fatal: BOM is required .* utf-${i}" err.out &&
-		test_i18ngrep "use UTF-${i}BE or UTF-${i}LE" err.out
+		test_grep "fatal: BOM is required .* utf-${i}" err.out &&
+		test_grep "use UTF-${i}BE or UTF-${i}LE" err.out
 	'
 
 	test_expect_success "eol conversion for UTF-${i} encoded files on checkout" '
 		test_when_finished "rm -f crlf.utf${i}.raw lf.utf${i}.raw" &&
 		test_when_finished "git reset --hard HEAD^" &&
 
-		cat lf.utf8.raw | write_utf${i} >lf.utf${i}.raw &&
-		cat crlf.utf8.raw | write_utf${i} >crlf.utf${i}.raw &&
+		write_utf${i} <lf.utf8.raw >lf.utf${i}.raw &&
+		write_utf${i} <crlf.utf8.raw >crlf.utf${i}.raw &&
 		cp crlf.utf${i}.raw eol.utf${i} &&
 
 		cat >expectIndexLF <<-EOF &&
@@ -169,7 +174,7 @@ test_expect_success 'check unsupported encodings' '
 	echo "*.set text working-tree-encoding" >.gitattributes &&
 	printf "set" >t.set &&
 	test_must_fail git add t.set 2>err.out &&
-	test_i18ngrep "true/false are no valid working-tree-encodings" err.out &&
+	test_grep "true/false are no valid working-tree-encodings" err.out &&
 
 	echo "*.unset text -working-tree-encoding" >.gitattributes &&
 	printf "unset" >t.unset &&
@@ -182,7 +187,7 @@ test_expect_success 'check unsupported encodings' '
 	echo "*.garbage text working-tree-encoding=garbage" >.gitattributes &&
 	printf "garbage" >t.garbage &&
 	test_must_fail git add t.garbage 2>err.out &&
-	test_i18ngrep "failed to encode" err.out
+	test_grep "failed to encode" err.out
 '
 
 test_expect_success 'error if encoding round trip is not the same during refresh' '
@@ -201,7 +206,7 @@ test_expect_success 'error if encoding round trip is not the same during refresh
 	git update-ref refs/heads/main $COMMIT &&
 
 	test_must_fail git checkout HEAD^ 2>err.out &&
-	test_i18ngrep "error: .* overwritten by checkout:" err.out
+	test_grep "error: .* overwritten by checkout:" err.out
 '
 
 test_expect_success 'error if encoding garbage is already in Git' '
@@ -217,7 +222,7 @@ test_expect_success 'error if encoding garbage is already in Git' '
 	git update-ref refs/heads/main $COMMIT &&
 
 	git diff 2>err.out &&
-	test_i18ngrep "error: BOM is required" err.out
+	test_grep "error: BOM is required" err.out
 '
 
 test_lazy_prereq ICONV_SHIFT_JIS '

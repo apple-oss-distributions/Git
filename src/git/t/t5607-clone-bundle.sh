@@ -24,7 +24,7 @@ test_expect_success 'setup' '
 test_expect_success '"verify" needs a worktree' '
 	git bundle create tip.bundle -1 main &&
 	nongit test_must_fail git bundle verify ../tip.bundle 2>err &&
-	test_i18ngrep "need a repository" err
+	test_grep "need a repository" err
 '
 
 test_expect_success 'annotated tags can be excluded by rev-list options' '
@@ -138,6 +138,48 @@ test_expect_success 'fetch SHA-1 from bundle' '
 	git fetch --no-tags foo/tip.bundle "$(cat hash)"
 '
 
+test_expect_success 'clone bundle with different fsckObjects configurations' '
+	test_create_repo bundle-fsck &&
+	(
+		cd bundle-fsck &&
+		test_commit A &&
+		commit_a=$(git rev-parse A) &&
+		tree_a=$(git rev-parse A^{tree}) &&
+		cat >data <<-EOF &&
+		tree $tree_a
+		parent $commit_a
+		author A U Thor
+		committer A U Thor
+
+		commit: this is a commit with bad emails
+
+		EOF
+		bad_commit=$(git hash-object --literally -t commit -w --stdin <data) &&
+		git branch bad $bad_commit &&
+		git bundle create bad.bundle bad
+	) &&
+
+	git clone bundle-fsck/bad.bundle bundle-no-fsck &&
+
+	git -c fetch.fsckObjects=false -c transfer.fsckObjects=true \
+		clone bundle-fsck/bad.bundle bundle-fetch-no-fsck &&
+
+	test_must_fail git -c fetch.fsckObjects=true \
+		clone bundle-fsck/bad.bundle bundle-fetch-fsck 2>err &&
+	test_grep "missingEmail" err &&
+
+	test_must_fail git -c transfer.fsckObjects=true \
+		clone bundle-fsck/bad.bundle bundle-transfer-fsck 2>err &&
+	test_grep "missingEmail" err &&
+
+	git -c fetch.fsckObjects=true -c fetch.fsck.missingEmail=ignore \
+		clone bundle-fsck/bad.bundle bundle-fsck-ignore &&
+
+	test_must_fail git -c fetch.fsckObjects=true -c fetch.fsck.missingEmail=error \
+		clone bundle-fsck/bad.bundle bundle-fsck-error 2>err &&
+	test_grep "missingEmail" err
+'
+
 test_expect_success 'git bundle uses expected default format' '
 	git bundle create bundle HEAD^.. &&
 	cat >expect <<-EOF &&
@@ -166,7 +208,19 @@ test_expect_success 'git bundle v3 rejects unknown capabilities' '
 	@unknown=silly
 	EOF
 	test_must_fail git bundle verify new 2>output &&
-	test_i18ngrep "unknown capability .unknown=silly." output
+	test_grep "unknown capability .unknown=silly." output
+'
+
+test_expect_success 'cloning bundle suppresses default branch name advice' '
+	test_when_finished "rm -rf bundle-repo clone-repo" &&
+
+	git init bundle-repo &&
+	git -C bundle-repo commit --allow-empty -m init &&
+	git -C bundle-repo bundle create repo.bundle --all &&
+	GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME= \
+		git clone --single-branch bundle-repo/repo.bundle clone-repo 2>err &&
+
+	test_grep ! "hint: " err
 '
 
 test_done

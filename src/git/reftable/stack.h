@@ -1,10 +1,10 @@
 /*
-Copyright 2020 Google LLC
-
-Use of this source code is governed by a BSD-style
-license that can be found in the LICENSE file or at
-https://developers.google.com/open-source/licenses/bsd
-*/
+ * Copyright 2020 Google LLC
+ *
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file or at
+ * https://developers.google.com/open-source/licenses/bsd
+ */
 
 #ifndef STACK_H
 #define STACK_H
@@ -14,14 +14,16 @@ https://developers.google.com/open-source/licenses/bsd
 #include "reftable-stack.h"
 
 struct reftable_stack {
+	struct stat list_st;
 	char *list_file;
+	int list_fd;
+
 	char *reftable_dir;
-	int disable_auto_compact;
 
-	struct reftable_write_options config;
+	struct reftable_write_options opts;
 
-	struct reftable_reader **readers;
-	size_t readers_len;
+	struct reftable_table **tables;
+	size_t tables_len;
 	struct reftable_merged_table *merged;
 	struct reftable_compaction_stats stats;
 };
@@ -29,13 +31,11 @@ struct reftable_stack {
 int read_lines(const char *filename, char ***lines);
 
 struct segment {
-	int start, end;
-	int log;
+	size_t start, end;
 	uint64_t bytes;
 };
 
-int fastlog2(uint64_t sz);
-struct segment *sizes_to_segments(int *seglen, uint64_t *sizes, int n);
-struct segment suggest_compaction_segment(uint64_t *sizes, int n);
+struct segment suggest_compaction_segment(uint64_t *sizes, size_t n,
+					  uint8_t factor);
 
 #endif

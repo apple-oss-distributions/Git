@@ -2,13 +2,10 @@
 #define COMMIT_H
 
 #include "object.h"
-#include "tree.h"
-#include "strbuf.h"
-#include "decorate.h"
-#include "gpg-interface.h"
-#include "string-list.h"
-#include "pretty.h"
-#include "commit-slab.h"
+
+struct signature_check;
+struct strbuf;
+struct tree;
 
 #define COMMIT_NOT_FROM_GRAPH 0xFFFFFFFF
 #define GENERATION_NUMBER_INFINITY ((1ULL << 63) - 1)
@@ -84,6 +81,8 @@ struct commit *lookup_commit_reference_gently(struct repository *r,
 					      const struct object_id *oid,
 					      int quiet);
 struct commit *lookup_commit_reference_by_name(const char *name);
+struct commit *lookup_commit_reference_by_name_gently(const char *name,
+						      int quiet);
 
 /*
  * Look up object named by "oid", dereference tag as necessary,
@@ -109,12 +108,9 @@ static inline int repo_parse_commit_no_graph(struct repository *r,
 	return repo_parse_commit_internal(r, commit, 0, 0);
 }
 
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define parse_commit_internal(item, quiet, use) repo_parse_commit_internal(the_repository, item, quiet, use)
-#define parse_commit(item) repo_parse_commit(the_repository, item)
-#endif
-
 void parse_commit_or_die(struct commit *item);
+
+void unparse_commit(struct repository *r, const struct object_id *oid);
 
 struct buffer_slab;
 struct buffer_slab *allocate_commit_buffer_slab(void);
@@ -135,27 +131,21 @@ const void *get_cached_commit_buffer(struct repository *, const struct commit *,
 /*
  * Get the commit's object contents, either from cache or by reading the object
  * from disk. The resulting memory should not be modified, and must be given
- * to unuse_commit_buffer when the caller is done.
+ * to repo_unuse_commit_buffer when the caller is done.
  */
 const void *repo_get_commit_buffer(struct repository *r,
 				   const struct commit *,
 				   unsigned long *size);
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define get_commit_buffer(c, s) repo_get_commit_buffer(the_repository, c, s)
-#endif
 
 /*
  * Tell the commit subsystem that we are done with a particular commit buffer.
  * The commit and buffer should be the input and return value, respectively,
- * from an earlier call to get_commit_buffer.  The buffer may or may not be
+ * from an earlier call to repo_get_commit_buffer.  The buffer may or may not be
  * freed by this call; callers should not access the memory afterwards.
  */
 void repo_unuse_commit_buffer(struct repository *r,
 			      const struct commit *,
 			      const void *buffer);
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define unuse_commit_buffer(c, b) repo_unuse_commit_buffer(the_repository, c, b)
-#endif
 
 /*
  * Free any cached object buffer associated with the commit.
@@ -163,7 +153,6 @@ void repo_unuse_commit_buffer(struct repository *r,
 void free_commit_buffer(struct parsed_object_pool *pool, struct commit *);
 
 struct tree *repo_get_commit_tree(struct repository *, const struct commit *);
-#define get_commit_tree(c) repo_get_commit_tree(the_repository, c)
 struct object_id *get_commit_tree_oid(const struct commit *);
 
 /*
@@ -196,7 +185,7 @@ struct commit_list *commit_list_insert_by_date(struct commit *item,
 void commit_list_sort_by_date(struct commit_list **list);
 
 /* Shallow copy of the input list */
-struct commit_list *copy_commit_list(struct commit_list *list);
+struct commit_list *copy_commit_list(const struct commit_list *list);
 
 /* Modify list in-place to reverse it, returning new head; list will be tail */
 struct commit_list *reverse_commit_list(struct commit_list *list);
@@ -205,17 +194,10 @@ void free_commit_list(struct commit_list *list);
 
 struct rev_info; /* in revision.h, it circularly uses enum cmit_fmt */
 
-int has_non_ascii(const char *text);
-const char *logmsg_reencode(const struct commit *commit,
-			    char **commit_encoding,
-			    const char *output_encoding);
 const char *repo_logmsg_reencode(struct repository *r,
 				 const struct commit *commit,
 				 char **commit_encoding,
 				 const char *output_encoding);
-#ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
-#define logmsg_reencode(c, enc, out) repo_logmsg_reencode(the_repository, c, enc, out)
-#endif
 
 const char *skip_blank_lines(const char *msg);
 
@@ -228,7 +210,7 @@ struct commit *pop_most_recent_commit(struct commit_list **list,
 struct commit *pop_commit(struct commit_list **stack);
 
 void clear_commit_marks(struct commit *commit, unsigned int mark);
-void clear_commit_marks_many(int nr, struct commit **commit, unsigned int mark);
+void clear_commit_marks_many(size_t nr, struct commit **commit, unsigned int mark);
 
 
 enum rev_sort_order {
@@ -262,7 +244,6 @@ int commit_graft_pos(struct repository *r, const struct object_id *oid);
 int register_commit_graft(struct repository *r, struct commit_graft *, int);
 void prepare_commit_graft(struct repository *r);
 struct commit_graft *lookup_commit_graft(struct repository *r, const struct object_id *oid);
-void reset_commit_grafts(struct repository *r);
 
 struct commit *get_fork_point(const char *refname, struct commit *commit);
 
@@ -273,9 +254,10 @@ struct oid_array;
 struct ref;
 int for_each_commit_graft(each_commit_graft_fn, void *);
 
-int interactive_add(const char **argv, const char *prefix, int patch);
-int run_add_interactive(const char *revision, const char *patch_mode,
-			const struct pathspec *pathspec);
+int interactive_add(struct repository *repo,
+		    const char **argv,
+		    const char *prefix,
+		    int patch);
 
 struct commit_extra_header {
 	struct commit_extra_header *next;
@@ -284,19 +266,19 @@ struct commit_extra_header {
 	size_t len;
 };
 
-void append_merge_tag_headers(struct commit_list *parents,
+void append_merge_tag_headers(const struct commit_list *parents,
 			      struct commit_extra_header ***tail);
 
 int commit_tree(const char *msg, size_t msg_len,
 		const struct object_id *tree,
-		struct commit_list *parents, struct object_id *ret,
+		const struct commit_list *parents, struct object_id *ret,
 		const char *author, const char *sign_commit);
 
 int commit_tree_extended(const char *msg, size_t msg_len,
 			 const struct object_id *tree,
-			 struct commit_list *parents, struct object_id *ret,
+			 const struct commit_list *parents, struct object_id *ret,
 			 const char *author, const char *committer,
-			 const char *sign_commit, struct commit_extra_header *);
+			 const char *sign_commit, const struct commit_extra_header *);
 
 struct commit_extra_header *read_commit_extra_headers(struct commit *, const char **);
 
@@ -304,22 +286,17 @@ void free_commit_extra_headers(struct commit_extra_header *extra);
 
 /*
  * Search the commit object contents given by "msg" for the header "key".
- * Reads up to "len" bytes of "msg".
  * Returns a pointer to the start of the header contents, or NULL. The length
  * of the header, up to the first newline, is returned via out_len.
  *
  * Note that some headers (like mergetag) may be multi-line. It is the caller's
  * responsibility to parse further in this case!
  */
-const char *find_header_mem(const char *msg, size_t len,
-			const char *key,
-			size_t *out_len);
-
 const char *find_commit_header(const char *msg, const char *key,
 			       size_t *out_len);
 
-/* Find the end of the log message, the right place for a new trailer. */
-size_t ignore_non_trailer(const char *buf, size_t len);
+/* Find the number of bytes to ignore from the end of a log message. */
+size_t ignored_log_message_bytes(const char *buf, size_t len);
 
 typedef int (*each_mergetag_fn)(struct commit *commit, struct commit_extra_header *extra,
 				void *cb_data);
@@ -330,7 +307,7 @@ struct merge_remote_desc {
 	struct object *obj; /* the named object, could be a tag */
 	char name[FLEX_ARRAY];
 };
-struct merge_remote_desc *merge_remote_util(struct commit *);
+struct merge_remote_desc *merge_remote_util(const struct commit *);
 void set_merge_remote_desc(struct commit *commit,
 			   const char *name, struct object *obj);
 
@@ -394,5 +371,6 @@ int parse_buffer_signed_by_header(const char *buffer,
 				  struct strbuf *payload,
 				  struct strbuf *signature,
 				  const struct git_hash_algo *algop);
+int add_header_signature(struct strbuf *buf, struct strbuf *sig, const struct git_hash_algo *algo);
 
 #endif /* COMMIT_H */

@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitprotocol-common
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITPROTOCOL\-COMMON" "5" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITPROTOCOL\-COMMON" "5" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,10 +34,9 @@ gitprotocol-common \- Things common to various protocols
 .nf
 <over\-the\-wire\-protocol>
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-This document sets defines things common to various over\-the\-wire protocols and file formats used in Git\&.
+This document defines things common to various over\-the\-wire protocols and file formats used in Git\&.
 .SH "ABNF NOTATION"
 .sp
 ABNF notation as described by RFC 5234 is used within the protocol documents, except the following replacement core rules are used:
@@ -51,7 +50,6 @@ ABNF notation as described by RFC 5234 is used within the protocol documents, ex
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 We also define the following common rules:
 .sp
@@ -70,7 +68,6 @@ We also define the following common rules:
 .RE
 .\}
 .sp
-.sp
 A refname is a hierarchical octet string beginning with "refs/" and not violating the \fIgit\-check\-ref\-format\fR command\(cqs validation rules\&. More specifically, they:
 .sp
 .RS 4
@@ -83,8 +80,7 @@ A refname is a hierarchical octet string beginning with "refs/" and not violatin
 .\}
 They can include slash
 \fB/\fR
-for hierarchical (directory) grouping, but no slash\-separated component can begin with a dot
-\fB\&.\fR\&.
+for hierarchical (directory) grouping, but no slash\-separated component can begin with a dot \&.\&.
 .RE
 .sp
 .RS 4
@@ -127,11 +123,8 @@ They cannot have ASCII control characters (i\&.e\&. bytes whose values are lower
 \fBDEL\fR), space, tilde
 \fB~\fR, caret
 \fB^\fR, colon
-\fB:\fR, question\-mark
-\fB?\fR, asterisk
-\fB*\fR, or open bracket
-\fB[\fR
-anywhere\&.
+\fB:\fR, question\-mark ?, asterisk
+\fB*\fR, or open bracket [ anywhere\&.
 .RE
 .sp
 .RS 4
@@ -144,8 +137,7 @@ anywhere\&.
 .\}
 They cannot end with a slash
 \fB/\fR
-or a dot
-\fB\&.\fR\&.
+or a dot \&.\&.
 .RE
 .sp
 .RS 4
@@ -156,8 +148,7 @@ or a dot
 .sp -1
 .IP "  6." 4.2
 .\}
-They cannot end with the sequence
-\fB\&.lock\fR\&.
+They cannot end with the sequence \&.\fBlock\fR\&.
 .RE
 .sp
 .RS 4
@@ -169,7 +160,7 @@ They cannot end with the sequence
 .IP "  7." 4.2
 .\}
 They cannot contain a sequence
-\fB@{\fR\&.
+\fB@\fR{\&.
 .RE
 .sp
 .RS 4
@@ -215,7 +206,6 @@ A pkt\-line with a length field of 0 ("0000"), called a flush\-pkt, is a special
 .RE
 .\}
 .sp
-.sp
 Examples (as C\-style strings):
 .sp
 .if n \{\
@@ -232,7 +222,6 @@ Examples (as C\-style strings):
 .if n \{\
 .RE
 .\}
-.sp
 .SH "GIT"
 .sp
 Part of the \fBgit\fR(1) suite

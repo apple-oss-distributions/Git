@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-bugreport
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-BUGREPORT" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-BUGREPORT" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,13 +32,13 @@ git-bugreport \- Collect information for user to file a bug report
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit bugreport\fR [(\-o | \-\-output\-directory) <path>] [(\-s | \-\-suffix) <format>]
+\fIgit bugreport\fR [(\-o | \-\-output\-directory) <path>]
+                [(\-s | \-\-suffix) <format> | \-\-no\-suffix]
                 [\-\-diagnose[=<mode>]]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Captures information about the user\(cqs machine, Git client, and repository state, as well as a form requesting information about the behavior the user observed, into a single text file which the user can then share, for example to the Git mailing list, in order to report an observed bug\&.
+Collects information about the user\(cqs machine, Git client, and repository state, in addition to a form requesting information about the behavior the user observed, and stores it in a single text file which the user can then share, for example to the Git mailing list, in order to report an observed bug\&.
 .sp
 The following information is requested from the user:
 .sp
@@ -140,25 +140,30 @@ This tool is invoked via the typical Git setup process, which means that in some
 \-o <path>, \-\-output\-directory <path>
 .RS 4
 Place the resulting bug report file in
-\fB<path>\fR
+\fI<path>\fR
 instead of the current directory\&.
 .RE
 .PP
-\-s <format>, \-\-suffix <format>
+\-s <format>, \-\-suffix <format>, \-\-no\-suffix
 .RS 4
 Specify an alternate suffix for the bugreport name, to create a file named
-\fIgit\-bugreport\-<formatted suffix>\fR\&. This should take the form of a strftime(3) format string; the current local time will be used\&.
+\fIgit\-bugreport\-<formatted\-suffix>\fR\&. This should take the form of a strftime(3) format string; the current local time will be used\&.
+\fB\-\-no\-suffix\fR
+disables the suffix and the file is just named
+\fBgit\-bugreport\fR
+without any disambiguation measure\&.
 .RE
 .PP
 \-\-no\-diagnose, \-\-diagnose[=<mode>]
 .RS 4
 Create a zip archive of supplemental information about the user\(cqs machine, Git client, and repository state\&. The archive is written to the same output directory as the bug report and is named
-\fIgit\-diagnostics\-<formatted suffix>\fR\&.
+\fIgit\-diagnostics\-<formatted\-suffix>\fR\&.
 .sp
 Without
 \fBmode\fR
 specified, the diagnostic archive will contain the default set of statistics reported by
-\fBgit diagnose\fR\&. An optional
+\fBgit\fR
+\fBdiagnose\fR\&. An optional
 \fBmode\fR
 value may be specified to change which information is included in the archive\&. See
 \fBgit-diagnose\fR(1)

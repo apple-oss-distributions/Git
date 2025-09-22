@@ -2,12 +2,14 @@
  * Copyright (c) 2010 Ævar Arnfjörð Bjarmason
  */
 
-#include "cache.h"
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
+#include "abspath.h"
+#include "environment.h"
 #include "exec-cmd.h"
 #include "gettext.h"
-#include "strbuf.h"
 #include "utf8.h"
-#include "config.h"
 
 #ifndef NO_GETTEXT
 #	include <libintl.h>

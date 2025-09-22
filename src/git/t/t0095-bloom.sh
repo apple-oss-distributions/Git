@@ -2,7 +2,6 @@
 
 test_description='Testing the various Bloom filter computations in bloom.c'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'compute unseeded murmur3 hash for empty string' '
@@ -26,6 +25,14 @@ test_expect_success 'compute unseeded murmur3 hash for test string 2' '
 	Murmur3 Hash with seed=0:0x2e4ff723
 	EOF
 	test-tool bloom get_murmur3 "The quick brown fox jumps over the lazy dog" >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'compute unseeded murmur3 hash for test string 3' '
+	cat >expect <<-\EOF &&
+	Murmur3 Hash with seed=0:0xa183ccfd
+	EOF
+	test-tool bloom get_murmur3_seven_highbit >actual &&
 	test_cmp expect actual
 '
 
@@ -69,7 +76,7 @@ test_expect_success 'compute bloom key for test string 2' '
 	test_cmp expect actual
 '
 
-test_expect_success !SANITIZE_LEAK 'get bloom filters for commit with no changes' '
+test_expect_success 'get bloom filters for commit with no changes' '
 	git init &&
 	git commit --allow-empty -m "c0" &&
 	cat >expect <<-\EOF &&

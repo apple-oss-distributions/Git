@@ -103,7 +103,7 @@ test_expect_success setup '
 
 	git format-patch --stdout first >patch1 &&
 	{
-		echo "Message-Id: <1226501681-24923-1-git-send-email-bda@mnsspb.ru>" &&
+		echo "Message-ID: <1226501681-24923-1-git-send-email-bda@mnsspb.ru>" &&
 		echo "X-Fake-Field: Line One" &&
 		echo "X-Fake-Field: Line Two" &&
 		echo "X-Fake-Field: Line Three" &&
@@ -345,6 +345,21 @@ test_expect_success 'am with failing applypatch-msg hook' '
 	test_cmp_rev first HEAD
 '
 
+test_expect_success 'am with failing applypatch-msg hook (no verify)' '
+	rm -fr .git/rebase-apply &&
+	git reset --hard &&
+	git checkout first &&
+	test_hook applypatch-msg <<-\EOF &&
+	echo hook-message >"$1"
+	exit 1
+	EOF
+	git am --no-verify patch1 &&
+	test_path_is_missing .git/rebase-apply &&
+	git diff --exit-code second &&
+	git log -1 --format=format:%B >actual &&
+	test_cmp msg actual
+'
+
 test_expect_success 'am with pre-applypatch hook' '
 	rm -fr .git/rebase-apply &&
 	git reset --hard &&
@@ -372,6 +387,23 @@ test_expect_success 'am with failing pre-applypatch hook' '
 	test_path_is_dir .git/rebase-apply &&
 	git diff --exit-code second &&
 	test_cmp_rev first HEAD
+'
+
+test_expect_success 'am with failing pre-applypatch hook (no verify)' '
+	rm -fr .git/rebase-apply &&
+	git reset --hard &&
+	git checkout first &&
+	touch empty-file &&
+	test_hook pre-applypatch <<-\EOF &&
+	rm empty-file
+	exit 1
+	EOF
+	git am --no-verify patch1 &&
+	test_path_is_missing .git/rebase-apply &&
+	test_path_is_file empty-file &&
+	git diff --exit-code second &&
+	git log -1 --format=format:%B >actual &&
+	test_cmp msg actual
 '
 
 test_expect_success 'am with post-applypatch hook' '
@@ -747,7 +779,7 @@ test_expect_success 'am --resolved fails if index has unmerged entries' '
 	test_must_fail git am --resolved >err &&
 	test_path_is_dir .git/rebase-apply &&
 	test_cmp_rev second HEAD &&
-	test_i18ngrep "still have unmerged paths" err
+	test_grep "still have unmerged paths" err
 '
 
 test_expect_success 'am takes patches from a Pine mailbox' '
@@ -881,7 +913,7 @@ test_expect_success 'am newline in subject' '
 	test_tick &&
 	sed -e "s/second/second \\\n foo/" patch1 >patchnl &&
 	git am <patchnl >output.out 2>&1 &&
-	test_i18ngrep "^Applying: second \\\n foo$" output.out
+	test_grep "^Applying: second \\\n foo$" output.out
 '
 
 test_expect_success 'am -q is quiet' '
@@ -910,7 +942,7 @@ test_expect_success 'am --message-id really adds the message id' '
 	git am --message-id patch1.eml &&
 	test_path_is_missing .git/rebase-apply &&
 	git cat-file commit HEAD | tail -n1 >actual &&
-	grep Message-Id patch1.eml >expected &&
+	grep Message-ID patch1.eml >expected &&
 	test_cmp expected actual
 '
 
@@ -922,7 +954,7 @@ test_expect_success 'am.messageid really adds the message id' '
 	git am patch1.eml &&
 	test_path_is_missing .git/rebase-apply &&
 	git cat-file commit HEAD | tail -n1 >actual &&
-	grep Message-Id patch1.eml >expected &&
+	grep Message-ID patch1.eml >expected &&
 	test_cmp expected actual
 '
 
@@ -933,7 +965,7 @@ test_expect_success 'am --message-id -s signs off after the message id' '
 	git am -s --message-id patch1.eml &&
 	test_path_is_missing .git/rebase-apply &&
 	git cat-file commit HEAD | tail -n2 | head -n1 >actual &&
-	grep Message-Id patch1.eml >expected &&
+	grep Message-ID patch1.eml >expected &&
 	test_cmp expected actual
 '
 
@@ -1033,7 +1065,7 @@ test_expect_success 'am --patch-format=mboxrd handles mboxrd' '
 	>From extra escape for reversibility
 	INPUT_END
 	git commit -F msg &&
-	git format-patch --pretty=mboxrd --stdout -1 >mboxrd1 &&
+	git -c format.mboxrd format-patch --stdout -1 >mboxrd1 &&
 	grep "^>From could trip up a loose mbox parser" mboxrd1 &&
 	git checkout -f first &&
 	git am --patch-format=mboxrd mboxrd1 &&
@@ -1052,13 +1084,13 @@ test_expect_success 'am works with multi-line in-body headers' '
     Body test" --author="$LONG <long@example.com>" &&
 	git format-patch --stdout -1 >patch &&
 	# bump from, date, and subject down to in-body header
-	perl -lpe "
-		if (/^From:/) {
+	awk "
+		/^From:/{
 			print \"From: x <x\@example.com>\";
 			print \"Date: Sat, 1 Jan 2000 00:00:00 +0000\";
 			print \"Subject: x\n\";
-		}
-	" patch >msg &&
+		}; 1
+	" <patch >msg &&
 	git checkout HEAD^ &&
 	git am msg &&
 	# Ensure that the author and full message are present
@@ -1192,8 +1224,8 @@ test_expect_success 'record as an empty commit when meeting e-mail message that 
 
 test_expect_success 'skip an empty patch in the middle of an am session' '
 	git checkout empty-commit^ &&
-	test_must_fail git am empty-commit.patch >err &&
-	grep "Patch is empty." err &&
+	test_must_fail git am empty-commit.patch >out 2>err &&
+	grep "Patch is empty." out &&
 	grep "To record the empty patch as an empty commit, run \"git am --allow-empty\"." err &&
 	git am --skip &&
 	test_path_is_missing .git/rebase-apply &&
@@ -1204,8 +1236,8 @@ test_expect_success 'skip an empty patch in the middle of an am session' '
 
 test_expect_success 'record an empty patch as an empty commit in the middle of an am session' '
 	git checkout empty-commit^ &&
-	test_must_fail git am empty-commit.patch >err &&
-	grep "Patch is empty." err &&
+	test_must_fail git am empty-commit.patch >out 2>err &&
+	grep "Patch is empty." out &&
 	grep "To record the empty patch as an empty commit, run \"git am --allow-empty\"." err &&
 	git am --allow-empty >output &&
 	grep "No changes - recorded it as an empty commit." output &&

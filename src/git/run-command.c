@@ -1,15 +1,22 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "git-compat-util.h"
 #include "run-command.h"
+#include "environment.h"
 #include "exec-cmd.h"
+#include "gettext.h"
 #include "sigchain.h"
 #include "strvec.h"
+#include "symlinks.h"
 #include "thread-utils.h"
 #include "strbuf.h"
 #include "string-list.h"
+#include "trace.h"
+#include "trace2.h"
 #include "quote.h"
 #include "config.h"
 #include "packfile.h"
-#include "hook.h"
 #include "compat/nonblock.h"
 
 void child_process_init(struct child_process *child)
@@ -164,6 +171,7 @@ int is_executable(const char *name)
 	return st.st_mode & S_IXUSR;
 }
 
+#ifndef locate_in_PATH
 /*
  * Search $PATH for a command.  This emulates the path search that
  * execvp would perform, without actually executing the command so it
@@ -212,6 +220,7 @@ static char *locate_in_PATH(const char *file)
 	strbuf_release(&buf);
 	return NULL;
 }
+#endif
 
 int exists_in_PATH(const char *command)
 {
@@ -266,17 +275,24 @@ int sane_execvp(const char *file, char * const argv[])
 	return -1;
 }
 
+char *git_shell_path(void)
+{
+#ifndef GIT_WINDOWS_NATIVE
+	return xstrdup(SHELL_PATH);
+#else
+	char *p = locate_in_PATH("sh");
+	convert_slashes(p);
+	return p;
+#endif
+}
+
 static const char **prepare_shell_cmd(struct strvec *out, const char **argv)
 {
 	if (!argv[0])
 		BUG("shell command is empty");
 
 	if (strcspn(argv[0], "|&;<>()$`\\\"' \t\n*?[#~=%") != strlen(argv[0])) {
-#ifndef GIT_WINDOWS_NATIVE
-		strvec_push(out, SHELL_PATH);
-#else
-		strvec_push(out, "sh");
-#endif
+		strvec_push_nodup(out, git_shell_path());
 		strvec_push(out, "-c");
 
 		/*
@@ -301,7 +317,6 @@ enum child_errcode {
 	CHILD_ERR_DUP2,
 	CHILD_ERR_CLOSE,
 	CHILD_ERR_SIGPROCMASK,
-	CHILD_ERR_ENOENT,
 	CHILD_ERR_SILENT,
 	CHILD_ERR_ERRNO
 };
@@ -341,19 +356,19 @@ static void child_close_pair(int fd[2])
 	child_close(fd[1]);
 }
 
-static void child_error_fn(const char *err, va_list params)
+static void child_error_fn(const char *err UNUSED, va_list params UNUSED)
 {
 	const char msg[] = "error() should not be called in child\n";
 	xwrite(2, msg, sizeof(msg) - 1);
 }
 
-static void child_warn_fn(const char *err, va_list params)
+static void child_warn_fn(const char *err UNUSED, va_list params UNUSED)
 {
 	const char msg[] = "warn() should not be called in child\n";
 	xwrite(2, msg, sizeof(msg) - 1);
 }
 
-static void NORETURN child_die_fn(const char *err, va_list params)
+static void NORETURN child_die_fn(const char *err UNUSED, va_list params UNUSED)
 {
 	const char msg[] = "die() should not be called in child\n";
 	xwrite(2, msg, sizeof(msg) - 1);
@@ -383,9 +398,6 @@ static void child_err_spew(struct child_process *cmd, struct child_err *cerr)
 		break;
 	case CHILD_ERR_SIGPROCMASK:
 		error_errno("sigprocmask failed restoring signals");
-		break;
-	case CHILD_ERR_ENOENT:
-		error_errno("cannot run %s", cmd->args.v[0]);
 		break;
 	case CHILD_ERR_SILENT:
 		break;
@@ -503,7 +515,13 @@ static void atfork_prepare(struct atfork_state *as)
 {
 	sigset_t all;
 
-	if (sigfillset(&all))
+	/*
+	 * POSIX says sigfillset() can fail, but an overly clever
+	 * compiler can see through the header files and decide
+	 * it cannot fail on a particular platform it is compiling for,
+	 * triggering -Wunreachable-code false positive.
+	 */
+	if (NOT_CONSTANT(sigfillset(&all)))
 		die_errno("sigfillset");
 #ifdef NO_PTHREADS
 	if (sigprocmask(SIG_SETMASK, &all, &as->old))
@@ -661,7 +679,7 @@ int start_command(struct child_process *cmd)
 	int need_in, need_out, need_err;
 	int fdin[2], fdout[2], fderr[2];
 	int failed_errno;
-	char *str;
+	const char *str;
 
 	/*
 	 * In case of errors we must keep the promise to close FDs
@@ -743,6 +761,8 @@ fail_pipe:
 			error_errno("cannot run %s", cmd->args.v[0]);
 		goto end_of_spawn;
 	}
+
+	trace_argv_printf(&argv.v[1], "trace: start_command:");
 
 	if (pipe(notify_pipe))
 		notify_pipe[0] = notify_pipe[1] = -1;
@@ -840,13 +860,9 @@ fail_pipe:
 			execve(argv.v[0], (char *const *) argv.v,
 			       (char *const *) childenv);
 
-		if (errno == ENOENT) {
-			if (cmd->silent_exec_failure)
-				child_die(CHILD_ERR_SILENT);
-			child_die(CHILD_ERR_ENOENT);
-		} else {
-			child_die(CHILD_ERR_ERRNO);
-		}
+		if (cmd->silent_exec_failure && errno == ENOENT)
+			child_die(CHILD_ERR_SILENT);
+		child_die(CHILD_ERR_ERRNO);
 	}
 	atfork_parent(&as);
 	if (cmd->pid < 0)
@@ -915,6 +931,7 @@ end_of_spawn:
 	else if (cmd->use_shell)
 		cmd->args.v = prepare_shell_cmd(&nargv, sargv);
 
+	trace_argv_printf(cmd->args.v, "trace: start_command:");
 	cmd->pid = mingw_spawnvpe(cmd->args.v[0], cmd->args.v,
 				  (char**) cmd->env.v,
 				  cmd->dir, fhin, fhout, fherr);
@@ -1019,7 +1036,7 @@ static void *run_thread(void *data)
 		sigset_t mask;
 		sigemptyset(&mask);
 		sigaddset(&mask, SIGPIPE);
-		if (pthread_sigmask(SIG_BLOCK, &mask, NULL) < 0) {
+		if (pthread_sigmask(SIG_BLOCK, &mask, NULL)) {
 			ret = error("unable to block SIGPIPE in async thread");
 			return (void *)ret;
 		}
@@ -1586,6 +1603,14 @@ static int pp_start_one(struct parallel_processes *pp,
 	if (i == opts->processes)
 		BUG("bookkeeping is hard");
 
+	/*
+	 * By default, do not inherit stdin from the parent process - otherwise,
+	 * all children would share stdin! Users may overwrite this to provide
+	 * something to the child's stdin by having their 'get_next_task'
+	 * callback assign 0 to .no_stdin and an appropriate integer to .in.
+	 */
+	pp->children[i].process.no_stdin = 1;
+
 	code = opts->get_next_task(&pp->children[i].process,
 				   opts->ungroup ? NULL : &pp->children[i].err,
 				   opts->data,
@@ -1601,7 +1626,6 @@ static int pp_start_one(struct parallel_processes *pp,
 		pp->children[i].process.err = -1;
 		pp->children[i].process.stdout_to_stderr = 1;
 	}
-	pp->children[i].process.no_stdin = 1;
 
 	if (start_command(&pp->children[i].process)) {
 		if (opts->start_failure)
@@ -1632,9 +1656,7 @@ static void pp_buffer_stderr(struct parallel_processes *pp,
 			     const struct run_process_parallel_opts *opts,
 			     int output_timeout)
 {
-	int i;
-
-	while ((i = poll(pp->pfd, opts->processes, output_timeout) < 0)) {
+	while (poll(pp->pfd, opts->processes, output_timeout) < 0) {
 		if (errno == EINTR)
 			continue;
 		pp_cleanup(pp, opts);
@@ -1750,7 +1772,8 @@ void run_processes_parallel(const struct run_process_parallel_opts *opts)
 
 	if (do_trace2)
 		trace2_region_enter_printf(tr2_category, tr2_label, NULL,
-					   "max:%d", opts->processes);
+					   "max:%"PRIuMAX,
+					   (uintmax_t)opts->processes);
 
 	pp_init(&pp, opts, &pp_sig);
 	while (1) {
@@ -1790,20 +1813,37 @@ void run_processes_parallel(const struct run_process_parallel_opts *opts)
 		trace2_region_leave(tr2_category, tr2_label, NULL);
 }
 
-int run_auto_maintenance(int quiet)
+int prepare_auto_maintenance(int quiet, struct child_process *maint)
 {
-	int enabled;
-	struct child_process maint = CHILD_PROCESS_INIT;
+	int enabled, auto_detach;
 
 	if (!git_config_get_bool("maintenance.auto", &enabled) &&
 	    !enabled)
 		return 0;
 
-	maint.git_cmd = 1;
-	maint.close_object_store = 1;
-	strvec_pushl(&maint.args, "maintenance", "run", "--auto", NULL);
-	strvec_push(&maint.args, quiet ? "--quiet" : "--no-quiet");
+	/*
+	 * When `maintenance.autoDetach` isn't set, then we fall back to
+	 * honoring `gc.autoDetach`. This is somewhat weird, but required to
+	 * retain behaviour from when we used to run git-gc(1) here.
+	 */
+	if (git_config_get_bool("maintenance.autodetach", &auto_detach) &&
+	    git_config_get_bool("gc.autodetach", &auto_detach))
+		auto_detach = 1;
 
+	maint->git_cmd = 1;
+	maint->close_object_store = 1;
+	strvec_pushl(&maint->args, "maintenance", "run", "--auto", NULL);
+	strvec_push(&maint->args, quiet ? "--quiet" : "--no-quiet");
+	strvec_push(&maint->args, auto_detach ? "--detach" : "--no-detach");
+
+	return 1;
+}
+
+int run_auto_maintenance(int quiet)
+{
+	struct child_process maint = CHILD_PROCESS_INIT;
+	if (!prepare_auto_maintenance(quiet, &maint))
+		return 0;
 	return run_command(&maint);
 }
 
@@ -1853,7 +1893,7 @@ enum start_bg_result start_bg_command(struct child_process *cmd,
 		 *
 		 * We also assume that `start_command()` does not add
 		 * us to the cleanup list.  And that it calls
-		 * calls `child_process_clear()`.
+		 * `child_process_clear()`.
 		 */
 		sbgr = SBGR_ERROR;
 		goto done;

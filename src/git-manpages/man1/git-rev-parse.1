@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-rev-parse
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-REV\-PARSE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-REV\-PARSE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,12 +32,13 @@ git-rev-parse \- Pick out and massage parameters
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit rev\-parse\fR [<options>] <args>\&...
+\fIgit rev\-parse\fR [<options>] <arg>\&...\:
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Many Git porcelainish commands take mixture of flags (i\&.e\&. parameters that begin with a dash \fI\-\fR) and parameters meant for the underlying \fIgit rev\-list\fR command they use internally and flags and parameters for the other commands they use downstream of \fIgit rev\-list\fR\&. This command is used to distinguish between them\&.
+Many Git porcelainish commands take a mixture of flags (i\&.e\&. parameters that begin with a dash \fI\-\fR) and parameters meant for the underlying \fIgit rev\-list\fR command they use internally and flags and parameters for the other commands they use downstream of \fIgit rev\-list\fR\&. The primary purpose of this command is to allow calling programs to distinguish between them\&. There are a few other operation modes that have nothing to do with the above "help parse command line options"\&.
+.sp
+Unless otherwise specified, most of the options and operation modes require you to run this command inside a git repository or a working tree that is under the control of a git repository, and will give you a fatal error otherwise\&.
 .SH "OPTIONS"
 .SS "Operation Modes"
 .sp
@@ -47,7 +48,7 @@ Each of these options must appear first on the command line\&.
 .RS 4
 Use
 \fIgit rev\-parse\fR
-in option parsing mode (see PARSEOPT section below)\&.
+in option parsing mode (see PARSEOPT section below)\&. The command in this mode can be used outside a repository or a working tree controlled by a repository\&.
 .RE
 .PP
 \-\-sq\-quote
@@ -56,7 +57,7 @@ Use
 \fIgit rev\-parse\fR
 in shell quoting mode (see SQ\-QUOTE section below)\&. In contrast to the
 \fB\-\-sq\fR
-option below, this mode does only quoting\&. Nothing else is done to command input\&.
+option below, this mode only does quoting\&. Nothing else is done to command input\&. The command in this mode can be used outside a repository or a working tree controlled by a repository\&.
 .RE
 .SS "Options for \-\-parseopt"
 .PP
@@ -112,7 +113,7 @@ Do not output flag parameters\&.
 \-\-default <arg>
 .RS 4
 If there is no parameter given by the user, use
-\fB<arg>\fR
+\fI<arg>\fR
 instead\&.
 .RE
 .PP
@@ -121,9 +122,9 @@ instead\&.
 Behave as if
 \fIgit rev\-parse\fR
 was invoked from the
-\fB<arg>\fR
+\fI<arg>\fR
 subdirectory of the working tree\&. Any relative filenames are resolved as if they are prefixed by
-\fB<arg>\fR
+\fI<arg>\fR
 and will be printed in that form\&.
 .sp
 This can be used to convert arguments to a command run in a subdirectory so that they can still be used after moving to the top\-level of the repository\&. For example:
@@ -134,13 +135,12 @@ This can be used to convert arguments to a command run in a subdirectory so that
 .nf
 prefix=$(git rev\-parse \-\-show\-prefix)
 cd "$(git rev\-parse \-\-show\-toplevel)"
-# rev\-parse provides the \-\- needed for \(aqset\(aq
+# rev\-parse provides the \-\- needed for \*(Aqset\*(Aq
 eval "set $(git rev\-parse \-\-sq \-\-prefix "$prefix" \-\- "$@")"
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .PP
 \-\-verify
@@ -148,16 +148,17 @@ eval "set $(git rev\-parse \-\-sq \-\-prefix "$prefix" \-\- "$@")"
 Verify that exactly one parameter is provided, and that it can be turned into a raw 20\-byte SHA\-1 that can be used to access the object database\&. If so, emit it to the standard output; otherwise, error out\&.
 .sp
 If you want to make sure that the output actually names an object in your object database and/or can be used as a specific type of object you require, you can add the
-\fB^{type}\fR
-peeling operator to the parameter\&. For example,
-\fBgit rev\-parse "$VAR^{commit}"\fR
-will make sure
+\fB^\fR{type} peeling operator to the parameter\&. For example,
+\fBgit\fR
+\fBrev\-parse\fR
+"$VAR^{commit}" will make sure
 \fB$VAR\fR
 names an existing object that is a commit\-ish (i\&.e\&. a commit, or an annotated tag that points at a commit)\&. To make sure that
 \fB$VAR\fR
 names an existing object of any type,
-\fBgit rev\-parse "$VAR^{object}"\fR
-can be used\&.
+\fBgit\fR
+\fBrev\-parse\fR
+"$VAR^{object}" can be used\&.
 .sp
 Note that if you are verifying a name from an untrusted source, it is wise to use
 \fB\-\-end\-of\-options\fR
@@ -181,7 +182,7 @@ with
 option, the command input is still interpreted as usual\&.
 .RE
 .PP
-\-\-short[=length]
+\-\-short[=<length>]
 .RS 4
 Same as
 \fB\-\-verify\fR
@@ -216,7 +217,43 @@ prefix); this option makes them output in a form as close to the original input 
 .PP
 \-\-symbolic\-full\-name
 .RS 4
-This is similar to \-\-symbolic, but it omits input that are not refs (i\&.e\&. branch or tag names; or more explicitly disambiguating "heads/master" form, when you want to name the "master" branch when there is an unfortunately named tag "master"), and show them as full refnames (e\&.g\&. "refs/heads/master")\&.
+This is similar to \-\-symbolic, but it omits input that are not refs (i\&.e\&. branch or tag names; or more explicitly disambiguating "heads/master" form, when you want to name the "master" branch when there is an unfortunately named tag "master"), and shows them as full refnames (e\&.g\&. "refs/heads/master")\&.
+.RE
+.PP
+\-\-output\-object\-format=(sha1|sha256|storage)
+.RS 4
+Allow oids to be input from any object format that the current repository supports\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+Specifying "sha1" translates if necessary and returns a sha1 oid\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+Specifying "sha256" translates if necessary and returns a sha256 oid\&.
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+Specifying "storage" translates if necessary and returns an oid in
+encoded in the storage hash algorithm\&.
+.fi
+.if n \{\
+.RE
+.\}
 .RE
 .SS "Options for Objects"
 .PP
@@ -226,7 +263,7 @@ Show all refs found in
 \fBrefs/\fR\&.
 .RE
 .PP
-\-\-branches[=pattern], \-\-tags[=pattern], \-\-remotes[=pattern]
+\-\-branches[=<pattern>], \-\-tags[=<pattern>], \-\-remotes[=<pattern>]
 .RS 4
 Show all branches, tags, or remote\-tracking branches, respectively (i\&.e\&., refs found in
 \fBrefs/heads\fR,
@@ -235,19 +272,17 @@ Show all branches, tags, or remote\-tracking branches, respectively (i\&.e\&., r
 .sp
 If a
 \fBpattern\fR
-is given, only refs matching the given shell glob are shown\&. If the pattern does not contain a globbing character (\fB?\fR,
-\fB*\fR, or
-\fB[\fR), it is turned into a prefix match by appending
+is given, only refs matching the given shell glob are shown\&. If the pattern does not contain a globbing character (?,
+\fB*\fR, or [), it is turned into a prefix match by appending
 \fB/*\fR\&.
 .RE
 .PP
-\-\-glob=pattern
+\-\-glob=<pattern>
 .RS 4
 Show all refs matching the shell glob pattern
 \fBpattern\fR\&. If the pattern does not start with
-\fBrefs/\fR, this is automatically prepended\&. If the pattern does not contain a globbing character (\fB?\fR,
-\fB*\fR, or
-\fB[\fR), it is turned into a prefix match by appending
+\fBrefs/\fR, this is automatically prepended\&. If the pattern does not contain a globbing character (?,
+\fB*\fR, or [), it is turned into a prefix match by appending
 \fB/*\fR\&.
 .RE
 .PP
@@ -286,13 +321,15 @@ or
 is intended, it must be given explicitly\&.
 .RE
 .PP
-\-\-exclude\-hidden=[receive|uploadpack]
+\-\-exclude\-hidden=(fetch|receive|uploadpack)
 .RS 4
 Do not include refs that would be hidden by
+\fBgit\-fetch\fR,
 \fBgit\-receive\-pack\fR
 or
 \fBgit\-upload\-pack\fR
 by consulting the appropriate
+\fBfetch\&.hideRefs\fR,
 \fBreceive\&.hideRefs\fR
 or
 \fBuploadpack\&.hideRefs\fR
@@ -352,7 +389,7 @@ Check if <path> is a valid repository or a gitfile that points at a valid reposi
 .PP
 \-\-git\-path <path>
 .RS 4
-Resolve "$GIT_DIR/<path>" and takes other path relocation variables such as $GIT_OBJECT_DIRECTORY, $GIT_INDEX_FILE\&... into account\&. For example, if $GIT_OBJECT_DIRECTORY is set to /foo/bar then "git rev\-parse \-\-git\-path objects/abc" returns /foo/bar/abc\&.
+Resolve "$GIT_DIR/<path>" and takes other path relocation variables such as $GIT_OBJECT_DIRECTORY, $GIT_INDEX_FILE\&...\: into account\&. For example, if $GIT_OBJECT_DIRECTORY is set to /foo/bar then "git rev\-parse \-\-git\-path objects/abc" returns /foo/bar/abc\&.
 .RE
 .PP
 \-\-show\-toplevel
@@ -410,25 +447,29 @@ When the command is invoked from a subdirectory, show the path of the current di
 .PP
 \-\-show\-object\-format[=(storage|input|output)]
 .RS 4
-Show the object format (hash algorithm) used for the repository for storage inside the
-\fB\&.git\fR
+Show the object format (hash algorithm) used for the repository for storage inside the \&.\fBgit\fR
 directory, input, or output\&. For input, multiple algorithms may be printed, space\-separated\&. If not specified, the default is "storage"\&.
+.RE
+.PP
+\-\-show\-ref\-format
+.RS 4
+Show the reference storage format used for the repository\&.
 .RE
 .SS "Other Options"
 .PP
-\-\-since=datestring, \-\-after=datestring
+\-\-since=<datestring>, \-\-after=<datestring>
 .RS 4
 Parse the date string, and output the corresponding \-\-max\-age= parameter for
 \fIgit rev\-list\fR\&.
 .RE
 .PP
-\-\-until=datestring, \-\-before=datestring
+\-\-until=<datestring>, \-\-before=<datestring>
 .RS 4
 Parse the date string, and output the corresponding \-\-min\-age= parameter for
 \fIgit rev\-list\fR\&.
 .RE
 .PP
-<args>\&...
+<arg>\&...\:
 .RS 4
 Flags and parameters to be parsed\&.
 .RE
@@ -460,7 +501,8 @@ The full SHA\-1 object name (40\-byte hexadecimal string), or a leading substrin
 \fI<describeOutput>\fR, e\&.g\&. \fIv1\&.7\&.4\&.2\-679\-g3bee7fb\fR
 .RS 4
 Output from
-\fBgit describe\fR; i\&.e\&. a closest tag, optionally followed by a dash and a number of commits, followed by a dash, a
+\fBgit\fR
+\fBdescribe\fR; i\&.e\&. a closest tag, optionally followed by a dash and a number of commits, followed by a dash, a
 \fIg\fR, and an abbreviated object name\&.
 .RE
 .PP
@@ -492,9 +534,13 @@ exists, that is what you mean (this is usually useful only for
 \fBHEAD\fR,
 \fBFETCH_HEAD\fR,
 \fBORIG_HEAD\fR,
-\fBMERGE_HEAD\fR
+\fBMERGE_HEAD\fR,
+\fBREBASE_HEAD\fR,
+\fBREVERT_HEAD\fR,
+\fBCHERRY_PICK_HEAD\fR,
+\fBBISECT_HEAD\fR
 and
-\fBCHERRY_PICK_HEAD\fR);
+\fBAUTO_MERGE\fR);
 .RE
 .sp
 .RS 4
@@ -560,25 +606,79 @@ if it exists;
 otherwise,
 \fIrefs/remotes/<refname>/HEAD\fR
 if it exists\&.
-.sp
+.PP
 \fBHEAD\fR
+.RS 4
 names the commit on which you based the changes in the working tree\&.
+.RE
+.PP
 \fBFETCH_HEAD\fR
+.RS 4
 records the branch which you fetched from a remote repository with your last
-\fBgit fetch\fR
+\fBgit\fR
+\fBfetch\fR
 invocation\&.
+.RE
+.PP
 \fBORIG_HEAD\fR
+.RS 4
 is created by commands that move your
 \fBHEAD\fR
-in a drastic way, to record the position of the
+in a drastic way (\fBgit\fR
+\fBam\fR,
+\fBgit\fR
+\fBmerge\fR,
+\fBgit\fR
+\fBrebase\fR,
+\fBgit\fR
+\fBreset\fR), to record the position of the
 \fBHEAD\fR
 before their operation, so that you can easily change the tip of the branch back to the state before you ran them\&.
+.RE
+.PP
 \fBMERGE_HEAD\fR
+.RS 4
 records the commit(s) which you are merging into your branch when you run
-\fBgit merge\fR\&.
+\fBgit\fR
+\fBmerge\fR\&.
+.RE
+.PP
+\fBREBASE_HEAD\fR
+.RS 4
+during a rebase, records the commit at which the operation is currently stopped, either because of conflicts or an
+\fBedit\fR
+command in an interactive rebase\&.
+.RE
+.PP
+\fBREVERT_HEAD\fR
+.RS 4
+records the commit which you are reverting when you run
+\fBgit\fR
+\fBrevert\fR\&.
+.RE
+.PP
 \fBCHERRY_PICK_HEAD\fR
+.RS 4
 records the commit which you are cherry\-picking when you run
-\fBgit cherry\-pick\fR\&.
+\fBgit\fR
+\fBcherry\-pick\fR\&.
+.RE
+.PP
+\fBBISECT_HEAD\fR
+.RS 4
+records the current commit to be tested when you run
+\fBgit\fR
+\fBbisect\fR
+\fB\-\-no\-checkout\fR\&.
+.RE
+.PP
+\fBAUTO_MERGE\fR
+.RS 4
+records a tree object corresponding to the state the
+\fIort\fR
+merge strategy wrote to the working tree when a merge operation resulted in conflicts\&.
+.RE
+.RE
 .sp
 Note that any of the
 \fIrefs/*\fR
@@ -587,7 +687,6 @@ cases above may come either from the
 directory or from the
 \fB$GIT_DIR/packed\-refs\fR
 file\&. While the ref name encoding is unspecified, UTF\-8 is preferred as some output processing may assume ref names in UTF\-8\&.
-.RE
 .RE
 .PP
 \fI@\fR
@@ -653,7 +752,8 @@ means the <n>th branch/commit checked out before the current one\&.
 \fI[<branchname>]@{upstream}\fR, e\&.g\&. \fImaster@{upstream}\fR, \fI@{u}\fR
 .RS 4
 A branch B may be set up to build on top of a branch X (configured with
-\fBbranch\&.<name>\&.merge\fR) at a remote R (configured with the branch X taken from remote R, typically found at
+\fBbranch\&.\fR\fI<name>\fR\fB\&.merge\fR) at a remote R (configured with
+\fBbranch\&.\fR\fI<name>\fR\fB\&.remote\fR)\&. B@{u} refers to the remote\-tracking branch for the branch X taken from remote R, typically found at
 \fBrefs/remotes/R/X\fR\&.
 .RE
 .PP
@@ -662,7 +762,8 @@ A branch B may be set up to build on top of a branch X (configured with
 The suffix
 \fI@{push}\fR
 reports the branch "where we would push to" if
-\fBgit push\fR
+\fBgit\fR
+\fBpush\fR
 were run while
 \fBbranchname\fR
 was checked out (or the current
@@ -856,7 +957,7 @@ J = F^2  = B^3^2   = A^^3^2
 .\}
 .SH "SPECIFYING RANGES"
 .sp
-History traversing commands such as \fBgit log\fR operate on a set of commits, not just a single commit\&.
+History traversing commands such as \fBgit\fR \fBlog\fR operate on a set of commits, not just a single commit\&.
 .sp
 For these commands, specifying a single revision, using the notation described in the previous section, means the set of commits \fBreachable\fR from the given commit\&.
 .sp
@@ -1037,9 +1138,9 @@ Here are a handful of examples using the Loeliger illustration above, with each 
 .\}
 .SH "PARSEOPT"
 .sp
-In \fB\-\-parseopt\fR mode, \fIgit rev\-parse\fR helps massaging options to bring to shell scripts the same facilities C builtins have\&. It works as an option normalizer (e\&.g\&. splits single switches aggregate values), a bit like \fBgetopt(1)\fR does\&.
+In \fB\-\-parseopt\fR mode, \fIgit rev\-parse\fR helps massaging options to bring to shell scripts the same facilities C builtins have\&. It works as an option normalizer (e\&.g\&. splits single switches aggregate values), a bit like \fBgetopt\fR(\fB1\fR) does\&.
 .sp
-It takes on the standard input the specification of the options to parse and understand, and echoes on the standard output a string suitable for \fBsh(1)\fR \fBeval\fR to replace the arguments with normalized ones\&. In case of error, it outputs usage on the standard error stream, and exits with code 129\&.
+It takes on the standard input the specification of the options to parse and understand, and echoes on the standard output a string suitable for \fBsh\fR(\fB1\fR) \fBeval\fR to replace the arguments with normalized ones\&. In case of error, it outputs usage on the standard error stream, and exits with code 129\&.
 .sp
 Note: Make sure you quote the result when passing it to \fBeval\fR\&. See below for an example\&.
 .SS "Input Format"
@@ -1057,31 +1158,26 @@ Each line of options has this format:
 .if n \{\
 .RE
 .\}
-.sp
-
 .PP
-\fB<opt\-spec>\fR
+\fI<opt\-spec>\fR
 .RS 4
 its format is the short option character, then the long option name separated by a comma\&. Both parts are not required, though at least one is necessary\&. May not contain any of the
-\fB<flags>\fR
+\fI<flags>\fR
 characters\&.
-\fBh,help\fR,
+\fBh\fR,help,
 \fBdry\-run\fR
 and
 \fBf\fR
 are examples of correct
-\fB<opt\-spec>\fR\&.
+\fI<opt\-spec>\fR\&.
 .RE
 .PP
-\fB<flags>\fR
+\fI<flags>\fR
 .RS 4
-\fB<flags>\fR
+\fI<flags>\fR
 are of
 \fB*\fR,
-\fB=\fR,
-\fB?\fR
-or
-\fB!\fR\&.
+\fB=\fR, ? or !\&.
 .sp
 .RS 4
 .ie n \{\
@@ -1104,9 +1200,7 @@ if the option takes an argument\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-Use
-\fB?\fR
-to mean that the option takes an optional argument\&. You probably want to use the
+Use ? to mean that the option takes an optional argument\&. You probably want to use the
 \fB\-\-stuck\-long\fR
 mode to be able to unambiguously parse the optional argument\&.
 .RE
@@ -1137,20 +1231,18 @@ as documented in
 .sp -1
 .IP \(bu 2.3
 .\}
-Use
-\fB!\fR
-to not make the corresponding negated long option available\&.
+Use ! to not make the corresponding negated long option available\&.
 .RE
 .RE
 .PP
-\fB<arg\-hint>\fR
+\fI<arg\-hint>\fR
 .RS 4
-\fB<arg\-hint>\fR, if specified, is used as a name of the argument in the help output, for options that take arguments\&.
-\fB<arg\-hint>\fR
+\fI<arg\-hint>\fR, if specified, is used as a name of the argument in the help output, for options that take arguments\&.
+\fI<arg\-hint>\fR
 is terminated by the first whitespace\&. It is customary to use a dash to separate words in a multi\-word argument hint\&.
 .RE
 .sp
-The remainder of the line, after stripping the spaces, is used as the help associated to the option\&.
+The remainder of the line, after stripping the spaces, is used as the help associated with the option\&.
 .sp
 Blank lines are ignored, and lines that don\(cqt match this specification are used as option group headers (start the line with a space to create such lines on purpose)\&.
 .SS "Example"
@@ -1164,7 +1256,7 @@ some\-command [<options>] <args>\&.\&.\&.
 
 some\-command does foo and bar!
 \-\-
-h,help    show the help
+h,help!   show the help
 
 foo       some nifty option \-\-foo
 bar=      some cool option \-\-bar with an argument
@@ -1179,10 +1271,9 @@ eval "$(echo "$OPTS_SPEC" | git rev\-parse \-\-parseopt \-\- "$@" || echo exit $
 .if n \{\
 .RE
 .\}
-.sp
 .SS "Usage text"
 .sp
-When \fB"$@"\fR is \fB\-h\fR or \fB\-\-help\fR in the above example, the following usage text would be shown:
+When "$@" is \fB\-h\fR or \fB\-\-help\fR in the above example, the following usage text would be shown:
 .sp
 .if n \{\
 .RS 4
@@ -1193,10 +1284,10 @@ usage: some\-command [<options>] <args>\&.\&.\&.
     some\-command does foo and bar!
 
     \-h, \-\-help            show the help
-    \-\-foo                 some nifty option \-\-foo
-    \-\-bar \&.\&.\&.             some cool option \-\-bar with an argument
-    \-\-baz <arg>           another cool option \-\-baz with a named argument
-    \-\-qux[=<path>]        qux may take a path argument but has meaning by itself
+    \-\-[no\-]foo            some nifty option \-\-foo
+    \-\-[no\-]bar \&.\&.\&.        some cool option \-\-bar with an argument
+    \-\-[no\-]baz <arg>      another cool option \-\-baz with a named argument
+    \-\-[no\-]qux[=<path>]   qux may take a path argument but has meaning by itself
 
 An option group Header
     \-C[\&.\&.\&.]               option C with an optional argument
@@ -1204,10 +1295,9 @@ An option group Header
 .if n \{\
 .RE
 .\}
-.sp
 .SH "SQ\-QUOTE"
 .sp
-In \fB\-\-sq\-quote\fR mode, \fIgit rev\-parse\fR echoes on the standard output a single line suitable for \fBsh(1)\fR \fBeval\fR\&. This line is made by normalizing the arguments following \fB\-\-sq\-quote\fR\&. Nothing other than quoting the arguments is done\&.
+In \fB\-\-sq\-quote\fR mode, \fIgit rev\-parse\fR echoes on the standard output a single line suitable for \fBsh\fR(\fB1\fR) \fBeval\fR\&. This line is made by normalizing the arguments following \fB\-\-sq\-quote\fR\&. Nothing other than quoting the arguments is done\&.
 .sp
 If you want command input to still be interpreted as usual by \fIgit rev\-parse\fR before the output is shell quoted, see the \fB\-\-sq\fR option\&.
 .SS "Example"
@@ -1224,12 +1314,11 @@ command="git frotz \-n24 $args"          # and use it inside a handcrafted
 eval "$command"
 EOF
 
-$ sh your\-git\-script\&.sh "a b\(aqc"
+$ sh your\-git\-script\&.sh "a b\*(Aqc"
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .SH "EXAMPLES"
 .sp
 .RS 4
@@ -1251,7 +1340,6 @@ $ git rev\-parse \-\-verify HEAD
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .sp
 .RS 4

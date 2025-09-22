@@ -5,8 +5,13 @@ test_description='test automatic tag following'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
+
+if ! test_have_prereq PERL_TEST_HELPERS
+then
+	skip_all='skipping tagfollow tests; Perl not available'
+	test_done
+fi
 
 # End state of the repository:
 #
@@ -159,6 +164,20 @@ test_expect_success 'new clone fetch main and tags' '
 	) &&
 	get_needs $U >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success 'fetch specific OID with tag following' '
+	git init --bare clone3.git &&
+	(
+		cd clone3.git &&
+		git remote add origin .. &&
+		git fetch origin $B:refs/heads/main &&
+
+		git -C .. for-each-ref >expect &&
+		git for-each-ref >actual &&
+
+		test_cmp expect actual
+	)
 '
 
 test_done

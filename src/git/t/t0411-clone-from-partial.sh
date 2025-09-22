@@ -28,8 +28,7 @@ test_expect_success 'local clone must not fetch from promisor remote and execute
 	test_must_fail git clone \
 		--upload-pack="GIT_TEST_ASSUME_DIFFERENT_OWNER=true git-upload-pack" \
 		evil clone1 2>err &&
-	grep "detected dubious ownership" err &&
-	! grep "fake-upload-pack running" err &&
+	test_grep ! "fake-upload-pack running" err &&
 	test_path_is_missing script-executed
 '
 
@@ -38,8 +37,7 @@ test_expect_success 'clone from file://... must not fetch from promisor remote a
 	test_must_fail git clone \
 		--upload-pack="GIT_TEST_ASSUME_DIFFERENT_OWNER=true git-upload-pack" \
 		"file://$(pwd)/evil" clone2 2>err &&
-	grep "detected dubious ownership" err &&
-	! grep "fake-upload-pack running" err &&
+	test_grep ! "fake-upload-pack running" err &&
 	test_path_is_missing script-executed
 '
 
@@ -48,22 +46,21 @@ test_expect_success 'fetch from file://... must not fetch from promisor remote a
 	test_must_fail git fetch \
 		--upload-pack="GIT_TEST_ASSUME_DIFFERENT_OWNER=true git-upload-pack" \
 		"file://$(pwd)/evil" 2>err &&
-	grep "detected dubious ownership" err &&
-	! grep "fake-upload-pack running" err &&
+	test_grep ! "fake-upload-pack running" err &&
 	test_path_is_missing script-executed
 '
 
 test_expect_success 'pack-objects should fetch from promisor remote and execute script' '
 	rm -f script-executed &&
 	echo "HEAD" | test_must_fail git -C evil pack-objects --revs --stdout >/dev/null 2>err &&
-	grep "fake-upload-pack running" err &&
+	test_grep "fake-upload-pack running" err &&
 	test_path_is_file script-executed
 '
 
 test_expect_success 'clone from promisor remote does not lazy-fetch by default' '
 	rm -f script-executed &&
 	test_must_fail git clone evil no-lazy 2>err &&
-	grep "lazy fetching disabled" err &&
+	test_grep "lazy fetching disabled" err &&
 	test_path_is_missing script-executed
 '
 
@@ -71,7 +68,7 @@ test_expect_success 'promisor lazy-fetching can be re-enabled' '
 	rm -f script-executed &&
 	test_must_fail env GIT_NO_LAZY_FETCH=0 \
 		git clone evil lazy-ok 2>err &&
-	grep "fake-upload-pack running" err &&
+	test_grep "fake-upload-pack running" err &&
 	test_path_is_file script-executed
 '
 

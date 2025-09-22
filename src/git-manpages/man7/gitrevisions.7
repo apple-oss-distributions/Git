@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitrevisions
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITREVISIONS" "7" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITREVISIONS" "7" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -65,7 +65,8 @@ The full SHA\-1 object name (40\-byte hexadecimal string), or a leading substrin
 \fI<describeOutput>\fR, e\&.g\&. \fIv1\&.7\&.4\&.2\-679\-g3bee7fb\fR
 .RS 4
 Output from
-\fBgit describe\fR; i\&.e\&. a closest tag, optionally followed by a dash and a number of commits, followed by a dash, a
+\fBgit\fR
+\fBdescribe\fR; i\&.e\&. a closest tag, optionally followed by a dash and a number of commits, followed by a dash, a
 \fIg\fR, and an abbreviated object name\&.
 .RE
 .PP
@@ -97,9 +98,13 @@ exists, that is what you mean (this is usually useful only for
 \fBHEAD\fR,
 \fBFETCH_HEAD\fR,
 \fBORIG_HEAD\fR,
-\fBMERGE_HEAD\fR
+\fBMERGE_HEAD\fR,
+\fBREBASE_HEAD\fR,
+\fBREVERT_HEAD\fR,
+\fBCHERRY_PICK_HEAD\fR,
+\fBBISECT_HEAD\fR
 and
-\fBCHERRY_PICK_HEAD\fR);
+\fBAUTO_MERGE\fR);
 .RE
 .sp
 .RS 4
@@ -165,25 +170,79 @@ if it exists;
 otherwise,
 \fIrefs/remotes/<refname>/HEAD\fR
 if it exists\&.
-.sp
+.PP
 \fBHEAD\fR
+.RS 4
 names the commit on which you based the changes in the working tree\&.
+.RE
+.PP
 \fBFETCH_HEAD\fR
+.RS 4
 records the branch which you fetched from a remote repository with your last
-\fBgit fetch\fR
+\fBgit\fR
+\fBfetch\fR
 invocation\&.
+.RE
+.PP
 \fBORIG_HEAD\fR
+.RS 4
 is created by commands that move your
 \fBHEAD\fR
-in a drastic way, to record the position of the
+in a drastic way (\fBgit\fR
+\fBam\fR,
+\fBgit\fR
+\fBmerge\fR,
+\fBgit\fR
+\fBrebase\fR,
+\fBgit\fR
+\fBreset\fR), to record the position of the
 \fBHEAD\fR
 before their operation, so that you can easily change the tip of the branch back to the state before you ran them\&.
+.RE
+.PP
 \fBMERGE_HEAD\fR
+.RS 4
 records the commit(s) which you are merging into your branch when you run
-\fBgit merge\fR\&.
+\fBgit\fR
+\fBmerge\fR\&.
+.RE
+.PP
+\fBREBASE_HEAD\fR
+.RS 4
+during a rebase, records the commit at which the operation is currently stopped, either because of conflicts or an
+\fBedit\fR
+command in an interactive rebase\&.
+.RE
+.PP
+\fBREVERT_HEAD\fR
+.RS 4
+records the commit which you are reverting when you run
+\fBgit\fR
+\fBrevert\fR\&.
+.RE
+.PP
 \fBCHERRY_PICK_HEAD\fR
+.RS 4
 records the commit which you are cherry\-picking when you run
-\fBgit cherry\-pick\fR\&.
+\fBgit\fR
+\fBcherry\-pick\fR\&.
+.RE
+.PP
+\fBBISECT_HEAD\fR
+.RS 4
+records the current commit to be tested when you run
+\fBgit\fR
+\fBbisect\fR
+\fB\-\-no\-checkout\fR\&.
+.RE
+.PP
+\fBAUTO_MERGE\fR
+.RS 4
+records a tree object corresponding to the state the
+\fIort\fR
+merge strategy wrote to the working tree when a merge operation resulted in conflicts\&.
+.RE
+.RE
 .sp
 Note that any of the
 \fIrefs/*\fR
@@ -192,7 +251,6 @@ cases above may come either from the
 directory or from the
 \fB$GIT_DIR/packed\-refs\fR
 file\&. While the ref name encoding is unspecified, UTF\-8 is preferred as some output processing may assume ref names in UTF\-8\&.
-.RE
 .RE
 .PP
 \fI@\fR
@@ -258,7 +316,8 @@ means the <n>th branch/commit checked out before the current one\&.
 \fI[<branchname>]@{upstream}\fR, e\&.g\&. \fImaster@{upstream}\fR, \fI@{u}\fR
 .RS 4
 A branch B may be set up to build on top of a branch X (configured with
-\fBbranch\&.<name>\&.merge\fR) at a remote R (configured with the branch X taken from remote R, typically found at
+\fBbranch\&.\fR\fI<name>\fR\fB\&.merge\fR) at a remote R (configured with
+\fBbranch\&.\fR\fI<name>\fR\fB\&.remote\fR)\&. B@{u} refers to the remote\-tracking branch for the branch X taken from remote R, typically found at
 \fBrefs/remotes/R/X\fR\&.
 .RE
 .PP
@@ -267,7 +326,8 @@ A branch B may be set up to build on top of a branch X (configured with
 The suffix
 \fI@{push}\fR
 reports the branch "where we would push to" if
-\fBgit push\fR
+\fBgit\fR
+\fBpush\fR
 were run while
 \fBbranchname\fR
 was checked out (or the current
@@ -461,7 +521,7 @@ J = F^2  = B^3^2   = A^^3^2
 .\}
 .SH "SPECIFYING RANGES"
 .sp
-History traversing commands such as \fBgit log\fR operate on a set of commits, not just a single commit\&.
+History traversing commands such as \fBgit\fR \fBlog\fR operate on a set of commits, not just a single commit\&.
 .sp
 For these commands, specifying a single revision, using the notation described in the previous section, means the set of commits \fBreachable\fR from the given commit\&.
 .sp

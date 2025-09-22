@@ -2,7 +2,10 @@
  * The Scalar command-line interface.
  */
 
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
+#include "abspath.h"
 #include "gettext.h"
 #include "parse-options.h"
 #include "config.h"
@@ -14,6 +17,8 @@
 #include "dir.h"
 #include "packfile.h"
 #include "help.h"
+#include "setup.h"
+#include "trace2.h"
 
 static void setup_enlistment_directory(int argc, const char **argv,
 				       const char * const *usagestr,
@@ -67,6 +72,7 @@ static void setup_enlistment_directory(int argc, const char **argv,
 	strbuf_release(&path);
 }
 
+LAST_ARG_MUST_BE_NULL
 static int run_git(const char *arg, ...)
 {
 	struct child_process cmd = CHILD_PROCESS_INIT;
@@ -143,6 +149,7 @@ static int set_recommended_config(int reconfigure)
 		{ "credential.validate", "false", 1 }, /* GCM4W-only */
 		{ "gc.auto", "0", 1 },
 		{ "gui.GCWarning", "false", 1 },
+		{ "index.skipHash", "false", 1 },
 		{ "index.threads", "true", 1 },
 		{ "index.version", "4", 1 },
 		{ "merge.stat", "false", 1 },
@@ -202,6 +209,12 @@ static int set_recommended_config(int reconfigure)
 	return 0;
 }
 
+/**
+ * Enable or disable the maintenance mode for the current repository:
+ *
+ * * If 'enable' is nonzero, run 'git maintenance start'.
+ * * If 'enable' is zero, run 'git maintenance unregister --force'.
+ */
 static int toggle_maintenance(int enable)
 {
 	return run_git("maintenance",
@@ -234,7 +247,7 @@ static int add_or_remove_enlistment(int add)
 
 static int start_fsmonitor_daemon(void)
 {
-	assert(have_fsmonitor_support());
+	ASSERT(have_fsmonitor_support());
 
 	if (fsmonitor_ipc__get_state() != IPC_STATE__LISTENING)
 		return run_git("fsmonitor--daemon", "start", NULL);
@@ -244,7 +257,7 @@ static int start_fsmonitor_daemon(void)
 
 static int stop_fsmonitor_daemon(void)
 {
-	assert(have_fsmonitor_support());
+	ASSERT(have_fsmonitor_support());
 
 	if (fsmonitor_ipc__get_state() == IPC_STATE__LISTENING)
 		return run_git("fsmonitor--daemon", "stop", NULL);
@@ -252,7 +265,15 @@ static int stop_fsmonitor_daemon(void)
 	return 0;
 }
 
-static int register_dir(void)
+/**
+ * Register the current directory as a Scalar enlistment, and set the
+ * recommended configuration.
+ *
+ * * If 'maintenance' is non-zero, then enable background maintenance.
+ * * If 'maintenance' is zero, then leave background maintenance as it is
+ *   currently configured.
+ */
+static int register_dir(int maintenance)
 {
 	if (add_or_remove_enlistment(1))
 		return error(_("could not add enlistment"));
@@ -260,8 +281,9 @@ static int register_dir(void)
 	if (set_recommended_config(0))
 		return error(_("could not set recommended config"));
 
-	if (toggle_maintenance(1))
-		return error(_("could not turn on maintenance"));
+	if (maintenance &&
+	    toggle_maintenance(maintenance))
+		warning(_("could not toggle maintenance"));
 
 	if (have_fsmonitor_support() && start_fsmonitor_daemon()) {
 		return error(_("could not start the FSMonitor daemon"));
@@ -284,6 +306,7 @@ static int unregister_dir(void)
 }
 
 /* printf-style interface, expects `<key>=<value>` argument */
+__attribute__((format (printf, 1, 2)))
 static int set_config(const char *fmt, ...)
 {
 	struct strbuf buf = STRBUF_INIT;
@@ -357,16 +380,13 @@ static char *remote_default_branch(const char *url)
 
 static int delete_enlistment(struct strbuf *enlistment)
 {
-#ifdef WIN32
 	struct strbuf parent = STRBUF_INIT;
 	size_t offset;
 	char *path_sep;
-#endif
 
 	if (unregister_dir())
 		return error(_("failed to unregister repository"));
 
-#ifdef WIN32
 	/*
 	 * Change the current directory to one outside of the enlistment so
 	 * that we may delete everything underneath it.
@@ -374,14 +394,13 @@ static int delete_enlistment(struct strbuf *enlistment)
 	offset = offset_1st_component(enlistment->buf);
 	path_sep = find_last_dir_sep(enlistment->buf + offset);
 	strbuf_add(&parent, enlistment->buf,
-		   path_sep ? path_sep - enlistment->buf : offset);
+		   path_sep ? (size_t) (path_sep - enlistment->buf) : offset);
 	if (chdir(parent.buf) < 0) {
 		int res = error_errno(_("could not switch to '%s'"), parent.buf);
 		strbuf_release(&parent);
 		return res;
 	}
 	strbuf_release(&parent);
-#endif
 
 	if (have_fsmonitor_support() && stop_fsmonitor_daemon())
 		return error(_("failed to stop the FSMonitor daemon"));
@@ -396,7 +415,8 @@ static int delete_enlistment(struct strbuf *enlistment)
  * Dummy implementation; Using `get_version_info()` would cause a link error
  * without this.
  */
-void load_builtin_commands(const char *prefix, struct cmdnames *cmds)
+void load_builtin_commands(const char *prefix UNUSED,
+			   struct cmdnames *cmds UNUSED)
 {
 	die("not implemented");
 }
@@ -404,7 +424,9 @@ void load_builtin_commands(const char *prefix, struct cmdnames *cmds)
 static int cmd_clone(int argc, const char **argv)
 {
 	const char *branch = NULL;
-	int full_clone = 0, single_branch = 0;
+	char *branch_to_free = NULL;
+	int full_clone = 0, single_branch = 0, show_progress = isatty(2);
+	int src = 1, tags = 1, maintenance = 1;
 	struct option clone_options[] = {
 		OPT_STRING('b', "branch", &branch, N_("<branch>"),
 			   N_("branch to checkout after clone")),
@@ -413,10 +435,17 @@ static int cmd_clone(int argc, const char **argv)
 		OPT_BOOL(0, "single-branch", &single_branch,
 			 N_("only download metadata for the branch that will "
 			    "be checked out")),
+		OPT_BOOL(0, "src", &src,
+			 N_("create repository within 'src' directory")),
+		OPT_BOOL(0, "tags", &tags,
+			 N_("specify if tags should be fetched during clone")),
+		OPT_BOOL(0, "maintenance", &maintenance,
+			 N_("specify if background maintenance should be enabled")),
 		OPT_END(),
 	};
 	const char * const clone_usage[] = {
-		N_("scalar clone [<options>] [--] <repo> [<dir>]"),
+		N_("scalar clone [--single-branch] [--branch <main-branch>] [--full-clone]\n"
+		   "\t[--[no-]src] [--[no-]tags] [--[no-]maintenance] <url> [<enlistment>]"),
 		NULL
 	};
 	const char *url;
@@ -452,7 +481,10 @@ static int cmd_clone(int argc, const char **argv)
 	if (is_directory(enlistment))
 		die(_("directory '%s' exists already"), enlistment);
 
-	dir = xstrfmt("%s/src", enlistment);
+	if (src)
+		dir = xstrfmt("%s/src", enlistment);
+	else
+		dir = xstrdup(enlistment);
 
 	strbuf_reset(&buf);
 	if (branch)
@@ -476,7 +508,7 @@ static int cmd_clone(int argc, const char **argv)
 	/* common-main already logs `argv` */
 	trace2_def_repo(the_repository);
 
-	if (!branch && !(branch = remote_default_branch(url))) {
+	if (!branch && !(branch = branch_to_free = remote_default_branch(url))) {
 		res = error(_("failed to get default branch for '%s'"), url);
 		goto cleanup;
 	}
@@ -492,6 +524,11 @@ static int cmd_clone(int argc, const char **argv)
 		goto cleanup;
 	}
 
+	if (!tags && set_config("remote.origin.tagOpt=--no-tags")) {
+		res = error(_("could not disable tags in '%s'"), dir);
+		goto cleanup;
+	}
+
 	if (!full_clone &&
 	    (res = run_git("sparse-checkout", "init", "--cone", NULL)))
 		goto cleanup;
@@ -499,7 +536,11 @@ static int cmd_clone(int argc, const char **argv)
 	if (set_recommended_config(0))
 		return error(_("could not configure '%s'"), dir);
 
-	if ((res = run_git("fetch", "--quiet", "origin", NULL))) {
+	if ((res = run_git("fetch", "--quiet",
+				show_progress ? "--progress" : "--no-progress",
+				"origin",
+				(tags ? NULL : "--no-tags"),
+				NULL))) {
 		warning(_("partial clone failed; attempting full clone"));
 
 		if (set_config("remote.origin.promisor") ||
@@ -508,7 +549,9 @@ static int cmd_clone(int argc, const char **argv)
 			goto cleanup;
 		}
 
-		if ((res = run_git("fetch", "--quiet", "origin", NULL)))
+		if ((res = run_git("fetch", "--quiet",
+					show_progress ? "--progress" : "--no-progress",
+					"origin", NULL)))
 			goto cleanup;
 	}
 
@@ -524,9 +567,11 @@ static int cmd_clone(int argc, const char **argv)
 	if (res)
 		goto cleanup;
 
-	res = register_dir();
+	/* If --no-maintenance, then skip maintenance command entirely. */
+	res = register_dir(maintenance);
 
 cleanup:
+	free(branch_to_free);
 	free(enlistment);
 	free(dir);
 	strbuf_release(&buf);
@@ -558,7 +603,7 @@ static int cmd_diagnose(int argc, const char **argv)
 	return res;
 }
 
-static int cmd_list(int argc, const char **argv)
+static int cmd_list(int argc, const char **argv UNUSED)
 {
 	if (argc != 1)
 		die(_("`scalar list` does not take arguments"));
@@ -570,11 +615,14 @@ static int cmd_list(int argc, const char **argv)
 
 static int cmd_register(int argc, const char **argv)
 {
+	int maintenance = 1;
 	struct option options[] = {
+		OPT_BOOL(0, "maintenance", &maintenance,
+			 N_("specify if background maintenance should be enabled")),
 		OPT_END(),
 	};
 	const char * const usage[] = {
-		N_("scalar register [<enlistment>]"),
+		N_("scalar register [--[no-]maintenance] [<enlistment>]"),
 		NULL
 	};
 
@@ -583,10 +631,13 @@ static int cmd_register(int argc, const char **argv)
 
 	setup_enlistment_directory(argc, argv, usage, options, NULL);
 
-	return register_dir();
+	/* If --no-maintenance, then leave maintenance as-is. */
+	return register_dir(maintenance);
 }
 
-static int get_scalar_repos(const char *key, const char *value, void *data)
+static int get_scalar_repos(const char *key, const char *value,
+			    const struct config_context *ctx UNUSED,
+			    void *data)
 {
 	struct string_list *list = data;
 
@@ -617,18 +668,23 @@ static int remove_deleted_enlistment(struct strbuf *path)
 static int cmd_reconfigure(int argc, const char **argv)
 {
 	int all = 0;
+	const char *maintenance_str = NULL;
+	int maintenance = 1; /* Enable maintenance by default. */
+
 	struct option options[] = {
 		OPT_BOOL('a', "all", &all,
 			 N_("reconfigure all registered enlistments")),
+		OPT_STRING(0, "maintenance", &maintenance_str,
+			 N_("(enable|disable|keep)"),
+			 N_("signal how to adjust background maintenance")),
 		OPT_END(),
 	};
 	const char * const usage[] = {
-		N_("scalar reconfigure [--all | <enlistment>]"),
+		N_("scalar reconfigure [--maintenance=(enable|disable|keep)] [--all | <enlistment>]"),
 		NULL
 	};
 	struct string_list scalar_repos = STRING_LIST_INIT_DUP;
-	int i, res = 0;
-	struct repository r = { NULL };
+	int res = 0;
 	struct strbuf commondir = STRBUF_INIT, gitdir = STRBUF_INIT;
 
 	argc = parse_options(argc, argv, NULL, options,
@@ -644,9 +700,23 @@ static int cmd_reconfigure(int argc, const char **argv)
 		usage_msg_opt(_("--all or <enlistment>, but not both"),
 			      usage, options);
 
+	if (maintenance_str) {
+		if (!strcmp(maintenance_str, "enable"))
+			maintenance = 1;
+		else if (!strcmp(maintenance_str, "disable"))
+			maintenance = 0;
+		else if (!strcmp(maintenance_str, "keep"))
+			maintenance = -1;
+		else
+			die(_("unknown mode for --maintenance option: %s"),
+			    maintenance_str);
+	}
+
 	git_config(get_scalar_repos, &scalar_repos);
 
-	for (i = 0; i < scalar_repos.nr; i++) {
+	for (size_t i = 0; i < scalar_repos.nr; i++) {
+		int succeeded = 0;
+		struct repository *old_repo, r = { NULL };
 		const char *dir = scalar_repos.items[i].string;
 
 		strbuf_reset(&commondir);
@@ -657,30 +727,65 @@ static int cmd_reconfigure(int argc, const char **argv)
 
 			if (errno != ENOENT) {
 				warning_errno(_("could not switch to '%s'"), dir);
-				res = -1;
-				continue;
+				goto loop_end;
 			}
 
 			strbuf_addstr(&buf, dir);
 			if (remove_deleted_enlistment(&buf))
-				res = error(_("could not remove stale "
-					      "scalar.repo '%s'"), dir);
-			else
-				warning(_("removing stale scalar.repo '%s'"),
+				error(_("could not remove stale "
+					"scalar.repo '%s'"), dir);
+			else {
+				warning(_("removed stale scalar.repo '%s'"),
 					dir);
+				succeeded = 1;
+			}
 			strbuf_release(&buf);
-		} else if (discover_git_directory(&commondir, &gitdir) < 0) {
-			warning_errno(_("git repository gone in '%s'"), dir);
+			goto loop_end;
+		}
+
+		switch (discover_git_directory_reason(&commondir, &gitdir)) {
+		case GIT_DIR_INVALID_OWNERSHIP:
+			warning(_("repository at '%s' has different owner"), dir);
+			goto loop_end;
+
+		case GIT_DIR_INVALID_GITFILE:
+		case GIT_DIR_INVALID_FORMAT:
+			warning(_("repository at '%s' has a format issue"), dir);
+			goto loop_end;
+
+		case GIT_DIR_DISCOVERED:
+			succeeded = 1;
+			break;
+
+		default:
+			warning(_("repository not found in '%s'"), dir);
+			break;
+		}
+
+		git_config_clear();
+
+		if (repo_init(&r, gitdir.buf, commondir.buf))
+			goto loop_end;
+
+		old_repo = the_repository;
+		the_repository = &r;
+
+		if (set_recommended_config(1) >= 0)
+			succeeded = 1;
+
+		the_repository = old_repo;
+		repo_clear(&r);
+
+		if (maintenance >= 0 &&
+		    toggle_maintenance(maintenance) >= 0)
+			succeeded = 1;
+
+loop_end:
+		if (!succeeded) {
 			res = -1;
-		} else {
-			git_config_clear();
-
-			the_repository = &r;
-			r.commondir = commondir.buf;
-			r.gitdir = gitdir.buf;
-
-			if (set_recommended_config(1) < 0)
-				res = -1;
+			warning(_("to unregister this repository from Scalar, run\n"
+				  "\tgit config --global --unset --fixed-value scalar.repo \"%s\""),
+				dir);
 		}
 	}
 
@@ -739,13 +844,13 @@ static int cmd_run(int argc, const char **argv)
 	strbuf_release(&buf);
 
 	if (i == 0)
-		return register_dir();
+		return register_dir(1);
 
 	if (i > 0)
 		return run_git("maintenance", "run",
 			       "--task", tasks[i].task, NULL);
 
-	if (register_dir())
+	if (register_dir(1))
 		return -1;
 	for (i = 1; tasks[i].arg; i++)
 		if (run_git("maintenance", "run",

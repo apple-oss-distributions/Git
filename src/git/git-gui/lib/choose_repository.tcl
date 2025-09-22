@@ -174,9 +174,6 @@ constructor pick {} {
 			-foreground blue \
 			-underline 1
 		set home $::env(HOME)
-		if {[is_Cygwin]} {
-			set home [exec cygpath --windows --absolute $home]
-		}
 		set home "[file normalize $home]/"
 		set hlen [string length $home]
 		foreach p $sorted_recent {
@@ -372,18 +369,6 @@ proc _objdir {path} {
 	set objdir [file join $path objects]
 	if {[file isdirectory $objdir]} {
 		return $objdir
-	}
-
-	if {[is_Cygwin]} {
-		set objdir [file join $path .git objects.lnk]
-		if {[file isfile $objdir]} {
-			return [win32_read_lnk $objdir]
-		}
-
-		set objdir [file join $path objects.lnk]
-		if {[file isfile $objdir]} {
-			return [win32_read_lnk $objdir]
-		}
 	}
 
 	return {}
@@ -623,12 +608,6 @@ method _do_clone2 {} {
 	}
 
 	set giturl $origin_url
-	if {[is_Cygwin] && [file isdirectory $giturl]} {
-		set giturl [exec cygpath --unix --absolute $giturl]
-		if {$clone_type eq {shared}} {
-			set objdir [exec cygpath --unix --absolute $objdir]
-		}
-	}
 
 	if {[file exists $local_path]} {
 		error_popup [mc "Location %s already exists." $local_path]
@@ -662,17 +641,13 @@ method _do_clone2 {} {
 			set pwd [pwd]
 			if {[catch {
 				file mkdir [gitdir objects info]
-				set f_in [open [file join $objdir info alternates] r]
-				set f_cp [open [gitdir objects info alternates] w]
+				set f_in [safe_open_file [file join $objdir info alternates] r]
+				set f_cp [safe_open_file [gitdir objects info alternates] w]
 				fconfigure $f_in -translation binary -encoding binary
 				fconfigure $f_cp -translation binary -encoding binary
 				cd $objdir
 				while {[gets $f_in line] >= 0} {
-					if {[is_Cygwin]} {
-						puts $f_cp [exec cygpath --unix --absolute $line]
-					} else {
-						puts $f_cp [file normalize $line]
-					}
+					puts $f_cp [file normalize $line]
 				}
 				close $f_in
 				close $f_cp
@@ -752,7 +727,7 @@ method _do_clone2 {} {
 			[cb _do_clone_tags]
 	}
 	shared {
-		set fd [open [gitdir objects info alternates] w]
+		set fd [safe_open_file [gitdir objects info alternates] w]
 		fconfigure $fd -translation binary
 		puts $fd $objdir
 		close $fd
@@ -785,8 +760,8 @@ method _copy_files {objdir tocopy} {
 	}
 	foreach p $tocopy {
 		if {[catch {
-				set f_in [open [file join $objdir $p] r]
-				set f_cp [open [file join .git objects $p] w]
+				set f_in [safe_open_file [file join $objdir $p] r]
+				set f_cp [safe_open_file [file join .git objects $p] w]
 				fconfigure $f_in -translation binary -encoding binary
 				fconfigure $f_cp -translation binary -encoding binary
 
@@ -843,12 +818,12 @@ method _clone_refs {} {
 		error_popup [mc "Not a Git repository: %s" [file tail $origin_url]]
 		return 0
 	}
-	set fd_in [git_read for-each-ref \
+	set fd_in [git_read [list for-each-ref \
 		--tcl \
-		{--format=list %(refname) %(objectname) %(*objectname)}]
+		{--format=list %(refname) %(objectname) %(*objectname)}]]
 	cd $pwd
 
-	set fd [open [gitdir packed-refs] w]
+	set fd [safe_open_file [gitdir packed-refs] w]
 	fconfigure $fd -translation binary
 	puts $fd "# pack-refs with: peeled"
 	while {[gets $fd_in line] >= 0} {
@@ -902,7 +877,7 @@ method _do_clone_full_end {ok} {
 
 		set HEAD {}
 		if {[file exists [gitdir FETCH_HEAD]]} {
-			set fd [open [gitdir FETCH_HEAD] r]
+			set fd [safe_open_file [gitdir FETCH_HEAD] r]
 			while {[gets $fd line] >= 0} {
 				if {[regexp "^(.{40})\t\t" $line line HEAD]} {
 					break
@@ -978,13 +953,14 @@ method _do_clone_checkout {HEAD} {
 		[mc "files"]]
 
 	set readtree_err {}
-	set fd [git_read --stderr read-tree \
+	set fd [git_read [list read-tree \
 		-m \
 		-u \
 		-v \
 		HEAD \
 		HEAD \
-		]
+		] \
+		[list 2>@1]]
 	fconfigure $fd -blocking 0 -translation binary
 	fileevent $fd readable [cb _readtree_wait $fd]
 }

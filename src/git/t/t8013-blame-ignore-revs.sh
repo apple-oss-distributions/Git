@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='ignore revisions when blaming'
+
 . ./test-lib.sh
 
 # Creates:
@@ -25,11 +26,11 @@ test_expect_success setup '
 
 	git blame --line-porcelain file >blame_raw &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 1" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 1/s/ .*//p" blame_raw >actual &&
 	git rev-parse X >expect &&
 	test_cmp expect actual &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 2" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 2/s/ .*//p" blame_raw >actual &&
 	git rev-parse X >expect &&
 	test_cmp expect actual
 '
@@ -53,11 +54,11 @@ do
 	test_expect_success "ignore_rev_changing_lines ($I)" '
 		git blame --line-porcelain --ignore-rev $I file >blame_raw &&
 
-		grep -E "^[0-9a-f]+ [0-9]+ 1" blame_raw | sed -e "s/ .*//" >actual &&
+		sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 1/s/ .*//p" blame_raw >actual &&
 		git rev-parse A >expect &&
 		test_cmp expect actual &&
 
-		grep -E "^[0-9a-f]+ [0-9]+ 2" blame_raw | sed -e "s/ .*//" >actual &&
+		sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 2/s/ .*//p" blame_raw >actual &&
 		git rev-parse B >expect &&
 		test_cmp expect actual
 	'
@@ -79,10 +80,10 @@ test_expect_success ignore_rev_adding_unblamable_lines '
 	git rev-parse Y >expect &&
 	git blame --line-porcelain file --ignore-rev Y >blame_raw &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 3" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 3/s/ .*//p" blame_raw >actual &&
 	test_cmp expect actual &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 4" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 4/s/ .*//p" blame_raw >actual &&
 	test_cmp expect actual
 '
 
@@ -92,11 +93,11 @@ test_expect_success ignore_revs_from_files '
 	git rev-parse Y >ignore_y &&
 	git blame --line-porcelain file --ignore-revs-file ignore_x --ignore-revs-file ignore_y >blame_raw &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 1" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 1/s/ .*//p" blame_raw >actual &&
 	git rev-parse A >expect &&
 	test_cmp expect actual &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 2" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 2/s/ .*//p" blame_raw >actual &&
 	git rev-parse B >expect &&
 	test_cmp expect actual
 '
@@ -106,11 +107,11 @@ test_expect_success ignore_revs_from_configs_and_files '
 	git config --add blame.ignoreRevsFile ignore_x &&
 	git blame --line-porcelain file --ignore-revs-file ignore_y >blame_raw &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 1" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 1/s/ .*//p" blame_raw >actual &&
 	git rev-parse A >expect &&
 	test_cmp expect actual &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 2" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 2/s/ .*//p" blame_raw >actual &&
 	git rev-parse B >expect &&
 	test_cmp expect actual
 '
@@ -121,22 +122,22 @@ test_expect_success override_ignore_revs_file '
 	git blame --line-porcelain file --ignore-revs-file "" --ignore-revs-file ignore_y >blame_raw &&
 	git rev-parse X >expect &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 1" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 1/s/ .*//p" blame_raw >actual &&
 	test_cmp expect actual &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 2" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 2/s/ .*//p" blame_raw >actual &&
 	test_cmp expect actual
 	'
 test_expect_success bad_files_and_revs '
 	test_must_fail git blame file --ignore-rev NOREV 2>err &&
-	test_i18ngrep "cannot find revision NOREV to ignore" err &&
+	test_grep "cannot find revision NOREV to ignore" err &&
 
 	test_must_fail git blame file --ignore-revs-file NOFILE 2>err &&
-	test_i18ngrep "could not open.*: NOFILE" err &&
+	test_grep "could not open.*: NOFILE" err &&
 
 	echo NOREV >ignore_norev &&
 	test_must_fail git blame file --ignore-revs-file ignore_norev 2>err &&
-	test_i18ngrep "invalid object name: NOREV" err
+	test_grep "invalid object name: NOREV" err
 '
 
 # For ignored revs that have added 'unblamable' lines, mark those lines with a
@@ -156,6 +157,25 @@ test_expect_success mark_unblamable_lines '
 	sed -n "4p" blame_raw | cut -c1 >actual &&
 	test_cmp expect actual
 '
+
+for opt in --porcelain --line-porcelain
+do
+	test_expect_success "mark_unblamable_lines with $opt" "
+		sha=$(git rev-parse Y) &&
+
+		git -c blame.markUnblamableLines=false blame $opt --ignore-rev Y file >raw &&
+		cat > sedscript <<- 'EOF' &&
+		/^	y3/i\\
+		unblamable
+		/^	y4/i\\
+		unblamable
+		EOF
+		sed -f sedscript raw >expect &&
+
+		git -c blame.markUnblamableLines=true blame $opt --ignore-rev Y file >actual &&
+		test_cmp expect actual
+	"
+done
 
 # Commit Z will touch the first two lines.  Y touched all four.
 # 	A--B--X--Y--Z
@@ -189,6 +209,25 @@ test_expect_success mark_ignored_lines '
 	sed -n "4p" blame_raw | cut -c1 >actual &&
 	! test_cmp expect actual
 '
+
+for opt in --porcelain --line-porcelain
+do
+	test_expect_success "mark_ignored_lines with $opt" "
+		sha=$(git rev-parse Y) &&
+
+		git -c blame.markIgnoredLines=false blame $opt --ignore-rev Z file >raw &&
+		cat > sedscript <<- 'EOF' &&
+		/^	line-one-Z/i\\
+		ignored
+		/^	line-two-Z/i\\
+		ignored
+		EOF
+		sed -f sedscript raw >expect &&
+
+		git -c blame.markIgnoredLines=true blame $opt --ignore-rev Z file >actual &&
+		test_cmp expect actual
+	"
+done
 
 # For ignored revs that added 'unblamable' lines and more recent commits changed
 # the blamable lines, mark the unblamable lines with a
@@ -279,11 +318,11 @@ test_expect_success ignore_merge '
 	test_merge M B &&
 	git blame --line-porcelain file --ignore-rev M >blame_raw &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 1" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 1/s/ .*//p" blame_raw >actual &&
 	git rev-parse B >expect &&
 	test_cmp expect actual &&
 
-	grep -E "^[0-9a-f]+ [0-9]+ 9" blame_raw | sed -e "s/ .*//" >actual &&
+	sed -ne "/^[0-9a-f][0-9a-f]* [0-9][0-9]* 9/s/ .*//p" blame_raw >actual &&
 	git rev-parse C >expect &&
 	test_cmp expect actual
 '

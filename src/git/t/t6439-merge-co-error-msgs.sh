@@ -47,7 +47,7 @@ test_expect_success 'untracked files overwritten by merge (fast and non-fast for
 		export GIT_MERGE_VERBOSITY &&
 		test_must_fail git merge branch 2>out2
 	) &&
-	echo "Merge with strategy ${GIT_TEST_MERGE_ALGORITHM:-ort} failed." >>expect &&
+	echo "Merge with strategy ort failed." >>expect &&
 	test_cmp out2 expect &&
 	git reset --hard HEAD^
 '
@@ -64,7 +64,7 @@ Please move or remove them before you merge.
 Aborting
 EOF
 
-test_expect_success 'untracked files or local changes ovewritten by merge' '
+test_expect_success 'untracked files or local changes overwritten by merge' '
 	git add two &&
 	git add three &&
 	git add four &&

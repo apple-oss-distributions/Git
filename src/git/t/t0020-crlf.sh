@@ -5,7 +5,6 @@ test_description='CRLF conversion'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 has_cr() {
@@ -125,7 +124,7 @@ test_expect_success 'update with autocrlf=input' '
 	munge_cr append dir/two &&
 	git update-index -- one dir/two &&
 	differs=$(git diff-index --cached HEAD) &&
-	verbose test -z "$differs"
+	test -z "$differs"
 
 '
 
@@ -138,7 +137,7 @@ test_expect_success 'update with autocrlf=true' '
 	munge_cr append dir/two &&
 	git update-index -- one dir/two &&
 	differs=$(git diff-index --cached HEAD) &&
-	verbose test -z "$differs"
+	test -z "$differs"
 
 '
 
@@ -153,7 +152,7 @@ test_expect_success 'checkout with autocrlf=true' '
 	test "$one" = $(git hash-object --stdin <one) &&
 	test "$two" = $(git hash-object --stdin <dir/two) &&
 	differs=$(git diff-index --cached HEAD) &&
-	verbose test -z "$differs"
+	test -z "$differs"
 '
 
 test_expect_success 'checkout with autocrlf=input' '
@@ -167,7 +166,7 @@ test_expect_success 'checkout with autocrlf=input' '
 	test "$one" = $(git hash-object --stdin <one) &&
 	test "$two" = $(git hash-object --stdin <dir/two) &&
 	differs=$(git diff-index --cached HEAD) &&
-	verbose test -z "$differs"
+	test -z "$differs"
 '
 
 test_expect_success 'apply patch (autocrlf=input)' '
@@ -177,7 +176,7 @@ test_expect_success 'apply patch (autocrlf=input)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply patch.file &&
-	verbose test "$patched" = "$(git hash-object --stdin <one)"
+	test "$patched" = "$(git hash-object --stdin <one)"
 '
 
 test_expect_success 'apply patch --cached (autocrlf=input)' '
@@ -187,7 +186,7 @@ test_expect_success 'apply patch --cached (autocrlf=input)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --cached patch.file &&
-	verbose test "$patched" = $(git rev-parse :one)
+	test "$patched" = $(git rev-parse :one)
 '
 
 test_expect_success 'apply patch --index (autocrlf=input)' '
@@ -197,8 +196,8 @@ test_expect_success 'apply patch --index (autocrlf=input)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --index patch.file &&
-	verbose test "$patched" = $(git rev-parse :one) &&
-	verbose test "$patched" = $(git hash-object --stdin <one)
+	test "$patched" = $(git rev-parse :one) &&
+	test "$patched" = $(git hash-object --stdin <one)
 '
 
 test_expect_success 'apply patch (autocrlf=true)' '
@@ -208,7 +207,7 @@ test_expect_success 'apply patch (autocrlf=true)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply patch.file &&
-	verbose test "$patched" = "$(remove_cr <one | git hash-object --stdin)"
+	test "$patched" = "$(remove_cr <one | git hash-object --stdin)"
 '
 
 test_expect_success 'apply patch --cached (autocrlf=true)' '
@@ -218,7 +217,7 @@ test_expect_success 'apply patch --cached (autocrlf=true)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --cached patch.file &&
-	verbose test "$patched" = $(git rev-parse :one)
+	test "$patched" = $(git rev-parse :one)
 '
 
 test_expect_success 'apply patch --index (autocrlf=true)' '
@@ -228,8 +227,8 @@ test_expect_success 'apply patch --index (autocrlf=true)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --index patch.file &&
-	verbose test "$patched" = $(git rev-parse :one) &&
-	verbose test "$patched" = "$(remove_cr <one | git hash-object --stdin)"
+	test "$patched" = $(git rev-parse :one) &&
+	test "$patched" = "$(remove_cr <one | git hash-object --stdin)"
 '
 
 test_expect_success '.gitattributes says two is binary' '
@@ -240,7 +239,7 @@ test_expect_success '.gitattributes says two is binary' '
 	git read-tree --reset -u HEAD &&
 
 	! has_cr dir/two &&
-	verbose has_cr one &&
+	has_cr one &&
 	! has_cr three
 '
 
@@ -259,8 +258,8 @@ test_expect_success '.gitattributes says two and three are text' '
 	echo "t* crlf" >.gitattributes &&
 	git read-tree --reset -u HEAD &&
 
-	verbose has_cr dir/two &&
-	verbose has_cr three
+	has_cr dir/two &&
+	has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (1)' '
@@ -273,7 +272,7 @@ test_expect_success 'in-tree .gitattributes (1)' '
 	git read-tree --reset -u HEAD &&
 
 	! has_cr one &&
-	verbose has_cr three
+	has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (2)' '
@@ -283,7 +282,7 @@ test_expect_success 'in-tree .gitattributes (2)' '
 	git checkout-index -f -q -u -a &&
 
 	! has_cr one &&
-	verbose has_cr three
+	has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (3)' '
@@ -294,7 +293,7 @@ test_expect_success 'in-tree .gitattributes (3)' '
 	git checkout-index -u one dir/two three &&
 
 	! has_cr one &&
-	verbose has_cr three
+	has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (4)' '
@@ -305,7 +304,7 @@ test_expect_success 'in-tree .gitattributes (4)' '
 	git checkout-index -u .gitattributes &&
 
 	! has_cr one &&
-	verbose has_cr three
+	has_cr three
 '
 
 test_expect_success 'checkout with existing .gitattributes' '

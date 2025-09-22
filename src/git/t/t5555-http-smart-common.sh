@@ -2,7 +2,6 @@
 
 test_description='test functionality common to smart fetch & push'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -131,7 +130,6 @@ test_expect_success 'git upload-pack --advertise-refs: v2' '
 	fetch=shallow wait-for-done
 	server-option
 	object-format=$(test_oid algo)
-	object-info
 	0000
 	EOF
 

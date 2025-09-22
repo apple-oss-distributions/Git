@@ -1,12 +1,13 @@
-#include "cache.h"
+#include "git-compat-util.h"
 #include "config.h"
+#include "gettext.h"
 #include "repository.h"
 #include "fsmonitor-ipc.h"
 #include "fsmonitor-settings.h"
 #include "fsmonitor-path-utils.h"
 
 /*
- * We keep this structure defintion private and have getters
+ * We keep this structure definition private and have getters
  * for all fields so that we can lazy load it as needed.
  */
 struct fsmonitor_settings {
@@ -61,7 +62,8 @@ static enum fsmonitor_reason check_remote(struct repository *r)
 }
 #endif
 
-static enum fsmonitor_reason check_for_incompatible(struct repository *r, int ipc)
+static enum fsmonitor_reason check_for_incompatible(struct repository *r,
+						    int ipc MAYBE_UNUSED)
 {
 	if (!r->worktree) {
 		/*
@@ -101,6 +103,7 @@ static struct fsmonitor_settings *alloc_settings(void)
 static void lookup_fsmonitor_settings(struct repository *r)
 {
 	const char *const_str;
+	char *to_free = NULL;
 	int bool_value;
 
 	if (r->settings.fsmonitor)
@@ -127,8 +130,9 @@ static void lookup_fsmonitor_settings(struct repository *r)
 		break;
 
 	case -1: /* config value set to an arbitrary string */
-		if (repo_config_get_pathname(r, "core.fsmonitor", &const_str))
+		if (repo_config_get_pathname(r, "core.fsmonitor", &to_free))
 			return; /* should not happen */
+		const_str = to_free;
 		break;
 
 	default: /* should not happen */
@@ -139,12 +143,11 @@ static void lookup_fsmonitor_settings(struct repository *r)
 		fsm_settings__set_hook(r, const_str);
 	else
 		fsm_settings__set_disabled(r);
+	free(to_free);
 }
 
 enum fsmonitor_mode fsm_settings__get_mode(struct repository *r)
 {
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		lookup_fsmonitor_settings(r);
 
@@ -153,8 +156,6 @@ enum fsmonitor_mode fsm_settings__get_mode(struct repository *r)
 
 const char *fsm_settings__get_hook_path(struct repository *r)
 {
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		lookup_fsmonitor_settings(r);
 
@@ -174,8 +175,6 @@ void fsm_settings__set_ipc(struct repository *r)
 	 * Caller requested IPC explicitly, so avoid (possibly
 	 * recursive) config lookup.
 	 */
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		r->settings.fsmonitor = alloc_settings();
 
@@ -197,8 +196,6 @@ void fsm_settings__set_hook(struct repository *r, const char *path)
 	 * Caller requested hook explicitly, so avoid (possibly
 	 * recursive) config lookup.
 	 */
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		r->settings.fsmonitor = alloc_settings();
 
@@ -210,8 +207,6 @@ void fsm_settings__set_hook(struct repository *r, const char *path)
 
 void fsm_settings__set_disabled(struct repository *r)
 {
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		r->settings.fsmonitor = alloc_settings();
 
@@ -223,8 +218,6 @@ void fsm_settings__set_disabled(struct repository *r)
 void fsm_settings__set_incompatible(struct repository *r,
 				    enum fsmonitor_reason reason)
 {
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		r->settings.fsmonitor = alloc_settings();
 
@@ -235,8 +228,6 @@ void fsm_settings__set_incompatible(struct repository *r,
 
 enum fsmonitor_reason fsm_settings__get_reason(struct repository *r)
 {
-	if (!r)
-		r = the_repository;
 	if (!r->settings.fsmonitor)
 		lookup_fsmonitor_settings(r);
 

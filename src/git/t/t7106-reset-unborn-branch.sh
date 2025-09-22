@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='git reset should work on unborn branch'
+
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -32,7 +33,7 @@ test_expect_success 'reset $file' '
 	test_cmp expect actual
 '
 
-test_expect_success PERL 'reset -p' '
+test_expect_success 'reset -p' '
 	rm .git/index &&
 	git add a &&
 	echo y >yes &&
@@ -40,7 +41,7 @@ test_expect_success PERL 'reset -p' '
 
 	git ls-files >actual &&
 	test_must_be_empty actual &&
-	test_i18ngrep "Unstage" output
+	test_grep "Unstage" output
 '
 
 test_expect_success 'reset --soft is a no-op' '

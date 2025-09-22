@@ -1,5 +1,6 @@
-#include "cache.h"
+#include "git-compat-util.h"
 #include "compat/terminal.h"
+#include "gettext.h"
 #include "sigchain.h"
 #include "strbuf.h"
 #include "run-command.h"
@@ -258,14 +259,13 @@ static DWORD cmode_in, cmode_out;
 void restore_term(void)
 {
 	if (use_stty) {
-		int i;
 		struct child_process cp = CHILD_PROCESS_INIT;
 
 		if (stty_restore.nr == 0)
 			return;
 
 		strvec_push(&cp.args, "stty");
-		for (i = 0; i < stty_restore.nr; i++)
+		for (size_t i = 0; i < stty_restore.nr; i++)
 			strvec_push(&cp.args, stty_restore.items[i].string);
 		run_command(&cp);
 		string_list_clear(&stty_restore, 0);
@@ -478,10 +478,13 @@ struct escape_sequence_entry {
 };
 
 static int sequence_entry_cmp(const void *hashmap_cmp_fn_data UNUSED,
-			      const struct escape_sequence_entry *e1,
-			      const struct escape_sequence_entry *e2,
+			      const struct hashmap_entry *he1,
+			      const struct hashmap_entry *he2,
 			      const void *keydata)
 {
+	const struct escape_sequence_entry
+		*e1 = container_of(he1, const struct escape_sequence_entry, entry),
+		*e2 = container_of(he2, const struct escape_sequence_entry, entry);
 	return strcmp(e1->sequence, keydata ? keydata : e2->sequence);
 }
 
@@ -495,8 +498,7 @@ static int is_known_escape_sequence(const char *sequence)
 		struct strbuf buf = STRBUF_INIT;
 		char *p, *eol;
 
-		hashmap_init(&sequences, (hashmap_cmp_fn)sequence_entry_cmp,
-			     NULL, 0);
+		hashmap_init(&sequences, sequence_entry_cmp, NULL, 0);
 
 		strvec_pushl(&cp.args, "infocmp", "-L", "-1", NULL);
 		if (pipe_command(&cp, NULL, 0, &buf, 0, NULL, 0))
@@ -591,7 +593,7 @@ void restore_term(void)
 {
 }
 
-char *git_terminal_prompt(const char *prompt, int echo)
+char *git_terminal_prompt(const char *prompt, int echo UNUSED)
 {
 	return getpass(prompt);
 }

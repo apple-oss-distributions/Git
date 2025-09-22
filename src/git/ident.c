@@ -5,10 +5,13 @@
  *
  * Copyright (C) 2005 Linus Torvalds
  */
-#include "cache.h"
+#include "git-compat-util.h"
+#include "ident.h"
 #include "config.h"
 #include "date.h"
+#include "gettext.h"
 #include "mailmap.h"
+#include "strbuf.h"
 
 static struct strbuf git_default_name = STRBUF_INIT;
 static struct strbuf git_default_email = STRBUF_INIT;
@@ -43,9 +46,9 @@ static struct passwd *xgetpwuid_self(int *is_bogus)
 	pw = getpwuid(getuid());
 	if (!pw) {
 		static struct passwd fallback;
-		fallback.pw_name = "unknown";
+		fallback.pw_name = (char *) "unknown";
 #ifndef NO_GECOS_IN_PWENT
-		fallback.pw_gecos = "Unknown";
+		fallback.pw_gecos = (char *) "Unknown";
 #endif
 		pw = &fallback;
 		if (is_bogus)
@@ -56,7 +59,7 @@ static struct passwd *xgetpwuid_self(int *is_bogus)
 
 static void copy_gecos(const struct passwd *w, struct strbuf *name)
 {
-	char *src;
+	const char *src;
 
 	/* Traditionally GECOS field had office phone numbers etc, separated
 	 * with commas.  Also & stands for capitalized form of the login name.
@@ -200,7 +203,6 @@ void reset_ident_date(void)
 static int crud(unsigned char c)
 {
 	return  c <= 32  ||
-		c == '.' ||
 		c == ',' ||
 		c == ':' ||
 		c == ';' ||
@@ -668,7 +670,9 @@ static int set_ident(const char *var, const char *value)
 	return 0;
 }
 
-int git_ident_config(const char *var, const char *value, void *data UNUSED)
+int git_ident_config(const char *var, const char *value,
+		     const struct config_context *ctx UNUSED,
+		     void *data UNUSED)
 {
 	if (!strcmp(var, "user.useconfigonly")) {
 		ident_use_config_only = git_config_bool(var, value);

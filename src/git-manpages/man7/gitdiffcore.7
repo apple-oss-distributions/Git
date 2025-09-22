@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitdiffcore
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITDIFFCORE" "7" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITDIFFCORE" "7" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,6 @@ gitdiffcore \- Tweaking diff output
 .nf
 \fIgit diff\fR *
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 The diff commands \fIgit diff\-index\fR, \fIgit diff\-files\fR, and \fIgit diff\-tree\fR can be told to manipulate differences they find in unconventional ways before showing \fIdiff\fR output\&. The manipulation is collectively called "diffcore transformation"\&. This short note describes what they are and how to use them to produce \fIdiff\fR output that is easier to understand than the conventional kind\&.
@@ -96,8 +95,7 @@ The pathspecs are used to limit the world diff operates in\&. They remove the fi
 .RE
 .\}
 .sp
-.sp
-but the command invocation was \fBgit diff\-files myfile\fR, then the junkfile entry would be removed from the list because only "myfile" is under consideration\&.
+but the command invocation was \fBgit\fR \fBdiff\-files\fR \fBmyfile\fR, then the junkfile entry would be removed from the list because only "myfile" is under consideration\&.
 .sp
 The result of comparison is passed from these commands to what is internally called "diffcore", in a format similar to what is output when the \-p option is not used\&. E\&.g\&.
 .sp
@@ -113,7 +111,6 @@ unmerged       :000000 000000 0000000\&.\&.\&. 0000000\&.\&.\&. U file6
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 The diffcore mechanism is fed a list of such comparison results (each of which is called "filepair", although at this point each of them talks about a single file), and transforms such a list into another list\&. There are currently 5 such transformations:
 .sp
@@ -198,7 +195,6 @@ The second transformation in the chain is diffcore\-break, and is controlled by 
 .RE
 .\}
 .sp
-.sp
 and if it detects that the file "file0" is completely rewritten, it changes it to:
 .sp
 .if n \{\
@@ -212,8 +208,7 @@ and if it detects that the file "file0" is completely rewritten, it changes it t
 .RE
 .\}
 .sp
-.sp
-For the purpose of breaking a filepair, diffcore\-break examines the extent of changes between the contents of the files before and after modification (i\&.e\&. the contents that have "bcd1234\&..." and "0123456\&..." as their SHA\-1 content ID, in the above example)\&. The amount of deletion of original contents and insertion of new material are added together, and if it exceeds the "break score", the filepair is broken into two\&. The break score defaults to 50% of the size of the smaller of the original and the result (i\&.e\&. if the edit shrinks the file, the size of the result is used; if the edit lengthens the file, the size of the original is used), and can be customized by giving a number after "\-B" option (e\&.g\&. "\-B75" to tell it to use 75%)\&.
+For the purpose of breaking a filepair, diffcore\-break examines the extent of changes between the contents of the files before and after modification (i\&.e\&. the contents that have "bcd1234\&...\:" and "0123456\&...\:" as their SHA\-1 content ID, in the above example)\&. The amount of deletion of original contents and insertion of new material are added together, and if it exceeds the "break score", the filepair is broken into two\&. The break score defaults to 50% of the size of the smaller of the original and the result (i\&.e\&. if the edit shrinks the file, the size of the result is used; if the edit lengthens the file, the size of the original is used), and can be customized by giving a number after "\-B" option (e\&.g\&. "\-B75" to tell it to use 75%)\&.
 .SH "DIFFCORE\-RENAME: FOR DETECTING RENAMES AND COPIES"
 .sp
 This transformation is used to detect renames and copies, and is controlled by the \-M option (to detect renames) and the \-C option (to detect copies as well) to the \fIgit diff\-*\fR commands\&. If the input contained these filepairs:
@@ -229,7 +224,6 @@ This transformation is used to detect renames and copies, and is controlled by t
 .RE
 .\}
 .sp
-.sp
 and the contents of the deleted file fileX is similar enough to the contents of the created file file0, then rename detection merges these filepairs and creates:
 .sp
 .if n \{\
@@ -241,7 +235,6 @@ and the contents of the deleted file fileX is similar enough to the contents of 
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 When the "\-C" option is used, the original contents of modified files, and deleted files (and also unmodified files, if the "\-\-find\-copies\-harder" option is used) are considered as candidates of the source files in rename/copy operation\&. If the input were like these filepairs, that talk about a modified file fileY and a newly created file file0:
 .sp
@@ -256,7 +249,6 @@ When the "\-C" option is used, the original contents of modified files, and dele
 .RE
 .\}
 .sp
-.sp
 the original contents of fileY and the resulting contents of file0 are compared, and if they are similar enough, they are changed to:
 .sp
 .if n \{\
@@ -270,17 +262,16 @@ the original contents of fileY and the resulting contents of file0 are compared,
 .RE
 .\}
 .sp
-.sp
 In both rename and copy detection, the same "extent of changes" algorithm used in diffcore\-break is used to determine if two files are "similar enough", and can be customized to use a similarity score different from the default of 50% by giving a number after the "\-M" or "\-C" option (e\&.g\&. "\-M8" to tell it to use 8/10 = 80%)\&.
 .sp
-Note that when rename detection is on but both copy and break detection are off, rename detection adds a preliminary step that first checks if files are moved across directories while keeping their filename the same\&. If there is a file added to a directory whose contents is sufficiently similar to a file with the same name that got deleted from a different directory, it will mark them as renames and exclude them from the later quadratic step (the one that pairwise compares all unmatched files to find the "best" matches, determined by the highest content similarity)\&. So, for example, if a deleted docs/ext\&.txt and an added docs/config/ext\&.txt are similar enough, they will be marked as a rename and prevent an added docs/ext\&.md that may be even more similar to the deleted docs/ext\&.txt from being considered as the rename destination in the later step\&. For this reason, the preliminary "match same filename" step uses a bit higher threshold to mark a file pair as a rename and stop considering other candidates for better matches\&. At most, one comparison is done per file in this preliminary pass; so if there are several remaining ext\&.txt files throughout the directory hierarchy after exact rename detection, this preliminary step may be skipped for those files\&.
+Note that when rename detection is on but both copy and break detection are off, rename detection adds a preliminary step that first checks if files are moved across directories while keeping their filename the same\&. If there is a file added to a directory whose contents are sufficiently similar to a file with the same name that got deleted from a different directory, it will mark them as renames and exclude them from the later quadratic step (the one that pairwise compares all unmatched files to find the "best" matches, determined by the highest content similarity)\&. So, for example, if a deleted docs/ext\&.txt and an added docs/config/ext\&.txt are similar enough, they will be marked as a rename and prevent an added docs/ext\&.md that may be even more similar to the deleted docs/ext\&.txt from being considered as the rename destination in the later step\&. For this reason, the preliminary "match same filename" step uses a bit higher threshold to mark a file pair as a rename and stop considering other candidates for better matches\&. At most, one comparison is done per file in this preliminary pass; so if there are several remaining ext\&.txt files throughout the directory hierarchy after exact rename detection, this preliminary step may be skipped for those files\&.
 .sp
 Note\&. When the "\-C" option is used with \fB\-\-find\-copies\-harder\fR option, \fIgit diff\-*\fR commands feed unmodified filepairs to diffcore mechanism as well as modified ones\&. This lets the copy detector consider unmodified files as copy source candidates at the expense of making it slower\&. Without \fB\-\-find\-copies\-harder\fR, \fIgit diff\-*\fR commands can detect copies only if the file that was copied happened to have been modified in the same changeset\&.
 .SH "DIFFCORE\-MERGE\-BROKEN: FOR PUTTING COMPLETE REWRITES BACK TOGETHER"
 .sp
 This transformation is used to merge filepairs broken by diffcore\-break, and not transformed into rename/copy by diffcore\-rename, back into a single modification\&. This always runs when diffcore\-break is used\&.
 .sp
-For the purpose of merging broken filepairs back, it uses a different "extent of changes" computation from the ones used by diffcore\-break and diffcore\-rename\&. It counts only the deletion from the original, and does not count insertion\&. If you removed only 10 lines from a 100\-line document, even if you added 910 new lines to make a new 1000\-line document, you did not do a complete rewrite\&. diffcore\-break breaks such a case in order to help diffcore\-rename to consider such filepairs as candidate of rename/copy detection, but if filepairs broken that way were not matched with other filepairs to create rename/copy, then this transformation merges them back into the original "modification"\&.
+For the purpose of merging broken filepairs back, it uses a different "extent of changes" computation from the ones used by diffcore\-break and diffcore\-rename\&. It counts only the deletion from the original, and does not count insertion\&. If you removed only 10 lines from a 100\-line document, even if you added 910 new lines to make a new 1000\-line document, you did not do a complete rewrite\&. diffcore\-break breaks such a case in order to help diffcore\-rename to consider such filepairs as a candidate of rename/copy detection, but if filepairs broken that way were not matched with other filepairs to create rename/copy, then this transformation merges them back into the original "modification"\&.
 .sp
 The "extent of changes" parameter can be tweaked from the default 80% (that is, unless more than 80% of the original material is deleted, the broken pairs are merged back into a single modification) by giving a second number to \-B option, like these:
 .sp
@@ -306,14 +297,14 @@ The "extent of changes" parameter can be tweaked from the default 80% (that is, 
 \-B/60 (the same as above, since diffcore\-break defaults to 50%)\&.
 .RE
 .sp
-Note that earlier implementation left a broken pair as a separate creation and deletion patches\&. This was an unnecessary hack and the latest implementation always merges all the broken pairs back into modifications, but the resulting patch output is formatted differently for easier review in case of such a complete rewrite by showing the entire contents of old version prefixed with \fI\-\fR, followed by the entire contents of new version prefixed with \fI+\fR\&.
+Note that earlier implementation left a broken pair as separate creation and deletion patches\&. This was an unnecessary hack, and the latest implementation always merges all the broken pairs back into modifications, but the resulting patch output is formatted differently for easier review in case of such a complete rewrite by showing the entire contents of the old version prefixed with \fI\-\fR, followed by the entire contents of the new version prefixed with \fI+\fR\&.
 .SH "DIFFCORE\-PICKAXE: FOR DETECTING ADDITION/DELETION OF SPECIFIED STRING"
 .sp
-This transformation limits the set of filepairs to those that change specified strings between the preimage and the postimage in a certain way\&. \-S<block of text> and \-G<regular expression> options are used to specify different ways these strings are sought\&.
+This transformation limits the set of filepairs to those that change specified strings between the preimage and the postimage in a certain way\&. \-S<block\-of\-text> and \-G<regular\-expression> options are used to specify different ways these strings are sought\&.
 .sp
-"\-S<block of text>" detects filepairs whose preimage and postimage have different number of occurrences of the specified block of text\&. By definition, it will not detect in\-file moves\&. Also, when a changeset moves a file wholesale without affecting the interesting string, diffcore\-rename kicks in as usual, and \fB\-S\fR omits the filepair (since the number of occurrences of that string didn\(cqt change in that rename\-detected filepair)\&. When used with \fB\-\-pickaxe\-regex\fR, treat the <block of text> as an extended POSIX regular expression to match, instead of a literal string\&.
+"\-S<block\-of\-text>" detects filepairs whose preimage and postimage have different number of occurrences of the specified block of text\&. By definition, it will not detect in\-file moves\&. Also, when a changeset moves a file wholesale without affecting the interesting string, diffcore\-rename kicks in as usual, and \fB\-S\fR omits the filepair (since the number of occurrences of that string didn\(cqt change in that rename\-detected filepair)\&. When used with \fB\-\-pickaxe\-regex\fR, treat the <block\-of\-text> as an extended POSIX regular expression to match, instead of a literal string\&.
 .sp
-"\-G<regular expression>" (mnemonic: grep) detects filepairs whose textual diff has an added or a deleted line that matches the given regular expression\&. This means that it will detect in\-file (or what rename\-detection considers the same file) moves, which is noise\&. The implementation runs diff twice and greps, and this can be quite expensive\&. To speed things up binary files without textconv filters will be ignored\&.
+"\-G<regular\-expression>" (mnemonic: grep) detects filepairs whose textual diff has an added or a deleted line that matches the given regular expression\&. This means that it will detect in\-file (or what rename\-detection considers the same file) moves, which is noise\&. The implementation runs diff twice and greps, and this can be quite expensive\&. To speed things up, binary files without textconv filters will be ignored\&.
 .sp
 When \fB\-S\fR or \fB\-G\fR are used without \fB\-\-pickaxe\-all\fR, only filepairs that match their respective criterion are kept in the output\&. When \fB\-\-pickaxe\-all\fR is used, if even one filepair matches their respective criterion in a changeset, the entire changeset is kept\&. This behavior is designed to make reviewing changes in the context of the whole changeset easier\&.
 .SH "DIFFCORE\-ORDER: FOR SORTING THE OUTPUT BASED ON FILENAMES"
@@ -338,7 +329,6 @@ t
 .if n \{\
 .RE
 .\}
-.sp
 .SH "DIFFCORE\-ROTATE: FOR CHANGING AT WHICH PATH OUTPUT STARTS"
 .sp
 This transformation takes one pathname, and rotates the set of filepairs so that the filepair for the given pathname comes first, optionally discarding the paths that come before it\&. This is used to implement the \fB\-\-skip\-to\fR and the \fB\-\-rotate\-to\fR options\&. It is an error when the specified pathname is not in the set of filepairs, but it is not useful to error out when used with "git log" family of commands, because it is unreasonable to expect that a given path would be modified by each and every commit shown by the "git log" command\&. For this reason, when used with "git log", the filepair that sorts the same as, or the first one that sorts after, the given pathname is where the output starts\&.

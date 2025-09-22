@@ -4,6 +4,7 @@
 #
 
 test_description='test transitive info/alternate entries'
+
 . ./test-lib.sh
 
 test_expect_success 'preparing first repository' '

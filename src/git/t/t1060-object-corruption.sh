@@ -2,7 +2,6 @@
 
 test_description='see how we handle various forms of corruption'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 # convert "1234abcd" to ".git/objects/12/34abcd"
@@ -125,7 +124,7 @@ test_expect_success 'fetch into corrupted repo with index-pack' '
 		cd bit-error-cp &&
 		test_must_fail git -c transfer.unpackLimit=1 \
 			fetch ../no-bit-error 2>stderr &&
-		test_i18ngrep ! -i collision stderr
+		test_grep ! -i collision stderr
 	)
 '
 

@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use lib (split(/:/, $ENV{GITPERLLIB}));
 
-use 5.008;
+require v5.26;
 use warnings;
 use strict;
 
@@ -146,6 +146,11 @@ is($r3->cat_blob($file1hash, \*TEMPFILE3), 15, "cat_blob(outside): size");
 close TEMPFILE3;
 unlink $tmpfile3;
 chdir($abs_repo_dir);
+
+# open alternate bare repo
+my $r4 = Git->repository(Directory => "$abs_repo_dir/bare.git");
+is($r4->command_oneline(qw(log --format=%s)), "bare commit",
+	"log of bare repo works");
 
 # unquoting paths
 is(Git::unquote_path('abc'), 'abc', 'unquote unquoted path');

@@ -1,24 +1,31 @@
-#define USE_THE_INDEX_VARIABLE
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
+#include "builtin.h"
 #include "config.h"
+#include "environment.h"
+#include "gettext.h"
+#include "hex.h"
 #include "lockfile.h"
 #include "commit.h"
 #include "tag.h"
-#include "blob.h"
 #include "refs.h"
-#include "builtin.h"
-#include "exec-cmd.h"
+#include "object-name.h"
 #include "parse-options.h"
+#include "read-cache-ll.h"
 #include "revision.h"
 #include "diff.h"
 #include "hashmap.h"
+#include "setup.h"
 #include "strvec.h"
 #include "run-command.h"
 #include "object-store.h"
 #include "list-objects.h"
 #include "commit-slab.h"
+#include "wildmatch.h"
 
 #define MAX_TAGS	(FLAG_BITS - 1)
+#define DEFAULT_CANDIDATES 10
 
 define_commit_slab(commit_names, struct commit_name *);
 
@@ -35,7 +42,7 @@ static int tags;	/* Allow lightweight tags */
 static int longformat;
 static int first_parent;
 static int abbrev = -1; /* unspecified */
-static int max_candidates = 10;
+static int max_candidates = DEFAULT_CANDIDATES;
 static struct hashmap names;
 static int have_util;
 static struct string_list patterns = STRING_LIST_INIT_NODUP;
@@ -47,6 +54,10 @@ static struct commit_names commit_names;
 /* diff-index command arguments to check if working tree is dirty. */
 static const char *diff_index_args[] = {
 	"diff-index", "--quiet", "HEAD", "--", NULL
+};
+
+static const char *update_index_args[] = {
+	"update-index", "--unmerged", "-q", "--refresh", NULL
 };
 
 struct commit_name {
@@ -141,7 +152,7 @@ static void add_to_known_names(const char *path,
 	}
 }
 
-static int get_name(const char *path, const struct object_id *oid,
+static int get_name(const char *path, const char *referent UNUSED, const struct object_id *oid,
 		    int flag UNUSED, void *cb_data UNUSED)
 {
 	int is_tag = 0;
@@ -196,7 +207,7 @@ static int get_name(const char *path, const struct object_id *oid,
 	}
 
 	/* Is it annotated? */
-	if (!peel_iterated_oid(oid, &peeled)) {
+	if (!peel_iterated_oid(the_repository, oid, &peeled)) {
 		is_annotated = !oideq(oid, &peeled);
 	} else {
 		oidcpy(&peeled, oid);
@@ -261,7 +272,7 @@ static unsigned long finish_depth_computation(
 			best->depth++;
 		while (parents) {
 			struct commit *p = parents->item;
-			parse_commit(p);
+			repo_parse_commit(the_repository, p);
 			if (!(p->object.flags & SEEN))
 				commit_list_insert_by_date(p, list);
 			p->object.flags |= c->object.flags;
@@ -298,7 +309,8 @@ static void append_name(struct commit_name *n, struct strbuf *dst)
 
 static void append_suffix(int depth, const struct object_id *oid, struct strbuf *dst)
 {
-	strbuf_addf(dst, "-%d-g%s", depth, find_unique_abbrev(oid, abbrev));
+	strbuf_addf(dst, "-%d-g%s", depth,
+		    repo_find_unique_abbrev(the_repository, oid, abbrev));
 }
 
 static void describe_commit(struct object_id *oid, struct strbuf *dst)
@@ -356,6 +368,13 @@ static void describe_commit(struct object_id *oid, struct strbuf *dst)
 		struct commit_name **slot;
 
 		seen_commits++;
+
+		if (match_cnt == max_candidates ||
+		    match_cnt == hashmap_get_size(&names)) {
+			gave_up_on = c;
+			break;
+		}
+
 		slot = commit_names_peek(&commit_names, c);
 		n = slot ? *slot : NULL;
 		if (n) {
@@ -370,10 +389,6 @@ static void describe_commit(struct object_id *oid, struct strbuf *dst)
 				c->object.flags |= t->flag_within;
 				if (n->prio == 2)
 					annotated_cnt++;
-			}
-			else {
-				gave_up_on = c;
-				break;
 			}
 		}
 		for (cur_match = 0; cur_match < match_cnt; cur_match++) {
@@ -403,7 +418,7 @@ static void describe_commit(struct object_id *oid, struct strbuf *dst)
 		}
 		while (parents) {
 			struct commit *p = parents->item;
-			parse_commit(p);
+			repo_parse_commit(the_repository, p);
 			if (!(p->object.flags & SEEN))
 				commit_list_insert_by_date(p, &list);
 			p->object.flags |= c->object.flags;
@@ -460,9 +475,8 @@ static void describe_commit(struct object_id *oid, struct strbuf *dst)
 		fprintf(stderr, _("traversed %lu commits\n"), seen_commits);
 		if (gave_up_on) {
 			fprintf(stderr,
-				_("more than %i tags found; listed %i most recent\n"
-				"gave up search at %s\n"),
-				max_candidates, max_candidates,
+				_("found %i tags; gave up search at %s\n"),
+				max_candidates,
 				oid_to_hex(&gave_up_on->object.oid));
 		}
 	}
@@ -504,7 +518,7 @@ static void describe_blob(struct object_id oid, struct strbuf *dst)
 {
 	struct rev_info revs;
 	struct strvec args = STRVEC_INIT;
-	struct process_commit_data pcd = { *null_oid(), oid, dst, &revs};
+	struct process_commit_data pcd = { *null_oid(the_hash_algo), oid, dst, &revs};
 
 	strvec_pushl(&args, "internal: The first arg is not parsed",
 		     "--objects", "--in-commit-order", "--reverse", "HEAD",
@@ -520,6 +534,7 @@ static void describe_blob(struct object_id oid, struct strbuf *dst)
 	traverse_commit_list(&revs, process_commit, process_object, &pcd);
 	reset_revision_walk();
 	release_revisions(&revs);
+	strvec_clear(&args);
 }
 
 static void describe(const char *arg, int last_one)
@@ -531,7 +546,7 @@ static void describe(const char *arg, int last_one)
 	if (debug)
 		fprintf(stderr, _("describe %s\n"), arg);
 
-	if (get_oid(arg, &oid))
+	if (repo_get_oid(the_repository, arg, &oid))
 		die(_("Not a valid object name %s"), arg);
 	cmit = lookup_commit_reference_gently(the_repository, &oid, 1);
 
@@ -550,7 +565,21 @@ static void describe(const char *arg, int last_one)
 	strbuf_release(&sb);
 }
 
-int cmd_describe(int argc, const char **argv, const char *prefix)
+static int option_parse_exact_match(const struct option *opt, const char *arg,
+				    int unset)
+{
+	int *val = opt->value;
+
+	BUG_ON_OPT_ARG(arg);
+
+	*val = unset ? DEFAULT_CANDIDATES : 0;
+	return 0;
+}
+
+int cmd_describe(int argc,
+		 const char **argv,
+		 const char *prefix,
+		 struct repository *repo UNUSED )
 {
 	int contains = 0;
 	struct option options[] = {
@@ -561,8 +590,9 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 		OPT_BOOL(0, "long",       &longformat, N_("always use long format")),
 		OPT_BOOL(0, "first-parent", &first_parent, N_("only follow first parent")),
 		OPT__ABBREV(&abbrev),
-		OPT_SET_INT(0, "exact-match", &max_candidates,
-			    N_("only output exact matches"), 0),
+		OPT_CALLBACK_F(0, "exact-match", &max_candidates, NULL,
+			       N_("only output exact matches"),
+			       PARSE_OPT_NOARG, option_parse_exact_match),
 		OPT_INTEGER(0, "candidates", &max_candidates,
 			    N_("consider <n> most recent tags (default: 10)")),
 		OPT_STRING_LIST(0, "match", &patterns, N_("pattern"),
@@ -571,12 +601,24 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 			   N_("do not consider tags matching <pattern>")),
 		OPT_BOOL(0, "always",        &always,
 			N_("show abbreviated commit object as fallback")),
-		{OPTION_STRING, 0, "dirty",  &dirty, N_("mark"),
-			N_("append <mark> on dirty working tree (default: \"-dirty\")"),
-			PARSE_OPT_OPTARG, NULL, (intptr_t) "-dirty"},
-		{OPTION_STRING, 0, "broken",  &broken, N_("mark"),
-			N_("append <mark> on broken working tree (default: \"-broken\")"),
-			PARSE_OPT_OPTARG, NULL, (intptr_t) "-broken"},
+		{
+			.type = OPTION_STRING,
+			.long_name = "dirty",
+			.value = &dirty,
+			.argh = N_("mark"),
+			.help = N_("append <mark> on dirty working tree (default: \"-dirty\")"),
+			.flags = PARSE_OPT_OPTARG,
+			.defval = (intptr_t) "-dirty",
+		},
+		{
+			.type = OPTION_STRING,
+			.long_name = "broken",
+			.value = &broken,
+			.argh = N_("mark"),
+			.help = N_("append <mark> on broken working tree (default: \"-broken\")"),
+			.flags = PARSE_OPT_OPTARG,
+			.defval = (intptr_t) "-broken",
+		},
 		OPT_END(),
 	};
 
@@ -598,6 +640,8 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 	if (contains) {
 		struct string_list_item *item;
 		struct strvec args;
+		const char **argv_copy;
+		int ret;
 
 		strvec_init(&args);
 		strvec_pushl(&args, "name-rev",
@@ -616,17 +660,40 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 			strvec_pushv(&args, argv);
 		else
 			strvec_push(&args, "HEAD");
-		return cmd_name_rev(args.nr, args.v, prefix);
+
+		/*
+		 * `cmd_name_rev()` modifies the array, so we'd leak its
+		 * contained strings if we didn't do a copy here.
+		 */
+		ALLOC_ARRAY(argv_copy, args.nr + 1);
+		for (size_t i = 0; i < args.nr; i++)
+			argv_copy[i] = args.v[i];
+		argv_copy[args.nr] = NULL;
+
+		ret = cmd_name_rev(args.nr, argv_copy, prefix, the_repository);
+
+		strvec_clear(&args);
+		free(argv_copy);
+		return ret;
 	}
 
 	hashmap_init(&names, commit_name_neq, NULL, 0);
-	for_each_rawref(get_name, NULL);
+	refs_for_each_rawref(get_main_ref_store(the_repository), get_name,
+			     NULL);
 	if (!hashmap_get_size(&names) && !always)
 		die(_("No names found, cannot describe anything."));
 
 	if (argc == 0) {
 		if (broken) {
 			struct child_process cp = CHILD_PROCESS_INIT;
+
+			strvec_pushv(&cp.args, update_index_args);
+			cp.git_cmd = 1;
+			cp.no_stdin = 1;
+			cp.no_stdout = 1;
+			run_command(&cp);
+
+			child_process_init(&cp);
 			strvec_pushv(&cp.args, diff_index_args);
 			cp.git_cmd = 1;
 			cp.no_stdin = 1;
@@ -649,12 +716,13 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 		} else if (dirty) {
 			struct lock_file index_lock = LOCK_INIT;
 			struct rev_info revs;
-			struct strvec args = STRVEC_INIT;
-			int fd, result;
+			int fd;
 
 			setup_work_tree();
+			prepare_repo_settings(the_repository);
+			the_repository->settings.command_requires_full_index = 0;
 			repo_read_index(the_repository);
-			refresh_index(&the_index, REFRESH_QUIET|REFRESH_UNMERGED,
+			refresh_index(the_repository->index, REFRESH_QUIET|REFRESH_UNMERGED,
 				      NULL, NULL, NULL);
 			fd = repo_hold_locked_index(the_repository,
 						    &index_lock, 0);
@@ -662,12 +730,13 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
 				repo_update_index_if_able(the_repository, &index_lock);
 
 			repo_init_revisions(the_repository, &revs, prefix);
-			strvec_pushv(&args, diff_index_args);
-			if (setup_revisions(args.nr, args.v, &revs, NULL) != 1)
-				BUG("malformed internal diff-index command line");
-			result = run_diff_index(&revs, 0);
 
-			if (!diff_result_code(&revs.diffopt, result))
+			if (setup_revisions(ARRAY_SIZE(diff_index_args) - 1,
+					    diff_index_args, &revs, NULL) != 1)
+				BUG("malformed internal diff-index command line");
+			run_diff_index(&revs, 0);
+
+			if (!diff_result_code(&revs))
 				suffix = NULL;
 			else
 				suffix = dirty;

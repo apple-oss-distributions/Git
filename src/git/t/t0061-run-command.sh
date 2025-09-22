@@ -5,7 +5,6 @@
 
 test_description='Test run command'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 cat >hello-script <<-EOF
@@ -19,12 +18,12 @@ test_expect_success MINGW 'subprocess inherits only std handles' '
 
 test_expect_success 'start_command reports ENOENT (slash)' '
 	test-tool run-command start-command-ENOENT ./does-not-exist 2>err &&
-	test_i18ngrep "\./does-not-exist" err
+	test_grep "\./does-not-exist" err
 '
 
 test_expect_success 'start_command reports ENOENT (no slash)' '
 	test-tool run-command start-command-ENOENT does-not-exist 2>err &&
-	test_i18ngrep "does-not-exist" err
+	test_grep "does-not-exist" err
 '
 
 test_expect_success 'run_command can run a command' '
@@ -49,7 +48,7 @@ test_expect_success !RUNS_COMMANDS_FROM_PWD 'run_command is restricted to PATH' 
 	echo yikes
 	EOF
 	test_must_fail test-tool run-command run-command should-not-run 2>err &&
-	test_i18ngrep "should-not-run" err
+	test_grep "should-not-run" err
 '
 
 test_expect_success !MINGW 'run_command can run a script without a #! line' '

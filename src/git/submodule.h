@@ -41,6 +41,10 @@ struct submodule_update_strategy {
 	.type = SM_UPDATE_UNSPECIFIED, \
 }
 
+int parse_submodule_update_strategy(const char *value,
+				    struct submodule_update_strategy *dst);
+void submodule_update_strategy_release(struct submodule_update_strategy *strategy);
+
 int is_gitmodules_unmerged(struct index_state *istate);
 int is_writing_gitmodules_ok(void);
 int is_staging_gitmodules_ok(struct index_state *istate);
@@ -70,8 +74,6 @@ void die_in_unpopulated_submodule(struct index_state *istate,
 void die_path_inside_submodule(struct index_state *istate,
 			       const struct pathspec *ps);
 enum submodule_update_type parse_submodule_update_type(const char *value);
-int parse_submodule_update_strategy(const char *value,
-				    struct submodule_update_strategy *dst);
 const char *submodule_update_type_to_string(enum submodule_update_type type);
 void handle_ignore_submodules_arg(struct diff_options *, const char *);
 void show_submodule_diff_summary(struct diff_options *o, const char *path,
@@ -134,7 +136,8 @@ int push_unpushed_submodules(struct repository *r,
  * path of that submodule in 'buf'. Return -1 on error or when the
  * submodule is not initialized.
  */
-int submodule_to_gitdir(struct strbuf *buf, const char *submodule);
+int submodule_to_gitdir(struct repository *repo,
+			struct strbuf *buf, const char *submodule);
 
 /*
  * Given a submodule name, create a path to where the submodule's gitdir lives
@@ -155,9 +158,8 @@ int validate_submodule_path(const char *path);
 
 #define SUBMODULE_MOVE_HEAD_DRY_RUN (1<<0)
 #define SUBMODULE_MOVE_HEAD_FORCE   (1<<1)
-int submodule_move_head(const char *path,
-			const char *old,
-			const char *new_head,
+int submodule_move_head(const char *path, const char *super_prefix,
+			const char *old_head, const char *new_head,
 			unsigned flags);
 
 void submodule_unset_core_worktree(const struct submodule *sub);
@@ -169,7 +171,8 @@ void submodule_unset_core_worktree(const struct submodule *sub);
  */
 void prepare_submodule_repo_env(struct strvec *env);
 
-void absorb_git_dir_into_superproject(const char *path);
+void absorb_git_dir_into_superproject(const char *path,
+				      const char *super_prefix);
 
 /*
  * Return the absolute path of the working tree of the superproject, which this

@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='diff --relative tests'
+
 . ./test-lib.sh
 
 test_expect_success 'setup' '

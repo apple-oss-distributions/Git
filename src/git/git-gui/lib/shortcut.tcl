@@ -12,7 +12,7 @@ proc do_windows_shortcut {} {
 			set fn ${fn}.lnk
 		}
 		# Use git-gui.exe if available (ie: git-for-windows)
-		set cmdLine [auto_execok git-gui.exe]
+		set cmdLine [list [_which git-gui]]
 		if {$cmdLine eq {}} {
 			set cmdLine [list [info nameofexecutable] \
 							 [file normalize $::argv0]]
@@ -27,14 +27,11 @@ proc do_windows_shortcut {} {
 }
 
 proc do_cygwin_shortcut {} {
-	global argv0 _gitworktree
+	global argv0 _gitworktree oguilib
 
 	if {[catch {
-		set desktop [exec cygpath \
-			--windows \
-			--absolute \
-			--long-name \
-			--desktop]
+		set desktop [safe_exec [list cygpath \
+			--desktop]]
 		}]} {
 			set desktop .
 	}
@@ -48,19 +45,19 @@ proc do_cygwin_shortcut {} {
 			set fn ${fn}.lnk
 		}
 		if {[catch {
-				set sh [exec cygpath \
-					--windows \
-					--absolute \
+				set repodir [file normalize $_gitworktree]
+				set shargs {-c \
+					"CHERE_INVOKING=1 \
+					source /etc/profile; \
+					git gui"}
+				safe_exec [list /bin/mkshortcut.exe \
+					--arguments $shargs \
+					--desc "git-gui on $repodir" \
+					--icon $oguilib/git-gui.ico \
+					--name $fn \
+					--show min \
+					--workingdir $repodir \
 					/bin/sh.exe]
-				set me [exec cygpath \
-					--unix \
-					--absolute \
-					$argv0]
-				win32_create_lnk $fn [list \
-					$sh -c \
-					"CHERE_INVOKING=1 source /etc/profile;[sq $me] &" \
-					] \
-					[file normalize $_gitworktree]
 			} err]} {
 			error_popup [strcat [mc "Cannot write shortcut:"] "\n\n$err"]
 		}
@@ -86,7 +83,7 @@ proc do_macosx_app {} {
 
 				file mkdir $MacOS
 
-				set fd [open [file join $Contents Info.plist] w]
+				set fd [safe_open_file [file join $Contents Info.plist] w]
 				puts $fd {<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -111,7 +108,7 @@ proc do_macosx_app {} {
 </plist>}
 				close $fd
 
-				set fd [open $exe w]
+				set fd [safe_open_file $exe w]
 				puts $fd "#!/bin/sh"
 				foreach name [lsort [array names env]] {
 					set value $env($name)

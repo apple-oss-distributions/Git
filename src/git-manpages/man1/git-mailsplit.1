@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-mailsplit
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-MAILSPLIT" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-MAILSPLIT" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,9 +33,8 @@ git-mailsplit \- Simple UNIX mbox splitter program
 .sp
 .nf
 \fIgit mailsplit\fR [\-b] [\-f<nn>] [\-d<prec>] [\-\-keep\-cr] [\-\-mboxrd]
-                \-o<directory> [\-\-] [(<mbox>|<Maildir>)\&...]
+                \-o<directory> [\-\-] [(<mbox>|<Maildir>)\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Splits a mbox file or a Maildir into a list of files: "0001" "0002" \&.\&. in the specified directory so you can process them further from there\&.
@@ -74,7 +73,7 @@ Directory in which to place the individual messages\&.
 .PP
 \-b
 .RS 4
-If any file doesn\(cqt begin with a From line, assume it is a single mail message instead of signaling error\&.
+If any file doesn\(cqt begin with a From line, assume it is a single mail message instead of signaling an error\&.
 .RE
 .PP
 \-d<prec>

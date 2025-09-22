@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test dwim of revs versus pathspecs in revision parser'
+
 . ./test-lib.sh
 
 test_expect_success 'setup' '

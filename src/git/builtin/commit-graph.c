@@ -1,13 +1,17 @@
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
+#include "commit.h"
 #include "config.h"
-#include "dir.h"
-#include "lockfile.h"
+#include "gettext.h"
+#include "hex.h"
 #include "parse-options.h"
-#include "repository.h"
 #include "commit-graph.h"
 #include "object-store.h"
 #include "progress.h"
+#include "replace-object.h"
+#include "strbuf.h"
 #include "tag.h"
+#include "trace2.h"
 
 #define BUILTIN_COMMIT_GRAPH_VERIFY_USAGE \
 	N_("git commit-graph verify [--object-dir <dir>] [--shallow] [--[no-]progress]")
@@ -16,14 +20,14 @@
 	N_("git commit-graph write [--object-dir <dir>] [--append]\n" \
 	   "                       [--split[=<strategy>]] [--reachable | --stdin-packs | --stdin-commits]\n" \
 	   "                       [--changed-paths] [--[no-]max-new-filters <n>] [--[no-]progress]\n" \
-	   "                       <split options>")
+	   "                       <split-options>")
 
-static const char * builtin_commit_graph_verify_usage[] = {
+static const char * const builtin_commit_graph_verify_usage[] = {
 	BUILTIN_COMMIT_GRAPH_VERIFY_USAGE,
 	NULL
 };
 
-static const char * builtin_commit_graph_write_usage[] = {
+static const char * const builtin_commit_graph_write_usage[] = {
 	BUILTIN_COMMIT_GRAPH_WRITE_USAGE,
 	NULL
 };
@@ -58,15 +62,19 @@ static struct option *add_common_options(struct option *to)
 	return parse_options_concat(common_opts, to);
 }
 
-static int graph_verify(int argc, const char **argv, const char *prefix)
+static int graph_verify(int argc, const char **argv, const char *prefix,
+			struct repository *repo UNUSED)
 {
 	struct commit_graph *graph = NULL;
 	struct object_directory *odb = NULL;
 	char *graph_name;
-	int open_ok;
+	char *chain_name;
+	enum { OPENED_NONE, OPENED_GRAPH, OPENED_CHAIN } opened = OPENED_NONE;
 	int fd;
 	struct stat st;
 	int flags = 0;
+	int incomplete_chain = 0;
+	int ret;
 
 	static struct option builtin_commit_graph_verify_options[] = {
 		OPT_BOOL(0, "shallow", &opts.shallow,
@@ -87,7 +95,7 @@ static int graph_verify(int argc, const char **argv, const char *prefix)
 		usage_with_options(builtin_commit_graph_verify_usage, options);
 
 	if (!opts.obj_dir)
-		opts.obj_dir = get_object_directory();
+		opts.obj_dir = repo_get_object_directory(the_repository);
 	if (opts.shallow)
 		flags |= COMMIT_GRAPH_VERIFY_SHALLOW;
 	if (opts.progress)
@@ -95,24 +103,40 @@ static int graph_verify(int argc, const char **argv, const char *prefix)
 
 	odb = find_odb(the_repository, opts.obj_dir);
 	graph_name = get_commit_graph_filename(odb);
-	open_ok = open_commit_graph(graph_name, &fd, &st);
-	if (!open_ok && errno != ENOENT)
+	chain_name = get_commit_graph_chain_filename(odb);
+	if (open_commit_graph(graph_name, &fd, &st))
+		opened = OPENED_GRAPH;
+	else if (errno != ENOENT)
 		die_errno(_("Could not open commit-graph '%s'"), graph_name);
+	else if (open_commit_graph_chain(chain_name, &fd, &st))
+		opened = OPENED_CHAIN;
+	else if (errno != ENOENT)
+		die_errno(_("could not open commit-graph chain '%s'"), chain_name);
 
 	FREE_AND_NULL(graph_name);
+	FREE_AND_NULL(chain_name);
 	FREE_AND_NULL(options);
 
-	if (open_ok)
+	if (opened == OPENED_NONE)
+		return 0;
+	else if (opened == OPENED_GRAPH)
 		graph = load_commit_graph_one_fd_st(the_repository, fd, &st, odb);
 	else
-		graph = read_commit_graph_one(the_repository, odb);
+		graph = load_commit_graph_chain_fd_st(the_repository, fd, &st,
+						      &incomplete_chain);
 
-	/* Return failure if open_ok predicted success */
 	if (!graph)
-		return !!open_ok;
+		return 1;
 
-	UNLEAK(graph);
-	return verify_commit_graph(the_repository, graph, flags);
+	ret = verify_commit_graph(the_repository, graph, flags);
+	free_commit_graph(graph);
+
+	if (incomplete_chain) {
+		error("one or more commit-graph chain files could not be loaded");
+		ret |= 1;
+	}
+
+	return ret;
 }
 
 extern int read_replace_refs;
@@ -179,10 +203,11 @@ static int write_option_max_new_filters(const struct option *opt,
 }
 
 static int git_commit_graph_write_config(const char *var, const char *value,
+					 const struct config_context *ctx,
 					 void *cb UNUSED)
 {
 	if (!strcmp(var, "commitgraph.maxnewfilters"))
-		write_opts.max_new_filters = git_config_int(var, value);
+		write_opts.max_new_filters = git_config_int(var, value, ctx->kvi);
 	/*
 	 * No need to fall-back to 'git_default_config', since this was already
 	 * called in 'cmd_commit_graph()'.
@@ -190,7 +215,8 @@ static int git_commit_graph_write_config(const char *var, const char *value,
 	return 0;
 }
 
-static int graph_write(int argc, const char **argv, const char *prefix)
+static int graph_write(int argc, const char **argv, const char *prefix,
+		       struct repository *repo UNUSED)
 {
 	struct string_list pack_indexes = STRING_LIST_INIT_DUP;
 	struct strbuf buf = STRBUF_INIT;
@@ -250,7 +276,7 @@ static int graph_write(int argc, const char **argv, const char *prefix)
 	if (opts.reachable + opts.stdin_packs + opts.stdin_commits > 1)
 		die(_("use at most one of --reachable, --stdin-commits, or --stdin-packs"));
 	if (!opts.obj_dir)
-		opts.obj_dir = get_object_directory();
+		opts.obj_dir = repo_get_object_directory(the_repository);
 	if (opts.append)
 		flags |= COMMIT_GRAPH_WRITE_APPEND;
 	if (opts.split)
@@ -267,8 +293,8 @@ static int graph_write(int argc, const char **argv, const char *prefix)
 
 	if (opts.reachable) {
 		if (write_commit_graph_reachable(odb, flags, &write_opts))
-			return 1;
-		return 0;
+			result = 1;
+		goto cleanup;
 	}
 
 	if (opts.stdin_packs) {
@@ -279,6 +305,7 @@ static int graph_write(int argc, const char **argv, const char *prefix)
 		oidset_init(&commits, 0);
 		if (opts.progress)
 			progress = start_delayed_progress(
+				the_repository,
 				_("Collecting commits from input"), 0);
 
 		while (strbuf_getline(&buf, stdin) != EOF) {
@@ -302,10 +329,14 @@ cleanup:
 	FREE_AND_NULL(options);
 	string_list_clear(&pack_indexes, 0);
 	strbuf_release(&buf);
+	oidset_clear(&commits);
 	return result;
 }
 
-int cmd_commit_graph(int argc, const char **argv, const char *prefix)
+int cmd_commit_graph(int argc,
+		     const char **argv,
+		     const char *prefix,
+		     struct repository *repo)
 {
 	parse_opt_subcommand_fn *fn = NULL;
 	struct option builtin_commit_graph_options[] = {
@@ -317,12 +348,12 @@ int cmd_commit_graph(int argc, const char **argv, const char *prefix)
 
 	git_config(git_default_config, NULL);
 
-	read_replace_refs = 0;
+	disable_replace_refs();
 	save_commit_buffer = 0;
 
 	argc = parse_options(argc, argv, prefix, options,
 			     builtin_commit_graph_usage, 0);
 	FREE_AND_NULL(options);
 
-	return fn(argc, argv, prefix);
+	return fn(argc, argv, prefix, repo);
 }

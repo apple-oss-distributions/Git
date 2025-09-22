@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-bundle
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-BUNDLE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-BUNDLE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,25 +32,22 @@ git-bundle \- Move objects and refs by archive
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit bundle\fR create [\-q | \-\-quiet | \-\-progress | \-\-all\-progress] [\-\-all\-progress\-implied]
+\fIgit bundle\fR create [\-q | \-\-quiet | \-\-progress]
                     [\-\-version=<version>] <file> <git\-rev\-list\-args>
 \fIgit bundle\fR verify [\-q | \-\-quiet] <file>
-\fIgit bundle\fR list\-heads <file> [<refname>\&...]
-\fIgit bundle\fR unbundle [\-\-progress] <file> [<refname>\&...]
+\fIgit bundle\fR list\-heads <file> [<refname>\&...\:]
+\fIgit bundle\fR unbundle [\-\-progress] <file> [<refname>\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Create, unpack, and manipulate "bundle" files\&. Bundles are used for the "offline" transfer of Git objects without an active "server" sitting on the other side of the network connection\&.
 .sp
-They can be used to create both incremental and full backups of a repository, and to relay the state of the references in one repository to another\&.
+They can be used to create both incremental and full backups of a repository (see the "full backup" example in "EXAMPLES"), and to relay the state of the references in one repository to another (see the second example)\&.
 .sp
-Git commands that fetch or otherwise "read" via protocols such as \fBssh://\fR and \fBhttps://\fR can also operate on bundle files\&. It is possible \fBgit-clone\fR(1) a new repository from a bundle, to use \fBgit-fetch\fR(1) to fetch from one, and to list the references contained within it with \fBgit-ls-remote\fR(1)\&. There\(cqs no corresponding "write" support, i\&.e\&.a \fIgit push\fR into a bundle is not supported\&.
-.sp
-See the "EXAMPLES" section below for examples of how to use bundles\&.
+Git commands that fetch or otherwise "read" via protocols such as \fBssh://\fR and \fBhttps://\fR can also operate on bundle files\&. It is possible \fBgit-clone\fR(1) a new repository from a bundle, to use \fBgit-fetch\fR(1) to fetch from one, and to list the references contained within it with \fBgit-ls-remote\fR(1)\&. There\(cqs no corresponding "write" support, i\&.e\&. a \fIgit push\fR into a bundle is not supported\&.
 .SH "BUNDLE FORMAT"
 .sp
-Bundles are \fB\&.pack\fR files (see \fBgit-pack-objects\fR(1)) with a header indicating what references are contained within the bundle\&.
+Bundles are \&.\fBpack\fR files (see \fBgit-pack-objects\fR(1)) with a header indicating what references are contained within the bundle\&.
 .sp
 Like the packed archive format itself bundles can either be self\-contained, or be created using exclusions\&. See the "OBJECT PREREQUISITES" section below\&.
 .sp
@@ -70,7 +67,10 @@ arguments to define the bundle contents\&.
 \fIoptions\fR
 contains the options specific to the
 \fIgit bundle create\fR
-subcommand\&.
+subcommand\&. If
+\fIfile\fR
+is
+\fB\-\fR, the bundle is written to stdout\&.
 .RE
 .PP
 verify <file>
@@ -79,12 +79,18 @@ Used to check that a bundle file is valid and will apply cleanly to the current 
 \fIgit bundle\fR
 prints a list of missing commits, if any\&. Finally, information about additional capabilities, such as "object filter", is printed\&. See "Capabilities" in
 \fBgitformat-bundle\fR(5)
-for more information\&. The exit code is zero for success, but will be nonzero if the bundle file is invalid\&.
+for more information\&. The exit code is zero for success, but will be nonzero if the bundle file is invalid\&. If
+\fIfile\fR
+is
+\fB\-\fR, the bundle is read from stdin\&.
 .RE
 .PP
 list\-heads <file>
 .RS 4
-Lists the references defined in the bundle\&. If followed by a list of references, only references matching those given are printed out\&.
+Lists the references defined in the bundle\&. If followed by a list of references, only references matching those given are printed out\&. If
+\fIfile\fR
+is
+\fB\-\fR, the bundle is read from stdin\&.
 .RE
 .PP
 unbundle <file>
@@ -92,7 +98,10 @@ unbundle <file>
 Passes the objects in the bundle to
 \fIgit index\-pack\fR
 for storage in the repository, then prints the names of all defined references\&. If a list of references is given, only references matching those in the list are printed\&. This command is really plumbing, intended to be called only by
-\fIgit fetch\fR\&.
+\fIgit fetch\fR\&. If
+\fIfile\fR
+is
+\fB\-\fR, the bundle is read from stdin\&.
 .RE
 .PP
 <git\-rev\-list\-args>
@@ -102,11 +111,11 @@ A list of arguments, acceptable to
 and
 \fIgit rev\-list\fR
 (and containing a named ref, see SPECIFYING REFERENCES below), that specifies the specific objects and references to transport\&. For example,
-\fBmaster~10\&.\&.master\fR
+\fBmaster~10\fR\fB\&.\&.\fR\fBmaster\fR
 causes the current master reference to be packaged along with all objects added since its 10th ancestor commit\&. There is no explicit limit to the number of references and objects that may be packaged\&.
 .RE
 .PP
-[<refname>\&...]
+[<refname>\&...\:]
 .RS 4
 A list of references used to limit the references reported as available\&. This is principally of use to
 \fIgit fetch\fR, which expects to receive only those references asked for and not necessarily everything in the pack (in this case,
@@ -120,16 +129,6 @@ acts like
 Progress status is reported on the standard error stream by default when it is attached to a terminal, unless \-q is specified\&. This flag forces progress status even if the standard error stream is not directed to a terminal\&.
 .RE
 .PP
-\-\-all\-progress
-.RS 4
-When \-\-stdout is specified then progress report is displayed during the object count and compression phases but inhibited during the write\-out phase\&. The reason is that in some cases the output stream is directly linked to another command which may wish to display progress status of its own as it processes incoming pack data\&. This flag is like \-\-progress except that it forces progress report for the write\-out phase as well even if \-\-stdout is used\&.
-.RE
-.PP
-\-\-all\-progress\-implied
-.RS 4
-This is used to imply \-\-all\-progress whenever progress display is activated\&. Unlike \-\-all\-progress this flag doesn\(cqt actually force any progress display by itself\&.
-.RE
-.PP
 \-\-version=<version>
 .RS 4
 Specify the bundle version\&. Version 2 is the older format and can only be used with SHA\-1 repositories; the newer version 3 contains capabilities that permit extensions\&. The default is the oldest supported format, based on the hash algorithm in use\&.
@@ -141,11 +140,11 @@ This flag makes the command not to report its progress on the standard error str
 .RE
 .SH "SPECIFYING REFERENCES"
 .sp
-Revisions must be accompanied by reference names to be packaged in a bundle\&.
+Revisions must be accompanied by reference names to be packaged in a bundle\&. Alternatively \fB\-\-all\fR can be used to package all refs\&.
 .sp
 More than one reference may be packaged, and more than one set of prerequisite objects can be specified\&. The objects packaged are those not contained in the union of the prerequisites\&.
 .sp
-The \fIgit bundle create\fR command resolves the reference names for you using the same rules as \fBgit rev\-parse \-\-abbrev\-ref=loose\fR\&. Each prerequisite can be specified explicitly (e\&.g\&. \fB^master~10\fR), or implicitly (e\&.g\&. \fBmaster~10\&.\&.master\fR, \fB\-\-since=10\&.days\&.ago master\fR)\&.
+The \fIgit bundle create\fR command resolves the reference names for you using the same rules as \fBgit\fR \fBrev\-parse\fR \fB\-\-abbrev\-ref=loose\fR\&. Each prerequisite can be specified explicitly (e\&.g\&. \fB^master~10\fR), or implicitly (e\&.g\&. \fBmaster~10\fR\fB\&.\&.\fR\fBmaster\fR, \fB\-\-since=10\&.days\&.ago\fR \fBmaster\fR)\&.
 .sp
 All of these simple cases are OK (assuming we have a "master" and "next" branch):
 .sp
@@ -162,7 +161,6 @@ $ (echo master; echo next) | git bundle create master\-and\-next\&.bundle \-\-st
 .RE
 .\}
 .sp
-.sp
 And so are these (and the same but omitted \fB\-\-stdin\fR examples):
 .sp
 .if n \{\
@@ -175,7 +173,6 @@ $ git bundle create recent\-updates\&.bundle master~10\&.\&.master next~5\&.\&.n
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 A revision name or a range whose right\-hand\-side cannot be resolved to a reference is not accepted:
 .sp
@@ -191,12 +188,11 @@ fatal: Refusing to create empty bundle\&.
 .if n \{\
 .RE
 .\}
-.sp
 .SH "OBJECT PREREQUISITES"
 .sp
 When creating bundles it is possible to create a self\-contained bundle that can be unbundled in a repository with no common history, as well as providing negative revisions to exclude objects needed in the earlier parts of the history\&.
 .sp
-Feeding a revision such as \fBnew\fR to \fBgit bundle create\fR will create a bundle file that contains all the objects reachable from the revision \fBnew\fR\&. That bundle can be unbundled in any repository to obtain a full history that leads to the revision \fBnew\fR:
+Feeding a revision such as \fBnew\fR to \fBgit\fR \fBbundle\fR \fBcreate\fR will create a bundle file that contains all the objects reachable from the revision \fBnew\fR\&. That bundle can be unbundled in any repository to obtain a full history that leads to the revision \fBnew\fR:
 .sp
 .if n \{\
 .RS 4
@@ -208,8 +204,7 @@ $ git bundle create full\&.bundle new
 .RE
 .\}
 .sp
-.sp
-A revision range such as \fBold\&.\&.new\fR will produce a bundle file that will require the revision \fBold\fR (and any objects reachable from it) to exist for the bundle to be "unbundle"\-able:
+A revision range such as \fBold\fR\fB\&.\&.\fR\fBnew\fR will produce a bundle file that will require the revision \fBold\fR (and any objects reachable from it) to exist for the bundle to be "unbundle"\-able:
 .sp
 .if n \{\
 .RS 4
@@ -221,17 +216,66 @@ $ git bundle create full\&.bundle old\&.\&.new
 .RE
 .\}
 .sp
-.sp
-A self\-contained bundle without any prerequisites can be extracted into anywhere, even into an empty repository, or be cloned from (i\&.e\&., \fBnew\fR, but not \fBold\&.\&.new\fR)\&.
+A self\-contained bundle without any prerequisites can be extracted into anywhere, even into an empty repository, or be cloned from (i\&.e\&., \fBnew\fR, but not \fBold\fR\fB\&.\&.\fR\fBnew\fR)\&.
 .sp
 It is okay to err on the side of caution, causing the bundle file to contain objects already in the destination, as these are ignored when unpacking at the destination\&.
 .sp
-If you want to match \fBgit clone \-\-mirror\fR, which would include your refs such as \fBrefs/remotes/*\fR, use \fB\-\-all\fR\&. If you want to provide the same set of refs that a clone directly from the source repository would get, use \fB\-\-branches \-\-tags\fR for the \fB<git\-rev\-list\-args>\fR\&.
+If you want to provide the same set of refs that a clone directly from the source repository would get, use \fB\-\-branches\fR \fB\-\-tags\fR for the \fI<git\-rev\-list\-args>\fR\&.
 .sp
 The \fIgit bundle verify\fR command can be used to check whether your recipient repository has the required prerequisite commits for a bundle\&.
 .SH "EXAMPLES"
 .sp
-Assume you want to transfer the history from a repository R1 on machine A to another repository R2 on machine B\&. For whatever reason, direct connection between A and B is not allowed, but we can move data from A to B via some mechanism (CD, email, etc\&.)\&. We want to update R2 with development made on the branch master in R1\&.
+We\(cqll discuss two cases:
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 1.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  1." 4.2
+.\}
+Taking a full backup of a repository
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 2.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  2." 4.2
+.\}
+Transferring the history of a repository to another machine when the two machines have no direct connection
+.RE
+.sp
+First let\(cqs consider a full backup of the repository\&. The following command will take a full backup of the repository in the sense that all refs are included in the bundle:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git bundle create backup\&.bundle \-\-all
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+But note again that this is only for the refs, i\&.e\&. you will only include refs and commits reachable from those refs\&. You will not include other local state, such as the contents of the index, working tree, the stash, per\-repository configuration, hooks, etc\&.
+.sp
+You can later recover that repository by using for example \fBgit-clone\fR(1):
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git clone backup\&.bundle <new directory>
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+For the next example, assume you want to transfer the history from a repository R1 on machine A to another repository R2 on machine B\&. For whatever reason, direct connection between A and B is not allowed, but we can move data from A to B via some mechanism (CD, email, etc\&.)\&. We want to update R2 with development made on the branch master in R1\&.
 .sp
 To bootstrap the process, you can first create a bundle that does not have any prerequisites\&. You can use a tag to remember up to what commit you last processed, in order to make it easy to later update the other repository with an incremental bundle:
 .sp
@@ -247,7 +291,6 @@ machineA$ git tag \-f lastR2bundle master
 .RE
 .\}
 .sp
-.sp
 Then you transfer file\&.bundle to the target machine B\&. Because this bundle does not require any existing object to be extracted, you can create a new repository on machine B by cloning from it:
 .sp
 .if n \{\
@@ -259,7 +302,6 @@ machineB$ git clone \-b master /home/me/tmp/file\&.bundle R2
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 This will define a remote called "origin" in the resulting repository that lets you fetch and pull from the bundle\&. The $GIT_DIR/config file in R2 will have an entry like this:
 .sp
@@ -274,7 +316,6 @@ This will define a remote called "origin" in the resulting repository that lets 
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 To update the resulting mine\&.git repository, you can fetch or pull after replacing the bundle stored at /home/me/tmp/file\&.bundle with incremental updates\&.
 .sp
@@ -292,7 +333,6 @@ machineA$ git tag \-f lastR2bundle master
 .RE
 .\}
 .sp
-.sp
 You then transfer the bundle to the other machine to replace /home/me/tmp/file\&.bundle, and pull from it\&.
 .sp
 .if n \{\
@@ -305,7 +345,6 @@ machineB$ git pull
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 If you know up to what commit the intended recipient repository should have the necessary objects, you can use that knowledge to specify the prerequisites, giving a cut\-off point to limit the revisions and objects that go in the resulting bundle\&. The previous example used the lastR2bundle tag for this purpose, but you can use any other options that you would give to the \fBgit-log\fR(1) command\&. Here are more examples:
 .sp
@@ -321,7 +360,6 @@ $ git bundle create mybundle v1\&.0\&.0\&.\&.master
 .RE
 .\}
 .sp
-.sp
 You can use a prerequisite based on time:
 .sp
 .if n \{\
@@ -333,7 +371,6 @@ $ git bundle create mybundle \-\-since=10\&.days master
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 You can use the number of commits:
 .sp
@@ -347,8 +384,7 @@ $ git bundle create mybundle \-10 master
 .RE
 .\}
 .sp
-.sp
-You can run \fBgit\-bundle verify\fR to see if you can extract from a bundle that was created with a prerequisite:
+You can run \fBgit\-bundle\fR \fBverify\fR to see if you can extract from a bundle that was created with a prerequisite:
 .sp
 .if n \{\
 .RS 4
@@ -359,7 +395,6 @@ $ git bundle verify mybundle
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 This will list what commits you must have in order to extract from the bundle and will error out if you do not have them\&.
 .sp
@@ -375,7 +410,6 @@ $ git fetch mybundle master:localRef
 .RE
 .\}
 .sp
-.sp
 You can also see what references it offers:
 .sp
 .if n \{\
@@ -387,7 +421,13 @@ $ git ls\-remote mybundle
 .if n \{\
 .RE
 .\}
+.SH "DISCUSSION"
 .sp
+A naive way to make a full backup of a repository is to use something to the effect of \fBcp\fR \fB\-r\fR \fI<repo>\fR \fI<destination>\fR\&. This is discouraged since the repository could be written to during the copy operation\&. In turn some files at \fI<destination>\fR could be corrupted\&.
+.sp
+This is why it is recommended to use Git tooling for making repository backups, either with this command or with e\&.g\&. \fBgit-clone\fR(1)\&. But keep in mind that these tools will not help you backup state other than refs and commits\&. In other words they will not help you backup contents of the index, working tree, the stash, per\-repository configuration, hooks, etc\&.
+.sp
+See also \fBgitfaq\fR(7), section "TRANSFERS" for a discussion of the problems associated with file syncing across systems\&.
 .SH "FILE FORMAT"
 .sp
 See \fBgitformat-bundle\fR(5)\&.

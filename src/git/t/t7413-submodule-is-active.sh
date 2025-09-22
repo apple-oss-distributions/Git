@@ -9,7 +9,6 @@ This is a unit test of the submodule.c is_submodule_active() function,
 which is also indirectly tested elsewhere.
 '
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -22,7 +21,7 @@ test_expect_success 'setup' '
 	git -C super submodule add ../sub sub2 &&
 
 	# Remove submodule.<name>.active entries in order to test in an
-	# environment where only URLs are present in the conifg
+	# environment where only URLs are present in the config
 	git -C super config --unset submodule.sub1.active &&
 	git -C super config --unset submodule.sub2.active &&
 
@@ -49,6 +48,22 @@ test_expect_success 'is-active works with submodule.<name>.active config' '
 	git -C super config --bool submodule.sub1.active "true" &&
 	git -C super config --unset submodule.sub1.URL &&
 	test-tool -C super submodule is-active sub1
+'
+
+test_expect_success 'is-active handles submodule.active config missing a value' '
+	cp super/.git/config super/.git/config.orig &&
+	test_when_finished mv super/.git/config.orig super/.git/config &&
+
+	cat >>super/.git/config <<-\EOF &&
+	[submodule]
+		active
+	EOF
+
+	cat >expect <<-\EOF &&
+	error: missing value for '\''submodule.active'\''
+	EOF
+	test-tool -C super submodule is-active sub1 2>actual &&
+	test_cmp expect actual
 '
 
 test_expect_success 'is-active works with basic submodule.active config' '

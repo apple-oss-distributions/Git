@@ -229,7 +229,7 @@ test_expect_success 'fetch --refetch triggers repacking' '
 
 	GIT_TRACE2_EVENT="$PWD/trace1.event" \
 	git -C pc1 fetch --refetch origin &&
-	test_subcommand git maintenance run --auto --no-quiet <trace1.event &&
+	test_subcommand git maintenance run --auto --no-quiet --detach <trace1.event &&
 	grep \"param\":\"gc.autopacklimit\",\"value\":\"1\" trace1.event &&
 	grep \"param\":\"maintenance.incremental-repack.auto\",\"value\":\"-1\" trace1.event &&
 
@@ -238,7 +238,7 @@ test_expect_success 'fetch --refetch triggers repacking' '
 		-c gc.autoPackLimit=0 \
 		-c maintenance.incremental-repack.auto=1234 \
 		-C pc1 fetch --refetch origin &&
-	test_subcommand git maintenance run --auto --no-quiet <trace2.event &&
+	test_subcommand git maintenance run --auto --no-quiet --detach <trace2.event &&
 	grep \"param\":\"gc.autopacklimit\",\"value\":\"0\" trace2.event &&
 	grep \"param\":\"maintenance.incremental-repack.auto\",\"value\":\"-1\" trace2.event &&
 
@@ -247,7 +247,7 @@ test_expect_success 'fetch --refetch triggers repacking' '
 		-c gc.autoPackLimit=1234 \
 		-c maintenance.incremental-repack.auto=0 \
 		-C pc1 fetch --refetch origin &&
-	test_subcommand git maintenance run --auto --no-quiet <trace3.event &&
+	test_subcommand git maintenance run --auto --no-quiet --detach <trace3.event &&
 	grep \"param\":\"gc.autopacklimit\",\"value\":\"1\" trace3.event &&
 	grep \"param\":\"maintenance.incremental-repack.auto\",\"value\":\"0\" trace3.event
 '
@@ -257,8 +257,8 @@ test_expect_success 'partial clone with transfer.fsckobjects=1 works with submod
 	test_commit -C submodule mycommit &&
 
 	test_create_repo src_with_sub &&
-	test_config -C src_with_sub uploadpack.allowfilter 1 &&
-	test_config -C src_with_sub uploadpack.allowanysha1inwant 1 &&
+	git -C src_with_sub config uploadpack.allowfilter 1 &&
+	git -C src_with_sub config uploadpack.allowanysha1inwant 1 &&
 
 	test_config_global protocol.file.allow always &&
 
@@ -267,6 +267,12 @@ test_expect_success 'partial clone with transfer.fsckobjects=1 works with submod
 
 	git -c transfer.fsckobjects=1 \
 		clone --filter="blob:none" "file://$(pwd)/src_with_sub" dst &&
+	test_when_finished rm -rf dst
+'
+
+test_expect_success 'lazily fetched .gitmodules works' '
+	git clone --filter="blob:none" --no-checkout "file://$(pwd)/src_with_sub" dst &&
+	git -C dst fetch &&
 	test_when_finished rm -rf dst
 '
 
@@ -347,14 +353,14 @@ test_expect_success 'upload-pack complains of bogus filter config' '
 	test_must_fail git \
 		-c uploadpackfilter.tree.maxdepth \
 		upload-pack . >/dev/null 2>err &&
-	test_i18ngrep "unable to parse.*tree.maxdepth" err
+	test_grep "unable to parse.*tree.maxdepth" err
 '
 
 test_expect_success 'upload-pack fails banned object filters' '
 	test_config -C srv.bare uploadpackfilter.blob:none.allow false &&
 	test_must_fail ok=sigpipe git clone --no-checkout --filter=blob:none \
 		"file://$(pwd)/srv.bare" pc3 2>err &&
-	test_i18ngrep "filter '\''blob:none'\'' not supported" err
+	test_grep "filter '\''blob:none'\'' not supported" err
 '
 
 test_expect_success 'upload-pack fails banned combine object filters' '
@@ -364,14 +370,14 @@ test_expect_success 'upload-pack fails banned combine object filters' '
 	test_config -C srv.bare uploadpackfilter.blob:none.allow false &&
 	test_must_fail ok=sigpipe git clone --no-checkout --filter=tree:1 \
 		--filter=blob:none "file://$(pwd)/srv.bare" pc3 2>err &&
-	test_i18ngrep "filter '\''blob:none'\'' not supported" err
+	test_grep "filter '\''blob:none'\'' not supported" err
 '
 
 test_expect_success 'upload-pack fails banned object filters with fallback' '
 	test_config -C srv.bare uploadpackfilter.allow false &&
 	test_must_fail ok=sigpipe git clone --no-checkout --filter=blob:none \
 		"file://$(pwd)/srv.bare" pc3 2>err &&
-	test_i18ngrep "filter '\''blob:none'\'' not supported" err
+	test_grep "filter '\''blob:none'\'' not supported" err
 '
 
 test_expect_success 'upload-pack limits tree depth filters' '
@@ -380,7 +386,7 @@ test_expect_success 'upload-pack limits tree depth filters' '
 	test_config -C srv.bare uploadpackfilter.tree.maxDepth 0 &&
 	test_must_fail ok=sigpipe git clone --no-checkout --filter=tree:1 \
 		"file://$(pwd)/srv.bare" pc3 2>err &&
-	test_i18ngrep "tree filter allows max depth 0, but got 1" err &&
+	test_grep "tree filter allows max depth 0, but got 1" err &&
 
 	git clone --no-checkout --filter=tree:0 "file://$(pwd)/srv.bare" pc4 &&
 
@@ -388,7 +394,7 @@ test_expect_success 'upload-pack limits tree depth filters' '
 	git clone --no-checkout --filter=tree:5 "file://$(pwd)/srv.bare" pc5 &&
 	test_must_fail ok=sigpipe git clone --no-checkout --filter=tree:6 \
 		"file://$(pwd)/srv.bare" pc6 2>err &&
-	test_i18ngrep "tree filter allows max depth 5, but got 6" err
+	test_grep "tree filter allows max depth 5, but got 6" err
 '
 
 test_expect_success 'partial clone fetches blobs pointed to by refs even if normally filtered out' '
@@ -453,11 +459,11 @@ test_expect_success 'partial clone with unresolvable sparse filter fails cleanly
 	test_must_fail git clone --no-local --bare \
 				 --filter=sparse:oid=main:no-such-name \
 				 sparse-src dst.git 2>err &&
-	test_i18ngrep "unable to access sparse blob in .main:no-such-name" err &&
+	test_grep "unable to access sparse blob in .main:no-such-name" err &&
 	test_must_fail git clone --no-local --bare \
 				 --filter=sparse:oid=main \
 				 sparse-src dst.git 2>err &&
-	test_i18ngrep "unable to parse sparse filter data in" err
+	test_grep "unable to parse sparse filter data in" err
 '
 
 setup_triangle () {
@@ -487,8 +493,8 @@ setup_triangle () {
 	TREE_HASH=$(git -C server rev-parse HEAD~1^{tree}) &&
 	git -C promisor-remote fetch --keep "file://$(pwd)/server" "$TREE_HASH" &&
 	git -C promisor-remote count-objects -v >object-count &&
-	test_i18ngrep "count: 0" object-count &&
-	test_i18ngrep "in-pack: 2" object-count &&
+	test_grep "count: 0" object-count &&
+	test_grep "in-pack: 2" object-count &&
 
 	# Set it as the promisor remote of client. Thus, whenever
 	# the client lazy fetches, the lazy fetch will succeed only if it is
@@ -644,6 +650,79 @@ test_expect_success 'repack does not loosen promisor objects' '
 	grep "loosen_unused_packed_objects/loosened:0" trace
 '
 
+test_expect_success 'lazy-fetch in submodule succeeds' '
+	# setup
+	test_config_global protocol.file.allow always &&
+
+	test_when_finished "rm -rf src-sub" &&
+	git init src-sub &&
+	git -C src-sub config uploadpack.allowfilter 1 &&
+	git -C src-sub config uploadpack.allowanysha1inwant 1 &&
+
+	# This blob must be missing in the subsequent commit.
+	echo foo >src-sub/file &&
+	git -C src-sub add file &&
+	git -C src-sub commit -m "submodule one" &&
+	SUB_ONE=$(git -C src-sub rev-parse HEAD) &&
+
+	echo bar >src-sub/file &&
+	git -C src-sub add file &&
+	git -C src-sub commit -m "submodule two" &&
+	SUB_TWO=$(git -C src-sub rev-parse HEAD) &&
+
+	test_when_finished "rm -rf src-super" &&
+	git init src-super &&
+	git -C src-super config uploadpack.allowfilter 1 &&
+	git -C src-super config uploadpack.allowanysha1inwant 1 &&
+	git -C src-super submodule add ../src-sub src-sub &&
+
+	git -C src-super/src-sub checkout $SUB_ONE &&
+	git -C src-super add src-sub &&
+	git -C src-super commit -m "superproject one" &&
+
+	git -C src-super/src-sub checkout $SUB_TWO &&
+	git -C src-super add src-sub &&
+	git -C src-super commit -m "superproject two" &&
+
+	# the fetch
+	test_when_finished "rm -rf client" &&
+	git clone --filter=blob:none --also-filter-submodules \
+		--recurse-submodules "file://$(pwd)/src-super" client &&
+
+	# Trigger lazy-fetch from the superproject
+	git -C client restore --recurse-submodules --source=HEAD^ :/
+'
+
+test_expect_success 'after fetching descendants of non-promisor commits, gc works' '
+	# Setup
+	git init full &&
+	git -C full config uploadpack.allowfilter 1 &&
+	git -C full config uploadpack.allowanysha1inwant 1 &&
+	touch full/foo &&
+	git -C full add foo &&
+	git -C full commit -m "commit 1" &&
+	git -C full checkout --detach &&
+
+	# Partial clone and push commit to remote
+	git clone "file://$(pwd)/full" --filter=blob:none partial &&
+	echo "hello" > partial/foo &&
+	git -C partial commit -a -m "commit 2" &&
+	git -C partial push &&
+
+	# gc in partial repo
+	git -C partial gc --prune=now &&
+
+	# Create another commit in normal repo
+	git -C full checkout main &&
+	echo " world" >> full/foo &&
+	git -C full commit -a -m "commit 3" &&
+
+	# Pull from remote in partial repo, and run gc again
+	git -C partial pull &&
+	git -C partial gc --prune=now
+'
+
+
 . "$TEST_DIRECTORY"/lib-httpd.sh
 start_httpd
 
@@ -658,18 +737,22 @@ intersperse () {
 	sed 's/\(..\)/'$1'\1/g'
 }
 
-# Create a one-time-perl command to replace the existing packfile with $1.
+# Create a one-time-script command to replace the existing packfile with $1.
 replace_packfile () {
-	# The protocol requires that the packfile be sent in sideband 1, hence
-	# the extra \x01 byte at the beginning.
-	cp $1 "$HTTPD_ROOT_PATH/one-time-pack" &&
-	echo 'if (/packfile/) {
-		print;
-		my $length = -s "one-time-pack";
-		printf "%04x\x01", $length + 5;
-		print `cat one-time-pack` . "0000";
-		last
-	}' >"$HTTPD_ROOT_PATH/one-time-perl"
+	cp "$1" one-time-pack &&
+	write_script "$HTTPD_ROOT_PATH/one-time-script" <<-EOF
+	if grep packfile "\$1" >/dev/null
+	then
+		sed '/packfile/q' "\$1" &&
+		# The protocol requires that the packfile be sent in sideband
+		# 1, hence the extra \001 byte at the beginning.
+		printf "%04x\001" \$((\$(wc -c <"$PWD/one-time-pack") + 5)) &&
+		cat "$PWD/one-time-pack" &&
+		printf "0000"
+	else
+		cat "\$1"
+	fi
+	EOF
 }
 
 test_expect_success 'upon cloning, check that all refs point to objects' '
@@ -697,12 +780,12 @@ test_expect_success 'upon cloning, check that all refs point to objects' '
 	# section header.
 	test_config -C "$SERVER" protocol.version 2 &&
 	test_must_fail git -c protocol.version=2 clone \
-		--filter=blob:none $HTTPD_URL/one_time_perl/server repo 2>err &&
+		--filter=blob:none $HTTPD_URL/one_time_script/server repo 2>err &&
 
-	test_i18ngrep "did not send all necessary objects" err &&
+	test_grep "did not send all necessary objects" err &&
 
-	# Ensure that the one-time-perl script was used.
-	! test -e "$HTTPD_ROOT_PATH/one-time-perl"
+	# Ensure that the one-time-script script was used.
+	! test -e "$HTTPD_ROOT_PATH/one-time-script"
 '
 
 test_expect_success 'when partial cloning, tolerate server not sending target of tag' '
@@ -739,14 +822,14 @@ test_expect_success 'when partial cloning, tolerate server not sending target of
 
 	# Exercise to make sure it works.
 	git -c protocol.version=2 clone \
-		--filter=blob:none $HTTPD_URL/one_time_perl/server repo 2> err &&
+		--filter=blob:none $HTTPD_URL/one_time_script/server repo 2> err &&
 	! grep "missing object referenced by" err &&
 
-	# Ensure that the one-time-perl script was used.
-	! test -e "$HTTPD_ROOT_PATH/one-time-perl"
+	# Ensure that the one-time-script script was used.
+	! test -e "$HTTPD_ROOT_PATH/one-time-script"
 '
 
-test_expect_success 'tolerate server sending REF_DELTA against missing promisor objects' '
+test_expect_success PERL_TEST_HELPERS 'tolerate server sending REF_DELTA against missing promisor objects' '
 	SERVER="$HTTPD_DOCUMENT_ROOT_PATH/server" &&
 	rm -rf "$SERVER" repo &&
 	test_create_repo "$SERVER" &&
@@ -766,7 +849,7 @@ test_expect_success 'tolerate server sending REF_DELTA against missing promisor 
 
 	# Clone. The client has deltabase_have but not deltabase_missing.
 	git -c protocol.version=2 clone --no-checkout \
-		--filter=blob:none $HTTPD_URL/one_time_perl/server repo &&
+		--filter=blob:none $HTTPD_URL/one_time_script/server repo &&
 	git -C repo hash-object -w -- "$SERVER/have.txt" &&
 
 	# Sanity check to ensure that the client does not have
@@ -820,8 +903,8 @@ test_expect_success 'tolerate server sending REF_DELTA against missing promisor 
 	grep "want $(cat deltabase_missing)" trace &&
 	! grep "want $(cat deltabase_have)" trace &&
 
-	# Ensure that the one-time-perl script was used.
-	! test -e "$HTTPD_ROOT_PATH/one-time-perl"
+	# Ensure that the one-time-script script was used.
+	! test -e "$HTTPD_ROOT_PATH/one-time-script"
 '
 
 # DO NOT add non-httpd-specific tests here, because the last part of this

@@ -1,7 +1,6 @@
 #!/bin/sh
 
 test_description='test config file include directives'
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 # Force setup_explicit_git_dir() to run until the end. This is needed
@@ -355,6 +354,46 @@ test_expect_success 'include cycles are detected' '
 	git config -f cycle/cycle include.path config &&
 	test_must_fail git -C cycle config --get-all test.value 2>stderr &&
 	grep "exceeded maximum include depth" stderr
+'
+
+test_expect_success 'onbranch with unborn branch' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		git config set includeIf.onbranch:"*".path config.inc &&
+		git config set -f .git/config.inc foo.bar baz &&
+		git config get foo.bar
+	)
+'
+
+test_expect_success 'onbranch with detached HEAD' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		git config set "includeIf.onbranch:*.path" config.inc &&
+		git config set -f .git/config.inc foo.bar baz &&
+		test_commit initial &&
+		git switch --detach HEAD &&
+		test_must_fail git config get foo.bar
+	)
+'
+
+test_expect_success 'onbranch without repository' '
+	test_when_finished "rm -f .gitconfig config.inc" &&
+	git config set -f .gitconfig "includeIf.onbranch:**.path" config.inc &&
+	git config set -f config.inc foo.bar baz &&
+	git config get foo.bar &&
+	test_must_fail nongit git config get foo.bar
+'
+
+test_expect_success 'onbranch without repository but explicit nonexistent Git directory' '
+	test_when_finished "rm -f .gitconfig config.inc" &&
+	git config set -f .gitconfig "includeIf.onbranch:**.path" config.inc &&
+	git config set -f config.inc foo.bar baz &&
+	git config get foo.bar &&
+	test_must_fail nongit git --git-dir=nonexistent config get foo.bar
 '
 
 test_done

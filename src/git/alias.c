@@ -1,6 +1,10 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
 #include "alias.h"
 #include "config.h"
+#include "gettext.h"
+#include "strbuf.h"
 #include "string-list.h"
 
 struct config_alias_data {
@@ -9,7 +13,8 @@ struct config_alias_data {
 	struct string_list *list;
 };
 
-static int config_alias_cb(const char *key, const char *value, void *d)
+static int config_alias_cb(const char *key, const char *value,
+			   const struct config_context *ctx UNUSED, void *d)
 {
 	struct config_alias_data *data = d;
 	const char *p;
@@ -18,9 +23,11 @@ static int config_alias_cb(const char *key, const char *value, void *d)
 		return 0;
 
 	if (data->alias) {
-		if (!strcasecmp(p, data->alias))
-			return git_config_string((const char **)&data->v,
+		if (!strcasecmp(p, data->alias)) {
+			FREE_AND_NULL(data->v);
+			return git_config_string(&data->v,
 						 key, value);
+		}
 	} else if (data->list) {
 		string_list_append(data->list, p);
 	}
@@ -32,7 +39,7 @@ char *alias_lookup(const char *alias)
 {
 	struct config_alias_data data = { alias, NULL };
 
-	read_early_config(config_alias_cb, &data);
+	read_early_config(the_repository, config_alias_cb, &data);
 
 	return data.v;
 }
@@ -41,7 +48,24 @@ void list_aliases(struct string_list *list)
 {
 	struct config_alias_data data = { NULL, NULL, list };
 
-	read_early_config(config_alias_cb, &data);
+	read_early_config(the_repository, config_alias_cb, &data);
+}
+
+void quote_cmdline(struct strbuf *buf, const char **argv)
+{
+	for (const char **argp = argv; *argp; argp++) {
+		if (argp != argv)
+			strbuf_addch(buf, ' ');
+		strbuf_addch(buf, '"');
+		for (const char *p = *argp; *p; p++) {
+			const char c = *p;
+
+			if (c == '"' || c =='\\')
+				strbuf_addch(buf, '\\');
+			strbuf_addch(buf, c);
+		}
+		strbuf_addch(buf, '"');
+	}
 }
 
 #define SPLIT_CMDLINE_BAD_ENDING 1

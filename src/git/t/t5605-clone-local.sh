@@ -15,8 +15,12 @@ test_expect_success 'preparing origin repository' '
 	: >file && git add . && git commit -m1 &&
 	git clone --bare . a.git &&
 	git clone --bare . x &&
-	test "$(cd a.git && git config --bool core.bare)" = true &&
-	test "$(cd x && git config --bool core.bare)" = true &&
+	echo true >expect &&
+	git -C a.git config --bool core.bare >actual &&
+	test_cmp expect actual &&
+	echo true >expect &&
+	git -C x config --bool core.bare >actual &&
+	test_cmp expect actual &&
 	git bundle create b1.bundle --all &&
 	git bundle create b2.bundle main &&
 	mkdir dir &&
@@ -29,7 +33,9 @@ test_expect_success 'preparing origin repository' '
 test_expect_success 'local clone without .git suffix' '
 	git clone -l -s a b &&
 	(cd b &&
-	test "$(git config --bool core.bare)" = false &&
+	echo false >expect &&
+	git config --bool core.bare >actual &&
+	test_cmp expect actual &&
 	git fetch)
 '
 
@@ -59,11 +65,11 @@ test_expect_success 'Even without -l, local will make a hardlink' '
 '
 
 test_expect_success 'local clone of repo with nonexistent ref in HEAD' '
-	echo "ref: refs/heads/nonexistent" > a.git/HEAD &&
+	git -C a.git symbolic-ref HEAD refs/heads/nonexistent &&
 	git clone a d &&
 	(cd d &&
 	git fetch &&
-	test ! -e .git/refs/remotes/origin/HEAD)
+	test_ref_missing refs/remotes/origin/HEAD)
 '
 
 test_expect_success 'bundle clone without .bundle suffix' '
@@ -147,17 +153,26 @@ test_expect_success 'cloning a local path with --no-local does not hardlink' '
 	! repo_is_hardlinked force-nonlocal
 '
 
+test_expect_success 'cloning a local path with --no-local from a different user succeeds' '
+	git clone --upload-pack="GIT_TEST_ASSUME_DIFFERENT_OWNER=true git-upload-pack" \
+		--no-local a nonlocal-otheruser 2>err &&
+	! repo_is_hardlinked nonlocal-otheruser/.git &&
+	# Verify that this is a git repository.
+	git -C nonlocal-otheruser rev-parse --show-toplevel &&
+	test_grep ! "detected dubious ownership" err
+'
+
 test_expect_success 'cloning locally respects "-u" for fetching refs' '
 	test_must_fail git clone --bare -u false a should_not_work.git
 '
 
-test_expect_success 'local clone from repo with corrupt refs fails gracefully' '
+test_expect_success REFFILES 'local clone from repo with corrupt refs fails gracefully' '
 	git init corrupt &&
 	test_commit -C corrupt one &&
 	echo a >corrupt/.git/refs/heads/topic &&
 
 	test_must_fail git clone corrupt working 2>err &&
-	grep "has a null OID" err
+	grep "has neither a valid OID nor a target" err
 '
 
 test_done

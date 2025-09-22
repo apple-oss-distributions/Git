@@ -45,7 +45,7 @@ build_version () {
 
 	(
 		cd "$dir" &&
-		make $GIT_INTEROP_MAKE_OPTS >&2 &&
+		make $2 $GIT_INTEROP_MAKE_OPTS >&2 &&
 		touch .built
 	) || return 1
 
@@ -68,7 +68,7 @@ generate_wrappers () {
 	wrap_git .bin/git.a "$DIR_A" &&
 	wrap_git .bin/git.b "$DIR_B" &&
 	write_script .bin/git <<-\EOF &&
-	echo >&2 fatal: test tried to run generic git
+	echo >&2 fatal: test tried to run generic git: $*
 	exit 1
 	EOF
 	PATH=$(pwd)/.bin:$PATH
@@ -76,9 +76,11 @@ generate_wrappers () {
 
 VERSION_A=${GIT_TEST_VERSION_A:-$VERSION_A}
 VERSION_B=${GIT_TEST_VERSION_B:-$VERSION_B}
+MAKE_OPTS_A=${GIT_INTEROP_MAKE_OPTS_A:-$MAKE_OPTS_A}
+MAKE_OPTS_B=${GIT_INTEROP_MAKE_OPTS_B:-$MAKE_OPTS_B}
 
-if ! DIR_A=$(build_version "$VERSION_A") ||
-   ! DIR_B=$(build_version "$VERSION_B")
+if ! DIR_A=$(build_version "$VERSION_A" "$MAKE_OPTS_A") ||
+   ! DIR_B=$(build_version "$VERSION_B" "$MAKE_OPTS_B")
 then
 	echo >&2 "fatal: unable to build git versions"
 	exit 1

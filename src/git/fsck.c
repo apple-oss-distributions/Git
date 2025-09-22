@@ -1,5 +1,11 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
+#include "date.h"
+#include "dir.h"
+#include "hex.h"
 #include "object-store.h"
+#include "path.h"
 #include "repository.h"
 #include "object.h"
 #include "attr.h"
@@ -12,13 +18,13 @@
 #include "refs.h"
 #include "url.h"
 #include "utf8.h"
-#include "decorate.h"
 #include "oidset.h"
 #include "packfile.h"
 #include "submodule-config.h"
 #include "config.h"
-#include "credential.h"
 #include "help.h"
+
+static ssize_t max_tree_entry_len = 4096;
 
 #define STR(x) #x
 #define MSG_ID(id, msg_type) { STR(id), NULL, NULL, FSCK_##msg_type },
@@ -150,15 +156,29 @@ void fsck_set_msg_type(struct fsck_options *options,
 		       const char *msg_id_str, const char *msg_type_str)
 {
 	int msg_id = parse_msg_id(msg_id_str);
-	enum fsck_msg_type msg_type = parse_msg_type(msg_type_str);
+	char *to_free = NULL;
+	enum fsck_msg_type msg_type;
 
 	if (msg_id < 0)
 		die("Unhandled message id: %s", msg_id_str);
+
+	if (msg_id == FSCK_MSG_LARGE_PATHNAME) {
+		const char *colon = strchr(msg_type_str, ':');
+		if (colon) {
+			msg_type_str = to_free =
+				xmemdupz(msg_type_str, colon - msg_type_str);
+			colon++;
+			if (!git_parse_ssize_t(colon, &max_tree_entry_len))
+				die("unable to parse max tree entry len: %s", colon);
+		}
+	}
+	msg_type = parse_msg_type(msg_type_str);
 
 	if (msg_type != FSCK_ERROR && msg_id_info[msg_id].msg_type == FSCK_FATAL)
 		die("Cannot demote %s to %s", msg_id_str, msg_type_str);
 
 	fsck_set_msg_type_from_ids(options, msg_id, msg_type);
+	free(to_free);
 }
 
 void fsck_set_msg_types(struct fsck_options *options, const char *values)
@@ -185,7 +205,8 @@ void fsck_set_msg_types(struct fsck_options *options, const char *values)
 		if (!strcmp(buf, "skiplist")) {
 			if (equal == len)
 				die("skiplist requires a path");
-			oidset_parse_file(&options->skiplist, buf + equal + 1);
+			oidset_parse_file(&options->skip_oids, buf + equal + 1,
+					  the_repository->hash_algo);
 			buf += len + 1;
 			continue;
 		}
@@ -202,23 +223,23 @@ void fsck_set_msg_types(struct fsck_options *options, const char *values)
 static int object_on_skiplist(struct fsck_options *opts,
 			      const struct object_id *oid)
 {
-	return opts && oid && oidset_contains(&opts->skiplist, oid);
+	return opts && oid && oidset_contains(&opts->skip_oids, oid);
 }
 
-__attribute__((format (printf, 5, 6)))
-static int report(struct fsck_options *options,
-		  const struct object_id *oid, enum object_type object_type,
-		  enum fsck_msg_id msg_id, const char *fmt, ...)
+/*
+ * Provide the common functionality for either fscking refs or objects.
+ * It will get the current msg error type and call the error_func callback
+ * which is registered in the "fsck_options" struct.
+ */
+static int fsck_vreport(struct fsck_options *options,
+			void *fsck_report,
+			enum fsck_msg_id msg_id, const char *fmt, va_list ap)
 {
-	va_list ap;
 	struct strbuf sb = STRBUF_INIT;
 	enum fsck_msg_type msg_type = fsck_msg_type(msg_id, options);
 	int result;
 
 	if (msg_type == FSCK_IGNORE)
-		return 0;
-
-	if (object_on_skiplist(options, oid))
 		return 0;
 
 	if (msg_type == FSCK_FATAL)
@@ -229,13 +250,46 @@ static int report(struct fsck_options *options,
 	prepare_msg_ids();
 	strbuf_addf(&sb, "%s: ", msg_id_info[msg_id].camelcased);
 
-	va_start(ap, fmt);
 	strbuf_vaddf(&sb, fmt, ap);
-	result = options->error_func(options, oid, object_type,
+	result = options->error_func(options, fsck_report,
 				     msg_type, msg_id, sb.buf);
 	strbuf_release(&sb);
+
+	return result;
+}
+
+__attribute__((format (printf, 5, 6)))
+static int report(struct fsck_options *options,
+		  const struct object_id *oid, enum object_type object_type,
+		  enum fsck_msg_id msg_id, const char *fmt, ...)
+{
+	va_list ap;
+	struct fsck_object_report report = {
+		.oid = oid,
+		.object_type = object_type
+	};
+	int result;
+
+	if (object_on_skiplist(options, oid))
+		return 0;
+
+	va_start(ap, fmt);
+	result = fsck_vreport(options, &report, msg_id, fmt, ap);
 	va_end(ap);
 
+	return result;
+}
+
+int fsck_report_ref(struct fsck_options *options,
+		    struct fsck_ref_report *report,
+		    enum fsck_msg_id msg_id,
+		    const char *fmt, ...)
+{
+	va_list ap;
+	int result;
+	va_start(ap, fmt);
+	result = fsck_vreport(options, report, msg_id, fmt, ap);
+	va_end(ap);
 	return result;
 }
 
@@ -309,7 +363,8 @@ static int fsck_walk_tree(struct tree *tree, void *data, struct fsck_options *op
 		return -1;
 
 	name = fsck_get_object_name(options, &tree->object.oid);
-	if (init_tree_desc_gently(&desc, tree->buffer, tree->size, 0))
+	if (init_tree_desc_gently(&desc, &tree->object.oid,
+				  tree->buffer, tree->size, 0))
 		return -1;
 	while (tree_entry_gently(&desc, &entry)) {
 		struct object *obj;
@@ -353,7 +408,7 @@ static int fsck_walk_commit(struct commit *commit, void *data, struct fsck_optio
 	int result;
 	const char *name;
 
-	if (parse_commit(commit))
+	if (repo_parse_commit(the_repository, commit))
 		return -1;
 
 	name = fsck_get_object_name(options, &commit->object.oid);
@@ -361,7 +416,7 @@ static int fsck_walk_commit(struct commit *commit, void *data, struct fsck_optio
 		fsck_put_object_name(options, get_commit_tree_oid(commit),
 				     "%s:", name);
 
-	result = options->walk((struct object *)get_commit_tree(commit),
+	result = options->walk((struct object *) repo_get_commit_tree(the_repository, commit),
 			       OBJ_TREE, data, options);
 	if (result < 0)
 		return result;
@@ -574,12 +629,14 @@ static int fsck_tree(const struct object_id *tree_oid,
 	int has_bad_modes = 0;
 	int has_dup_entries = 0;
 	int not_properly_sorted = 0;
+	int has_large_name = 0;
 	struct tree_desc desc;
 	unsigned o_mode;
 	const char *o_name;
 	struct name_stack df_dup_candidates = { NULL };
 
-	if (init_tree_desc_gently(&desc, buffer, size, TREE_DESC_RAW_MODES)) {
+	if (init_tree_desc_gently(&desc, tree_oid, buffer, size,
+				  TREE_DESC_RAW_MODES)) {
 		retval += report(options, tree_oid, OBJ_TREE,
 				 FSCK_MSG_BAD_TREE,
 				 "cannot be parsed as a tree");
@@ -603,6 +660,7 @@ static int fsck_tree(const struct object_id *tree_oid,
 		has_dotdot |= !strcmp(name, "..");
 		has_dotgit |= is_hfs_dotgit(name) || is_ntfs_dotgit(name);
 		has_zero_pad |= *(char *)desc.buffer == '0';
+		has_large_name |= tree_entry_len(&desc.entry) > max_tree_entry_len;
 
 		if (is_hfs_dotgitmodules(name) || is_ntfs_dotgitmodules(name)) {
 			if (!S_ISLNK(mode))
@@ -745,9 +803,30 @@ static int fsck_tree(const struct object_id *tree_oid,
 		retval += report(options, tree_oid, OBJ_TREE,
 				 FSCK_MSG_TREE_NOT_SORTED,
 				 "not properly sorted");
+	if (has_large_name)
+		retval += report(options, tree_oid, OBJ_TREE,
+				 FSCK_MSG_LARGE_PATHNAME,
+				 "contains excessively large pathname");
 	return retval;
 }
 
+/*
+ * Confirm that the headers of a commit or tag object end in a reasonable way,
+ * either with the usual "\n\n" separator, or at least with a trailing newline
+ * on the final header line.
+ *
+ * This property is important for the memory safety of our callers. It allows
+ * them to scan the buffer linewise without constantly checking the remaining
+ * size as long as:
+ *
+ *   - they check that there are bytes left in the buffer at the start of any
+ *     line (i.e., that the last newline they saw was not the final one we
+ *     found here)
+ *
+ *   - any intra-line scanning they do will stop at a newline, which will worst
+ *     case hit the newline we found here as the end-of-header. This makes it
+ *     OK for them to use helpers like parse_oid_hex(), or even skip_prefix().
+ */
 static int verify_headers(const void *data, unsigned long size,
 			  const struct object_id *oid, enum object_type type,
 			  struct fsck_options *options)
@@ -808,6 +887,20 @@ static int fsck_ident(const char **ident,
 	if (*p != ' ')
 		return report(options, oid, type, FSCK_MSG_MISSING_SPACE_BEFORE_DATE, "invalid author/committer line - missing space before date");
 	p++;
+	/*
+	 * Our timestamp parser is based on the C strto*() functions, which
+	 * will happily eat whitespace, including the newline that is supposed
+	 * to prevent us walking past the end of the buffer. So do our own
+	 * scan, skipping linear whitespace but not newlines, and then
+	 * confirming we found a digit. We _could_ be even more strict here,
+	 * as we really expect only a single space, but since we have
+	 * traditionally allowed extra whitespace, we'll continue to do so.
+	 */
+	while (*p == ' ' || *p == '\t')
+		p++;
+	if (!isdigit(*p))
+		return report(options, oid, type, FSCK_MSG_BAD_DATE,
+			      "invalid author/committer line - bad date");
 	if (*p == '0' && p[1] != ' ')
 		return report(options, oid, type, FSCK_MSG_ZERO_PADDED_DATE, "invalid author/committer line - zero-padded date");
 	if (date_overflows(parse_timestamp(p, &end, 10)))
@@ -834,12 +927,18 @@ static int fsck_commit(const struct object_id *oid,
 	unsigned author_count;
 	int err;
 	const char *buffer_begin = buffer;
+	const char *buffer_end = buffer + size;
 	const char *p;
 
+	/*
+	 * We _must_ stop parsing immediately if this reports failure, as the
+	 * memory safety of the rest of the function depends on it. See the
+	 * comment above the definition of verify_headers() for more details.
+	 */
 	if (verify_headers(buffer, size, oid, OBJ_COMMIT, options))
 		return -1;
 
-	if (!skip_prefix(buffer, "tree ", &buffer))
+	if (buffer >= buffer_end || !skip_prefix(buffer, "tree ", &buffer))
 		return report(options, oid, OBJ_COMMIT, FSCK_MSG_MISSING_TREE, "invalid format - expected 'tree' line");
 	if (parse_oid_hex(buffer, &tree_oid, &p) || *p != '\n') {
 		err = report(options, oid, OBJ_COMMIT, FSCK_MSG_BAD_TREE_SHA1, "invalid 'tree' line format - bad sha1");
@@ -847,7 +946,7 @@ static int fsck_commit(const struct object_id *oid,
 			return err;
 	}
 	buffer = p + 1;
-	while (skip_prefix(buffer, "parent ", &buffer)) {
+	while (buffer < buffer_end && skip_prefix(buffer, "parent ", &buffer)) {
 		if (parse_oid_hex(buffer, &parent_oid, &p) || *p != '\n') {
 			err = report(options, oid, OBJ_COMMIT, FSCK_MSG_BAD_PARENT_SHA1, "invalid 'parent' line format - bad sha1");
 			if (err)
@@ -856,7 +955,7 @@ static int fsck_commit(const struct object_id *oid,
 		buffer = p + 1;
 	}
 	author_count = 0;
-	while (skip_prefix(buffer, "author ", &buffer)) {
+	while (buffer < buffer_end && skip_prefix(buffer, "author ", &buffer)) {
 		author_count++;
 		err = fsck_ident(&buffer, oid, OBJ_COMMIT, options);
 		if (err)
@@ -868,7 +967,7 @@ static int fsck_commit(const struct object_id *oid,
 		err = report(options, oid, OBJ_COMMIT, FSCK_MSG_MULTIPLE_AUTHORS, "invalid format - multiple 'author' lines");
 	if (err)
 		return err;
-	if (!skip_prefix(buffer, "committer ", &buffer))
+	if (buffer >= buffer_end || !skip_prefix(buffer, "committer ", &buffer))
 		return report(options, oid, OBJ_COMMIT, FSCK_MSG_MISSING_COMMITTER, "invalid format - expected 'committer' line");
 	err = fsck_ident(&buffer, oid, OBJ_COMMIT, options);
 	if (err)
@@ -899,13 +998,19 @@ int fsck_tag_standalone(const struct object_id *oid, const char *buffer,
 	int ret = 0;
 	char *eol;
 	struct strbuf sb = STRBUF_INIT;
+	const char *buffer_end = buffer + size;
 	const char *p;
 
+	/*
+	 * We _must_ stop parsing immediately if this reports failure, as the
+	 * memory safety of the rest of the function depends on it. See the
+	 * comment above the definition of verify_headers() for more details.
+	 */
 	ret = verify_headers(buffer, size, oid, OBJ_TAG, options);
 	if (ret)
 		goto done;
 
-	if (!skip_prefix(buffer, "object ", &buffer)) {
+	if (buffer >= buffer_end || !skip_prefix(buffer, "object ", &buffer)) {
 		ret = report(options, oid, OBJ_TAG, FSCK_MSG_MISSING_OBJECT, "invalid format - expected 'object' line");
 		goto done;
 	}
@@ -916,11 +1021,11 @@ int fsck_tag_standalone(const struct object_id *oid, const char *buffer,
 	}
 	buffer = p + 1;
 
-	if (!skip_prefix(buffer, "type ", &buffer)) {
+	if (buffer >= buffer_end || !skip_prefix(buffer, "type ", &buffer)) {
 		ret = report(options, oid, OBJ_TAG, FSCK_MSG_MISSING_TYPE_ENTRY, "invalid format - expected 'type' line");
 		goto done;
 	}
-	eol = strchr(buffer, '\n');
+	eol = memchr(buffer, '\n', buffer_end - buffer);
 	if (!eol) {
 		ret = report(options, oid, OBJ_TAG, FSCK_MSG_MISSING_TYPE, "invalid format - unexpected end after 'type' line");
 		goto done;
@@ -932,11 +1037,11 @@ int fsck_tag_standalone(const struct object_id *oid, const char *buffer,
 		goto done;
 	buffer = eol + 1;
 
-	if (!skip_prefix(buffer, "tag ", &buffer)) {
+	if (buffer >= buffer_end || !skip_prefix(buffer, "tag ", &buffer)) {
 		ret = report(options, oid, OBJ_TAG, FSCK_MSG_MISSING_TAG_ENTRY, "invalid format - expected 'tag' line");
 		goto done;
 	}
-	eol = strchr(buffer, '\n');
+	eol = memchr(buffer, '\n', buffer_end - buffer);
 	if (!eol) {
 		ret = report(options, oid, OBJ_TAG, FSCK_MSG_MISSING_TAG, "invalid format - unexpected end after 'type' line");
 		goto done;
@@ -952,7 +1057,7 @@ int fsck_tag_standalone(const struct object_id *oid, const char *buffer,
 	}
 	buffer = eol + 1;
 
-	if (!skip_prefix(buffer, "tagger ", &buffer)) {
+	if (buffer >= buffer_end || !skip_prefix(buffer, "tagger ", &buffer)) {
 		/* early tags do not contain 'tagger' lines; warn only */
 		ret = report(options, oid, OBJ_TAG, FSCK_MSG_MISSING_TAGGER_ENTRY, "invalid format - expected 'tagger' line");
 		if (ret)
@@ -960,10 +1065,8 @@ int fsck_tag_standalone(const struct object_id *oid, const char *buffer,
 	}
 	else
 		ret = fsck_ident(&buffer, oid, OBJ_TAG, options);
-	if (!*buffer)
-		goto done;
 
-	if (!starts_with(buffer, "\n")) {
+	if (buffer < buffer_end && !starts_with(buffer, "\n")) {
 		/*
 		 * The verify_headers() check will allow
 		 * e.g. "[...]tagger <tagger>\nsome
@@ -981,145 +1084,15 @@ done:
 	return ret;
 }
 
-static int starts_with_dot_slash(const char *const path)
-{
-	return path_match_flags(path, PATH_MATCH_STARTS_WITH_DOT_SLASH |
-				PATH_MATCH_XPLATFORM);
-}
-
-static int starts_with_dot_dot_slash(const char *const path)
-{
-	return path_match_flags(path, PATH_MATCH_STARTS_WITH_DOT_DOT_SLASH |
-				PATH_MATCH_XPLATFORM);
-}
-
-static int submodule_url_is_relative(const char *url)
-{
-	return starts_with_dot_slash(url) || starts_with_dot_dot_slash(url);
-}
-
-/*
- * Count directory components that a relative submodule URL should chop
- * from the remote_url it is to be resolved against.
- *
- * In other words, this counts "../" components at the start of a
- * submodule URL.
- *
- * Returns the number of directory components to chop and writes a
- * pointer to the next character of url after all leading "./" and
- * "../" components to out.
- */
-static int count_leading_dotdots(const char *url, const char **out)
-{
-	int result = 0;
-	while (1) {
-		if (starts_with_dot_dot_slash(url)) {
-			result++;
-			url += strlen("../");
-			continue;
-		}
-		if (starts_with_dot_slash(url)) {
-			url += strlen("./");
-			continue;
-		}
-		*out = url;
-		return result;
-	}
-}
-/*
- * Check whether a transport is implemented by git-remote-curl.
- *
- * If it is, returns 1 and writes the URL that would be passed to
- * git-remote-curl to the "out" parameter.
- *
- * Otherwise, returns 0 and leaves "out" untouched.
- *
- * Examples:
- *   http::https://example.com/repo.git -> 1, https://example.com/repo.git
- *   https://example.com/repo.git -> 1, https://example.com/repo.git
- *   git://example.com/repo.git -> 0
- *
- * This is for use in checking for previously exploitable bugs that
- * required a submodule URL to be passed to git-remote-curl.
- */
-static int url_to_curl_url(const char *url, const char **out)
-{
-	/*
-	 * We don't need to check for case-aliases, "http.exe", and so
-	 * on because in the default configuration, is_transport_allowed
-	 * prevents URLs with those schemes from being cloned
-	 * automatically.
-	 */
-	if (skip_prefix(url, "http::", out) ||
-	    skip_prefix(url, "https::", out) ||
-	    skip_prefix(url, "ftp::", out) ||
-	    skip_prefix(url, "ftps::", out))
-		return 1;
-	if (starts_with(url, "http://") ||
-	    starts_with(url, "https://") ||
-	    starts_with(url, "ftp://") ||
-	    starts_with(url, "ftps://")) {
-		*out = url;
-		return 1;
-	}
-	return 0;
-}
-
-static int check_submodule_url(const char *url)
-{
-	const char *curl_url;
-
-	if (looks_like_command_line_option(url))
-		return -1;
-
-	if (submodule_url_is_relative(url) || starts_with(url, "git://")) {
-		char *decoded;
-		const char *next;
-		int has_nl;
-
-		/*
-		 * This could be appended to an http URL and url-decoded;
-		 * check for malicious characters.
-		 */
-		decoded = url_decode(url);
-		has_nl = !!strchr(decoded, '\n');
-
-		free(decoded);
-		if (has_nl)
-			return -1;
-
-		/*
-		 * URLs which escape their root via "../" can overwrite
-		 * the host field and previous components, resolving to
-		 * URLs like https::example.com/submodule.git and
-		 * https:///example.com/submodule.git that were
-		 * susceptible to CVE-2020-11008.
-		 */
-		if (count_leading_dotdots(url, &next) > 0 &&
-		    (*next == ':' || *next == '/'))
-			return -1;
-	}
-
-	else if (url_to_curl_url(url, &curl_url)) {
-		struct credential c = CREDENTIAL_INIT;
-		int ret = 0;
-		if (credential_from_url_gently(&c, curl_url, 1) ||
-		    !*c.host)
-			ret = -1;
-		credential_clear(&c);
-		return ret;
-	}
-
-	return 0;
-}
-
 struct fsck_gitmodules_data {
 	const struct object_id *oid;
 	struct fsck_options *options;
 	int ret;
 };
 
-static int fsck_gitmodules_fn(const char *var, const char *value, void *vdata)
+static int fsck_gitmodules_fn(const char *var, const char *value,
+			      const struct config_context *ctx UNUSED,
+			      void *vdata)
 {
 	struct fsck_gitmodules_data *data = vdata;
 	const char *subsection, *key;
@@ -1192,7 +1165,8 @@ static int fsck_blob(const struct object_id *oid, const char *buf,
 		data.ret = 0;
 		config_opts.error_action = CONFIG_ERROR_SILENT;
 		if (git_config_from_mem(fsck_gitmodules_fn, CONFIG_ORIGIN_BLOB,
-					".gitmodules", buf, size, &data, &config_opts))
+					".gitmodules", buf, size, &data,
+					CONFIG_SCOPE_UNKNOWN, &config_opts))
 			data.ret |= report(options, oid, OBJ_BLOB,
 					FSCK_MSG_GITMODULES_PARSE,
 					"could not parse gitmodules blob");
@@ -1237,34 +1211,69 @@ int fsck_object(struct object *obj, void *data, unsigned long size,
 	if (!obj)
 		return report(options, NULL, OBJ_NONE, FSCK_MSG_BAD_OBJECT_SHA1, "no valid object to fsck");
 
-	if (obj->type == OBJ_BLOB)
-		return fsck_blob(&obj->oid, data, size, options);
-	if (obj->type == OBJ_TREE)
-		return fsck_tree(&obj->oid, data, size, options);
-	if (obj->type == OBJ_COMMIT)
-		return fsck_commit(&obj->oid, data, size, options);
-	if (obj->type == OBJ_TAG)
-		return fsck_tag(&obj->oid, data, size, options);
-
-	return report(options, &obj->oid, obj->type,
-		      FSCK_MSG_UNKNOWN_TYPE,
-		      "unknown type '%d' (internal fsck error)",
-		      obj->type);
+	return fsck_buffer(&obj->oid, obj->type, data, size, options);
 }
 
-int fsck_error_function(struct fsck_options *o,
-			const struct object_id *oid,
-			enum object_type object_type,
-			enum fsck_msg_type msg_type,
-			enum fsck_msg_id msg_id,
-			const char *message)
+int fsck_buffer(const struct object_id *oid, enum object_type type,
+		const void *data, unsigned long size,
+		struct fsck_options *options)
 {
+	if (type == OBJ_BLOB)
+		return fsck_blob(oid, data, size, options);
+	if (type == OBJ_TREE)
+		return fsck_tree(oid, data, size, options);
+	if (type == OBJ_COMMIT)
+		return fsck_commit(oid, data, size, options);
+	if (type == OBJ_TAG)
+		return fsck_tag(oid, data, size, options);
+
+	return report(options, oid, type,
+		      FSCK_MSG_UNKNOWN_TYPE,
+		      "unknown type '%d' (internal fsck error)",
+		      type);
+}
+
+int fsck_objects_error_function(struct fsck_options *o,
+				void *fsck_report,
+				enum fsck_msg_type msg_type,
+				enum fsck_msg_id msg_id UNUSED,
+				const char *message)
+{
+	struct fsck_object_report *report = fsck_report;
+	const struct object_id *oid = report->oid;
+
 	if (msg_type == FSCK_WARN) {
 		warning("object %s: %s", fsck_describe_object(o, oid), message);
 		return 0;
 	}
 	error("object %s: %s", fsck_describe_object(o, oid), message);
 	return 1;
+}
+
+int fsck_refs_error_function(struct fsck_options *options UNUSED,
+			     void *fsck_report,
+			     enum fsck_msg_type msg_type,
+			     enum fsck_msg_id msg_id UNUSED,
+			     const char *message)
+{
+	struct fsck_ref_report *report = fsck_report;
+	struct strbuf sb = STRBUF_INIT;
+	int ret = 0;
+
+	strbuf_addstr(&sb, report->path);
+
+	if (report->oid)
+		strbuf_addf(&sb, " -> (%s)", oid_to_hex(report->oid));
+	else if (report->referent)
+		strbuf_addf(&sb, " -> (%s)", report->referent);
+
+	if (msg_type == FSCK_WARN)
+		warning("%s: %s", sb.buf, message);
+	else
+		ret = error("%s: %s", sb.buf, message);
+
+	strbuf_release(&sb);
+	return ret;
 }
 
 static int fsck_blobs(struct oidset *blobs_found, struct oidset *blobs_done,
@@ -1284,9 +1293,9 @@ static int fsck_blobs(struct oidset *blobs_found, struct oidset *blobs_done,
 		if (oidset_contains(blobs_done, oid))
 			continue;
 
-		buf = read_object_file(oid, &type, &size);
+		buf = repo_read_object_file(the_repository, oid, &type, &size);
 		if (!buf) {
-			if (is_promisor_object(oid))
+			if (is_promisor_object(the_repository, oid))
 				continue;
 			ret |= report(options,
 				      oid, OBJ_BLOB, msg_missing,
@@ -1322,44 +1331,61 @@ int fsck_finish(struct fsck_options *options)
 	return ret;
 }
 
-int git_fsck_config(const char *var, const char *value, void *cb)
+void fsck_options_clear(struct fsck_options *options)
+{
+	free(options->msg_type);
+	oidset_clear(&options->skip_oids);
+	oidset_clear(&options->gitmodules_found);
+	oidset_clear(&options->gitmodules_done);
+	oidset_clear(&options->gitattributes_found);
+	oidset_clear(&options->gitattributes_done);
+	kh_clear_oid_map(options->object_names);
+}
+
+int git_fsck_config(const char *var, const char *value,
+		    const struct config_context *ctx, void *cb)
 {
 	struct fsck_options *options = cb;
+	const char *msg_id;
+
 	if (strcmp(var, "fsck.skiplist") == 0) {
-		const char *path;
+		char *path;
 		struct strbuf sb = STRBUF_INIT;
 
 		if (git_config_pathname(&path, var, value))
-			return 1;
+			return -1;
 		strbuf_addf(&sb, "skiplist=%s", path);
-		free((char *)path);
+		free(path);
 		fsck_set_msg_types(options, sb.buf);
 		strbuf_release(&sb);
 		return 0;
 	}
 
-	if (skip_prefix(var, "fsck.", &var)) {
-		fsck_set_msg_type(options, var, value);
+	if (skip_prefix(var, "fsck.", &msg_id)) {
+		if (!value)
+			return config_error_nonbool(var);
+		fsck_set_msg_type(options, msg_id, value);
 		return 0;
 	}
 
-	return git_default_config(var, value, cb);
+	return git_default_config(var, value, ctx, cb);
 }
 
 /*
  * Custom error callbacks that are used in more than one place.
  */
 
-int fsck_error_cb_print_missing_gitmodules(struct fsck_options *o,
-					   const struct object_id *oid,
-					   enum object_type object_type,
-					   enum fsck_msg_type msg_type,
-					   enum fsck_msg_id msg_id,
-					   const char *message)
+int fsck_objects_error_cb_print_missing_gitmodules(struct fsck_options *o,
+						   void *fsck_report,
+						   enum fsck_msg_type msg_type,
+						   enum fsck_msg_id msg_id,
+						   const char *message)
 {
 	if (msg_id == FSCK_MSG_GITMODULES_MISSING) {
-		puts(oid_to_hex(oid));
+		struct fsck_object_report *report = fsck_report;
+		puts(oid_to_hex(report->oid));
 		return 0;
 	}
-	return fsck_error_function(o, oid, object_type, msg_type, msg_id, message);
+	return fsck_objects_error_function(o, fsck_report,
+					   msg_type, msg_id, message);
 }

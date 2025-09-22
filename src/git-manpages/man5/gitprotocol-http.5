@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitprotocol-http
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITPROTOCOL\-HTTP" "5" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITPROTOCOL\-HTTP" "5" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,6 @@ gitprotocol-http \- Git HTTP\-based protocols
 .nf
 <over\-the\-wire\-protocol>
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Git supports two HTTP based transfer protocols\&. A "dumb" protocol which requires only a standard HTTP server on the server end of the connection, and a "smart" protocol which requires a Git aware CGI (or server module)\&. This document describes both protocols\&.
@@ -58,7 +57,7 @@ Within this documentation the placeholder \fB$GIT_URL\fR will stand for the http
 .sp
 Servers SHOULD handle all requests to locations matching \fB$GIT_URL\fR, as both the "smart" and "dumb" HTTP protocols used by Git operate by appending additional path components onto the end of the user supplied \fB$GIT_URL\fR string\&.
 .sp
-An example of a dumb client requesting for a loose object:
+An example of a dumb client requesting a loose object:
 .sp
 .if n \{\
 .RS 4
@@ -123,9 +122,9 @@ Servers MUST NOT require HTTP cookies in order to function correctly\&. Clients 
 .sp
 Except where noted, all standard HTTP behavior SHOULD be assumed by both client and server\&. This includes (but is not necessarily limited to):
 .sp
-If there is no repository at \fB$GIT_URL\fR, or the resource pointed to by a location matching \fB$GIT_URL\fR does not exist, the server MUST NOT respond with \fB200 OK\fR response\&. A server SHOULD respond with \fB404 Not Found\fR, \fB410 Gone\fR, or any other suitable HTTP status code which does not imply the resource exists as requested\&.
+If there is no repository at \fB$GIT_URL\fR, or the resource pointed to by a location matching \fB$GIT_URL\fR does not exist, the server MUST NOT respond with \fB200\fR \fBOK\fR response\&. A server SHOULD respond with \fB404\fR \fBNot\fR \fBFound\fR, \fB410\fR \fBGone\fR, or any other suitable HTTP status code which does not imply the resource exists as requested\&.
 .sp
-If there is a repository at \fB$GIT_URL\fR, but access is not currently permitted, the server MUST respond with the \fB403 Forbidden\fR HTTP status code\&.
+If there is a repository at \fB$GIT_URL\fR, but access is not currently permitted, the server MUST respond with the \fB403\fR \fBForbidden\fR HTTP status code\&.
 .sp
 Servers SHOULD support both HTTP 1\&.0 and HTTP 1\&.1\&. Servers SHOULD support chunked encoding for both request and response bodies\&.
 .sp
@@ -135,7 +134,7 @@ Servers MAY return ETag and/or Last\-Modified headers\&.
 .sp
 Clients MAY revalidate cached entities by including If\-Modified\-Since and/or If\-None\-Match request headers\&.
 .sp
-Servers MAY return \fB304 Not Modified\fR if the relevant headers appear in the request and the entity has not changed\&. Clients MUST treat \fB304 Not Modified\fR identical to \fB200 OK\fR by reusing the cached entity\&.
+Servers MAY return \fB304\fR \fBNot\fR \fBModified\fR if the relevant headers appear in the request and the entity has not changed\&. Clients MUST treat \fB304\fR \fBNot\fR \fBModified\fR identical to \fB200\fR \fBOK\fR by reusing the cached entity\&.
 .sp
 Clients MAY reuse a cached entity without revalidation if the Cache\-Control and/or Expires header permits caching\&. Clients and servers MUST follow RFC 2616 for cache controls\&.
 .SH "DISCOVERING REFERENCES"
@@ -163,20 +162,20 @@ C: GET $GIT_URL/info/refs HTTP/1\&.0
 .nf
 S: 200 OK
 S:
-S: 95dcfa3633004da0049d3d0fa03f80589cbcaf31  refs/heads/maint
-S: d049f6c27a2244e12041955e262a404c7faba355  refs/heads/master
-S: 2cb58b79488a98d2721cea644875a8dd0026b115  refs/tags/v1\&.0
-S: a3c2e2402b99163d1d59756e5f207ae21cccba4c  refs/tags/v1\&.0^{}
+S: 95dcfa3633004da0049d3d0fa03f80589cbcaf31	refs/heads/maint
+S: d049f6c27a2244e12041955e262a404c7faba355	refs/heads/master
+S: 2cb58b79488a98d2721cea644875a8dd0026b115	refs/tags/v1\&.0
+S: a3c2e2402b99163d1d59756e5f207ae21cccba4c	refs/tags/v1\&.0^{}
 .fi
 .if n \{\
 .RE
 .\}
 .sp
-The Content\-Type of the returned info/refs entity SHOULD be \fBtext/plain; charset=utf\-8\fR, but MAY be any content type\&. Clients MUST NOT attempt to validate the returned Content\-Type\&. Dumb servers MUST NOT return a return type starting with \fBapplication/x\-git\-\fR\&.
+The Content\-Type of the returned info/refs entity SHOULD be \fBtext/plain\fR; \fBcharset=utf\-8\fR, but MAY be any content type\&. Clients MUST NOT attempt to validate the returned Content\-Type\&. Dumb servers MUST NOT return a return type starting with \fBapplication/x\-git\-\fR\&.
 .sp
 Cache\-Control headers MAY be returned to disable caching of the returned entity\&.
 .sp
-When examining the response clients SHOULD only examine the HTTP status code\&. Valid responses are \fB200 OK\fR, or \fB304 Not Modified\fR\&.
+When examining the response clients SHOULD only examine the HTTP status code\&. Valid responses are \fB200\fR \fBOK\fR, or \fB304\fR \fBNot\fR \fBModified\fR\&.
 .sp
 The returned content is a UNIX formatted text file describing each ref and its known value\&. The file SHOULD be sorted by name according to the C locale ordering\&. The file SHOULD NOT include the default ref named \fBHEAD\fR\&.
 .sp
@@ -197,7 +196,7 @@ ref_record  =  any_ref / peeled_ref
 .nf
 any_ref     =  obj\-id HTAB refname LF
 peeled_ref  =  obj\-id HTAB refname LF
-               obj\-id HTAB refname "^{}" LF
+ obj\-id HTAB refname "^{}" LF
 .fi
 .if n \{\
 .RE
@@ -226,10 +225,10 @@ dumb server reply:
 .nf
 S: 200 OK
 S:
-S: 95dcfa3633004da0049d3d0fa03f80589cbcaf31  refs/heads/maint
-S: d049f6c27a2244e12041955e262a404c7faba355  refs/heads/master
-S: 2cb58b79488a98d2721cea644875a8dd0026b115  refs/tags/v1\&.0
-S: a3c2e2402b99163d1d59756e5f207ae21cccba4c  refs/tags/v1\&.0^{}
+S: 95dcfa3633004da0049d3d0fa03f80589cbcaf31	refs/heads/maint
+S: d049f6c27a2244e12041955e262a404c7faba355	refs/heads/master
+S: 2cb58b79488a98d2721cea644875a8dd0026b115	refs/tags/v1\&.0
+S: a3c2e2402b99163d1d59756e5f207ae21cccba4c	refs/tags/v1\&.0^{}
 .fi
 .if n \{\
 .RE
@@ -282,7 +281,7 @@ See the prior section under dumb clients for a more detailed description of the 
 \fBSmart Server Response\fR
 .RS 4
 .sp
-If the server does not recognize the requested service name, or the requested service name has been disabled by the server administrator, the server MUST respond with the \fB403 Forbidden\fR HTTP status code\&.
+If the server does not recognize the requested service name, or the requested service name has been disabled by the server administrator, the server MUST respond with the \fB403\fR \fBForbidden\fR HTTP status code\&.
 .sp
 Otherwise, smart servers MUST respond with the smart server reply format for the requested service name\&.
 .sp
@@ -290,13 +289,13 @@ Cache\-Control headers SHOULD be used to disable caching of the returned entity\
 .sp
 The Content\-Type MUST be \fBapplication/x\-$servicename\-advertisement\fR\&. Clients SHOULD fall back to the dumb protocol if another content type is returned\&. When falling back to the dumb protocol clients SHOULD NOT make an additional request to \fB$GIT_URL/info/refs\fR, but instead SHOULD use the response already in hand\&. Clients MUST NOT continue if they do not support the dumb protocol\&.
 .sp
-Clients MUST validate the status code is either \fB200 OK\fR or \fB304 Not Modified\fR\&.
+Clients MUST validate the status code is either \fB200\fR \fBOK\fR or \fB304\fR \fBNot\fR \fBModified\fR\&.
 .sp
-Clients MUST validate the first five bytes of the response entity matches the regex \fB^[0\-9a\-f]{4}#\fR\&. If this test fails, clients MUST NOT continue\&.
+Clients MUST validate the first five bytes of the response entity matches the regex \fB^\fR[\fB0\-9a\-f\fR]{4}#\&. If this test fails, clients MUST NOT continue\&.
 .sp
 Clients MUST parse the entire response as a sequence of pkt\-line records\&.
 .sp
-Clients MUST verify the first pkt\-line is \fB# service=$servicename\fR\&. Servers MUST set $servicename to be the request parameter value\&. Servers SHOULD include an LF at the end of this line\&. Clients MUST ignore an LF at the end of the line\&.
+Clients MUST verify the first pkt\-line is # \fBservice=$servicename\fR\&. Servers MUST set $servicename to be the request parameter value\&. Servers SHOULD include an LF at the end of this line\&. Clients MUST ignore an LF at the end of the line\&.
 .sp
 Servers MUST terminate the response with the magic \fB0000\fR end pkt\-line marker\&.
 .sp
@@ -309,10 +308,10 @@ The returned response contains "version 1" if "version=1" was sent as an Extra P
 .\}
 .nf
 smart_reply     =  PKT\-LINE("# service=$servicename" LF)
-                   "0000"
-                   *1("version 1")
-                   ref_list
-                   "0000"
+     "0000"
+     *1("version 1")
+     ref_list
+     "0000"
 ref_list        =  empty_list / non_empty_list
 .fi
 .if n \{\
@@ -334,7 +333,7 @@ empty_list      =  PKT\-LINE(zero\-id SP "capabilities^{}" NUL cap\-list LF)
 .\}
 .nf
 non_empty_list  =  PKT\-LINE(obj\-id SP name NUL cap_list LF)
-                   *ref_record
+     *ref_record
 .fi
 .if n \{\
 .RE
@@ -359,7 +358,7 @@ LC_ALPHA        =  %x61\-7A
 ref_record      =  any_ref / peeled_ref
 any_ref         =  PKT\-LINE(obj\-id SP name LF)
 peeled_ref      =  PKT\-LINE(obj\-id SP name LF)
-                   PKT\-LINE(obj\-id SP name "^{}" LF
+     PKT\-LINE(obj\-id SP name "^{}" LF
 .fi
 .if n \{\
 .RE
@@ -369,7 +368,7 @@ peeled_ref      =  PKT\-LINE(obj\-id SP name LF)
 .sp
 This service reads from the repository pointed to by \fB$GIT_URL\fR\&.
 .sp
-Clients MUST first perform ref discovery with \fB$GIT_URL/info/refs?service=git\-upload\-pack\fR\&.
+Clients MUST first perform ref discovery with \fB$GIT_URL/info/refs\fR?service=git\-upload\-pack\&.
 .sp
 .if n \{\
 .RS 4
@@ -412,8 +411,8 @@ Clients MUST send at least one "want" command in the request body\&. Clients MUS
 .\}
 .nf
 compute_request   =  want_list
-                     have_list
-                     request_end
+       have_list
+       request_end
 request_end       =  "0000" / "done"
 .fi
 .if n \{\
@@ -425,7 +424,7 @@ request_end       =  "0000" / "done"
 .\}
 .nf
 want_list         =  PKT\-LINE(want SP cap_list LF)
-                     *(want_pkt)
+       *(want_pkt)
 want_pkt          =  PKT\-LINE(want LF)
 want              =  "want" SP id
 cap_list          =  capability *(SP capability)
@@ -457,7 +456,7 @@ C: Place any object seen into set \fBadvertised\fR\&.
 .sp
 C: Build an empty set, \fBcommon\fR, to hold the objects that are later determined to be on both ends\&.
 .sp
-C: Build a set, \fBwant\fR, of the objects from \fBadvertised\fR the client wants to fetch, based on what it saw during ref discovery\&.
+C: Build a set, \fBwant\fR, of the objects from \fBadvertised\fR that the client wants to fetch, based on what it saw during ref discovery\&.
 .sp
 C: Start a queue, \fBc_pending\fR, ordered by commit time (popping newest first)\&. Add all client refs\&. When a commit is popped from the queue its parents SHOULD be automatically inserted back\&. Commits MUST only enter the queue once\&.
 .sp
@@ -469,14 +468,14 @@ C: Send one \fB$GIT_URL/git\-upload\-pack\fR request:
 .RS 4
 .\}
 .nf
-C: 0032want <want #1>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
-C: 0032want <want #2>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
+C: 0032want <want\-#1>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
+C: 0032want <want\-#2>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
 \&.\&.\&.\&.
-C: 0032have <common #1>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
-C: 0032have <common #2>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
+C: 0032have <common\-#1>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
+C: 0032have <common\-#2>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
 \&.\&.\&.\&.
-C: 0032have <have #1>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
-C: 0032have <have #2>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
+C: 0032have <have\-#1>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
+C: 0032have <have\-#2>\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.\&.
 \&.\&.\&.\&.
 C: 0000
 .fi
@@ -514,7 +513,7 @@ The stream is terminated by a pkt\-line flush (\fB0000\fR)\&.
 .sp
 A single "want" or "have" command MUST have one hex formatted object name as its value\&. Multiple object names MUST be sent by sending multiple commands\&. Object names MUST be given using the object format negotiated through the \fBobject\-format\fR capability (default SHA\-1)\&.
 .sp
-The \fBhave\fR list is created by popping the first 32 commits from \fBc_pending\fR\&. Less can be supplied if \fBc_pending\fR empties\&.
+The \fBhave\fR list is created by popping the first 32 commits from \fBc_pending\fR\&. Fewer can be supplied if \fBc_pending\fR empties\&.
 .sp
 If the client has sent 256 "have" commits and has not yet received one of those back from \fBs_common\fR, or the client has emptied \fBc_pending\fR it SHOULD include a "done" command to let the server know it won\(cqt proceed:
 .sp
@@ -573,7 +572,7 @@ C: Parse the upload\-pack response: TODO: Document parsing response
 .sp
 This service reads from the repository pointed to by \fB$GIT_URL\fR\&.
 .sp
-Clients MUST first perform ref discovery with \fB$GIT_URL/info/refs?service=git\-receive\-pack\fR\&.
+Clients MUST first perform ref discovery with \fB$GIT_URL/info/refs\fR?service=git\-receive\-pack\&.
 .sp
 .if n \{\
 .RS 4
@@ -615,7 +614,7 @@ Clients MUST send at least one command in the request body\&. Within the command
 .\}
 .nf
 update_request  =  command_list
-                   "PACK" <binary data>
+     "PACK" <binary\-data>
 .fi
 .if n \{\
 .RE
@@ -626,7 +625,7 @@ update_request  =  command_list
 .\}
 .nf
 command_list    =  PKT\-LINE(command NUL cap_list LF)
-                   *(command_pkt)
+     *(command_pkt)
 command_pkt     =  PKT\-LINE(command LF)
 cap_list        =  *(SP capability) SP
 .fi
@@ -661,10 +660,10 @@ Part of the \fBgit\fR(1) suite
 .IP " 1." 4
 RFC 1738: Uniform Resource Locators (URL)
 .RS 4
-\%http://www.ietf.org/rfc/rfc1738.txt
+\%https://www.ietf.org/rfc/rfc1738.txt
 .RE
 .IP " 2." 4
 RFC 2616: Hypertext Transfer Protocol \(em HTTP/1.1
 .RS 4
-\%http://www.ietf.org/rfc/rfc2616.txt
+\%https://www.ietf.org/rfc/rfc2616.txt
 .RE

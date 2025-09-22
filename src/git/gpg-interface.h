@@ -66,7 +66,7 @@ size_t parse_signed_buffer(const char *buf, size_t size);
  * Create a detached signature for the contents of "buffer" and append
  * it after "signature"; "buffer" and "signature" can be the same
  * strbuf instance, which would cause the detached signature appended
- * at the end.
+ * at the end.  Returns 0 on success, non-zero on failure.
  */
 int sign_buffer(struct strbuf *buffer, struct strbuf *signature,
 		const char *signing_key);
@@ -79,15 +79,14 @@ int sign_buffer(struct strbuf *buffer, struct strbuf *signature,
  */
 const char *gpg_trust_level_to_str(enum signature_trust_level level);
 
-int git_gpg_config(const char *, const char *, void *);
 void set_signing_key(const char *);
-const char *get_signing_key(void);
+char *get_signing_key(void);
 
 /*
  * Returns a textual unique representation of the signing key in use
  * Either a GPG KeyID or a SSH Key Fingerprint
  */
-const char *get_signing_key_id(void);
+char *get_signing_key_id(void);
 int check_signature(struct signature_check *sigc,
 		    const char *signature, size_t slen);
 void print_signature_buffer(const struct signature_check *sigc,

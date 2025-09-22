@@ -24,7 +24,7 @@ test_expect_success 'worktree path not directory' '
 	>notdir &&
 	test_must_fail git worktree repair >out 2>err &&
 	test_must_be_empty out &&
-	test_i18ngrep "not a directory" err
+	test_grep "not a directory" err
 '
 
 test_expect_success "don't clobber .git repo" '
@@ -34,7 +34,7 @@ test_expect_success "don't clobber .git repo" '
 	test_create_repo repo &&
 	test_must_fail git worktree repair >out 2>err &&
 	test_must_be_empty out &&
-	test_i18ngrep ".git is not a file" err
+	test_grep ".git is not a file" err
 '
 
 test_corrupt_gitfile () {
@@ -46,7 +46,7 @@ test_corrupt_gitfile () {
 	git -C corrupt rev-parse --absolute-git-dir >expect &&
 	eval "$butcher" &&
 	git -C "$repairdir" worktree repair 2>err &&
-	test_i18ngrep "$problem" err &&
+	test_grep "$problem" err &&
 	git -C corrupt rev-parse --absolute-git-dir >actual &&
 	test_cmp expect actual
 }
@@ -92,7 +92,7 @@ test_expect_success 'repair .git file from bare.git' '
 test_expect_success 'invalid worktree path' '
 	test_must_fail git worktree repair /notvalid >out 2>err &&
 	test_must_be_empty out &&
-	test_i18ngrep "not a valid path" err
+	test_grep "not a valid path" err
 '
 
 test_expect_success 'repo not found; .git not file' '
@@ -100,7 +100,7 @@ test_expect_success 'repo not found; .git not file' '
 	test_create_repo not-a-worktree &&
 	test_must_fail git worktree repair not-a-worktree >out 2>err &&
 	test_must_be_empty out &&
-	test_i18ngrep ".git is not a file" err
+	test_grep ".git is not a file" err
 '
 
 test_expect_success 'repo not found; .git not referencing repo' '
@@ -110,7 +110,7 @@ test_expect_success 'repo not found; .git not referencing repo' '
 	mv side/.newgit side/.git &&
 	mkdir not-a-repo &&
 	test_must_fail git worktree repair side 2>err &&
-	test_i18ngrep ".git file does not reference a repository" err
+	test_grep ".git file does not reference a repository" err
 '
 
 test_expect_success 'repo not found; .git file broken' '
@@ -120,7 +120,7 @@ test_expect_success 'repo not found; .git file broken' '
 	mv orig moved &&
 	test_must_fail git worktree repair moved >out 2>err &&
 	test_must_be_empty out &&
-	test_i18ngrep ".git file broken" err
+	test_grep ".git file broken" err
 '
 
 test_expect_success 'repair broken gitdir' '
@@ -131,7 +131,7 @@ test_expect_success 'repair broken gitdir' '
 	mv orig moved &&
 	git worktree repair moved 2>err &&
 	test_cmp expect .git/worktrees/orig/gitdir &&
-	test_i18ngrep "gitdir unreadable" err
+	test_grep "gitdir unreadable" err
 '
 
 test_expect_success 'repair incorrect gitdir' '
@@ -141,7 +141,7 @@ test_expect_success 'repair incorrect gitdir' '
 	mv orig moved &&
 	git worktree repair moved 2>err &&
 	test_cmp expect .git/worktrees/orig/gitdir &&
-	test_i18ngrep "gitdir incorrect" err
+	test_grep "gitdir incorrect" err
 '
 
 test_expect_success 'repair gitdir (implicit) from linked worktree' '
@@ -151,7 +151,7 @@ test_expect_success 'repair gitdir (implicit) from linked worktree' '
 	mv orig moved &&
 	git -C moved worktree repair 2>err &&
 	test_cmp expect .git/worktrees/orig/gitdir &&
-	test_i18ngrep "gitdir incorrect" err
+	test_grep "gitdir incorrect" err
 '
 
 test_expect_success 'unable to repair gitdir (implicit) from main worktree' '
@@ -176,8 +176,8 @@ test_expect_success 'repair multiple gitdir files' '
 	git worktree repair moved1 moved2 2>err &&
 	test_cmp expect1 .git/worktrees/orig1/gitdir &&
 	test_cmp expect2 .git/worktrees/orig2/gitdir &&
-	test_i18ngrep "gitdir incorrect:.*orig1/gitdir$" err &&
-	test_i18ngrep "gitdir incorrect:.*orig2/gitdir$" err
+	test_grep "gitdir incorrect:.*orig1/gitdir$" err &&
+	test_grep "gitdir incorrect:.*orig2/gitdir$" err
 '
 
 test_expect_success 'repair moved main and linked worktrees' '
@@ -193,6 +193,64 @@ test_expect_success 'repair moved main and linked worktrees' '
 	mv side sidemoved &&
 	git -C mainmoved worktree repair ../sidemoved &&
 	test_cmp expect-gitdir mainmoved/.git/worktrees/side/gitdir &&
+	test_cmp expect-gitfile sidemoved/.git
+'
+
+test_expect_success 'repair copied main and linked worktrees' '
+	test_when_finished "rm -rf orig dup" &&
+	mkdir -p orig &&
+	git -C orig init main &&
+	test_commit -C orig/main nothing &&
+	git -C orig/main worktree add ../linked &&
+	cp orig/main/.git/worktrees/linked/gitdir orig/main.expect &&
+	cp orig/linked/.git orig/linked.expect &&
+	cp -R orig dup &&
+	sed "s,orig/linked/\.git$,dup/linked/.git," orig/main.expect >dup/main.expect &&
+	sed "s,orig/main/\.git/worktrees/linked$,dup/main/.git/worktrees/linked," \
+		orig/linked.expect >dup/linked.expect &&
+	git -C dup/main worktree repair ../linked &&
+	test_cmp orig/main.expect orig/main/.git/worktrees/linked/gitdir &&
+	test_cmp orig/linked.expect orig/linked/.git &&
+	test_cmp dup/main.expect dup/main/.git/worktrees/linked/gitdir &&
+	test_cmp dup/linked.expect dup/linked/.git
+'
+
+test_expect_success 'repair worktree with relative path with missing gitfile' '
+	test_when_finished "rm -rf main wt" &&
+	test_create_repo main &&
+	git -C main config worktree.useRelativePaths true &&
+	test_commit -C main init &&
+	git -C main worktree add --detach ../wt &&
+	rm wt/.git &&
+	test_path_is_missing wt/.git &&
+	git -C main worktree repair &&
+	echo "gitdir: ../main/.git/worktrees/wt" >expect &&
+	test_cmp expect wt/.git
+'
+
+test_expect_success 'repair absolute worktree to use relative paths' '
+	test_when_finished "rm -rf main side sidemoved" &&
+	test_create_repo main &&
+	test_commit -C main init &&
+	git -C main worktree add --detach ../side &&
+	echo "../../../../sidemoved/.git" >expect-gitdir &&
+	echo "gitdir: ../main/.git/worktrees/side" >expect-gitfile &&
+	mv side sidemoved &&
+	git -C main worktree repair --relative-paths ../sidemoved &&
+	test_cmp expect-gitdir main/.git/worktrees/side/gitdir &&
+	test_cmp expect-gitfile sidemoved/.git
+'
+
+test_expect_success 'repair relative worktree to use absolute paths' '
+	test_when_finished "rm -rf main side sidemoved" &&
+	test_create_repo main &&
+	test_commit -C main init &&
+	git -C main worktree add --relative-paths --detach ../side &&
+	echo "$(pwd)/sidemoved/.git" >expect-gitdir &&
+	echo "gitdir: $(pwd)/main/.git/worktrees/side" >expect-gitfile &&
+	mv side sidemoved &&
+	git -C main worktree repair ../sidemoved &&
+	test_cmp expect-gitdir main/.git/worktrees/side/gitdir &&
 	test_cmp expect-gitfile sidemoved/.git
 '
 

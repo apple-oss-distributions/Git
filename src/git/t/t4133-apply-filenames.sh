@@ -6,7 +6,6 @@
 test_description='git apply filename consistency check'
 
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -32,9 +31,9 @@ EOF
 
 test_expect_success 'apply diff with inconsistent filenames in headers' '
 	test_must_fail git apply bad1.patch 2>err &&
-	test_i18ngrep "inconsistent new filename" err &&
+	test_grep "inconsistent new filename" err &&
 	test_must_fail git apply bad2.patch 2>err &&
-	test_i18ngrep "inconsistent old filename" err
+	test_grep "inconsistent old filename" err
 '
 
 test_expect_success 'apply diff with new filename missing from headers' '
@@ -46,7 +45,7 @@ test_expect_success 'apply diff with new filename missing from headers' '
 	+1
 	EOF
 	test_must_fail git apply missing_new_filename.diff 2>err &&
-	test_i18ngrep "lacks filename information" err
+	test_grep "lacks filename information" err
 '
 
 test_expect_success 'apply diff with old filename missing from headers' '
@@ -58,7 +57,7 @@ test_expect_success 'apply diff with old filename missing from headers' '
 	-1
 	EOF
 	test_must_fail git apply missing_old_filename.diff 2>err &&
-	test_i18ngrep "lacks filename information" err
+	test_grep "lacks filename information" err
 '
 
 test_done

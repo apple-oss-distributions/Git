@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitformat-commit-graph
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITFORMAT\-COMMIT\-G" "5" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITFORMAT\-COMMIT\-GRAPH" "5" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -35,7 +35,6 @@ gitformat-commit-graph \- Git commit\-graph format
 $GIT_DIR/objects/info/commit\-graph
 $GIT_DIR/objects/info/commit\-graphs/*
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 The Git commit\-graph stores a list of commit OIDs and some associated metadata, including:
@@ -108,7 +107,7 @@ All multi\-byte numbers are in network byte order\&.
 .\}
 .nf
 4\-byte signature:
-    The signature is: {\(aqC\(aq, \(aqG\(aq, \(aqP\(aq, \(aqH\(aq}
+    The signature is: {\*(AqC\*(Aq, \*(AqG\*(Aq, \*(AqP\*(Aq, \*(AqH\*(Aq}
 .fi
 .if n \{\
 .RE
@@ -129,13 +128,13 @@ All multi\-byte numbers are in network byte order\&.
 .RS 4
 .\}
 .nf
-1\-byte Hash Version
-    We infer the hash length (H) from this value:
-      1 => SHA\-1
-      2 => SHA\-256
-    If the hash type does not match the repository\(aqs hash algorithm, the
-    commit\-graph file should be ignored with a warning presented to the
-    user\&.
+ 1\-byte Hash Version
+     We infer the hash length (H) from this value:
+1 => SHA\-1
+2 => SHA\-256
+     If the hash type does not match the repository\*(Aqs hash algorithm, the
+     commit\-graph file should be ignored with a warning presented to the
+     user\&.
 .fi
 .if n \{\
 .RE
@@ -354,7 +353,7 @@ This list of 8\-byte values stores the corrected commit date offsets for commits
 .sp -1
 .IP \(bu 2.3
 .\}
-Generation Data Overflow chunk is present only when Generation Data chunk is present and atleast one corrected commit date offset cannot be stored within 31 bits\&.
+Generation Data Overflow chunk is present only when Generation Data chunk is present and at least one corrected commit date offset cannot be stored within 31 bits\&.
 .RE
 .RE
 .sp
@@ -439,11 +438,11 @@ It starts with header consisting of three unsigned 32\-bit integers:
 .sp -1
 .IP \(bu 2.3
 .\}
-Version of the hash algorithm being used\&. We currently only support value 1 which corresponds to the 32\-bit version of the murmur3 hash implemented exactly as described in
+Version of the hash algorithm being used\&. We currently support value 2 which corresponds to the 32\-bit version of the murmur3 hash implemented exactly as described in
 \m[blue]\fBhttps://en\&.wikipedia\&.org/wiki/MurmurHash#Algorithm\fR\m[]
 and the double hashing technique using seed values 0x293ae76f and 0x7e646e2 as described in
 \m[blue]\fBhttps://doi\&.org/10\&.1007/978\-3\-540\-30494\-4_26\fR\m[]
-"Bloom Filters in Probabilistic Verification"
+"Bloom Filters in Probabilistic Verification"\&. Version 1 Bloom filters have a bug that appears when char is signed and the repository has path names that have characters >= 0x80; Git supports reading and writing them, but this ability will be removed in a future version of Git\&.
 .RE
 .sp
 .RS 4
@@ -521,7 +520,7 @@ The BDAT chunk is present if and only if BIDX is present\&.
 .nf
 This list of H\-byte hashes describe a set of B commit\-graph files that
 form a commit\-graph chain\&. The graph position for the ith commit in this
-file\(aqs OID Lookup chunk is equal to i plus the number of commits in all
+file\*(Aqs OID Lookup chunk is equal to i plus the number of commits in all
 base graphs\&.  If B is non\-zero, this chunk must exist\&.
 .fi
 .if n \{\

@@ -2,9 +2,11 @@
  * Another stupid program, this one parsing the headers of an
  * email to figure out authorship and subject
  */
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
-#include "utf8.h"
+#include "abspath.h"
+#include "environment.h"
+#include "gettext.h"
 #include "strbuf.h"
 #include "mailinfo.h"
 #include "parse-options.h"
@@ -47,7 +49,10 @@ static int parse_opt_quoted_cr(const struct option *opt, const char *arg, int un
 	return 0;
 }
 
-int cmd_mailinfo(int argc, const char **argv, const char *prefix)
+int cmd_mailinfo(int argc,
+		 const char **argv,
+		 const char *prefix,
+		 struct repository *repo UNUSED)
 {
 	struct metainfo_charset meta_charset;
 	struct mailinfo mi;
@@ -78,7 +83,7 @@ int cmd_mailinfo(int argc, const char **argv, const char *prefix)
 		OPT_END()
 	};
 
-	setup_mailinfo(&mi);
+	setup_mailinfo(the_repository, &mi);
 	meta_charset.policy = CHARSET_DEFAULT;
 
 	argc = parse_options(argc, argv, prefix, options, mailinfo_usage, 0);

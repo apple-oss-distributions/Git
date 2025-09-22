@@ -5,7 +5,6 @@ test_description='Return value of diffs'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -137,5 +136,55 @@ test_expect_success 'check honors conflict marker length' '
 	git diff --check a &&
 	git reset --hard
 '
+
+test_expect_success 'option errors are not confused by --exit-code' '
+	test_must_fail git diff --exit-code --nonsense 2>err &&
+	grep '^usage:' err
+'
+
+for option in --exit-code --quiet
+do
+	test_expect_success "git diff $option returns 1 for changed binary file" "
+		test_when_finished 'rm -f .gitattributes' &&
+		git reset --hard &&
+		echo a binary >.gitattributes &&
+		echo 2 >>a &&
+		test_expect_code 1 git diff $option
+	"
+
+	test_expect_success "git diff $option returns 1 for copied file" "
+		git reset --hard &&
+		cp a copy &&
+		git add copy &&
+		test_expect_code 1 git diff $option --cached --find-copies-harder
+	"
+
+	test_expect_success "git diff $option returns 1 for renamed file" "
+		git reset --hard &&
+		git mv a renamed &&
+		test_expect_code 1 git diff $option --cached
+	"
+done
+
+test_expect_success 'setup dirty subrepo' '
+	git reset --hard &&
+	test_create_repo subrepo &&
+	test_commit -C subrepo subrepo-file &&
+	test_tick &&
+	git add subrepo &&
+	git commit -m subrepo &&
+	test_commit -C subrepo another-subrepo-file
+'
+
+for option in --exit-code --quiet
+do
+	for submodule_format in diff log short
+	do
+		opts="$option --submodule=$submodule_format" &&
+		test_expect_success "git diff $opts returns 1 for dirty subrepo" "
+			test_expect_code 1 git diff $opts
+		"
+	done
+done
 
 test_done

@@ -157,7 +157,7 @@ install-contrib:
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/completion/git-prompt.sh $(DSTROOT)$(PREFIX)/share/git-core
 	install -o root -g wheel -m 0755 $(SRCROOT)/src/git/contrib/subtree/git-subtree.sh $(DSTROOT)$(PREFIX)/libexec/git-core/git-subtree
 	$(CC) $(RC_ARCHFLAGS) -c $(CFLAGS) $(SRCROOT)/src/git/contrib/credential/osxkeychain/git-credential-osxkeychain.c -o $(OBJROOT)/git-credential-osxkeychain.o
-	$(CC) $(RC_ARCHFLAGS) -o $(DSTROOT)$(PREFIX)/libexec/git-core/git-credential-osxkeychain $(OBJROOT)/git-credential-osxkeychain.o -framework Security
+	$(CC) $(RC_ARCHFLAGS) -o $(DSTROOT)$(PREFIX)/libexec/git-core/git-credential-osxkeychain $(OBJROOT)/git-credential-osxkeychain.o -framework Security -framework Foundation
 
 install-bin: build
 	$(MAKE) -C $(firstarch) $(submakevars) \
@@ -225,7 +225,8 @@ $(OBJROOT)/$(1)/dir.timestamp:
 
 $(OBJROOT)/$(1)/ditto.timestamp: $(OBJROOT)/$(1)/dir.timestamp
 	ditto $$(CURDIR)/src/git $$(dir $$@)
-	sed -n "s/^DEF_VER=\\(.*\\)/\\1 (Apple Git-$(RC_ProjectSourceVersion))/p" < $$(dir $$@)/GIT-VERSION-GEN > $$(dir $$@)/version
+	# Apply Apple Version Prefix to Header
+	sed -i -e "s/\\(@GIT_VERSION@\\)/\\1 (Apple Git-$(RC_ProjectSourceVersion))/" $$(dir $$@)version-def.h.in
 	touch $$@
 
 $(OBJROOT)/$(1)/build.timestamp: $(OBJROOT)/$(1)/ditto.timestamp $(OBJROOT)/Info.plist

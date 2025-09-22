@@ -33,6 +33,26 @@ test_expect_success 'setup' '
 	u3 sha256:736c4bc
 	u4 sha256:673e77d
 
+	# topic (abbrev=10)
+	t1_abbrev sha1:4de457d2c0
+	t2_abbrev sha1:fccce22f8c
+	t3_abbrev sha1:147e64ef53
+	t4_abbrev sha1:a63e992599
+	t1_abbrev sha256:b89f8b9092
+	t2_abbrev sha256:5f12aadf34
+	t3_abbrev sha256:ea8b273a6c
+	t4_abbrev sha256:14b73361fc
+
+	# unmodified (abbrev=10)
+	u1_abbrev sha1:35b9b25f76
+	u2_abbrev sha1:de345ab3de
+	u3_abbrev sha1:9af6654000
+	u4_abbrev sha1:2901f773f3
+	u1_abbrev sha256:e3731be242
+	u2_abbrev sha256:14fadf8cee
+	u3_abbrev sha256:736c4bcb44
+	u4_abbrev sha256:673e77d589
+
 	# reordered
 	r1 sha1:aca177a
 	r2 sha1:14ad629
@@ -153,6 +173,18 @@ test_expect_success 'simple A B C (unmodified)' '
 	test_cmp expect actual
 '
 
+test_expect_success 'simple A..B A..C (unmodified) with --abbrev' '
+	git range-diff --no-color --abbrev=10 main..topic main..unmodified \
+		>actual &&
+	cat >expect <<-EOF &&
+	1:  $(test_oid t1_abbrev) = 1:  $(test_oid u1_abbrev) s/5/A/
+	2:  $(test_oid t2_abbrev) = 2:  $(test_oid u2_abbrev) s/4/A/
+	3:  $(test_oid t3_abbrev) = 3:  $(test_oid u3_abbrev) s/11/B/
+	4:  $(test_oid t4_abbrev) = 4:  $(test_oid u4_abbrev) s/12/B/
+	EOF
+	test_cmp expect actual
+'
+
 test_expect_success 'A^! and A^-<n> (unmodified)' '
 	git range-diff --no-color topic^! unmodified^-1 >actual &&
 	cat >expect <<-EOF &&
@@ -163,7 +195,7 @@ test_expect_success 'A^! and A^-<n> (unmodified)' '
 
 test_expect_success 'A^{/..} is not mistaken for a range' '
 	test_must_fail git range-diff topic^.. topic^{/..} -- 2>error &&
-	test_i18ngrep "not a commit range" error
+	test_grep "not a commit range" error
 '
 
 test_expect_success 'trivial reordering' '
@@ -501,11 +533,11 @@ test_expect_success 'dual-coloring' '
 for prev in topic main..topic
 do
 	test_expect_success "format-patch --range-diff=$prev" '
+		test_when_finished "rm -f 000?-*" &&
 		git format-patch --cover-letter --range-diff=$prev \
 			main..unmodified >actual &&
-		test_when_finished "rm 000?-*" &&
 		test_line_count = 5 actual &&
-		test_i18ngrep "^Range-diff:$" 0000-* &&
+		test_grep "^Range-diff:$" 0000-* &&
 		grep "= 1: .* s/5/A" 0000-* &&
 		grep "= 2: .* s/4/A" 0000-* &&
 		grep "= 3: .* s/11/B" 0000-* &&
@@ -513,35 +545,49 @@ do
 	'
 done
 
+test_expect_success "--range-diff implies --cover-letter for multi-patch series" '
+	test_when_finished "rm -f v2-000?-*" &&
+	git format-patch -v2 --range-diff=topic main..unmodified &&
+	test_grep "^Range-diff against v1:$" v2-0000-cover-letter.patch
+'
+
+test_expect_success "explicit --no-cover-letter defeats implied --cover-letter" '
+	test_when_finished "rm -f v2-000?-*" &&
+	test_must_fail git format-patch --no-cover-letter \
+		-v2 --range-diff=topic main..unmodified &&
+	test_must_fail git -c format.coverLetter=no format-patch \
+		-v2 --range-diff=topic main..unmodified
+'
+
 test_expect_success 'format-patch --range-diff as commentary' '
+	test_when_finished "rm -f 0001-*" &&
 	git format-patch --range-diff=HEAD~1 HEAD~1 >actual &&
-	test_when_finished "rm 0001-*" &&
 	test_line_count = 1 actual &&
-	test_i18ngrep "^Range-diff:$" 0001-* &&
+	test_grep "^Range-diff:$" 0001-* &&
 	grep "> 1: .* new message" 0001-*
 '
 
 test_expect_success 'format-patch --range-diff reroll-count with a non-integer' '
+	test_when_finished "rm -f v2.9-0001-*" &&
 	git format-patch --range-diff=HEAD~1 -v2.9 HEAD~1 >actual &&
-	test_when_finished "rm v2.9-0001-*" &&
 	test_line_count = 1 actual &&
-	test_i18ngrep "^Range-diff:$" v2.9-0001-* &&
+	test_grep "^Range-diff:$" v2.9-0001-* &&
 	grep "> 1: .* new message" v2.9-0001-*
 '
 
 test_expect_success 'format-patch --range-diff reroll-count with a integer' '
+	test_when_finished "rm -f v2-0001-*" &&
 	git format-patch --range-diff=HEAD~1 -v2 HEAD~1 >actual &&
-	test_when_finished "rm v2-0001-*" &&
 	test_line_count = 1 actual &&
-	test_i18ngrep "^Range-diff ..* v1:$" v2-0001-* &&
+	test_grep "^Range-diff ..* v1:$" v2-0001-* &&
 	grep "> 1: .* new message" v2-0001-*
 '
 
 test_expect_success 'format-patch --range-diff with v0' '
+	test_when_finished "rm -f v0-0001-*" &&
 	git format-patch --range-diff=HEAD~1 -v0 HEAD~1 >actual &&
-	test_when_finished "rm v0-0001-*" &&
 	test_line_count = 1 actual &&
-	test_i18ngrep "^Range-diff:$" v0-0001-* &&
+	test_grep "^Range-diff:$" v0-0001-* &&
 	grep "> 1: .* new message" v0-0001-*
 '
 
@@ -560,9 +606,9 @@ test_expect_success 'basic with modified format.pretty without "commit "' '
 '
 
 test_expect_success 'range-diff compares notes by default' '
+	test_when_finished "git notes remove topic unmodified || :" &&
 	git notes add -m "topic note" topic &&
 	git notes add -m "unmodified note" unmodified &&
-	test_when_finished git notes remove topic unmodified &&
 	git range-diff --no-color main..topic main..unmodified \
 		>actual &&
 	sed s/Z/\ /g >expect <<-EOF &&
@@ -584,9 +630,9 @@ test_expect_success 'range-diff compares notes by default' '
 '
 
 test_expect_success 'range-diff with --no-notes' '
+	test_when_finished "git notes remove topic unmodified || :" &&
 	git notes add -m "topic note" topic &&
 	git notes add -m "unmodified note" unmodified &&
-	test_when_finished git notes remove topic unmodified &&
 	git range-diff --no-color --no-notes main..topic main..unmodified \
 		>actual &&
 	cat >expect <<-EOF &&
@@ -599,12 +645,12 @@ test_expect_success 'range-diff with --no-notes' '
 '
 
 test_expect_success 'range-diff with multiple --notes' '
+	test_when_finished "git notes --ref=note1 remove topic unmodified || :" &&
 	git notes --ref=note1 add -m "topic note1" topic &&
 	git notes --ref=note1 add -m "unmodified note1" unmodified &&
-	test_when_finished git notes --ref=note1 remove topic unmodified &&
+	test_when_finished "git notes --ref=note2 remove topic unmodified || :" &&
 	git notes --ref=note2 add -m "topic note2" topic &&
 	git notes --ref=note2 add -m "unmodified note2" unmodified &&
-	test_when_finished git notes --ref=note2 remove topic unmodified &&
 	git range-diff --no-color --notes=note1 --notes=note2 main..topic main..unmodified \
 		>actual &&
 	sed s/Z/\ /g >expect <<-EOF &&
@@ -630,15 +676,29 @@ test_expect_success 'range-diff with multiple --notes' '
 	test_cmp expect actual
 '
 
-test_expect_success 'format-patch --range-diff does not compare notes by default' '
+# `range-diff` should act like `log` with regards to notes
+test_expect_success 'range-diff with --notes=custom does not show default notes' '
+	test_when_finished "git notes remove topic unmodified || :" &&
 	git notes add -m "topic note" topic &&
 	git notes add -m "unmodified note" unmodified &&
-	test_when_finished git notes remove topic unmodified &&
+	test_when_finished "git notes --ref=custom remove topic unmodified || :" &&
+	git notes --ref=custom add -m "topic note" topic &&
+	git notes --ref=custom add -m "unmodified note" unmodified &&
+	git range-diff --notes=custom main..topic main..unmodified \
+		>actual &&
+	! grep "## Notes ##" actual &&
+	grep "## Notes (custom) ##" actual
+'
+
+test_expect_success 'format-patch --range-diff does not compare notes by default' '
+	test_when_finished "git notes remove topic unmodified || :" &&
+	git notes add -m "topic note" topic &&
+	git notes add -m "unmodified note" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
 	git format-patch --cover-letter --range-diff=$prev \
 		main..unmodified >actual &&
-	test_when_finished "rm 000?-*" &&
 	test_line_count = 5 actual &&
-	test_i18ngrep "^Range-diff:$" 0000-* &&
+	test_grep "^Range-diff:$" 0000-* &&
 	grep "= 1: .* s/5/A" 0000-* &&
 	grep "= 2: .* s/4/A" 0000-* &&
 	grep "= 3: .* s/11/B" 0000-* &&
@@ -647,15 +707,29 @@ test_expect_success 'format-patch --range-diff does not compare notes by default
 	! grep "note" 0000-*
 '
 
-test_expect_success 'format-patch --range-diff with --no-notes' '
+test_expect_success 'format-patch --notes=custom --range-diff only compares custom notes' '
+	test_when_finished "git notes remove topic unmodified || :" &&
 	git notes add -m "topic note" topic &&
 	git notes add -m "unmodified note" unmodified &&
-	test_when_finished git notes remove topic unmodified &&
+	test_when_finished "git notes --ref=custom remove topic unmodified || :" &&
+	git notes --ref=custom add -m "topic note (custom)" topic &&
+	git notes --ref=custom add -m "unmodified note (custom)" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --notes=custom --cover-letter --range-diff=$prev \
+		main..unmodified >actual &&
+	grep "## Notes (custom) ##" 0000-* &&
+	! grep "## Notes ##" 0000-*
+'
+
+test_expect_success 'format-patch --range-diff with --no-notes' '
+	test_when_finished "git notes remove topic unmodified || :" &&
+	git notes add -m "topic note" topic &&
+	git notes add -m "unmodified note" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
 	git format-patch --no-notes --cover-letter --range-diff=$prev \
 		main..unmodified >actual &&
-	test_when_finished "rm 000?-*" &&
 	test_line_count = 5 actual &&
-	test_i18ngrep "^Range-diff:$" 0000-* &&
+	test_grep "^Range-diff:$" 0000-* &&
 	grep "= 1: .* s/5/A" 0000-* &&
 	grep "= 2: .* s/4/A" 0000-* &&
 	grep "= 3: .* s/11/B" 0000-* &&
@@ -665,14 +739,14 @@ test_expect_success 'format-patch --range-diff with --no-notes' '
 '
 
 test_expect_success 'format-patch --range-diff with --notes' '
+	test_when_finished "git notes remove topic unmodified || :" &&
 	git notes add -m "topic note" topic &&
 	git notes add -m "unmodified note" unmodified &&
-	test_when_finished git notes remove topic unmodified &&
+	test_when_finished "rm -f 000?-*" &&
 	git format-patch --notes --cover-letter --range-diff=$prev \
 		main..unmodified >actual &&
-	test_when_finished "rm 000?-*" &&
 	test_line_count = 5 actual &&
-	test_i18ngrep "^Range-diff:$" 0000-* &&
+	test_grep "^Range-diff:$" 0000-* &&
 	grep "= 1: .* s/5/A" 0000-* &&
 	grep "= 2: .* s/4/A" 0000-* &&
 	grep "= 3: .* s/11/B" 0000-* &&
@@ -693,15 +767,15 @@ test_expect_success 'format-patch --range-diff with --notes' '
 '
 
 test_expect_success 'format-patch --range-diff with format.notes config' '
+	test_when_finished "git notes remove topic unmodified || :" &&
 	git notes add -m "topic note" topic &&
 	git notes add -m "unmodified note" unmodified &&
-	test_when_finished git notes remove topic unmodified &&
 	test_config format.notes true &&
+	test_when_finished "rm -f 000?-*" &&
 	git format-patch --cover-letter --range-diff=$prev \
 		main..unmodified >actual &&
-	test_when_finished "rm 000?-*" &&
 	test_line_count = 5 actual &&
-	test_i18ngrep "^Range-diff:$" 0000-* &&
+	test_grep "^Range-diff:$" 0000-* &&
 	grep "= 1: .* s/5/A" 0000-* &&
 	grep "= 2: .* s/4/A" 0000-* &&
 	grep "= 3: .* s/11/B" 0000-* &&
@@ -722,17 +796,17 @@ test_expect_success 'format-patch --range-diff with format.notes config' '
 '
 
 test_expect_success 'format-patch --range-diff with multiple notes' '
+	test_when_finished "git notes --ref=note1 remove topic unmodified || :" &&
 	git notes --ref=note1 add -m "topic note1" topic &&
 	git notes --ref=note1 add -m "unmodified note1" unmodified &&
-	test_when_finished git notes --ref=note1 remove topic unmodified &&
+	test_when_finished "git notes --ref=note2 remove topic unmodified || :" &&
 	git notes --ref=note2 add -m "topic note2" topic &&
 	git notes --ref=note2 add -m "unmodified note2" unmodified &&
-	test_when_finished git notes --ref=note2 remove topic unmodified &&
+	test_when_finished "rm -f 000?-*" &&
 	git format-patch --notes=note1 --notes=note2 --cover-letter --range-diff=$prev \
 		main..unmodified >actual &&
-	test_when_finished "rm 000?-*" &&
 	test_line_count = 5 actual &&
-	test_i18ngrep "^Range-diff:$" 0000-* &&
+	test_grep "^Range-diff:$" 0000-* &&
 	grep "= 1: .* s/5/A" 0000-* &&
 	grep "= 2: .* s/4/A" 0000-* &&
 	grep "= 3: .* s/11/B" 0000-* &&
@@ -831,6 +905,22 @@ test_expect_success 'submodule changes are shown irrespective of diff.submodule'
 	test_cmp expect actual &&
 	test_config diff.submodule diff &&
 	git range-diff --creation-factor=100 topic topic-sub modified-sub >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '--diff-merges' '
+	renamed_oid=$(git rev-parse --short renamed-file) &&
+	tree=$(git merge-tree unmodified renamed-file) &&
+	clean=$(git commit-tree -m merge -p unmodified -p renamed-file $tree) &&
+	clean_oid=$(git rev-parse --short $clean) &&
+	conflict=$(git commit-tree -m merge -p unmodified -p renamed-file^ $tree) &&
+	conflict_oid=$(git rev-parse --short $conflict) &&
+
+	git range-diff --diff-merges=1 $clean...$conflict >actual &&
+	cat >expect <<-EOF &&
+	1:  $renamed_oid < -:  ------- s/12/B/
+	2:  $clean_oid = 1:  $conflict_oid merge
+	EOF
 	test_cmp expect actual
 '
 

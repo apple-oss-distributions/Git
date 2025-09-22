@@ -1,9 +1,14 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
 #include "notes-cache.h"
+#include "object-file.h"
 #include "object-store.h"
+#include "pretty.h"
 #include "repository.h"
 #include "commit.h"
 #include "refs.h"
+#include "strbuf.h"
 
 static int notes_cache_match_validity(struct repository *r,
 				      const char *ref,
@@ -15,7 +20,7 @@ static int notes_cache_match_validity(struct repository *r,
 	struct strbuf msg = STRBUF_INIT;
 	int ret;
 
-	if (read_ref(ref, &oid) < 0)
+	if (refs_read_ref(get_main_ref_store(the_repository), ref, &oid) < 0)
 		return 0;
 
 	commit = lookup_commit_reference_gently(r, &oid, 1);
@@ -23,7 +28,8 @@ static int notes_cache_match_validity(struct repository *r,
 		return 0;
 
 	memset(&pretty_ctx, 0, sizeof(pretty_ctx));
-	format_commit_message(commit, "%s", &msg, &pretty_ctx);
+	repo_format_commit_message(r, commit, "%s", &msg,
+				   &pretty_ctx);
 	strbuf_trim(&msg);
 
 	ret = !strcmp(msg.buf, validity);
@@ -63,8 +69,8 @@ int notes_cache_write(struct notes_cache *c)
 	if (commit_tree(c->validity, strlen(c->validity), &tree_oid, NULL,
 			&commit_oid, NULL, NULL) < 0)
 		return -1;
-	if (update_ref("update notes cache", c->tree.update_ref, &commit_oid,
-		       NULL, 0, UPDATE_REFS_QUIET_ON_ERR) < 0)
+	if (refs_update_ref(get_main_ref_store(the_repository), "update notes cache", c->tree.update_ref, &commit_oid,
+			    NULL, 0, UPDATE_REFS_QUIET_ON_ERR) < 0)
 		return -1;
 
 	return 0;
@@ -81,7 +87,7 @@ char *notes_cache_get(struct notes_cache *c, struct object_id *key_oid,
 	value_oid = get_note(&c->tree, key_oid);
 	if (!value_oid)
 		return NULL;
-	value = read_object_file(value_oid, &type, &size);
+	value = repo_read_object_file(the_repository, value_oid, &type, &size);
 
 	*outsize = size;
 	return value;

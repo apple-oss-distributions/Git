@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test subject preservation with format-patch | am'
+
 . ./test-lib.sh
 
 make_patches() {

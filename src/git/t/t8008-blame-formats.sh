@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='blame output in various formats on a simple case'
+
 . ./test-lib.sh
 
 test_expect_success 'setup' '

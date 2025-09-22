@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='test finding specific blobs in the revision walking'
+
 . ./test-lib.sh
 
 test_expect_success 'setup ' '

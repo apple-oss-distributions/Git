@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-difftool
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-DIFFTOOL" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-DIFFTOOL" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,9 +32,8 @@ git-difftool \- Show changes using common diff tools
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit difftool\fR [<options>] [<commit> [<commit>]] [\-\-] [<path>\&...]
+\fIgit difftool\fR [<options>] [<commit> [<commit>]] [\-\-] [<path>\&...\:]
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 \fIgit difftool\fR is a Git command that allows you to compare and edit files between revisions using common diff tools\&. \fIgit difftool\fR is a frontend to \fIgit diff\fR and accepts the same options and arguments\&. See \fBgit-diff\fR(1)\&.
@@ -57,7 +56,7 @@ Prompt before each invocation of the diff tool\&. This is the default behaviour;
 .PP
 \-\-rotate\-to=<file>
 .RS 4
-Start showing the diff for the given path, the paths before it will move to end and output\&.
+Start showing the diff for the given path, the paths before it will move to the end and output\&.
 .RE
 .PP
 \-\-skip\-to=<file>
@@ -68,7 +67,9 @@ Start showing the diff for the given path, skipping all the paths before it\&.
 \-t <tool>, \-\-tool=<tool>
 .RS 4
 Use the diff tool specified by <tool>\&. Valid values include emerge, kompare, meld, and vimdiff\&. Run
-\fBgit difftool \-\-tool\-help\fR
+\fBgit\fR
+\fBdifftool\fR
+\fB\-\-tool\-help\fR
 for the list of valid <tool> settings\&.
 .sp
 If a diff tool is not specified,
@@ -81,7 +82,7 @@ is not set,
 will pick a suitable default\&.
 .sp
 You can explicitly provide a full path to the tool by setting the configuration variable
-\fBdifftool\&.<tool>\&.path\fR\&. For example, you can configure the absolute path to kdiff3 by setting
+\fBdifftool\&.\fR\fI<tool>\fR\fB\&.path\fR\&. For example, you can configure the absolute path to kdiff3 by setting
 \fBdifftool\&.kdiff3\&.path\fR\&. Otherwise,
 \fIgit difftool\fR
 assumes the tool is available in PATH\&.
@@ -89,7 +90,7 @@ assumes the tool is available in PATH\&.
 Instead of running one of the known diff tools,
 \fIgit difftool\fR
 can be customized to run an alternative program by specifying the command line to invoke in a configuration variable
-\fBdifftool\&.<tool>\&.cmd\fR\&.
+\fBdifftool\&.\fR\fI<tool>\fR\fB\&.cmd\fR\&.
 .sp
 When
 \fIgit difftool\fR
@@ -119,7 +120,7 @@ Print a list of diff tools that may be used with
 .PP
 \-\-[no\-]symlinks
 .RS 4
-\fIgit difftool\fR\(aqs default behavior is create symlinks to the working tree when run in
+\fIgit difftool\fR\*(Aqs default behavior is to create symlinks to the working tree when run in
 \fB\-\-dir\-diff\fR
 mode and the right\-hand side of the comparison yields the same content as the file in the working tree\&.
 .sp
@@ -137,7 +138,9 @@ is the default on Windows\&.
 Specify a custom command for viewing diffs\&.
 \fIgit\-difftool\fR
 ignores the configured defaults and runs
-\fB$command $LOCAL $REMOTE\fR
+\fI<command>\fR
+\fB$LOCAL\fR
+\fB$REMOTE\fR
 when this option is specified\&. Additionally,
 \fB$BASE\fR
 is set in the environment\&.
@@ -154,9 +157,10 @@ or
 option the default diff tool will be read from the configured
 \fBdiff\&.guitool\fR
 variable instead of
-\fBdiff\&.tool\fR\&. The
+\fBdiff\&.tool\fR\&. This may be selected automatically using the configuration variable
+\fBdifftool\&.guiDefault\fR\&. The
 \fB\-\-no\-gui\fR
-option can be used to override this setting\&. If
+option can be used to override these settings\&. If
 \fBdiff\&.guitool\fR
 is not set, we will fallback in the order of
 \fBmerge\&.guitool\fR,
@@ -167,8 +171,7 @@ until a tool is found\&.
 .PP
 \-\-[no\-]trust\-exit\-code
 .RS 4
-\fIgit\-difftool\fR
-invokes a diff tool individually on each file\&. Errors reported by the diff tool are ignored by default\&. Use
+Errors reported by the diff tool are ignored by default\&. Use
 \fB\-\-trust\-exit\-code\fR
 to make
 \fIgit\-difftool\fR
@@ -200,6 +203,131 @@ Controls which diff tool is used by
 \fBgit-difftool\fR(1)
 when the \-g/\-\-gui flag is specified\&. This variable overrides the value configured in
 \fBmerge\&.guitool\fR\&. The list below shows the valid built\-in values\&. Any other value is treated as a custom diff tool and requires that a corresponding difftool\&.<guitool>\&.cmd variable is defined\&.
+.PP
+\fBaraxis\fR
+.RS 4
+Use Araxis Merge (requires a graphical session)
+.RE
+.PP
+\fBbc\fR
+.RS 4
+Use Beyond Compare (requires a graphical session)
+.RE
+.PP
+\fBbc3\fR
+.RS 4
+Use Beyond Compare (requires a graphical session)
+.RE
+.PP
+\fBbc4\fR
+.RS 4
+Use Beyond Compare (requires a graphical session)
+.RE
+.PP
+\fBcodecompare\fR
+.RS 4
+Use Code Compare (requires a graphical session)
+.RE
+.PP
+\fBdeltawalker\fR
+.RS 4
+Use DeltaWalker (requires a graphical session)
+.RE
+.PP
+\fBdiffmerge\fR
+.RS 4
+Use DiffMerge (requires a graphical session)
+.RE
+.PP
+\fBdiffuse\fR
+.RS 4
+Use Diffuse (requires a graphical session)
+.RE
+.PP
+\fBecmerge\fR
+.RS 4
+Use ECMerge (requires a graphical session)
+.RE
+.PP
+\fBemerge\fR
+.RS 4
+Use Emacs\*(Aq Emerge
+.RE
+.PP
+\fBexamdiff\fR
+.RS 4
+Use ExamDiff Pro (requires a graphical session)
+.RE
+.PP
+\fBguiffy\fR
+.RS 4
+Use Guiffy\(cqs Diff Tool (requires a graphical session)
+.RE
+.PP
+\fBgvimdiff\fR
+.RS 4
+Use gVim (requires a graphical session)
+.RE
+.PP
+\fBkdiff3\fR
+.RS 4
+Use KDiff3 (requires a graphical session)
+.RE
+.PP
+\fBkompare\fR
+.RS 4
+Use Kompare (requires a graphical session)
+.RE
+.PP
+\fBmeld\fR
+.RS 4
+Use Meld (requires a graphical session)
+.RE
+.PP
+\fBnvimdiff\fR
+.RS 4
+Use Neovim
+.RE
+.PP
+\fBopendiff\fR
+.RS 4
+Use FileMerge (requires a graphical session)
+.RE
+.PP
+\fBp4merge\fR
+.RS 4
+Use HelixCore P4Merge (requires a graphical session)
+.RE
+.PP
+\fBsmerge\fR
+.RS 4
+Use Sublime Merge (requires a graphical session)
+.RE
+.PP
+\fBtkdiff\fR
+.RS 4
+Use TkDiff (requires a graphical session)
+.RE
+.PP
+\fBvimdiff\fR
+.RS 4
+Use Vim
+.RE
+.PP
+\fBvscode\fR
+.RS 4
+Use Visual Studio Code (requires a graphical session)
+.RE
+.PP
+\fBwinmerge\fR
+.RS 4
+Use WinMerge (requires a graphical session)
+.RE
+.PP
+\fBxxdiff\fR
+.RS 4
+Use xxdiff (requires a graphical session)
+.RE
 .RE
 .PP
 difftool\&.<tool>\&.cmd
@@ -211,7 +339,7 @@ is set to the name of the temporary file containing the contents of the diff pre
 is set to the name of the temporary file containing the contents of the diff post\-image\&.
 .sp
 See the
-\fB\-\-tool=<tool>\fR
+\fB\-\-tool=\fR\fI<tool>\fR
 option in
 \fBgit-difftool\fR(1)
 for more details\&.
@@ -236,6 +364,30 @@ for more details\&.
 difftool\&.prompt
 .RS 4
 Prompt before each invocation of the diff tool\&.
+.RE
+.PP
+difftool\&.guiDefault
+.RS 4
+Set
+\fBtrue\fR
+to use the
+\fBdiff\&.guitool\fR
+by default (equivalent to specifying the
+\fB\-\-gui\fR
+argument), or
+\fBauto\fR
+to select
+\fBdiff\&.guitool\fR
+or
+\fBdiff\&.tool\fR
+depending on the presence of a
+\fBDISPLAY\fR
+environment variable value\&. The default is
+\fBfalse\fR, where the
+\fB\-\-gui\fR
+argument must be provided explicitly for the
+\fBdiff\&.guitool\fR
+to be used\&.
 .RE
 .SH "SEE ALSO"
 .PP

@@ -1,13 +1,13 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
 #include "config.h"
+#include "gettext.h"
 #include "hook.h"
 #include "parse-options.h"
-#include "strbuf.h"
 #include "strvec.h"
 
 #define BUILTIN_HOOK_RUN_USAGE \
-	N_("git hook run [--ignore-missing] <hook-name> [-- <hook-args>]")
+	N_("git hook run [--ignore-missing] [--to-stdin=<path>] <hook-name> [-- <hook-args>]")
 
 static const char * const builtin_hook_usage[] = {
 	BUILTIN_HOOK_RUN_USAGE,
@@ -19,7 +19,8 @@ static const char * const builtin_hook_run_usage[] = {
 	NULL
 };
 
-static int run(int argc, const char **argv, const char *prefix)
+static int run(int argc, const char **argv, const char *prefix,
+	       struct repository *repo UNUSED)
 {
 	int i;
 	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
@@ -28,6 +29,8 @@ static int run(int argc, const char **argv, const char *prefix)
 	struct option run_options[] = {
 		OPT_BOOL(0, "ignore-missing", &ignore_missing,
 			 N_("silently ignore missing requested <hook-name>")),
+		OPT_STRING(0, "to-stdin", &opt.path_to_stdin, N_("path"),
+			   N_("file to read into hooks' stdin")),
 		OPT_END(),
 	};
 	int ret;
@@ -57,7 +60,7 @@ static int run(int argc, const char **argv, const char *prefix)
 	hook_name = argv[0];
 	if (!ignore_missing)
 		opt.error_if_missing = 1;
-	ret = run_hooks_opt(hook_name, &opt);
+	ret = run_hooks_opt(the_repository, hook_name, &opt);
 	if (ret < 0) /* error() return */
 		ret = 1;
 	return ret;
@@ -65,7 +68,10 @@ usage:
 	usage_with_options(builtin_hook_run_usage, run_options);
 }
 
-int cmd_hook(int argc, const char **argv, const char *prefix)
+int cmd_hook(int argc,
+	     const char **argv,
+	     const char *prefix,
+	     struct repository *repo)
 {
 	parse_opt_subcommand_fn *fn = NULL;
 	struct option builtin_hook_options[] = {
@@ -76,5 +82,5 @@ int cmd_hook(int argc, const char **argv, const char *prefix)
 	argc = parse_options(argc, argv, NULL, builtin_hook_options,
 			     builtin_hook_usage, 0);
 
-	return fn(argc, argv, prefix);
+	return fn(argc, argv, prefix, repo);
 }

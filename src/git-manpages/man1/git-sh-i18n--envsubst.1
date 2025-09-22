@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-sh-i18n--envsubst
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-SH\-I18N\-\-ENV" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-SH\-I18N\-\-ENVSUBST" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,7 +28,7 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-git-sh-i18n--envsubst \- Git\(aqs own envsubst(1) for i18n fallbacks
+git-sh-i18n--envsubst \- Git\*(Aqs own envsubst(1) for i18n fallbacks
 .SH "SYNOPSIS"
 .sp
 .nf
@@ -39,12 +39,11 @@ eval_gettext () {
         )
 }
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 This is not a command the end user would want to run\&. Ever\&. This documentation is meant for people who are studying the plumbing scripts and/or are writing new ones\&.
 .sp
-\fIgit sh\-i18n\-\-envsubst\fR is Git\(cqs stripped\-down copy of the GNU \fBenvsubst(1)\fR program that comes with the GNU gettext package\&. It\(cqs used internally by \fBgit-sh-i18n\fR(1) to interpolate the variables passed to the \fBeval_gettext\fR function\&.
+\fIgit sh\-i18n\-\-envsubst\fR is Git\(cqs stripped\-down copy of the GNU \fBenvsubst\fR(\fB1\fR) program that comes with the GNU gettext package\&. It\(cqs used internally by \fBgit-sh-i18n\fR(1) to interpolate the variables passed to the \fBeval_gettext\fR function\&.
 .sp
 No promises are made about the interface, or that this program won\(cqt disappear without warning in the next version of Git\&. Don\(cqt use it\&.
 .SH "GIT"

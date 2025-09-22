@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='git am with options and not losing them'
+
 . ./test-lib.sh
 
 tm="$TEST_DIRECTORY/t4252"

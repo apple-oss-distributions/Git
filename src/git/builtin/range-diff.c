@@ -1,9 +1,12 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "builtin.h"
+#include "gettext.h"
+#include "object-name.h"
 #include "parse-options.h"
 #include "range-diff.h"
 #include "config.h"
-#include "revision.h"
+
 
 static const char * const builtin_range_diff_usage[] = {
 N_("git range-diff [<options>] <old-base>..<old-tip> <new-base>..<new-tip>"),
@@ -12,10 +15,14 @@ N_("git range-diff [<options>] <base> <old-tip> <new-tip>"),
 NULL
 };
 
-int cmd_range_diff(int argc, const char **argv, const char *prefix)
+int cmd_range_diff(int argc,
+		   const char **argv,
+		   const char *prefix,
+		   struct repository *repo UNUSED)
 {
 	struct diff_options diffopt = { NULL };
 	struct strvec other_arg = STRVEC_INIT;
+	struct strvec diff_merges_arg = STRVEC_INIT;
 	struct range_diff_options range_diff_opts = {
 		.creation_factor = RANGE_DIFF_CREATION_FACTOR_DEFAULT,
 		.diffopt = &diffopt,
@@ -31,6 +38,10 @@ int cmd_range_diff(int argc, const char **argv, const char *prefix)
 		OPT_PASSTHRU_ARGV(0, "notes", &other_arg,
 				  N_("notes"), N_("passed to 'git log'"),
 				  PARSE_OPT_OPTARG),
+		OPT_PASSTHRU_ARGV(0, "diff-merges", &diff_merges_arg,
+				  N_("style"), N_("passed to 'git log'"), 0),
+		OPT_PASSTHRU_ARGV(0, "remerge-diff", &diff_merges_arg, NULL,
+				  N_("passed to 'git log'"), PARSE_OPT_NOARG),
 		OPT_BOOL(0, "left-only", &left_only,
 			 N_("only emit output related to the first range")),
 		OPT_BOOL(0, "right-only", &right_only,
@@ -47,7 +58,7 @@ int cmd_range_diff(int argc, const char **argv, const char *prefix)
 
 	repo_diff_setup(the_repository, &diffopt);
 
-	options = parse_options_concat(range_diff_options, diffopt.parseopts);
+	options = add_diff_options(range_diff_options, &diffopt);
 	argc = parse_options(argc, argv, prefix, options,
 			     builtin_range_diff_usage, PARSE_OPT_KEEP_DASHDASH);
 
@@ -57,6 +68,12 @@ int cmd_range_diff(int argc, const char **argv, const char *prefix)
 	if (!simple_color)
 		diffopt.use_color = 1;
 
+	/* If `--diff-merges` was specified, imply `--merges` */
+	if (diff_merges_arg.nr) {
+		range_diff_opts.include_merges = 1;
+		strvec_pushv(&other_arg, diff_merges_arg.v);
+	}
+
 	for (i = 0; i < argc; i++)
 		if (!strcmp(argv[i], "--")) {
 			dash_dash = i;
@@ -65,20 +82,20 @@ int cmd_range_diff(int argc, const char **argv, const char *prefix)
 
 	if (dash_dash == 3 ||
 	    (dash_dash < 0 && argc > 2 &&
-	     !get_oid_committish(argv[0], &oid) &&
-	     !get_oid_committish(argv[1], &oid) &&
-	     !get_oid_committish(argv[2], &oid))) {
+	     !repo_get_oid_committish(the_repository, argv[0], &oid) &&
+	     !repo_get_oid_committish(the_repository, argv[1], &oid) &&
+	     !repo_get_oid_committish(the_repository, argv[2], &oid))) {
 		if (dash_dash < 0)
 			; /* already validated arguments */
-		else if (get_oid_committish(argv[0], &oid))
+		else if (repo_get_oid_committish(the_repository, argv[0], &oid))
 			usage_msg_optf(_("not a revision: '%s'"),
 				       builtin_range_diff_usage, options,
 				       argv[0]);
-		else if (get_oid_committish(argv[1], &oid))
+		else if (repo_get_oid_committish(the_repository, argv[1], &oid))
 			usage_msg_optf(_("not a revision: '%s'"),
 				       builtin_range_diff_usage, options,
 				       argv[1]);
-		else if (get_oid_committish(argv[2], &oid))
+		else if (repo_get_oid_committish(the_repository, argv[2], &oid))
 			usage_msg_optf(_("not a revision: '%s'"),
 				       builtin_range_diff_usage, options,
 				       argv[2]);
@@ -150,6 +167,7 @@ int cmd_range_diff(int argc, const char **argv, const char *prefix)
 	res = show_range_diff(range1.buf, range2.buf, &range_diff_opts);
 
 	strvec_clear(&other_arg);
+	strvec_clear(&diff_merges_arg);
 	strbuf_release(&range1);
 	strbuf_release(&range2);
 

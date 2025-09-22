@@ -2,7 +2,6 @@
 
 test_description="git hash-object"
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 echo_without_newline() {
@@ -124,8 +123,8 @@ test_expect_success 'check that appropriate filter is invoke when --path is used
 	path0_sha=$(git hash-object --path=file0 file1) &&
 	test "$file0_sha" = "$path0_sha" &&
 	test "$file1_sha" = "$path1_sha" &&
-	path1_sha=$(cat file0 | git hash-object --path=file1 --stdin) &&
-	path0_sha=$(cat file1 | git hash-object --path=file0 --stdin) &&
+	path1_sha=$(git hash-object --path=file1 --stdin <file0) &&
+	path0_sha=$(git hash-object --path=file0 --stdin <file1) &&
 	test "$file0_sha" = "$path0_sha" &&
 	test "$file1_sha" = "$path1_sha"
 '
@@ -154,7 +153,7 @@ test_expect_success '--path works in a subdirectory' '
 test_expect_success 'check that --no-filters option works' '
 	nofilters_file1=$(git hash-object --no-filters file1) &&
 	test "$file0_sha" = "$nofilters_file1" &&
-	nofilters_file1=$(cat file1 | git hash-object --stdin) &&
+	nofilters_file1=$(git hash-object --stdin <file1) &&
 	test "$file0_sha" = "$nofilters_file1"
 '
 
@@ -203,23 +202,34 @@ done
 test_expect_success 'too-short tree' '
 	echo abc >malformed-tree &&
 	test_must_fail git hash-object -t tree malformed-tree 2>err &&
-	test_i18ngrep "too-short tree object" err
+	grep "too-short tree object" err
 '
 
-test_expect_success 'malformed mode in tree' '
-	hex_sha1=$(echo foo | git hash-object --stdin -w) &&
-	bin_sha1=$(echo $hex_sha1 | hex2oct) &&
-	printf "9100644 \0$bin_sha1" >tree-with-malformed-mode &&
+test_expect_success PERL_TEST_HELPERS 'malformed mode in tree' '
+	hex_oid=$(echo foo | git hash-object --stdin -w) &&
+	bin_oid=$(echo $hex_oid | hex2oct) &&
+	printf "9100644 \0$bin_oid" >tree-with-malformed-mode &&
 	test_must_fail git hash-object -t tree tree-with-malformed-mode 2>err &&
-	test_i18ngrep "malformed mode in tree entry" err
+	grep "malformed mode in tree entry" err
 '
 
-test_expect_success 'empty filename in tree' '
-	hex_sha1=$(echo foo | git hash-object --stdin -w) &&
-	bin_sha1=$(echo $hex_sha1 | hex2oct) &&
-	printf "100644 \0$bin_sha1" >tree-with-empty-filename &&
+test_expect_success PERL_TEST_HELPERS 'empty filename in tree' '
+	hex_oid=$(echo foo | git hash-object --stdin -w) &&
+	bin_oid=$(echo $hex_oid | hex2oct) &&
+	printf "100644 \0$bin_oid" >tree-with-empty-filename &&
 	test_must_fail git hash-object -t tree tree-with-empty-filename 2>err &&
-	test_i18ngrep "empty filename in tree entry" err
+	grep "empty filename in tree entry" err
+'
+
+test_expect_success PERL_TEST_HELPERS 'duplicate filename in tree' '
+	hex_oid=$(echo foo | git hash-object --stdin -w) &&
+	bin_oid=$(echo $hex_oid | hex2oct) &&
+	{
+		printf "100644 file\0$bin_oid" &&
+		printf "100644 file\0$bin_oid"
+	} >tree-with-duplicate-filename &&
+	test_must_fail git hash-object -t tree tree-with-duplicate-filename 2>err &&
+	grep "duplicateEntries" err
 '
 
 test_expect_success 'corrupt commit' '
@@ -238,15 +248,14 @@ test_expect_success 'hash-object complains about truncated type name' '
 	test_must_fail git hash-object -t bl --stdin </dev/null
 '
 
-test_expect_success '--literally' '
-	t=1234567890 &&
-	echo example | git hash-object -t $t --literally --stdin
+test_expect_success '--literally complains about non-standard types' '
+	test_must_fail git hash-object -t bogus --literally --stdin
 '
 
-test_expect_success '--literally with extra-long type' '
-	t=12345678901234567890123456789012345678901234567890 &&
-	t="$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t$t" &&
-	echo example | git hash-object -t $t --literally --stdin
+test_expect_success '--stdin outside of repository (uses SHA-1)' '
+	nongit git hash-object --stdin <hello >actual &&
+	echo "$(test_oid --hash=sha1 hello)" >expect &&
+	test_cmp expect actual
 '
 
 test_done

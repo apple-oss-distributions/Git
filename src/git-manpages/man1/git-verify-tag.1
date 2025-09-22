@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-verify-tag
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-VERIFY\-TAG" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-VERIFY\-TAG" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,27 +32,21 @@ git-verify-tag \- Check the GPG signature of tags
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit verify\-tag\fR [\-v | \-\-verbose] [\-\-format=<format>] [\-\-raw] <tag>\&...
+\fBgit\fR \fBverify\-tag\fR [\fB\-v\fR | \fB\-\-verbose\fR] [\fB\-\-format=\fR\fI<format>\fR] [\fB\-\-raw\fR] \fI<tag>\fR\&...\:
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
-Validates the gpg signature created by \fIgit tag\fR\&.
+Validates the gpg signature created by \fBgit\fR \fBtag\fR in the tag objects listed on the command line\&.
 .SH "OPTIONS"
 .PP
-\-\-raw
+\fB\-\-raw\fR
 .RS 4
 Print the raw gpg status output to standard error instead of the normal human\-readable output\&.
 .RE
 .PP
-\-v, \-\-verbose
+\fB\-v\fR, \fB\-\-verbose\fR
 .RS 4
 Print the contents of the tag object before validating it\&.
-.RE
-.PP
-<tag>\&...
-.RS 4
-SHA\-1 identifiers of Git tag objects\&.
 .RE
 .SH "GIT"
 .sp

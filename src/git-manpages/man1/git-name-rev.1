@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-name-rev
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-NAME\-REV" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-NAME\-REV" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,9 +33,8 @@ git-name-rev \- Find symbolic names for given revs
 .sp
 .nf
 \fIgit name\-rev\fR [\-\-tags] [\-\-refs=<pattern>]
-               ( \-\-all | \-\-stdin | <commit\-ish>\&... )
+               ( \-\-all | \-\-annotate\-stdin | <commit\-ish>\&...\: )
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 Finds symbolic names suitable for human digestion for revisions given in any format parsable by \fIgit rev\-parse\fR\&.
@@ -48,7 +47,7 @@ Do not use branch names, but only tags to name the commits
 .PP
 \-\-refs=<pattern>
 .RS 4
-Only use refs whose names match a given shell pattern\&. The pattern can be one of branch name, tag name or fully qualified ref name\&. If given multiple times, use refs whose names match any of the given shell patterns\&. Use
+Only use refs whose names match a given shell pattern\&. The pattern can be a branch name, a tag name, or a fully qualified ref name\&. If given multiple times, use refs whose names match any of the given shell patterns\&. Use
 \fB\-\-no\-refs\fR
 to clear any previous ref patterns given\&.
 .RE
@@ -67,7 +66,9 @@ List all commits reachable from all refs
 .PP
 \-\-annotate\-stdin
 .RS 4
-Transform stdin by substituting all the 40\-character SHA\-1 hexes (say $hex) with "$hex ($rev_name)"\&. When used with \-\-name\-only, substitute with "$rev_name", omitting $hex altogether\&.
+Transform stdin by substituting all the 40\-character SHA\-1 hexes (say $hex) with "$hex ($rev_name)"\&. When used with \-\-name\-only, substitute with "$rev_name", omitting $hex altogether\&. This option was called
+\fB\-\-stdin\fR
+in older versions of Git\&.
 .sp
 For example:
 .sp
@@ -96,13 +97,6 @@ while its tree object is 70d105cc79e63b81cfdcb08a15297c23e60b07ad
 .if n \{\
 .RE
 .\}
-.sp
-.RE
-.PP
-\-\-stdin
-.RS 4
-This option is deprecated in favor of
-\fIgit name\-rev \-\-annotate\-stdin\fR\&. They are functionally equivalent\&.
 .RE
 .PP
 \-\-name\-only
@@ -139,7 +133,6 @@ Enter \fIgit name\-rev\fR:
 .RE
 .\}
 .sp
-.sp
 Now you are wiser, because you know that it happened 940 revisions before v0\&.99\&.
 .sp
 Another nice thing you can do is:
@@ -148,12 +141,11 @@ Another nice thing you can do is:
 .RS 4
 .\}
 .nf
-% git log | git name\-rev \-\-stdin
+% git log | git name\-rev \-\-annotate\-stdin
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .SH "GIT"
 .sp
 Part of the \fBgit\fR(1) suite

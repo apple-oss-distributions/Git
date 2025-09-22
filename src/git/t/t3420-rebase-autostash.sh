@@ -81,6 +81,46 @@ testrebase () {
 	type=$1
 	dotest=$2
 
+	test_expect_success "rebase$type: restore autostash when pre-rebase hook fails" '
+		git checkout -f feature-branch &&
+		test_hook pre-rebase <<-\EOF &&
+		exit 1
+		EOF
+
+		echo changed >file0 &&
+		test_must_fail git rebase $type --autostash -f HEAD^ &&
+		test_must_fail git rebase --quit 2>err &&
+		test_grep "no rebase in progress" err &&
+		echo changed >expect &&
+		test_cmp expect file0
+	'
+
+	test_expect_success "rebase$type: restore autostash when checkout onto fails" '
+		git checkout -f --detach feature-branch &&
+		echo uncommitted-content >file0 &&
+		echo untracked >file4 &&
+		test_when_finished "rm file4" &&
+		test_must_fail git rebase $type --autostash \
+							unrelated-onto-branch &&
+		test_must_fail git rebase --quit 2>err &&
+		test_grep "no rebase in progress" err &&
+		echo uncommitted-content >expect &&
+		test_cmp expect file0
+	'
+
+	test_expect_success "rebase$type: restore autostash when branch checkout fails" '
+		git checkout -f unrelated-onto-branch^ &&
+		echo uncommitted-content >file0 &&
+		echo untracked >file4 &&
+		test_when_finished "rm file4" &&
+		test_must_fail git rebase $type --autostash HEAD \
+							unrelated-onto-branch &&
+		test_must_fail git rebase --quit 2>err &&
+		test_grep "no rebase in progress" err &&
+		echo uncommitted-content >expect &&
+		test_cmp expect file0
+	'
+
 	test_expect_success "rebase$type: dirty worktree, --no-autostash" '
 		test_config rebase.autostash true &&
 		git reset --hard &&
@@ -331,6 +371,16 @@ test_expect_success 'never change active branch' '
 	echo changed >file0 &&
 	git rebase --autostash not-the-feature-branch feature-branch &&
 	test_cmp_rev not-the-feature-branch unrelated-onto-branch
+'
+
+test_expect_success 'autostash commit is marked as reachable' '
+	echo changed >file0 &&
+	git rebase --autostash --exec "git prune --expire=now" \
+		feature-branch^ feature-branch &&
+	# git rebase succeeds if the stash cannot be applied so we need to check
+	# the contents of file0
+	echo changed >expect &&
+	test_cmp expect file0
 '
 
 test_done

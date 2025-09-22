@@ -3,9 +3,8 @@
 # Copyright (c) 2009 Giuseppe Bilotta
 #
 
-test_description='git-apply --ignore-whitespace.
+test_description='git-apply --ignore-whitespace.'
 
-'
 . ./test-lib.sh
 
 # This primes main.c file that indents without using HT at all.

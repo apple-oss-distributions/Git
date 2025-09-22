@@ -7,11 +7,7 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
 
-if test_have_prereq !ADD_I_USE_BUILTIN,!PERL
-then
-	skip_all='skipping add -i (scripted) tests, perl not available'
-	test_done
-fi
+SP=" "
 
 diff_cmp () {
 	for x
@@ -45,6 +41,19 @@ force_color () {
 		"$@"
 	)
 }
+
+test_expect_success 'unknown command' '
+	test_when_finished "git reset --hard; rm -f command" &&
+	echo W >command &&
+	git add -N command &&
+	git diff command >expect &&
+	cat >>expect <<-EOF &&
+	(1/1) Stage addition [y,n,q,a,d,e,p,?]? Unknown command ${SQ}W${SQ} (use ${SQ}?${SQ} for help)
+	(1/1) Stage addition [y,n,q,a,d,e,p,?]?$SP
+	EOF
+	git add -p -- command <command >actual 2>&1 &&
+	test_cmp expect actual
+'
 
 test_expect_success 'setup (initial)' '
 	echo content >file &&
@@ -135,6 +144,14 @@ test_expect_success 'revert works (commit)' '
 	grep "unchanged *+3/-0 file" output
 '
 
+test_expect_success 'reject multi-key input' '
+	saved=$(git hash-object -w file) &&
+	test_when_finished "git cat-file blob $saved >file" &&
+	echo an extra line >>file &&
+	test_write_lines aa | git add -p >actual &&
+	test_grep "is expected, got ${SQ}aa${SQ}" actual
+'
+
 test_expect_success 'setup expected' '
 	cat >expected <<-\EOF
 	EOF
@@ -222,7 +239,6 @@ test_expect_success 'setup file' '
 '
 
 test_expect_success 'setup patch' '
-	SP=" " &&
 	NULL="" &&
 	cat >patch <<-EOF
 	@@ -1,4 +1,4 @@
@@ -296,9 +312,11 @@ test_expect_success FILEMODE 'stage mode and hunk' '
 	echo content >>file &&
 	chmod +x file &&
 	printf "y\\ny\\n" | git add -p &&
-	git diff --cached file | grep "new mode" &&
-	git diff --cached file | grep "+content" &&
-	test -z "$(git diff file)"
+	git diff --cached file >out &&
+	grep "new mode" out &&
+	grep "+content" out &&
+	git diff file >out &&
+	test_must_be_empty out
 '
 
 # end of tests disabled when filemode is not usable
@@ -314,22 +332,22 @@ test_expect_success 'different prompts for mode change/deleted' '
 	git -c core.filemode=true add -p >actual &&
 	sed -n "s/^\(([0-9/]*) Stage .*?\).*/\1/p" actual >actual.filtered &&
 	cat >expect <<-\EOF &&
-	(1/1) Stage deletion [y,n,q,a,d,?]?
-	(1/2) Stage mode change [y,n,q,a,d,j,J,g,/,?]?
-	(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,?]?
+	(1/1) Stage deletion [y,n,q,a,d,p,?]?
+	(1/2) Stage mode change [y,n,q,a,d,j,J,g,/,p,?]?
+	(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,p,?]?
 	EOF
 	test_cmp expect actual.filtered
 '
 
 test_expect_success 'correct message when there is nothing to do' '
 	git reset --hard &&
-	git add -p 2>err &&
-	test_i18ngrep "No changes" err &&
+	git add -p >out &&
+	test_grep "No changes" out &&
 	printf "\\0123" >binary &&
 	git add binary &&
 	printf "\\0abc" >binary &&
-	git add -p 2>err &&
-	test_i18ngrep "Only binary files changed" err
+	git add -p >out &&
+	test_grep "Only binary files changed" out
 '
 
 test_expect_success 'setup again' '
@@ -486,7 +504,7 @@ test_expect_success 'adding an empty file' '
 
 		echo y | git checkout -p added-file -- >actual &&
 		test_path_is_file empty &&
-		test_i18ngrep "Apply addition to index and worktree" actual
+		test_grep "Apply addition to index and worktree" actual
 	)
 '
 
@@ -500,34 +518,108 @@ test_expect_success 'split hunk setup' '
 	test_write_lines 10 15 20 21 22 23 24 30 40 50 60 >test
 '
 
-test_expect_success 'goto hunk' '
+test_expect_success 'goto hunk 1 with "g 1"' '
 	test_when_finished "git reset" &&
 	tr _ " " >expect <<-EOF &&
-	(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,?]? + 1:  -1,2 +1,3          +15
+	(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,p,?]? + 1:  -1,2 +1,3          +15
 	_ 2:  -2,4 +3,8          +21
 	go to which hunk? @@ -1,2 +1,3 @@
 	_10
 	+15
 	_20
-	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,?]?_
+	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]?_
 	EOF
 	test_write_lines s y g 1 | git add -p >actual &&
 	tail -n 7 <actual >actual.trimmed &&
 	test_cmp expect actual.trimmed
 '
 
-test_expect_success 'navigate to hunk via regex' '
+test_expect_success 'goto hunk 1 with "g1"' '
 	test_when_finished "git reset" &&
 	tr _ " " >expect <<-EOF &&
-	(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,?]? @@ -1,2 +1,3 @@
 	_10
 	+15
 	_20
-	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,?]?_
+	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]?_
+	EOF
+	test_write_lines s y g1 | git add -p >actual &&
+	tail -n 4 <actual >actual.trimmed &&
+	test_cmp expect actual.trimmed
+'
+
+test_expect_success 'navigate to hunk via regex /pattern' '
+	test_when_finished "git reset" &&
+	tr _ " " >expect <<-EOF &&
+	(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,p,?]? @@ -1,2 +1,3 @@
+	_10
+	+15
+	_20
+	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]?_
 	EOF
 	test_write_lines s y /1,2 | git add -p >actual &&
 	tail -n 5 <actual >actual.trimmed &&
 	test_cmp expect actual.trimmed
+'
+
+test_expect_success 'navigate to hunk via regex / pattern' '
+	test_when_finished "git reset" &&
+	tr _ " " >expect <<-EOF &&
+	_10
+	+15
+	_20
+	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]?_
+	EOF
+	test_write_lines s y / 1,2 | git add -p >actual &&
+	tail -n 4 <actual >actual.trimmed &&
+	test_cmp expect actual.trimmed
+'
+
+test_expect_success 'print again the hunk' '
+	test_when_finished "git reset" &&
+	tr _ " " >expect <<-EOF &&
+	+15
+	 20
+	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]? @@ -1,2 +1,3 @@
+	 10
+	+15
+	 20
+	(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]?_
+	EOF
+	test_write_lines s y g 1 p | git add -p >actual &&
+	tail -n 7 <actual >actual.trimmed &&
+	test_cmp expect actual.trimmed
+'
+
+test_expect_success TTY 'print again the hunk (PAGER)' '
+	test_when_finished "git reset" &&
+	cat >expect <<-EOF &&
+	<GREEN>+<RESET><GREEN>15<RESET>
+	 20<RESET>
+	<BOLD;BLUE>(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]? <RESET>PAGER <CYAN>@@ -1,2 +1,3 @@<RESET>
+	PAGER  10<RESET>
+	PAGER <GREEN>+<RESET><GREEN>15<RESET>
+	PAGER  20<RESET>
+	<BOLD;BLUE>(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]? <RESET>
+	EOF
+	test_write_lines s y g 1 P |
+	(
+		GIT_PAGER="sed s/^/PAGER\ /" &&
+		export GIT_PAGER &&
+		test_terminal git add -p >actual
+	) &&
+	tail -n 7 <actual | test_decode_color >actual.trimmed &&
+	test_cmp expect actual.trimmed
+'
+
+test_expect_success TTY 'P handles SIGPIPE when writing to pager' '
+	test_when_finished "rm -f huge_file; git reset" &&
+	printf "\n%2500000s" Y >huge_file &&
+	git add -N huge_file &&
+	test_write_lines P q | (
+		GIT_PAGER="head -n 1" &&
+		export GIT_PAGER &&
+		test_terminal git add -p
+	)
 '
 
 test_expect_success 'split hunk "add -p (edit)"' '
@@ -547,15 +639,7 @@ test_expect_success 'split hunk "add -p (edit)"' '
 	! grep "^+15" actual
 '
 
-test_expect_success 'setup ADD_I_USE_BUILTIN check' '
-	result=success &&
-	if ! test_have_prereq ADD_I_USE_BUILTIN
-	then
-		result=failure
-	fi
-'
-
-test_expect_$result 'split hunk "add -p (no, yes, edit)"' '
+test_expect_success 'split hunk "add -p (no, yes, edit)"' '
 	test_write_lines 5 10 20 21 30 31 40 50 60 >test &&
 	git reset &&
 	# test sequence is s(plit), n(o), y(es), e(dit)
@@ -579,7 +663,7 @@ test_expect_success 'split hunk with incomplete line at end' '
 	test_must_fail git grep --cached before
 '
 
-test_expect_$result 'edit, adding lines to the first hunk' '
+test_expect_success 'edit, adding lines to the first hunk' '
 	test_write_lines 10 11 20 30 40 50 51 60 >test &&
 	git reset &&
 	tr _ " " >patch <<-EOF &&
@@ -712,23 +796,61 @@ test_expect_success 'colors can be overridden' '
 	<BLUE>+<RESET><BLUE>new<RESET>
 	<CYAN> more-context<RESET>
 	<BLUE>+<RESET><BLUE>another-one<RESET>
-	<YELLOW>(1/1) Stage this hunk [y,n,q,a,d,s,e,?]? <RESET><BOLD>Split into 2 hunks.<RESET>
+	<YELLOW>(1/1) Stage this hunk [y,n,q,a,d,s,e,p,?]? <RESET><BOLD>Split into 2 hunks.<RESET>
 	<MAGENTA>@@ -1,3 +1,3 @@<RESET>
 	<CYAN> context<RESET>
 	<BOLD>-old<RESET>
 	<BLUE>+<RESET><BLUE>new<RESET>
 	<CYAN> more-context<RESET>
-	<YELLOW>(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,?]? <RESET><MAGENTA>@@ -3 +3,2 @@<RESET>
+	<YELLOW>(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]? <RESET><MAGENTA>@@ -3 +3,2 @@<RESET>
 	<CYAN> more-context<RESET>
 	<BLUE>+<RESET><BLUE>another-one<RESET>
-	<YELLOW>(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,?]? <RESET><MAGENTA>@@ -1,3 +1,3 @@<RESET>
+	<YELLOW>(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,p,?]? <RESET><MAGENTA>@@ -1,3 +1,3 @@<RESET>
 	<CYAN> context<RESET>
 	<BOLD>-old<RESET>
 	<BLUE>+new<RESET>
 	<CYAN> more-context<RESET>
-	<YELLOW>(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,?]? <RESET>
+	<YELLOW>(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,p,?]? <RESET>
 	EOF
 	test_cmp expect actual
+'
+
+test_expect_success 'brackets appear without color' '
+	git reset --hard &&
+	test_when_finished "git rm -f bracket-test" &&
+	test_write_lines context old more-context >bracket-test &&
+	git add bracket-test &&
+	test_write_lines context new more-context another-one >bracket-test &&
+
+	test_write_lines quit >input &&
+	git add -i >actual <input &&
+
+	sed "s/^|//" >expect <<-\EOF &&
+	|           staged     unstaged path
+	|  1:        +3/-0        +2/-1 bracket-test
+	|
+	|*** Commands ***
+	|  1: [s]tatus	  2: [u]pdate	  3: [r]evert	  4: [a]dd untracked
+	|  5: [p]atch	  6: [d]iff	  7: [q]uit	  8: [h]elp
+	|What now> Bye.
+	EOF
+
+	test_cmp expect actual
+'
+
+test_expect_success 'colors can be skipped with color.ui=false' '
+	git reset --hard &&
+	test_when_finished "git rm -f color-test" &&
+	test_write_lines context old more-context >color-test &&
+	git add color-test &&
+	test_write_lines context new more-context another-one >color-test &&
+
+	test_write_lines help quit >input &&
+	force_color git \
+		-c color.ui=false \
+		add -i >actual.raw <input &&
+	test_decode_color <actual.raw >actual &&
+	test_cmp actual.raw actual
 '
 
 test_expect_success 'colorized diffs respect diff.wsErrorHighlight' '
@@ -797,7 +919,7 @@ test_expect_success 'diff.algorithm is passed to `git diff-files`' '
 	git add file &&
 	echo changed >file &&
 	test_must_fail git -c diff.algorithm=bogus add -p 2>err &&
-	test_i18ngrep "error: option diff-algorithm accepts " err
+	test_grep "error: option diff-algorithm accepts " err
 '
 
 test_expect_success 'patch-mode via -i prompts for files' '
@@ -1065,6 +1187,46 @@ test_expect_success 'show help from add--helper' '
 	EOF
 	test_write_lines h | force_color git add -i >actual.colored &&
 	test_decode_color <actual.colored >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'reset -p with unmerged files' '
+	test_when_finished "git checkout --force main" &&
+	test_commit one conflict &&
+	git checkout -B side HEAD^ &&
+	test_commit two conflict &&
+	test_must_fail git merge one &&
+
+	# this is a noop with only an unmerged entry
+	git reset -p &&
+
+	# add files that sort before and after unmerged entry
+	echo a >a &&
+	echo z >z &&
+	git add a z &&
+
+	# confirm that we can reset those files
+	printf "%s\n" y y | git reset -p &&
+	git diff-index --cached --diff-filter=u HEAD >staged &&
+	test_must_be_empty staged
+'
+
+test_expect_success 'hunk splitting works with diff.suppressBlankEmpty' '
+	test_config diff.suppressBlankEmpty true &&
+	write_script fake-editor.sh <<-\EOF &&
+	tr F G <"$1" >"$1.tmp" &&
+	mv "$1.tmp" "$1"
+	EOF
+
+	test_write_lines a b "" c d  "" e f "" >file &&
+	git add file &&
+	test_write_lines A b "" c D  "" e F "" >file &&
+	(
+		test_set_editor "$(pwd)/fake-editor.sh" &&
+		test_write_lines s n y e q | git add -p file
+	) &&
+	git cat-file blob :file >actual &&
+	test_write_lines a b "" c D "" e G "" >expect &&
 	test_cmp expect actual
 '
 

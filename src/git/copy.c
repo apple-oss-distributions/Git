@@ -1,4 +1,11 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
+#include "copy.h"
+#include "path.h"
+#include "gettext.h"
+#include "strbuf.h"
+#include "abspath.h"
 
 int copy_fd(int ifd, int ofd)
 {
@@ -52,7 +59,7 @@ int copy_file(const char *dst, const char *src, int mode)
 	if (close(fdo) != 0)
 		return error_errno("%s: close error", dst);
 
-	if (!status && adjust_shared_perm(dst))
+	if (!status && adjust_shared_perm(the_repository, dst))
 		return -1;
 
 	return status;

@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='git shell tests'
+
 . ./test-lib.sh
 
 test_expect_success 'shell allows upload-pack' '
@@ -29,7 +30,7 @@ test_expect_success 'shell allows interactive command' '
 '
 
 test_expect_success 'shell complains of overlong commands' '
-	perl -e "print \"a\" x 2**12 for (0..2**19)" |
+	test-tool genzeros | tr "\000" "a" |
 	test_must_fail git shell 2>err &&
 	grep "too long" err
 '

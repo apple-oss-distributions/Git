@@ -3,16 +3,16 @@
  *
  * Copyright (c) 2006 Junio C Hamano
  */
-
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+#include "builtin.h"
 #include "config.h"
 #include "dir.h"
-#include "repository.h"
-#include "builtin.h"
+#include "gettext.h"
+#include "path.h"
 #include "parse-options.h"
 #include "quote.h"
 #include "packfile.h"
-#include "object-store.h"
+#include "object-file.h"
 
 static unsigned long garbage;
 static off_t size_garbage;
@@ -57,7 +57,8 @@ static void loose_garbage(const char *path)
 		report_garbage(PACKDIR_FILE_GARBAGE, path);
 }
 
-static int count_loose(const struct object_id *oid, const char *path, void *data)
+static int count_loose(const struct object_id *oid, const char *path,
+		       void *data UNUSED)
 {
 	struct stat st;
 
@@ -66,19 +67,20 @@ static int count_loose(const struct object_id *oid, const char *path, void *data
 	else {
 		loose_size += on_disk_bytes(st);
 		loose++;
-		if (verbose && has_object_pack(oid))
+		if (verbose && has_object_pack(the_repository, oid))
 			packed_loose++;
 	}
 	return 0;
 }
 
-static int count_cruft(const char *basename, const char *path, void *data)
+static int count_cruft(const char *basename UNUSED, const char *path,
+		       void *data UNUSED)
 {
 	loose_garbage(path);
 	return 0;
 }
 
-static int print_alternate(struct object_directory *odb, void *data)
+static int print_alternate(struct object_directory *odb, void *data UNUSED)
 {
 	printf("alternate: ");
 	quote_c_style(odb->path, NULL, stdout, 0);
@@ -91,7 +93,10 @@ static char const * const count_objects_usage[] = {
 	NULL
 };
 
-int cmd_count_objects(int argc, const char **argv, const char *prefix)
+int cmd_count_objects(int argc,
+		      const char **argv,
+		      const char *prefix,
+		      struct repository *repo UNUSED)
 {
 	int human_readable = 0;
 	struct option opts[] = {
@@ -109,10 +114,10 @@ int cmd_count_objects(int argc, const char **argv, const char *prefix)
 		usage_with_options(count_objects_usage, opts);
 	if (verbose) {
 		report_garbage = real_report_garbage;
-		report_linked_checkout_garbage();
+		report_linked_checkout_garbage(the_repository);
 	}
 
-	for_each_loose_file_in_objdir(get_object_directory(),
+	for_each_loose_file_in_objdir(repo_get_object_directory(the_repository),
 				      count_loose, count_cruft, NULL, NULL);
 
 	if (verbose) {

@@ -2,7 +2,6 @@
 
 test_description='git mktree'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -43,13 +42,13 @@ test_expect_success 'ls-tree piped to mktree (2)' '
 '
 
 test_expect_success 'ls-tree output in wrong order given to mktree (1)' '
-	perl -e "print reverse <>" <top |
+	sort -r <top |
 	git mktree >actual &&
 	test_cmp tree actual
 '
 
 test_expect_success 'ls-tree output in wrong order given to mktree (2)' '
-	perl -e "print reverse <>" <top.withsub |
+	sort -r <top.withsub |
 	git mktree >actual &&
 	test_cmp tree.withsub actual
 '
@@ -60,11 +59,11 @@ test_expect_success 'allow missing object with --missing' '
 '
 
 test_expect_success 'mktree refuses to read ls-tree -r output (1)' '
-	test_must_fail git mktree <all >actual
+	test_must_fail git mktree <all
 '
 
 test_expect_success 'mktree refuses to read ls-tree -r output (2)' '
-	test_must_fail git mktree <all.withsub >actual
+	test_must_fail git mktree <all.withsub
 '
 
 test_done

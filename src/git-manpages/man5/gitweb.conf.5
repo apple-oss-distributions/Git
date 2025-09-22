@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: gitweb.conf
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GITWEB\&.CONF" "5" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GITWEB\&.CONF" "5" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,7 @@ gitweb.conf \- Gitweb (Git web interface) configuration file
 /etc/gitweb\&.conf, /etc/gitweb\-common\&.conf, $GITWEBDIR/gitweb_config\&.perl
 .SH "DESCRIPTION"
 .sp
-The gitweb CGI script for viewing Git repositories over the web uses a perl script fragment as its configuration file\&. You can set variables using "\fBour $variable = value\fR"; text from a "#" character until the end of a line is ignored\&. See \fBperlsyn\fR(1) for details\&.
+The gitweb CGI script for viewing Git repositories over the web uses a perl script fragment as its configuration file\&. You can set variables using "\fBour\fR \fB$variable\fR \fB=\fR \fBvalue\fR"; text from a "#" character until the end of a line is ignored\&. See \fBperlsyn\fR(1) for details\&.
 .sp
 An example:
 .sp
@@ -45,12 +45,11 @@ An example:
 # gitweb configuration file for http://git\&.example\&.org
 #
 our $projectroot = "/srv/git"; # FHS recommendation
-our $site_name = \(aqExample\&.org >> Repos\(aq;
+our $site_name = \*(AqExample\&.org >> Repos\*(Aq;
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 The configuration file is used to override the default settings that were built into gitweb at the time the \fIgitweb\&.cgi\fR script was generated\&.
 .sp
@@ -94,7 +93,7 @@ common system\-wide configuration file (defaults to
 .\}
 either per\-instance configuration file (defaults to
 \fIgitweb_config\&.perl\fR
-in the same directory as the installed gitweb), or if it does not exists then fallback system\-wide configuration file (defaults to
+in the same directory as the installed gitweb), or if it does not exist then fallback system\-wide configuration file (defaults to
 \fB/etc/gitweb\&.conf\fR)\&.
 .RE
 .sp
@@ -104,7 +103,7 @@ Locations of the common system\-wide configuration file, the fallback system\-wi
 .sp
 You can also override locations of gitweb configuration files during runtime by setting the following environment variables: \fBGITWEB_CONFIG_COMMON\fR, \fBGITWEB_CONFIG_SYSTEM\fR and \fBGITWEB_CONFIG\fR to a non\-empty value\&.
 .sp
-The syntax of the configuration files is that of Perl, since these files are handled by sourcing them as fragments of Perl code (the language that gitweb itself is written in)\&. Variables are typically set using the \fBour\fR qualifier (as in "\fBour $variable = <value>;\fR") to avoid syntax errors if a new version of gitweb no longer uses a variable and therefore stops declaring it\&.
+The syntax of the configuration files is that of Perl, since these files are handled by sourcing them as fragments of Perl code (the language that gitweb itself is written in)\&. Variables are typically set using the \fBour\fR qualifier (as in "\fBour\fR \fB$variable\fR \fB=\fR \fI<value>\fR;") to avoid syntax errors if a new version of gitweb no longer uses a variable and therefore stops declaring it\&.
 .sp
 You can include other configuration file using read_config_file() subroutine\&. For example, one might want to put gitweb configuration related to access control for viewing repositories via Gitolite (one of Git repository management tools) in a separate file, e\&.g\&. in \fB/etc/gitweb\-gitolite\&.conf\fR\&. To include it, put
 .sp
@@ -117,7 +116,6 @@ read_config_file("/etc/gitweb\-gitolite\&.conf");
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 somewhere in gitweb configuration file used, e\&.g\&. in per\-installation gitweb configuration file\&. Note that read_config_file() checks itself that the file it reads exists, and does nothing if it is not found\&. It also handles errors in included file\&.
 .sp
@@ -285,7 +283,7 @@ $GIT
 .RS 4
 Core git executable to use\&. By default set to
 \fB$GIT_BINDIR/git\fR, which in turn is by default set to
-\fB$(bindir)/git\fR\&. If you use Git installed from a binary package, you should usually set this to "/usr/bin/git"\&. This can just be "git" if your web server has a sensible PATH; from security point of view it is better to use absolute path to git binary\&. If you have multiple Git versions installed it can be used to choose which one to use\&. Must be (correctly) set for gitweb to be able to work\&.
+\fB$\fR(\fBbindir\fR)\fB/git\fR\&. If you use Git installed from a binary package, you should usually set this to "/usr/bin/git"\&. This can just be "git" if your web server has a sensible PATH; from security point of view it is better to use absolute path to git binary\&. If you have multiple Git versions installed it can be used to choose which one to use\&. Must be (correctly) set for gitweb to be able to work\&.
 .RE
 .PP
 $mimetypes_file
@@ -301,7 +299,7 @@ is used (if present on filesystem)\&. If no mimetypes file is found, mimetype gu
 $highlight_bin
 .RS 4
 Path to the highlight executable to use (it must be the one from
-\m[blue]\fBhttp://www\&.andre\-simon\&.de\fR\m[]
+\m[blue]\fBhttp://andre\-simon\&.de/zip/download\&.php\fR\m[]
 due to assumptions about parameters and output)\&. By default set to
 \fIhighlight\fR; set it to full path to highlight executable if it is not installed on your web server\(cqs PATH\&. Note that
 \fIhighlight\fR
@@ -311,7 +309,8 @@ feature must be set for gitweb to actually use syntax highlighting\&.
 \fB%highlight_basename\fR
 and
 \fB%highlight_ext\fR, which detect based on basename (the full filename, for example "Makefile") and extension (for example "sh")\&. The keys of these hashes are the basename and extension, respectively, and the value for a given key is the name of the syntax to be passed via
-\fB\-\-syntax <syntax>\fR
+\fB\-\-syntax\fR
+\fI<syntax>\fR
 to "highlight"\&. The last priority is the "highlight" configuration of
 \fBShebang\fR
 regular expressions to detect the language based on the first line in the file, (for example, matching the line "#!/bin/bash")\&. See the highlight documentation and the default config at /etc/highlight/filetypes\&.conf for more details\&.
@@ -323,12 +322,11 @@ For example if repositories you are hosting use "phtml" extension for PHP files,
 .\}
 .nf
 our %highlight_ext;
-$highlight_ext{\(aqphtml\(aq} = \(aqphp\(aq;
+$highlight_ext{\*(Aqphtml\*(Aq} = \*(Aqphp\*(Aq;
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .SS "Links and their targets"
 .sp
@@ -421,7 +419,11 @@ $home_link_str
 Label for the "home link" at the top of all pages, leading to
 \fB$home_link\fR
 (usually the main gitweb page, which contains the projects list)\&. It is used as the first component of gitweb\(cqs "breadcrumb trail":
-\fB<home link> / <project> / <action>\fR\&. Can be set at build time using the
+\fI<home\-link>\fR
+\fB/\fR
+\fI<project>\fR
+\fB/\fR
+\fI<action>\fR\&. Can be set at build time using the
 \fBGITWEB_HOME_LINK_STR\fR
 variable\&. By default it is set to "projects", as this link leads to the list of projects\&. Another popular choice is to set it to the name of site\&. Note that it is treated as raw HTML so it should not be set from untrusted sources\&.
 .RE
@@ -432,21 +434,20 @@ Additional links to be added to the start of the breadcrumb trail before the hom
 \fB$home_link_str\fR) and element 1 is the target URL (equivalent to
 \fB$home_link\fR)\&.
 .sp
-For example, the following setting produces a breadcrumb trail like "home / dev / projects / \&..." where "projects" is the home link\&.
+For example, the following setting produces a breadcrumb trail like "home / dev / projects / \&...\:" where "projects" is the home link\&.
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
     our @extra_breadcrumbs = (
-      [ \(aqhome\(aq => \(aqhttps://www\&.example\&.org/\(aq ],
-      [ \(aqdev\(aq  => \(aqhttps://dev\&.example\&.org/\(aq ],
+      [ \*(Aqhome\*(Aq => \*(Aqhttps://www\&.example\&.org/\*(Aq ],
+      [ \*(Aqdev\*(Aq  => \*(Aqhttps://dev\&.example\&.org/\*(Aq ],
     );
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .RE
 .PP
 $logo_url, $logo_label
@@ -545,10 +546,10 @@ Gitweb assumes this charset when a line contains non\-UTF\-8 characters\&. The f
 .PP
 @diff_opts
 .RS 4
-Rename detection options for git\-diff and git\-diff\-tree\&. The default is (\(aq\-M\(aq); set it to (\(aq\-C\(aq) or (\(aq\-C\(aq, \(aq\-C\(aq) to also detect copies, or set it to () i\&.e\&. empty list if you don\(cqt want to have renames detection\&.
+Rename detection options for git\-diff and git\-diff\-tree\&. The default is (\*(Aq\-M\*(Aq); set it to (\*(Aq\-C\*(Aq) or (\*(Aq\-C\*(Aq, \*(Aq\-C\*(Aq) to also detect copies, or set it to () i\&.e\&. empty list if you don\(cqt want to have renames detection\&.
 .sp
 \fBNote\fR
-that rename and especially copy detection can be quite CPU\-intensive\&. Note also that non Git tools can have problems with patches generated with options mentioned above, especially when they involve file copies (\(aq\-C\(aq) or criss\-cross renames (\(aq\-B\(aq)\&.
+that rename and especially copy detection can be quite CPU\-intensive\&. Note also that non Git tools can have problems with patches generated with options mentioned above, especially when they involve file copies (\*(Aq\-C\*(Aq) or criss\-cross renames (\*(Aq\-B\*(Aq)\&.
 .RE
 .SS "Some optional features and policies"
 .sp
@@ -694,9 +695,9 @@ Each \fB%feature\fR hash element is a hash reference and has the following struc
 .RS 4
 .\}
 .nf
-"<feature_name>" => {
-        "sub" => <feature\-sub (subroutine)>,
-        "override" => <allow\-override (boolean)>,
+"<feature\-name>" => {
+        "sub" => <feature\-sub\-(subroutine)>,
+        "override" => <allow\-override\-(boolean)>,
         "default" => [ <options>\&.\&.\&. ]
 },
 .fi
@@ -704,14 +705,13 @@ Each \fB%feature\fR hash element is a hash reference and has the following struc
 .RE
 .\}
 .sp
-.sp
 Some features cannot be overridden per project\&. For those features the structure of appropriate \fB%feature\fR hash element has a simpler form:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-"<feature_name>" => {
+"<feature\-name>" => {
         "override" => 0,
         "default" => [ <options>\&.\&.\&. ]
 },
@@ -720,8 +720,7 @@ Some features cannot be overridden per project\&. For those features the structu
 .RE
 .\}
 .sp
-.sp
-As one can see it lacks the \(aqsub\(aq element\&.
+As one can see it lacks the \*(Aqsub\*(Aq element\&.
 .sp
 The meaning of each part of feature configuration is described below:
 .PP
@@ -731,12 +730,9 @@ List (array reference) of feature parameters (if there are any), used also to to
 .sp
 Note that it is currently
 \fBalways\fR
-an array reference, even if feature doesn\(cqt accept any configuration parameters, and \(aqdefault\(aq is used only to turn it on or off\&. In such case you turn feature on by setting this element to
-\fB[1]\fR, and torn it off by setting it to
-\fB[0]\fR\&. See also the passage about the "blame" feature in the "Examples" section\&.
+an array reference, even if feature doesn\(cqt accept any configuration parameters, and \*(Aqdefault\*(Aq is used only to turn it on or off\&. In such case you turn feature on by setting this element to [\fB1\fR], and torn it off by setting it to [\fB0\fR]\&. See also the passage about the "blame" feature in the "Examples" section\&.
 .sp
-To disable features that accept parameters (are configurable), you need to set this element to empty list i\&.e\&.
-\fB[]\fR\&.
+To disable features that accept parameters (are configurable), you need to set this element to empty list i\&.e\&. []\&.
 .RE
 .PP
 override
@@ -744,7 +740,7 @@ override
 If this field has a true value then the given feature is overridable, which means that it can be configured (or enabled/disabled) on a per\-repository basis\&.
 .sp
 Usually given "<feature>" is configurable via the
-\fBgitweb\&.<feature>\fR
+\fBgitweb\&.\fR\fI<feature>\fR
 config variable in the per\-repository Git configuration file\&.
 .sp
 \fBNote\fR
@@ -777,7 +773,7 @@ Enable and configure the "snapshot" action, which allows user to download a comp
 \fBgit-archive\fR(1)
 and possibly additionally compressed\&. This can potentially generate high traffic if you have large project\&.
 .sp
-The value of \(aqdefault\(aq is a list of names of snapshot formats, defined in
+The value of \*(Aqdefault\*(Aq is a list of names of snapshot formats, defined in
 \fB%known_snapshot_formats\fR
 hash, that you wish to offer\&. Supported formats include "tgz", "tbz2", "txz" (gzip/bzip2/xz compressed tar archive) and "zip"; please consult gitweb sources for a definitive list\&. By default only "tgz" is offered\&.
 .sp
@@ -803,7 +799,7 @@ Enable the so called pickaxe search, which will list the commits that introduced
 The pickaxe search is described in
 \fBgit-log\fR(1)
 (the description of
-\fB\-S<string>\fR
+\fB\-S\fR\fI<string>\fR
 option, which refers to pickaxe entry in
 \fBgitdiffcore\fR(7)
 for more details)\&.
@@ -816,7 +812,8 @@ configuration variable (boolean)\&.
 show\-sizes
 .RS 4
 Enable showing size of blobs (ordinary files) in a "tree" view, in a separate column, similar to what
-\fBls \-l\fR
+\fBls\fR
+\fB\-l\fR
 does; see description of
 \fB\-l\fR
 option in
@@ -911,7 +908,7 @@ forks
 If this feature is enabled, gitweb considers projects in subdirectories of project root (basename) to be forks of existing projects\&. For each project
 \fB$projname\&.git\fR, projects in the
 \fB$projname/\fR
-directory and its subdirectories will not be shown in the main projects list\&. Instead, a \(aq+\(aq mark is shown next to
+directory and its subdirectories will not be shown in the main projects list\&. Instead, a \*(Aq+\*(Aq mark is shown next to
 \fB$projname\fR, which links to a "forks" view that lists all the forks (all projects in
 \fB$projname/\fR
 subdirectory)\&. Additionally a "forks" view for a project is linked from project summary page\&.
@@ -926,16 +923,20 @@ actions
 .RS 4
 Insert custom links to the action bar of all project pages\&. This allows you to link to third\-party scripts integrating into gitweb\&.
 .sp
-The "default" value consists of a list of triplets in the form \(oq("<label>", "<link>", "<position>")` where "position" is the label after which to insert the link, "link" is a format string where
+The "default" value consists of a list of triplets in the form ("\fI<label>\fR", "\fI<link>\fR", "\fI<position>\fR") where "position" is the label after which to insert the link, "link" is a format string where
 \fB%n\fR
 expands to the project name,
 \fB%f\fR
 to the project path within the filesystem (i\&.e\&. "$projectroot/$project"),
 \fB%h\fR
-to the current hash (\(aqh\(cq gitweb parameter) and \(oq%b` to the current hash base (\(aqhb\(cq gitweb parameter); \(oq%%` expands to \(aq%\(cq\&.
+to the current hash (\*(Aqh\*(Aq gitweb parameter) and
+\fB%b\fR
+to the current hash base (\*(Aqhb\*(Aq gitweb parameter);
+\fB%%\fR
+expands to \*(Aq%\*(Aq\&.
 .sp
 For example, at the time this page was written, the
-\m[blue]\fBhttp://repo\&.or\&.cz\fR\m[]
+\m[blue]\fBhttps://repo\&.or\&.cz\fR\m[]
 Git hosting site set it to the following to enable graphical log (using the third party tool
 \fBgit\-browser\fR):
 .sp
@@ -943,8 +944,8 @@ Git hosting site set it to the following to enable graphical log (using the thir
 .RS 4
 .\}
 .nf
-$feature{\(aqactions\(aq}{\(aqdefault\(aq} =
-        [ (\(aqgraphiclog\(aq, \(aq/git\-browser/by\-commit\&.html?r=%n\(aq, \(aqsummary\(aq)];
+$feature{\*(Aqactions\*(Aq}{\*(Aqdefault\*(Aq} =
+        [ (\*(Aqgraphiclog\*(Aq, \*(Aq/git\-browser/by\-commit\&.html?r=%n\*(Aq, \*(Aqsummary\*(Aq)];
 .fi
 .if n \{\
 .RE
@@ -953,7 +954,7 @@ $feature{\(aqactions\(aq}{\(aqdefault\(aq} =
 This adds a link titled "graphiclog" after the "summary" link, leading to
 \fBgit\-browser\fR
 script, passing
-\fBr=<project>\fR
+\fBr=\fR\fI<project>\fR
 as a query parameter\&.
 .sp
 Project specific override is not supported\&.
@@ -970,8 +971,7 @@ javascript\-timezone
 .RS 4
 Enable and configure the ability to change a common time zone for dates in gitweb output via JavaScript\&. Dates in gitweb output include authordate and committerdate in "commit", "commitdiff" and "log" views, and taggerdate in "tag" view\&. Enabled by default\&.
 .sp
-The value is a list of three values: a default time zone (for if the client hasn\(cqt selected some other time zone and saved it in a cookie), a name of cookie where to store selected time zone, and a CSS class used to mark up dates for manipulation\&. If you want to turn this feature off, set "default" to empty list:
-\fB[]\fR\&.
+The value is a list of three values: a default time zone (for if the client hasn\(cqt selected some other time zone and saved it in a cookie), a name of cookie where to store selected time zone, and a CSS class used to mark up dates for manipulation\&. If you want to turn this feature off, set "default" to empty list: []\&.
 .sp
 Typical gitweb config files will only change starting (default) time zone, and leave other elements at their default values:
 .sp
@@ -979,7 +979,7 @@ Typical gitweb config files will only change starting (default) time zone, and l
 .RS 4
 .\}
 .nf
-$feature{\(aqjavascript\-timezone\(aq}{\(aqdefault\(aq}[0] = "utc";
+$feature{\*(Aqjavascript\-timezone\*(Aq}{\*(Aqdefault\*(Aq}[0] = "utc";
 .fi
 .if n \{\
 .RE
@@ -1000,8 +1000,8 @@ List of additional directories under "refs" which are going to be used as branch
 .RS 4
 .\}
 .nf
-$feature{\(aqextra\-branch\-refs\(aq}{\(aqdefault\(aq} =
-        [\(aqsandbox\(aq, \(aqwip\(aq, \(aqother\(aq];
+$feature{\*(Aqextra\-branch\-refs\*(Aq}{\*(Aqdefault\*(Aq} =
+        [\*(Aqsandbox\*(Aq, \*(Aqwip\*(Aq, \*(Aqother\*(Aq];
 .fi
 .if n \{\
 .RE
@@ -1046,19 +1046,18 @@ To enable blame, pickaxe search, and snapshot support (allowing "tar\&.gz" and "
 .RS 4
 .\}
 .nf
-$feature{\(aqblame\(aq}{\(aqdefault\(aq} = [1];
-$feature{\(aqblame\(aq}{\(aqoverride\(aq} = 1;
+$feature{\*(Aqblame\*(Aq}{\*(Aqdefault\*(Aq} = [1];
+$feature{\*(Aqblame\*(Aq}{\*(Aqoverride\*(Aq} = 1;
 
-$feature{\(aqpickaxe\(aq}{\(aqdefault\(aq} = [1];
-$feature{\(aqpickaxe\(aq}{\(aqoverride\(aq} = 1;
+$feature{\*(Aqpickaxe\*(Aq}{\*(Aqdefault\*(Aq} = [1];
+$feature{\*(Aqpickaxe\*(Aq}{\*(Aqoverride\*(Aq} = 1;
 
-$feature{\(aqsnapshot\(aq}{\(aqdefault\(aq} = [\(aqzip\(aq, \(aqtgz\(aq];
-$feature{\(aqsnapshot\(aq}{\(aqoverride\(aq} = 1;
+$feature{\*(Aqsnapshot\*(Aq}{\*(Aqdefault\*(Aq} = [\*(Aqzip\*(Aq, \*(Aqtgz\*(Aq];
+$feature{\*(Aqsnapshot\*(Aq}{\*(Aqoverride\*(Aq} = 1;
 .fi
 .if n \{\
 .RE
 .\}
-.sp
 .sp
 If you allow overriding for the snapshot feature, you can specify which snapshot formats are globally disabled\&. You can also add any command\-line options you want (such as setting the compression level)\&. For instance, you can disable Zip compressed snapshots and set \fBgzip\fR(1) to run at level 6 by adding the following lines to your gitweb configuration file:
 .sp
@@ -1066,8 +1065,8 @@ If you allow overriding for the snapshot feature, you can specify which snapshot
 .RS 4
 .\}
 .nf
-$known_snapshot_formats{\(aqzip\(aq}{\(aqdisabled\(aq} = 1;
-$known_snapshot_formats{\(aqtgz\(aq}{\(aqcompressor\(aq} = [\(aqgzip\(aq,\(aq\-6\(aq];
+$known_snapshot_formats{\*(Aqzip\*(Aq}{\*(Aqdisabled\*(Aq} = 1;
+$known_snapshot_formats{\*(Aqtgz\*(Aq}{\*(Aqcompressor\*(Aq} = [\*(Aqgzip\*(Aq,\*(Aq\-6\*(Aq];
 .fi
 .if n \{\
 .RE

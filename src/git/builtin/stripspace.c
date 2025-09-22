@@ -1,8 +1,12 @@
+#define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
-#include "cache.h"
 #include "config.h"
+#include "environment.h"
+#include "gettext.h"
 #include "parse-options.h"
+#include "setup.h"
 #include "strbuf.h"
+#include "write-or-die.h"
 
 static void comment_lines(struct strbuf *buf)
 {
@@ -10,7 +14,7 @@ static void comment_lines(struct strbuf *buf)
 	size_t len;
 
 	msg = strbuf_detach(buf, &len);
-	strbuf_add_commented_lines(buf, msg, len);
+	strbuf_add_commented_lines(buf, msg, len, comment_line_str);
 	free(msg);
 }
 
@@ -26,7 +30,10 @@ enum stripspace_mode {
 	COMMENT_LINES
 };
 
-int cmd_stripspace(int argc, const char **argv, const char *prefix)
+int cmd_stripspace(int argc,
+		   const char **argv,
+		   const char *prefix,
+		   struct repository *repo UNUSED)
 {
 	struct strbuf buf = STRBUF_INIT;
 	enum stripspace_mode mode = STRIP_DEFAULT;
@@ -55,7 +62,8 @@ int cmd_stripspace(int argc, const char **argv, const char *prefix)
 		die_errno("could not read the input");
 
 	if (mode == STRIP_DEFAULT || mode == STRIP_COMMENTS)
-		strbuf_stripspace(&buf, mode == STRIP_COMMENTS);
+		strbuf_stripspace(&buf,
+			  mode == STRIP_COMMENTS ? comment_line_str : NULL);
 	else
 		comment_lines(&buf);
 

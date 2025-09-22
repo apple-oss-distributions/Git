@@ -48,8 +48,8 @@ EOF
 		test -f "$SCRIPT_NAME" ||
 		error "Cannot find gitweb at $GITWEB_TEST_INSTALLED."
 		say "# Testing $SCRIPT_NAME"
-	else # normal case, use source version of gitweb
-		SCRIPT_NAME="$GIT_BUILD_DIR/gitweb/gitweb.perl"
+	else # normal case, use built version of gitweb
+		SCRIPT_NAME="$GIT_BUILD_DIR/gitweb/gitweb.cgi"
 	fi
 	export SCRIPT_NAME
 }
@@ -102,6 +102,11 @@ gitweb_run () {
 
 if ! test_have_prereq PERL; then
 	skip_all='skipping gitweb tests, perl not available'
+	test_done
+fi
+
+if ! test_have_prereq GITWEB; then
+	skip_all='skipping gitweb tests, gitweb not available'
 	test_done
 fi
 

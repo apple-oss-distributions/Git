@@ -28,7 +28,7 @@
  *
  *     while ((ok = dir_iterator_advance(iter)) == ITER_OK) {
  *             if (want_to_stop_iteration()) {
- *                     ok = dir_iterator_abort(iter);
+ *                     ok = ITER_DONE;
  *                     break;
  *             }
  *
@@ -39,6 +39,7 @@
  *
  *     if (ok != ITER_DONE)
  *             handle_error();
+ *     dir_iterator_free(iter);
  *
  * Callers are allowed to modify iter->path while they are working,
  * but they must restore it to its original contents before calling
@@ -55,23 +56,10 @@
  *   warning is emitted. Note: ENOENT errors are always ignored so that
  *   the API users may remove files during iteration.
  *
- * - DIR_ITERATOR_FOLLOW_SYMLINKS: make dir-iterator follow symlinks.
- *   i.e., linked directories' contents will be iterated over and
- *   iter->base.st will contain information on the referred files,
- *   not the symlinks themselves, which is the default behavior. Broken
- *   symlinks are ignored.
- *
- *   Note: setting DIR_ITERATOR_FOLLOW_SYMLINKS affects resolving the
- *   starting path as well (e.g., attempting to iterate starting at a
- *   symbolic link pointing to a directory without FOLLOW_SYMLINKS will
- *   result in an error).
- *
- * Warning: circular symlinks are also followed when
- * DIR_ITERATOR_FOLLOW_SYMLINKS is set. The iteration may end up with
- * an ELOOP if they happen and DIR_ITERATOR_PEDANTIC is set.
+ * - DIR_ITERATOR_SORTED: sort directory entries alphabetically.
  */
 #define DIR_ITERATOR_PEDANTIC (1 << 0)
-#define DIR_ITERATOR_FOLLOW_SYMLINKS (1 << 1)
+#define DIR_ITERATOR_SORTED   (1 << 1)
 
 struct dir_iterator {
 	/* The current path: */
@@ -88,9 +76,7 @@ struct dir_iterator {
 	const char *basename;
 
 	/*
-	 * The result of calling lstat() on path; or stat(), if the
-	 * DIR_ITERATOR_FOLLOW_SYMLINKS flag was set at
-	 * dir_iterator's initialization.
+	 * The result of calling lstat() on path.
 	 */
 	struct stat st;
 };
@@ -122,11 +108,7 @@ struct dir_iterator *dir_iterator_begin(const char *path, unsigned int flags);
  */
 int dir_iterator_advance(struct dir_iterator *iterator);
 
-/*
- * End the iteration before it has been exhausted. Free the
- * dir_iterator and any associated resources and return ITER_DONE. On
- * error, free the dir_iterator and return ITER_ERROR.
- */
-int dir_iterator_abort(struct dir_iterator *iterator);
+/* Free the dir_iterator and any associated resources. */
+void dir_iterator_free(struct dir_iterator *iterator);
 
 #endif

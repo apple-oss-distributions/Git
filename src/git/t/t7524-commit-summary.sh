@@ -1,6 +1,7 @@
 #!/bin/sh
 
 test_description='git commit summary'
+
 . ./test-lib.sh
 
 test_expect_success 'setup' '

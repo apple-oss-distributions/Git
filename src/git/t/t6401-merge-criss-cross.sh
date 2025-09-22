@@ -8,6 +8,7 @@
 
 
 test_description='Test criss-cross merge'
+
 . ./test-lib.sh
 
 test_expect_success 'prepare repository' '

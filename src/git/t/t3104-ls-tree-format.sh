@@ -2,7 +2,6 @@
 
 test_description='ls-tree --format'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-t3100.sh
 
@@ -20,7 +19,6 @@ test_ls_tree_format () {
 	format=$1 &&
 	opts=$2 &&
 	fmtopts=$3 &&
-	shift 2 &&
 
 	test_expect_success "ls-tree '--format=<$format>' is like options '$opts $fmtopts'" '
 		git ls-tree $opts -r HEAD >expect &&

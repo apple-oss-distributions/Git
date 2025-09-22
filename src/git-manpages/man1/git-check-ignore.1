@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: git-check-ignore
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 12/12/2022
+.\" Generator: DocBook XSL Stylesheets v1.79.2 <http://docbook.sf.net/>
+.\"      Date: 2025-07-22
 .\"    Manual: Git Manual
-.\"    Source: Git 2.39.0
+.\"    Source: Git 2.50.1.428.g0e8243a355
 .\"  Language: English
 .\"
-.TH "GIT\-CHECK\-IGNORE" "1" "12/12/2022" "Git 2\&.39\&.0" "Git Manual"
+.TH "GIT\-CHECK\-IGNORE" "1" "2025-07-22" "Git 2\&.50\&.1\&.428\&.g0e8243" "Git Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,15 +32,14 @@ git-check-ignore \- Debug gitignore / exclude files
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit check\-ignore\fR [<options>] <pathname>\&...
+\fIgit check\-ignore\fR [<options>] <pathname>\&...\:
 \fIgit check\-ignore\fR [<options>] \-\-stdin
 .fi
-.sp
 .SH "DESCRIPTION"
 .sp
 For each pathname given via the command\-line or from a file via \fB\-\-stdin\fR, check whether the file is excluded by \&.gitignore (or other input files to the exclude mechanism) and output the path if it is excluded\&.
 .sp
-By default, tracked files are not shown at all since they are not subject to exclude rules; but see \(oq\-\-no\-index\(cq\&.
+By default, tracked files are not shown at all since they are not subject to exclude rules; but see \(lq\-\-no\-index\(rq\&.
 .SH "OPTIONS"
 .PP
 \-q, \-\-quiet
@@ -50,7 +49,7 @@ Don\(cqt output anything, just set exit status\&. This is only valid with a sing
 .PP
 \-v, \-\-verbose
 .RS 4
-Instead of printing the paths that are excluded, for each path that matches an exclude pattern, print the exclude pattern together with the path\&. (Matching an exclude pattern usually means the path is excluded, but if the pattern begins with "\fB!\fR" then it is a negated pattern and matching it means the path is NOT excluded\&.)
+Instead of printing the paths that are excluded, for each path that matches an exclude pattern, print the exclude pattern together with the path\&. (Matching an exclude pattern usually means the path is excluded, but if the pattern begins with "!" then it is a negated pattern and matching it means the path is NOT excluded\&.)
 .sp
 For precedence rules within and between exclude sources, see
 \fBgitignore\fR(5)\&.
@@ -78,9 +77,12 @@ is enabled, otherwise it would not be possible to distinguish between paths whic
 \-\-no\-index
 .RS 4
 Don\(cqt look in the index when undertaking the checks\&. This can be used to debug why a path became tracked by e\&.g\&.
-\fBgit add \&.\fR
-and was not ignored by the rules as expected by the user or when developing patterns including negation to match a path previously added with
-\fBgit add \-f\fR\&.
+\fBgit\fR
+\fBadd\fR
+\&. and was not ignored by the rules as expected by the user or when developing patterns including negation to match a path previously added with
+\fBgit\fR
+\fBadd\fR
+\fB\-f\fR\&.
 .RE
 .SH "OUTPUT"
 .sp
@@ -90,7 +92,7 @@ If \fB\-\-verbose\fR is specified, the output is a series of lines of the form:
 .sp
 <source> <COLON> <linenum> <COLON> <pattern> <HT> <pathname>
 .sp
-<pathname> is the path of a file being queried, <pattern> is the matching pattern, <source> is the pattern\(cqs source file, and <linenum> is the line number of the pattern within that source\&. If the pattern contained a "\fB!\fR" prefix or "\fB/\fR" suffix, it will be preserved in the output\&. <source> will be an absolute path when referring to the file configured by \fBcore\&.excludesFile\fR, or relative to the repository root when referring to \fB\&.git/info/exclude\fR or a per\-directory exclude file\&.
+<pathname> is the path of a file being queried, <pattern> is the matching pattern, <source> is the pattern\(cqs source file, and <linenum> is the line number of the pattern within that source\&. If the pattern contained a "!" prefix or "\fB/\fR" suffix, it will be preserved in the output\&. <source> will be an absolute path when referring to the file configured by \fBcore\&.excludesFile\fR, or relative to the repository root when referring to \&.\fBgit/info/exclude\fR or a per\-directory exclude file\&.
 .sp
 If \fB\-z\fR is specified, the pathnames in the output are delimited by the null character; if \fB\-\-verbose\fR is also specified then null characters are also used instead of colons and hard tabs:
 .sp

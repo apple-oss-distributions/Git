@@ -1,5 +1,14 @@
-#include "cache.h"
+#define USE_THE_REPOSITORY_VARIABLE
+
+#include "git-compat-util.h"
+#include "abspath.h"
+#include "advice.h"
 #include "config.h"
+#include "editor.h"
+#include "environment.h"
+#include "gettext.h"
+#include "pager.h"
+#include "path.h"
 #include "strbuf.h"
 #include "strvec.h"
 #include "run-command.h"
@@ -97,16 +106,15 @@ static int launch_specified_editor(const char *editor, const char *path,
 		sigchain_pop(SIGQUIT);
 		if (sig == SIGINT || sig == SIGQUIT)
 			raise(sig);
-		if (ret)
-			return error("There was a problem with the editor '%s'.",
-					editor);
-
 		if (print_waiting_for_editor && !is_terminal_dumb())
 			/*
 			 * Erase the entire line to avoid wasting the
 			 * vertical space.
 			 */
 			term_clear_line();
+		if (ret)
+			return error("there was a problem with the editor '%s'",
+					editor);
 	}
 
 	if (!buffer)
@@ -125,4 +133,33 @@ int launch_sequence_editor(const char *path, struct strbuf *buffer,
 			   const char *const *env)
 {
 	return launch_specified_editor(git_sequence_editor(), path, buffer, env);
+}
+
+int strbuf_edit_interactively(struct repository *r,
+			      struct strbuf *buffer, const char *path,
+			      const char *const *env)
+{
+	struct strbuf sb = STRBUF_INIT;
+	int fd, res = 0;
+
+	if (!is_absolute_path(path))
+		path = repo_git_path_append(r, &sb, "%s", path);
+
+	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	if (fd < 0)
+		res = error_errno(_("could not open '%s' for writing"), path);
+	else if (write_in_full(fd, buffer->buf, buffer->len) < 0) {
+		res = error_errno(_("could not write to '%s'"), path);
+		close(fd);
+	} else if (close(fd) < 0)
+		res = error_errno(_("could not close '%s'"), path);
+	else {
+		strbuf_reset(buffer);
+		if (launch_editor(path, buffer, env) < 0)
+			res = error_errno(_("could not edit '%s'"), path);
+		unlink(path);
+	}
+
+	strbuf_release(&sb);
+	return res;
 }
